@@ -1,262 +1,131 @@
-# SSI Match Creation Tool
+# Kupittaa Cup Automation Tool
 
-A PowerShell Core tool for creating SSI (Shoot'n'ScoreIt) matches using the GraphQL API.
+A PowerShell script for automating the creation of RESUL CUP events and child matches on shootnscoreit.com.
 
 ## Features
 
-- **Batch Creation**: Create multiple matches in one command
-- **Flexible Date Input**: Support for string dates or DateTime objects
-- **Dry Run Mode**: Preview what would be created without actually creating
-- **Progress Tracking**: Real-time progress updates for large batches
-- **Error Handling**: Comprehensive error reporting and retry capability
-- **Parallel Processing**: Configurable batch size for optimal performance
+- **Automated Cup Creation**: Creates a RESUL CUP event for a specified date
+- **Child Match Creation**: Automatically creates 3 child matches (Tarkkuus, Pika, Kuvio)
+- **Auto-Linking**: Links all child matches to the parent Cup event
+- **Configurable Settings**: Max competitors, categories, registration timing
 
 ## Requirements
 
-- PowerShell Core 7.0 or later
-- Internet connectivity to SSI GraphQL API
-- Valid SSI API credentials (if required)
-- Optional `config.yml` file containing credentials (see below)
-- `ConvertFrom-Yaml` availability (built into PowerShell 7); if missing, install `PowerShell-Yaml` module
+- PowerShell 5.1 or later
+- Valid session ID from shootnscoreit.com (obtained from browser cookies)
+- Internet connectivity
 
 ## Installation
 
-1. Download the `New-SSIMatch.ps1` script
-2. Open PowerShell Core
-3. Navigate to the script directory
-4. Set execution policy if needed:
-   ```powershell
-   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-   ```
+1. Clone or download this repository
+2. Navigate to the `scripts` directory
 
 ## Usage
 
 ### Basic Usage
 
 ```powershell
-# Create matches for specific dates
-$dates = @("2024-02-15", "2024-02-16", "2024-02-17")
-./New-SSIMatch.ps1 -Dates $dates -BaseName "Winter Match" -MatchAdminEmail "admin@example.com" -MatchType "USPSA"
+.\scripts\New-KupittaaCup.ps1 -Date "31-01-2026" -SessionId "your-session-id"
 ```
 
-### Advanced Usage
+### Parameters
 
-```powershell
-# Create matches for an entire month
-$dates = Get-Date -Day 1..28 -Month "February" -Year 2024 | ForEach-Object { $_.ToString("yyyy-MM-dd") }
-./New-SSIMatch.ps1 -Dates $dates -BaseName "Daily Practice" -MatchAdminEmail "range@club.com" -MatchType "USPSA" -BatchSize 10
-```
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `Date` | String | Yes | - | Match date in dd-mm-yyyy format |
+| `SessionId` | String | Yes | - | Browser session cookie for authentication |
+| `BaseUri` | String | No | https://shootnscoreit.com | SSI base URL |
+| `GroupId` | String | No | xxx | Group/club ID |
+| `OrganizerId` | String | No | 1215 | Organizer ID |
 
-### Dry Run Mode
+### Getting Your Session ID
 
-```powershell
-# Preview what would be created
-$dates = @("2024-02-15", "2024-02-16")
-./New-SSIMatch.ps1 -Dates $dates -BaseName "Test Match" -MatchAdminEmail "test@example.com" -MatchType "IPSC" -DryRun
-```
+1. Log in to shootnscoreit.com in your browser
+2. Open Developer Tools (F12)
+3. Go to Application > Cookies
+4. Copy the value of the `sessionid` cookie
 
-Dry run output now lists match dates in `yyyy-MM-dd` format to mirror the GraphQL payload.
+## What Gets Created
 
-You can pass either string dates (`yyyy-MM-dd`) or native `DateTime` objects to `-Dates`; both are normalized internally.
+### RESUL CUP Event
+- Name: "Kupittaa dd.mm.yyyy"
+- Max competitors: 25
+- Category: Open
+- Scoring: Series-points same as component-match points
+- Registration: Auto-register to all component matches
+- Registration starts: 1 week before Cup date
 
-### Using API Key
+### Child Matches (25m Pistooli Kuvio)
+Three matches are created and linked to the Cup:
+1. **Tarkkuus** - "Kupittaa dd.mm.yyyy Tarkkuus"
+2. **Pika** - "Kupittaa dd.mm.yyyy Pika"
+3. **Kuvio** - "Kupittaa dd.mm.yyyy Kuvio"
 
-```powershell
-# With explicit credentials
-./New-SSIMatch.ps1 -Dates $dates -BaseName "Tournament" -MatchAdminEmail "director@club.com" -MatchType "IDPA" -ApiKey "your-api-key-here" -UserEmail "you@example.com" -UserSecret "supers3cret"
-```
+Each match has:
+- Max competitors: 25
+- Category: Open
+- Level: Training
+- Verification: None
 
-### Using config.yml
-
-Create a `config.yml` file in the same directory as the script to load the API key automatically:
-
-```yaml
-variables:
-  apikey: YOUR_API_KEY
-  userEmail: your.email@example.com
-  secret: yourPasswordOrToken
-```
-
-If credentials are omitted from the command line, the script will attempt to read values from this file.
-
-## Parameters
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `Dates` | String[] | Yes | Array of dates (yyyy-MM-dd format or DateTime objects) |
-| `BaseName` | String | Yes | Base name for matches |
-| `MatchAdminEmail` | String | Yes | Email address of match administrator |
-| `MatchType` | String | Yes | Type of match (USPSA, IPSC, IDPA, etc.) |
-| `ApiUrl` | URI | No | SSI GraphQL API endpoint (default: https://api.shootnscoreit.com/graphql) |
-| `ApiKey` | String | No | API key for authentication |
-| `UserEmail` | String | No | SSI account email (used for header-based auth) |
-| `UserSecret` | String | No | SSI account secret/password (used for header-based auth) |
-| `DryRun` | Switch | No | Show what would be created without creating |
-| `BatchSize` | Int | No | Number of matches to create in parallel (default: 5) |
-
-## Examples
-
-### Example 1: Weekend Matches
-
-Create matches for upcoming weekends:
-
-```powershell
-# Get next 4 Saturdays
-$saturdays = for ($i = 0; $i -lt 4; $i++) {
-    $date = Get-Date
-    while ($date.DayOfWeek -ne "Saturday") { $date = $date.AddDays(1) }
-    $date.ToString("yyyy-MM-dd")
-    $date = $date.AddDays(7)
-}
-
-./New-SSIMatch.ps1 -Dates $saturdays -BaseName "Saturday Steel Challenge" -MatchAdminEmail "match@range.com" -MatchType "USPSA"
-```
-
-### Example 2: Monthly Series
-
-Create a monthly series for the year:
-
-```powershell
-# First Saturday of each month
-$firstSaturdays = for ($month = 1; $month -le 12; $month++) {
-    $date = Get-Date -Month $month -Day 1 -Year 2024
-    while ($date.DayOfWeek -ne "Saturday") { $date = $date.AddDays(1) }
-    $date.ToString("yyyy-MM-dd")
-}
-
-./New-SSIMatch.ps1 -Dates $firstSaturdays -BaseName "Monthly Championship" -MatchAdminEmail "director@club.com" -MatchType "USPSA" -BatchSize 3
-```
-
-### Example 3: Custom Date Range
-
-Create matches for a specific date range:
-
-```powershell
-# Every Tuesday in March 2024
-$tuesdays = @()
-$date = Get-Date -Month 3 -Day 1 -Year 2024
-while ($date.Month -eq 3) {
-    if ($date.DayOfWeek -eq "Tuesday") {
-        $tuesdays += $date.ToString("yyyy-MM-dd")
-    }
-    $date = $date.AddDays(1)
-}
-
-./New-SSIMatch.ps1 -Dates $tuesdays -BaseName "Tuesday Night League" -MatchAdminEmail "league@range.com" -MatchType "USPSA"
-```
-
-## Output
-
-The script provides detailed output including:
-
-- Configuration summary
-- Progress updates during creation
-- Success/failure status for each match
-- Match IDs for successful creations
-- Error messages for failed attempts
-- Final summary statistics
-
-### Sample Output
+## Example Output
 
 ```
-SSI Match Creation Tool
-========================
-Creating 3 match(es) with the following details:
-  Base Name: Winter Match
-  Match Type: USPSA
-  Admin Email: admin@example.com
-  API Endpoint: https://api.shootnscoreit.com/graphql
-  Dates: 2024-02-15, 2024-02-16, 2024-02-17
+Creating Kupittaa Cup for 31.01.2026
 
-Testing API connection...
-API connection successful!
+--- Creating RESUL CUP ---
+SUCCESS: Created Cup at: https://shootnscoreit.com/event/136/123/
+  Cup Event ID: 123
 
-Processing batch: matches 1 through 3
-  ✓ Created: Winter Match - Feb 15, 2024
-  ✓ Created: Winter Match - Feb 16, 2024
-  ✓ Created: Winter Match - Feb 17, 2024
+--- Creating Match: Tarkkuus (25m Pistooli Kuvio) ---
+SUCCESS: Created Tarkkuus at: https://shootnscoreit.com/event/91/456/
 
-Match Creation Summary
-======================
-Successfully created: 3
-Failed: 0
+--- Creating Match: Pika (25m Pistooli Kuvio) ---
+SUCCESS: Created Pika at: https://shootnscoreit.com/event/91/457/
 
-Successfully Created Matches:
-  • Winter Match - Feb 15, 2024 (ID: abc123)
-  • Winter Match - Feb 16, 2024 (ID: def456)
-  • Winter Match - Feb 17, 2024 (ID: ghi789)
+--- Creating Match: Kuvio (25m Pistooli Kuvio) ---
+SUCCESS: Created Kuvio at: https://shootnscoreit.com/event/91/458/
 
-🎉 All matches created successfully!
+--- Linking Matches to Cup ---
+  SUCCESS: Linked Tarkkuus as component #1
+  SUCCESS: Linked Pika as component #2
+  SUCCESS: Linked Kuvio as component #3
+
+Cup: https://shootnscoreit.com/event/136/123/
+
+Matches created and linked:
+  - Tarkkuus: https://shootnscoreit.com/event/91/456/ [LINKED]
+  - Pika: https://shootnscoreit.com/event/91/457/ [LINKED]
+  - Kuvio: https://shootnscoreit.com/event/91/458/ [LINKED]
 ```
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **API Connection Failed**
-   - Check internet connectivity
-   - Verify API endpoint URL
-   - Confirm API key if required
+1. **Session Expired**
+   - Get a fresh session ID from your browser
+   - Session IDs expire after inactivity
 
-2. **Invalid Date Format**
-   - Use yyyy-MM-dd format
-   - Or provide DateTime objects
+2. **Form Validation Errors**
+   - Check debug-cup-response.html or debug-match-response.html for details
+   - These files are created when creation fails
 
-3. **Authentication Errors**
-   - Verify API key is valid
-   - Check if API key has required permissions
+3. **Permission Errors**
+   - Ensure your account has permission to create events
+   - Verify the OrganizerId is correct for your club
 
-4. **Rate Limiting**
-   - Reduce BatchSize parameter
-   - Add delays between batches if needed
+## Project Structure
 
-### Getting Help
-
-For issues with the SSI API itself:
-- Consult SSI documentation
-- Contact SSI support
-- Check API status page
-
-For script issues:
-- Verify PowerShell version (7.0+)
-- Check execution policy
-- Ensure script file is not corrupted
-
-## Customization
-
-### Modifying GraphQL Mutation
-
-If the SSI API schema differs, update the `$graphqlMutationTemplate` variable in the script:
-
-```powershell
-$graphqlMutationTemplate = @"
-mutation CreateMatch($input: MatchInput!) {
-  createMatch(input: $input) {
-    id
-    name
-    date
-    matchType
-    adminEmail
-    status
-    createdAt
-    # Add any additional fields you need
-  }
-}
-"@
 ```
-
-### Adding Additional Match Fields
-
-To include additional fields in match creation, modify the `New-MatchInput` function:
-
-```powershell
-$input.additionalFields['customField'] = 'customValue'
+windsurf-project/
+├── scripts/
+│   └── New-KupittaaCup.ps1    # Main automation script
+├── docs/
+│   ├── README.md              # This file
+│   └── requirements.md        # Original requirements
+└── archive/                   # Old/experimental scripts
 ```
 
 ## License
 
-This tool is provided as-is for use with the SSI platform. Please ensure compliance with SSI's terms of service and API usage policies.
-
-## Contributing
-
-Feel free to submit improvements, bug reports, or feature requests to enhance this tool.
+This tool is provided as-is for use with the SSI platform. Please ensure compliance with SSI's terms of service.
