@@ -24,4 +24,5 @@
 |    | "Pika" example: https://shootnscoreit.com/event/91/1754/ | |
 |    | "Kuvio" example: https://shootnscoreit.com/event/91/1755/" | |
 | 15 | Matches belong to the Cup event. | [x] |
-
+| 16 | Result verification should not be required. | [x] |
+|    | xxx = No verification, sgn = Signature, pin = PIN code | |
