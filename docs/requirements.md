@@ -25,4 +25,28 @@
 |    | "Kuvio" example: https://shootnscoreit.com/event/91/1755/" | |
 | 15 | Matches belong to the Cup event. | [x] |
 | 16 | Result verification should not be required. | [x] |
-|    | xxx = No verification, sgn = Signature, pin = PIN code | |
+|    | xxx = No verification, sgn = Signature, pin = PIN code |[]|
+|    | There are three squads per match - Oma ase 1, Oma ase 2, Laina-ase. |[]|
+|    | Oma ase 1 and 2 have maximum of 9 shooters. Laina-ase has maximum of 7 shooters.  |[]|
+|    | Squad names and maximum shooters are defined in a configuration file.    |[]|
+|    | Match registration will start at the same time with the Cup. |[]|
+|    | Cup is managed by group id 25874|[]|
+|    | Match is managed by group id 25874|[]|
+||CUP has a description "Ammutaan kolme osuutta: Tarkkuus ja Pika, sekä Pistoolipika. Laukausmäärä: 100. Osallistujilla on oltava ammunnan kattava vakuutus (Reserviläisen toimintaturva tai SAL vakuutus) sekä suojalasit. Suojalasien käyttö pakollista harjoituksissa.Jos olet ensikertalainen, ilmoittaudu perehdytysvuorolle (ks. ohjeet tapahtumakalenterista)Laina-aseet käytössä (valvottu käyttö) Laina-aseille ratamaksu kattaa kaiken ammunnassa tarvittavan materiaalin.Ratamaksu 7 euroa. Omalla aseella ampuvat 6 euroa. (MobilePay tai tilisiirto) Huom! Ammunta alkaa klo 9.30, eikä en jälkeen ei ole mahdollista tulla paikalle.Kysymyksiä? Lisätietoja ampumajaosto(at)turunreservilaiset.fi", which is defined in a configuration file|[]|
+||"Tarkkuus" match has a description, which is defined in a configuration file. "SAL 25m pistooli (https://www.ampumaurheiluliitto.fi/pistooli/25m-pistooli/)
+
+Tarkkuusosa
+Ammutaan yksi koesarja ja kuusi kilpasarjaa.
+Sarjan aikana taulut näkyvillä 5 minuuttia."|[]|
+||"Pika" match has a description, which is defined in a configuration file. "SAL 25m pistooli (https://www.ampumaurheiluliitto.fi/pistooli/25m-pistooli/)
+
+Pikaosa
+Ammutaan yksi koesarja ja kuusi kilpasarjaa.
+Kutakin sarjan laukausta kohden taulut ovat piilossa 7 sekuntia ja näkyvissä 3 sekuntia."|[]|
+||"Kuvio" match has a description, which is defined in a configuration file. "Lyhennetty RESUL Pistoolipika-ammunta (https://resul.fi/pistoolipika-ammunta/)
+
+Pika-ammunta käsittää 30 kilpalaukausta:
+
+2×5 laukauksen sarja, aikaa 10 sek/sarja
+2×5 laukauksen sarja, aikaa 8 sek/sarja
+2×5 laukauksen sarja, aikaa 6 sek/sarja"|[]|

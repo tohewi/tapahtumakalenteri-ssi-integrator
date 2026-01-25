@@ -116,7 +116,7 @@ function Get-EventIdFromUrl {
 Write-Host "`n--- Creating RESUL CUP ---" -ForegroundColor Yellow
 
 $cupUrl = "$BaseUri/series/nordic/create-resul-cup/"
-$cupName = "TEST Kupittaa $displayDate"
+$cupName = "TEST TurRes Kupittan Reserviläisammunta CUP $displayDate"
 
 $csrf = Get-CsrfToken -Session $session -Url $cupUrl -UriObj $uriObj
 
