@@ -1,0 +1,177 @@
+# Kupittaa Cup Configuration
+# This file contains all configuration for creating Kupittaa RESUL CUP events
+# Secrets (SessionId, API keys) should be stored separately in config.yml
+
+# Event Management
+management:
+  groupId: "25874"  # Group that manages both Cup and Matches (use "xxx" for self-administered)
+  organizerId: ""  # toShootOrNot organizer (use "" for no club organizer)
+
+# Cup Settings
+cup:
+  nameTemplate: "TurRes Kupittaa CUP {displayDate}"  # Max 40 chars total
+  # Visibility options: pub=Public, lim=Limited, res=Restricted, csd=Closed, clb=Club members only
+  # Note: "res" (Restricted) may require manual approval even with registration="op"
+  visibility: "pub"  # Public - searchable and details for all (enables auto-approve)
+  status: "on"
+  results: "cmp"  # Results shown only to participants
+  registration: "op"  # Open registration
+  maxCompetitors: 25
+  region: "FIN"
+  scoringMode: "pts"  # Series-points is same as component-match points
+  matchRegistrationMode: "all"  # Auto-register to all component matches
+  matchCount: 3  # Number of matches in the Cup
+  timezone: "Europe/Helsinki"
+  currency: "EUR"
+  venue: "Kupittaan urheiluhalli, Tahkonkuja 5, 20520 TURKU"  # Location/venue
+  url: "https://turun-reservialiupseerit-turun-reservilaiset.reservilaisliitto.fi/toiminta/ammunta/reservilaisammunta/"
+  urlDisplay: "Lisätietoa"
+  
+  # Default times
+  startTime: "09:00"
+  endTime: "12:00"
+  
+  # Registration starts one week before the Cup
+  registrationDaysBeforeEvent: 7
+  registrationStartTime: "00:00"
+  
+  # Categories and divisions
+  weaponGroups:
+    - "STD"  # Standard division
+  categories:
+    - "Open"  # Open category only
+  competenceClasses:
+    - "1"
+    - "2"
+    - "3"
+    - "D1"
+    - "D2"
+    - "D3"
+    - "J1"
+    - "J2"
+    - "J3"
+    - "VY"
+    - "VO"
+  
+  # Max 300 characters for description (short summary)
+  description: "Hio pistooliammuntatekniikkaa ja kerää harrastuskertoja käsiaseeseen. 
+    Ohjattu ammunta lyhennetyillä SAL ja RESUL lajeilla. 
+    Laina-aseita saatavilla."
+  
+  # Max 800 characters for information (Yksityiskohtaiset tiedot / Detailed information)
+  information: |
+    Ohjattu ammunta lyhennetyillä ampumaohjelmilla:
+    - Tarkkuus- ja pikaosion (SAL 25m urheilupistooli)
+    - Pistoolipika-osion (RESUL pistoolipika-ammunta)
+    - Laukausmäärä yhteensä: 100
+    Tarkkuusosa kiinteään tauluun, pika- ja pikapistooliosio kääntyviin Olympia-tauluihin.
+
+    Vakuutus (Reserviläisen toimintaturva/SAL) ja suojalasit+kuulosuojaimet pakollisia.
+
+    Ensikertalainen? Ilmoittaudu ensin perehdytysvuorolle (ks. TurRes tapahtumakalenteri).
+
+    Laina-aseet käytössä (valvottu käyttö).
+
+    Ratamaksut:
+    -	Harjoitusmaksu sisältäen laina-aseen, ratamaksun ja 100 kpl patruunat 20 €
+    -	Laina-ase (omat patruunat)	7 €
+    -	Oma ase (omat patruunat) 	6 €
+
+    Maksuväline: MobilePay 24130
+
+    Ammunta alkaa klo 9.30, eikä sen jälkeen voi tulla paikalle.
+
+    Lisätietoja: ampumajaosto(at)turunreservilaiset.fi
+
+# Match Settings (common to all matches)
+match:
+  nameTemplate: "Kupittaa {displayDate} {matchSuffix}"
+  createUrl: "/nordic/create-resul-25-kuvio-pistol/"
+  visibility: "pub"  # Public - enables auto-approve
+  status: "on"
+  results: "org"
+  registration: "op"
+  maxCompetitors: 25
+  region: "FIN"
+  level: "tr"  # Training
+  verifyUsing: "xxx"  # No verification (alternatives: sgn=Signature, pin=PIN code)
+  timezone: "Europe/Helsinki"
+  currency: "EUR"
+  venue: "Kupittaan urheiluhalli, Tahkonkuja 5, 20520 TURKU"  # Location/venue for the match
+  # Note: Coordinates (lat/lng) must be added manually via SSI map UI - cannot be set programmatically
+  
+  # 25m Pistooli Kuvio specific fields
+  layouts: "6+SO"
+  precisionStrings: "6"
+  precisionShotsPerString: "5"
+  stringScoringFormat: "110X"
+  numberOfTeamMembers: "3"
+  resultFromTeamMembers: "3"
+  prematch: "no"
+  maxPrematchCompetitors: "0"
+  
+  # Categories and divisions (same as Cup)
+  weaponGroups:
+    - "STD"
+  categories:
+    - "Open"
+  competenceClasses:
+    - "1"
+    - "2"
+    - "3"
+    - "D1"
+    - "D2"
+    - "D3"
+    - "J1"
+    - "J2"
+    - "J3"
+    - "VY"
+    - "VO"
+
+# Match Types (three matches per Cup)
+# Each match has:
+#   - description: max 300 chars (short summary shown in listings)
+#   - information: max 800 chars (detailed info shown on event page)
+matchTypes:
+  - suffix: "Tarkkuus"
+    # Short description (max 300 chars)
+    description: "SAL 25m pistooli tarkkuusosa. Yksi koesarja ja kuusi kilpasarjaa. Taulut näkyvillä 5 min/sarja."
+    # Detailed information (max 800 chars)
+    information: |
+      SAL 25m pistooli (https://www.ampumaurheiluliitto.fi/pistooli/25m-pistooli/)
+
+      Tarkkuusosa
+      Ammutaan yksi koesarja (5 laukausta) ja kuusi kilpasarjaa (5 laukausta per sarja).
+      Sarjan aikana taulut näkyvillä 5 minuuttia.
+
+  - suffix: "Pika"
+    description: "SAL 25m pistooli pikaosa. Yksi koesarja ja kuusi kilpasarjaa. Taulut piilossa 7s, näkyvissä 3s."
+    information: |
+      SAL 25m pistooli (https://www.ampumaurheiluliitto.fi/pistooli/25m-pistooli/)
+
+      Pikaosa
+      Ammutaan yksi koesarja (5 laukausta) ja kuusi kilpasarjaa (5 laukausta per sarja).
+      Kutakin sarjan laukausta kohden taulut ovat piilossa 7 sekuntia ja näkyvissä 3 sekuntia.
+
+  - suffix: "Kuvio"
+    description: "Lyhennetty RESUL Pistoolipika. 30 kilpalaukausta: 2×5 sarjaa (10s, 8s, 6s)."
+    information: |
+      Lyhennetty RESUL Pistoolipika-ammunta (https://resul.fi/pistoolipika-ammunta/)
+
+      Pika-ammunta käsittää 30 kilpalaukausta:
+
+      2×5 laukauksen sarja, aikaa 10 s/sarja
+      2×5 laukauksen sarja, aikaa 8 s/sarja
+      2×5 laukauksen sarja, aikaa 6 s/sarja
+
+# Squad Configuration
+squads:
+  # URL format: /nordic/match/{eventId}/add-squads/ (uses EventId only, not TypeId)
+  addSquadsUrlTemplate: "/nordic/match/{eventId}/add-squads/"
+  definitions:
+    - name: "Oma ase 1"
+      maxShooters: 9
+    - name: "Oma ase 2"
+      maxShooters: 9
+    - name: "Laina-ase"
+      maxShooters: 7

@@ -1,10 +1,11 @@
 <#
 .SYNOPSIS
-    Creates a Kupittaa RESUL CUP with three child matches (Tarkkuus, Pika, Kuvio)
+    Creates a Kupittaa RESUL CUP with three child matches (Tarkkuus, Pika, Kuvio) and squads
 
 .DESCRIPTION
     This script creates a RESUL CUP event on shootnscoreit.com for a given date,
-    then creates three child matches linked to that Cup.
+    then creates three child matches linked to that Cup, and creates squads for each match.
+    Configuration is loaded from config/kupittaa-cup-config.yml
 
 .PARAMETER Date
     Match date in dd-mm-yyyy format
@@ -12,11 +13,17 @@
 .PARAMETER SessionId
     Browser session ID cookie value for authentication
 
-.PARAMETER OrganizerId
-    Organizer ID (default: 1215 for toShootOrNot)
+.PARAMETER ConfigPath
+    Path to the configuration file (default: config/kupittaa-cup-config.yml)
+
+.PARAMETER TestMode
+    If specified, adds "TEST" prefix to event names
 
 .EXAMPLE
     .\New-KupittaaCup.ps1 -Date "25-01-2026" -SessionId "your-session-id"
+
+.EXAMPLE
+    .\New-KupittaaCup.ps1 -Date "25-01-2026" -SessionId "your-session-id" -TestMode
 #>
 
 param(
@@ -28,24 +35,71 @@ param(
     [string]$SessionId,
 
     [string]$BaseUri = "https://shootnscoreit.com",
-    [string]$GroupId = "xxx",
-    [string]$OrganizerId = "1215"
+    
+    [string]$ConfigPath,
+    
+    [switch]$TestMode
 )
+
+# Import YAML module
+Import-Module -Name PowerShell-Yaml -ErrorAction Stop
+
+# Load configuration
+if (-not $ConfigPath) {
+    $ConfigPath = Join-Path -Path $PSScriptRoot -ChildPath "..\config\kupittaa-cup-config.yml"
+}
+
+if (-not (Test-Path $ConfigPath)) {
+    Write-Error "Configuration file not found: $ConfigPath"
+    exit 1
+}
+
+$configContent = Get-Content -Path $ConfigPath -Raw -Encoding UTF8
+$config = $configContent | ConvertFrom-Yaml
+
+# Extract configuration values
+$GroupId = $config.management.groupId
+$OrganizerId = $config.management.organizerId
 
 # Parse the date
 $dateObj = [DateTime]::ParseExact($Date, "dd-MM-yyyy", $null)
 $isoDate = $dateObj.ToString("yyyy-MM-dd")
 $displayDate = $dateObj.ToString("dd.MM.yyyy")
 
-# Registration starts one week before the Cup
-$regStartDateObj = $dateObj.AddDays(-7)
-$regStartDate = $regStartDateObj.ToString("yyyy-MM-dd")
 
-# Default times per requirements
-$startTime = "09:00"
-$endTime = "12:00"
+# Get times from config
+$startTime = $config.cup.startTime
+$endTime = $config.cup.endTime
+
+# Registration settings from config
+$regDaysBefore = $config.cup.registrationDaysBeforeEvent
+$regStartDateObj = $dateObj.AddDays(-$regDaysBefore)
+$regStartDate = $regStartDateObj.ToString("yyyy-MM-dd")
+$regStartTime = $config.cup.registrationStartTime
+
+# Cup registration closes 12 hours before Cup start time
+$cupStartDateTime = $dateObj.Add([TimeSpan]::Parse($startTime))
+$regCloseDateTime = $cupStartDateTime.AddHours(-12)
+$regCloseDate = $regCloseDateTime.ToString("yyyy-MM-dd", [System.Globalization.CultureInfo]::InvariantCulture)
+$regCloseTime = $regCloseDateTime.ToString("HH:mm", [System.Globalization.CultureInfo]::InvariantCulture)
+
+# Cup end date/time (used for match end and registration close)
+$cupEndDate = $isoDate
+$cupEndTime = $endTime
+
+# Build cup name from template
+$cupNameTemplate = $config.cup.nameTemplate
+$cupName = $cupNameTemplate -replace '\{displayDate\}', $displayDate
+if ($TestMode) {
+    $cupName = "TEST $cupName"
+}
+
+# Match name template for duplicate checking
+$matchNameTemplate = $config.match.nameTemplate
 
 Write-Host "Creating Kupittaa Cup for $displayDate" -ForegroundColor Cyan
+Write-Host "  Group ID: $GroupId" -ForegroundColor Gray
+Write-Host "  Organizer ID: $OrganizerId" -ForegroundColor Gray
 
 # Create web session with cookies
 $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
@@ -112,32 +166,98 @@ function Get-EventIdFromUrl {
     return $null
 }
 
+# Function to check for duplicate event names using user's events page
+function Test-EventNameExists {
+    param(
+        $Session,
+        $BaseUri,
+        [string]$EventName
+    )
+    
+    # Check user's own events page (more reliable than public search)
+    $myEventsUrl = "$BaseUri/my-events/"
+    
+    try {
+        $myEventsResponse = Invoke-WebRequest -Uri $myEventsUrl -WebSession $Session -UseBasicParsing
+        
+        # Check if exact match exists in user's events
+        # Event names appear in the HTML content
+        $escapedName = [regex]::Escape($EventName)
+        if ($myEventsResponse.Content -match $escapedName) {
+            return $true
+        }
+    }
+    catch {
+        Write-Host "  Warning: Could not check for duplicates: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+    
+    return $false
+}
+
+#region Check for Duplicate Names
+Write-Host "`n--- Checking for Duplicate Names ---" -ForegroundColor Yellow
+
+$duplicateFound = $false
+
+# Check Cup name
+Write-Host "  Checking Cup: $cupName" -ForegroundColor Gray
+if (Test-EventNameExists -Session $session -BaseUri $BaseUri -EventName $cupName) {
+    Write-Host "  ERROR: Cup with name '$cupName' already exists!" -ForegroundColor Red
+    $duplicateFound = $true
+}
+
+# Check Match names
+foreach ($matchType in $config.matchTypes) {
+    $checkMatchName = $matchNameTemplate -replace '\{displayDate\}', $displayDate -replace '\{matchSuffix\}', $matchType.suffix
+    if ($TestMode) { $checkMatchName = "TEST $checkMatchName" }
+    
+    Write-Host "  Checking Match: $checkMatchName" -ForegroundColor Gray
+    if (Test-EventNameExists -Session $session -BaseUri $BaseUri -EventName $checkMatchName) {
+        Write-Host "  ERROR: Match with name '$checkMatchName' already exists!" -ForegroundColor Red
+        $duplicateFound = $true
+    }
+}
+
+if ($duplicateFound) {
+    Write-Host "`nERROR: Duplicate event names found. Aborting to prevent duplicates." -ForegroundColor Red
+    Write-Host "Please delete existing events or use a different date." -ForegroundColor Yellow
+    exit 1
+}
+
+Write-Host "  No duplicates found. Proceeding with creation." -ForegroundColor Green
+#endregion
+
 #region Create RESUL CUP
 Write-Host "`n--- Creating RESUL CUP ---" -ForegroundColor Yellow
+Write-Host "  Name: $cupName" -ForegroundColor Gray
 
 $cupUrl = "$BaseUri/series/nordic/create-resul-cup/"
-$cupName = "TEST TurRes Kupittan Reserviläisammunta CUP $displayDate"
 
 $csrf = Get-CsrfToken -Session $session -Url $cupUrl -UriObj $uriObj
+
+# Get cup description and information from config (trim trailing whitespace)
+$cupDescription = $config.cup.description.Trim()
+$cupInformation = if ($config.cup.information) { $config.cup.information.Trim() } else { "" }
 
 $cupBody = @{
     "csrfmiddlewaretoken" = $csrf.Token
     "group" = $GroupId
     "name" = $cupName
     "organizer" = $OrganizerId
-    "visibility" = "res"  # Restricted
-    "status" = "on"
-    "results" = "cmp"  # Results shown only to participants
-    "registration" = "op"
-    "max_competitors" = "25"
-    "description" = ""
-    "region" = "FIN"
+    "visibility" = $config.cup.visibility
+    "status" = $config.cup.status
+    "results" = $config.cup.results
+    "registration" = $config.cup.registration
+    "max_competitors" = $config.cup.maxCompetitors.ToString()
+    "description" = $cupDescription
+    "information" = $cupInformation
+    "region" = $config.cup.region
     
-    # Required Cup-specific fields (missing these caused validation errors)
-    "scoring_mode" = "pts"  # Series-points is same as component-match points
-    "match_registration_mode" = "all"  # Auto-register to all component matches
-    "has_accepted_event_data_ass_agreement" = "on"  # Required checkbox
-    "count" = "3"  # Best #matches counted (we have 3 matches)
+    # Required Cup-specific fields
+    "scoring_mode" = $config.cup.scoringMode
+    "match_registration_mode" = $config.cup.matchRegistrationMode
+    "has_accepted_event_data_ass_agreement" = "on"
+    "count" = $config.cup.matchCount.ToString()
     
     # Dates/times
     "starts_date" = $isoDate
@@ -145,16 +265,16 @@ $cupBody = @{
     "ends_date" = $isoDate
     "ends_time" = $endTime
     "reg_start_date" = $regStartDate
-    "reg_start_time" = "00:00"
+    "reg_start_time" = $regStartTime
     
     # Additional fields from form
-    "timezone" = "Europe/Helsinki"
-    "currency" = "EUR"
-    "venue" = ""
-    "url" = ""
-    "url_display" = ""
-    "reg_close_date" = ""
-    "reg_close_time" = ""
+    "timezone" = $config.cup.timezone
+    "currency" = $config.cup.currency
+    "venue" = $config.cup.venue
+    "url" = $config.cup.url
+    "url_display" = $config.cup.urlDisplay
+    "reg_close_date" = $regCloseDate
+    "reg_close_time" = $regCloseTime
     "sq_start_date" = ""
     "sq_start_time" = ""
     "sq_close_date" = ""
@@ -165,9 +285,9 @@ $cupBody = @{
 }
 
 $cupArrayFields = @{
-    "weapon_groups" = @("STD")  # Standard division
-    "categories" = @("Open")  # Open category only per requirements
-    "competence_classes" = @("1","2","3","D1","D2","D3","J1","J2","J3","VY","VO")
+    "weapon_groups" = $config.cup.weaponGroups
+    "categories" = $config.cup.categories
+    "competence_classes" = $config.cup.competenceClasses
 }
 
 $cupEncodedBody = Build-FormBody -Body $cupBody -ArrayFields $cupArrayFields
@@ -209,83 +329,94 @@ catch {
 
 #region Create Child Matches
 # Now we need to create 3 matches linked to the Cup
-# The matches are: Tarkkuus, Pika, Kuvio
-# Match type: 25m Pistooli Kuvio
+# Match types are loaded from config
 
-$matchTypes = @(
-    @{ Name = "Tarkkuus"; Suffix = "Tarkkuus" },
-    @{ Name = "Pika"; Suffix = "Pika" },
-    @{ Name = "Kuvio"; Suffix = "Kuvio" }
-)
-
-$matchUrl = "$BaseUri/nordic/create-resul-25-kuvio-pistol/"
+$matchUrl = "$BaseUri$($config.match.createUrl)"
 $createdMatches = @()
 
-foreach ($matchType in $matchTypes) {
-    Write-Host "`n--- Creating Match: $($matchType.Name) (25m Pistooli Kuvio) ---" -ForegroundColor Yellow
+foreach ($matchTypeConfig in $config.matchTypes) {
+    $matchSuffix = $matchTypeConfig.suffix
     
-    $matchName = "Kupittaa $displayDate $($matchType.Suffix)"
+    # Build match name from template
+    $matchNameTemplate = $config.match.nameTemplate
+    $matchName = $matchNameTemplate -replace '\{displayDate\}', $displayDate -replace '\{matchSuffix\}', $matchSuffix
+    if ($TestMode) {
+        $matchName = "TEST $matchName"
+    }
+    
+    Write-Host "`n--- Creating Match: $matchSuffix ---" -ForegroundColor Yellow
+    Write-Host "  Name: $matchName" -ForegroundColor Gray
     
     # Get fresh CSRF token for each request
     $csrf = Get-CsrfToken -Session $session -Url $matchUrl -UriObj $uriObj
+    
+    # Get match description and information from config (trim trailing whitespace)
+    $matchDescription = $matchTypeConfig.description.Trim()
+    $matchInformation = if ($matchTypeConfig.information) { $matchTypeConfig.information.Trim() } else { "" }
     
     $matchBody = @{
         "csrfmiddlewaretoken" = $csrf.Token
         "group" = $GroupId
         "name" = $matchName
         "organizer" = $OrganizerId
-        "visibility" = "res"  # Restricted
-        "status" = "on"
-        "results" = "org"
-        "registration" = "op"
-        "max_competitors" = "25"
-        "description" = ""
-        "region" = "FIN"
+        "visibility" = $config.match.visibility
+        "status" = $config.match.status
+        "results" = $config.match.results
+        "registration" = $config.match.registration
+        "max_competitors" = $config.match.maxCompetitors.ToString()
+        "description" = $matchDescription
+        "information" = $matchInformation
+        "region" = $config.match.region
         
         # 25m Pistooli Kuvio specific fields
-        "layouts" = "6+SO"
-        "precision_strings" = "6"
-        "precision_shots_per_string" = "5"
-        "string_scoring_format" = "110X"
+        "layouts" = $config.match.layouts
+        "precision_strings" = $config.match.precisionStrings
+        "precision_shots_per_string" = $config.match.precisionShotsPerString
+        "string_scoring_format" = $config.match.stringScoringFormat
         
-        # Required fields (missing these caused validation errors)
-        "level" = "tr"  # Training
+        # Required fields
+        "level" = $config.match.level
         "has_accepted_event_data_ass_agreement" = "on"
-        "number_of_team_members" = "3"
-        "result_from_team_members" = "3"
-        "prematch" = "no"
-        "max_prematch_competitors" = "0"
-        "verify_using" = "xxx"  # No verification (alternatives: sgn=Signature, pin=PIN code)
+        "number_of_team_members" = $config.match.numberOfTeamMembers
+        "result_from_team_members" = $config.match.resultFromTeamMembers
+        "prematch" = $config.match.prematch
+        "max_prematch_competitors" = $config.match.maxPrematchCompetitors
+        "verify_using" = $config.match.verifyUsing
         
-        # Dates/times
+        # Dates/times - Match registration starts same time as Cup
         "starts_date" = $isoDate
         "starts_time" = $startTime
-        "reg_start_date" = $isoDate
-        "reg_start_time" = "00:00"
+        "reg_start_date" = $regStartDate
+        "reg_start_time" = $regStartTime
         
         # Additional fields
-        "timezone" = "Europe/Helsinki"
-        "currency" = "EUR"
-        "venue" = ""
+        "timezone" = $config.match.timezone
+        "currency" = $config.match.currency
+        "venue" = $config.match.venue
+        # Note: Coordinates (lat/lng) cannot be set via form - must be added manually via SSI map UI
         "url" = ""
         "url_display" = ""
-        "ends_date" = ""
-        "ends_time" = ""
-        "reg_close_date" = ""
-        "reg_close_time" = ""
-        "sq_start_date" = ""
-        "sq_start_time" = ""
-        "sq_close_date" = ""
-        "sq_close_time" = ""
+        # Match end date/time = Cup end date/time
+        "ends_date" = $cupEndDate
+        "ends_time" = $cupEndTime
+        # Match registration close = Cup end date/time
+        "reg_close_date" = $cupEndDate
+        "reg_close_time" = $cupEndTime
+        # Squading start = Match registration start
+        "sq_start_date" = $regStartDate
+        "sq_start_time" = $regStartTime
+        # Squading close = Match start
+        "sq_close_date" = $isoDate
+        "sq_close_time" = $startTime
         "pm_sq_start_date" = ""
         "pm_sq_start_time" = ""
         "imported" = ""
     }
     
     $matchArrayFields = @{
-        "weapon_groups" = @("STD")  # Standard division (checked by default)
-        "categories" = @("Open")  # Open category only per requirements
-        "competence_classes" = @("1","2","3","D1","D2","D3","J1","J2","J3","VY","VO")
+        "weapon_groups" = $config.match.weaponGroups
+        "categories" = $config.match.categories
+        "competence_classes" = $config.match.competenceClasses
     }
     
     $matchEncodedBody = Build-FormBody -Body $matchBody -ArrayFields $matchArrayFields
@@ -309,21 +440,22 @@ foreach ($matchType in $matchTypes) {
         }
         
         if ($matchFinalUrl -match "/event/\d+/\d+") {
-            Write-Host "SUCCESS: Created $($matchType.Name) at: $matchFinalUrl" -ForegroundColor Green
+            Write-Host "SUCCESS: Created $matchSuffix at: $matchFinalUrl" -ForegroundColor Green
             $matchEventInfo = Get-EventIdFromUrl -Url $matchFinalUrl
             $createdMatches += @{
-                Name = $matchType.Name
+                Name = $matchSuffix
                 Url = $matchFinalUrl
+                TypeId = $matchEventInfo.TypeId
                 EventId = $matchEventInfo.EventId
             }
         } else {
-            Write-Host "FAILED: $($matchType.Name) creation failed. Final URL: $matchFinalUrl" -ForegroundColor Red
+            Write-Host "FAILED: $matchSuffix creation failed. Final URL: $matchFinalUrl" -ForegroundColor Red
             $matchResponse.Content | Out-File -FilePath "debug-match-response.html" -Encoding UTF8
             Write-Host "Response saved to debug-match-response.html" -ForegroundColor Yellow
         }
     }
     catch {
-        Write-Host "ERROR creating $($matchType.Name): $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "ERROR creating $matchSuffix`: $($_.Exception.Message)" -ForegroundColor Red
     }
     
     # Small delay between requests
@@ -389,7 +521,93 @@ foreach ($match in $createdMatches) {
 }
 #endregion
 
+#region Create Squads for Each Match
+Write-Host "`n--- Creating Squads for Matches ---" -ForegroundColor Yellow
+
+foreach ($match in $createdMatches) {
+    Write-Host "`nCreating squads for $($match.Name) (ID: $($match.EventId))..." -ForegroundColor Gray
+    
+    # Squad URL uses the match EventId
+    $squadUrl = "$BaseUri$($config.squads.addSquadsUrlTemplate -replace '\{eventId\}', $match.EventId)"
+    Write-Host "  Squad URL: $squadUrl" -ForegroundColor Gray
+    
+    foreach ($squadDef in $config.squads.definitions) {
+        $squadName = $squadDef.name
+        $maxShooters = $squadDef.maxShooters
+        
+        # Squad form fields (note: squad names are auto-generated by SSI)
+        # Squad registration follows the same schedule as match registration
+        # Based on browser network capture - NO CSRF token needed for this form
+        $squadBody = @{
+            "quantity" = "1"  # Number of squads to create
+            "max_competitors" = $maxShooters.ToString()
+            "registration" = "aa"  # Anyone can register (aa=Anyone, os=Restricted)
+            "comment" = $squadName  # Use squad name as comment since name is auto-generated
+            # Squad registration dates (same as match registration)
+            "starts_date" = $regStartDate  # ISO format: YYYY-MM-DD
+            "starts_time" = $regStartTime  # HH:MM format
+            "issue_dates" = "False"  # Required field
+            "length" = "60"  # Squad duration in minutes
+            "split" = "10"  # Split time
+            "prematch" = "False"  # Required field
+            "submit" = "Submit"  # Submit button value
+        }
+        
+        # Array fields for categories, weapon_groups, competence_classes
+        $squadArrayFields = @{
+            "categories" = @("-")  # "-" means "Any" category
+            "weapon_groups" = @("-")  # "-" means "Any" weapon group
+            "competence_classes" = @("-")  # "-" means "Any" competence class
+        }
+        
+        $squadEncodedBody = Build-FormBody -Body $squadBody -ArrayFields $squadArrayFields
+        
+        $squadHeaders = @{
+            "Content-Type" = "application/x-www-form-urlencoded"
+            "Referer" = $squadUrl
+            "Origin" = $BaseUri
+        }
+        
+        try {
+            $squadResponse = Invoke-WebRequest -Uri $squadUrl -Method POST -WebSession $session -Headers $squadHeaders -Body $squadEncodedBody -MaximumRedirection 5
+            
+            $squadFinalUrl = if ($squadResponse.BaseResponse.ResponseUri) {
+                $squadResponse.BaseResponse.ResponseUri.AbsoluteUri
+            } elseif ($squadResponse.BaseResponse.RequestMessage.RequestUri) {
+                $squadResponse.BaseResponse.RequestMessage.RequestUri.AbsoluteUri
+            } else {
+                "Unknown"
+            }
+            
+            # Check for errors in response
+            if ($squadResponse.Content -match 'is-invalid|alert-danger|error') {
+                Write-Host "  WARNING: Squad '$squadName' may have validation errors. Check manually." -ForegroundColor Yellow
+                $squadResponse.Content | Out-File -FilePath "debug-squad-response-$($match.EventId)-$squadName.html" -Encoding UTF8
+            } elseif ($squadFinalUrl -match "add-squads" -and $squadResponse.StatusCode -eq 200) {
+                # Stayed on form but got 200 - likely success (form allows adding more)
+                Write-Host "  SUCCESS: Created squad '$squadName' (max: $maxShooters)" -ForegroundColor Green
+            } else {
+                Write-Host "  SUCCESS: Created squad '$squadName' (max: $maxShooters)" -ForegroundColor Green
+            }
+        }
+        catch {
+            Write-Host "  ERROR creating squad '$squadName': $($_.Exception.Message)" -ForegroundColor Red
+            if ($_.Exception.Response) {
+                Write-Host "    Status: $($_.Exception.Response.StatusCode)" -ForegroundColor Red
+            }
+        }
+        
+        Start-Sleep -Milliseconds 300
+    }
+}
+#endregion
+
 #region Summary
+Write-Host "`n" -NoNewline
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "           CREATION SUMMARY" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+
 Write-Host "`nCup: $cupFinalUrl" -ForegroundColor Green
 
 Write-Host "`nMatches created and linked:" -ForegroundColor Yellow
@@ -397,4 +615,14 @@ foreach ($match in $createdMatches) {
     $linkStatus = if ($match.Linked) { "[LINKED]" } else { "[NOT LINKED]" }
     Write-Host "  - $($match.Name): $($match.Url) $linkStatus" -ForegroundColor White
 }
+
+Write-Host "`nSquads created per match:" -ForegroundColor Yellow
+foreach ($squadDef in $config.squads.definitions) {
+    Write-Host "  - $($squadDef.name) (max: $($squadDef.maxShooters))" -ForegroundColor White
+}
+
+Write-Host "`nNext steps:" -ForegroundColor Cyan
+Write-Host "  1. Verify Cup and Matches at the URLs above" -ForegroundColor White
+Write-Host "  2. Check squad configuration for each match" -ForegroundColor White
+Write-Host "  3. Delete TEST events if this was a test run" -ForegroundColor White
 #endregion
