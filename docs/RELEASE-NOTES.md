@@ -1,84 +1,97 @@
 # Release Notes
 
-## Version 0.9 (2026-01-25)
+## Version 2.0 (2026-02-01)
 
 ### Overview
 
-First feature-complete release of the Kupittaa Cup Automation Tool. This version supports full automation of RESUL CUP creation with child matches and squads on Shoot'n'ScoreIt (SSI).
+Major release adding WordPress Tapahtumakalenteri integration and batch processing capabilities.
 
-### Features
+### New Features
 
-#### Core Functionality
-- **Cup Creation**: Automated RESUL CUP event creation with all required fields
-- **Match Creation**: Creates 3 child matches (Tarkkuus, Pika, Kuvio) per Cup
-- **Match Linking**: Automatically links matches to parent Cup as components
-- **Squad Creation**: Creates 3 squads per match (Oma ase 1, Oma ase 2, Laina-ase)
+#### WordPress Integration
+- **Calendar Event Creation**: Automatically creates events in Turun Reservilaiset WordPress calendar
+- **Auto-Publish**: Validates SSI and WordPress URLs, then publishes calendar event
+- **Statistics Update**: Updates shots fired count after Cup completion (`Update-TapahtumakalenteriEvent.ps1`)
+- **2FA Support**: Handles email-based OTP authentication for WordPress
 
-#### Configuration
-- **YAML-based Configuration**: All settings stored in `config/kupittaa-cup-config.yml`
-- **Customizable Templates**: Name templates for Cup and Match names
-- **Match Descriptions**: Individual descriptions for each match type
-- **Squad Definitions**: Configurable squad names and max shooters
+#### Batch Processing
+- **Batch Creation**: Create multiple events from a date list file (`New-KupittaaCupBatch.ps1`)
+- **Single Authentication**: One OTP prompt for entire batch - sessions reused
+- **Skip Existing**: Dates marked with `!` prefix are skipped
+- **Error Handling**: Stops on first error with clear status output
 
-#### Date/Time Management
-- **Registration Start**: Configurable days before event (default: 7 days)
-- **Registration Close**: Cup registration closes 12 hours before start time
-- **Match End Time**: Synced with Cup end time
-- **Squading Schedule**: Start with registration, close at match start
+#### Session Management
+- **PreAuth Parameter Set**: Pass pre-authenticated sessions to scripts
+- **Session Reuse**: SSI and WordPress sessions retained across batch operations
 
-#### Validation & Safety
-- **Duplicate Check**: Prevents creating events with duplicate names
-- **Test Mode**: `-TestMode` flag adds "TEST" prefix to event names
-- **Debug Output**: Saves HTML responses for troubleshooting
+### New Scripts
 
-#### Additional Fields
-- **Web Address**: Club website URL with "Lisätietoa" display text
-- **Venue**: Location name (Kupittaan urheiluhalli)
-- **Information Field**: Detailed event information (max 800 chars)
+| Script | Purpose |
+|--------|---------|
+| `Connect-WordPress.ps1` | WordPress authentication with 2FA |
+| `New-TapahtumakalenteriEvent.ps1` | Calendar event creation |
+| `Update-TapahtumakalenteriEvent.ps1` | Statistics update |
+| `New-KupittaaCupBatch.ps1` | Batch creation from date list |
 
-### Requirements
+### New Configuration
 
-- PowerShell 7.0+ (pwsh)
-- `powershell-yaml` module
-- Valid SSI session ID
+- `config/kupittaa-cup-dates.txt` - Date list for batch creation
 
 ### Usage
 
 ```powershell
-# Production
-.\scripts\New-KupittaaCup.ps1 -Date "25-01-2026" -SessionId "your-session-id"
+# Single event with calendar
+.\scripts\New-KupittaaCup.ps1 -Date "14-02-2026" `
+    -Username "ssi-email" -Password "ssi-password" `
+    -CreateCalendarEvent `
+    -WpUsername "wp-user" -WpPassword "wp-password"
 
-# Test mode
-.\scripts\New-KupittaaCup.ps1 -Date "25-01-2026" -SessionId "your-session-id" -TestMode
+# Batch creation
+.\scripts\New-KupittaaCupBatch.ps1 `
+    -DateListFile "config\kupittaa-cup-dates.txt" `
+    -SsiUsername "ssi-email" -SsiPassword "ssi-password" `
+    -WpUsername "wp-user" -WpPassword "wp-password"
 ```
 
-### Known Limitations
+### Requirements Met
 
-- **Venue Coordinates**: Cannot be set programmatically - must be added manually via SSI map UI
-- **Event Deletion**: Must be done manually via SSI web interface
-
-### Documentation
-
-- `docs/README.md` - User guide
-- `docs/developer-guide.md` - Technical documentation
-- `docs/requirements.md` - Requirements list (34 requirements, all completed)
-
-### Files
-
-```
-windsurf-project/
-├── config/
-│   └── kupittaa-cup-config.yml  # Event configuration
-├── scripts/
-│   └── New-KupittaaCup.ps1      # Main automation script
-└── docs/
-    ├── README.md
-    ├── developer-guide.md
-    ├── requirements.md
-    └── RELEASE-NOTES.md
-
-```
+- Req 38: Tapahtumakalenteri Integration ✅
+- Req 40: Upfront authentication ✅
+- Req 43: Statistics update ✅
+- Req 44: Auto-publish calendar event ✅
+- Req 45: Batch creation ✅
+- Req 46: Single authentication with session reuse ✅
 
 ---
 
-*Released: 2026-01-25*
+## Version 1.0 (2026-01-25)
+
+### Overview
+
+First release with full SSI Cup automation.
+
+### Features
+
+- **Cup Creation**: Automated RESUL CUP event creation
+- **Match Creation**: Creates 3 child matches (Tarkkuus, Pika, Kuvio)
+- **Match Linking**: Links matches to parent Cup as components
+- **Squad Creation**: Creates 3 squads per match
+- **YAML Configuration**: All settings in `kupittaa-cup-config.yml`
+- **Duplicate Check**: Prevents duplicate event names
+- **Test Mode**: `-TestMode` flag for testing
+- **Username/Password Auth**: Login without manual session ID
+
+### Requirements Met
+
+- Requirements 1-34: SSI Cup automation ✅
+- Requirement 37: Username/password authentication ✅
+
+### Known Limitations
+
+- Venue coordinates must be added manually via SSI map UI
+- Event deletion must be done manually
+
+---
+
+*Version 2.0 Released: 2026-02-01*
+*Version 1.0 Released: 2026-01-25*

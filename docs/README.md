@@ -1,16 +1,30 @@
 # Kupittaa Cup Automation Tool
 
-A PowerShell script for automating the creation of RESUL CUP events, child matches, and squads on shootnscoreit.com, with optional integration to the Turun Reservilaiset WordPress event calendar (tapahtumakalenteri).
+PowerShell automation for creating RESUL CUP events on Shoot'n'ScoreIt (SSI) with integrated WordPress calendar event creation for Turun Reservilaiset.
 
 ## Features
 
-- **Automated Cup Creation**: Creates a RESUL CUP event for a specified date
-- **Child Match Creation**: Automatically creates 3 child matches (Tarkkuus, Pika, Kuvio)
-- **Auto-Linking**: Links all child matches to the parent Cup event
-- **Squad Creation**: Creates 3 squads per match (Laina-ase, Oma ase 1, Oma ase 2)
-- **Tapahtumakalenteri Integration**: Optionally creates a corresponding event in the WordPress calendar
+### SSI Integration
+- **Automated Cup Creation**: Creates RESUL CUP with all required fields
+- **Child Match Creation**: Creates 3 matches (Tarkkuus, Pika, Kuvio) per Cup
+- **Auto-Linking**: Links matches to parent Cup as components
+- **Squad Creation**: Creates 3 squads per match with configurable limits
 - **Duplicate Check**: Prevents creating events with duplicate names
-- **Configuration-Driven**: All settings loaded from YAML configuration file
+
+### WordPress Integration
+- **Calendar Event Creation**: Creates event in Tapahtumakalenteri
+- **Auto-Publish**: Validates URLs and publishes after successful creation
+- **Statistics Update**: Updates shots fired after Cup completion
+- **2FA Support**: Handles email-based OTP authentication
+
+### Batch Processing
+- **Batch Creation**: Create multiple events from a date list file
+- **Single Authentication**: One OTP prompt for entire batch
+- **Session Reuse**: SSI and WordPress sessions retained across events
+- **Skip Existing**: Dates marked with `!` are skipped
+
+### Configuration
+- **YAML-based**: All settings in `kupittaa-cup-config.yml`
 - **Test Mode**: Add TEST prefix to event names for testing
 
 ## Requirements
@@ -42,6 +56,24 @@ A PowerShell script for automating the creation of RESUL CUP events, child match
     -Username "ssi-email" -Password "ssi-password" `
     -CreateCalendarEvent `
     -WpUsername "wp-username" -WpPassword "wp-password"
+```
+
+### Batch Creation (Multiple Dates)
+
+```powershell
+.\scripts\New-KupittaaCupBatch.ps1 `
+    -DateListFile "config\kupittaa-cup-dates.txt" `
+    -SsiUsername "ssi-email" -SsiPassword "ssi-password" `
+    -WpUsername "wp-username" -WpPassword "wp-password"
+```
+
+The date list file format:
+```
+# Comments start with #
+# Dates marked with ! are skipped (already created)
+!14.2.2026
+21.3.2026
+28.3.2026
 ```
 
 ### Test Mode (adds TEST prefix to names)
@@ -218,25 +250,28 @@ All settings are stored in `config/kupittaa-cup-config.yml`:
 ```
 windsurf-project/
 ├── config/
-│   └── kupittaa-cup-config.yml           # All event configuration (SSI + Tapahtumakalenteri)
+│   ├── kupittaa-cup-config.yml           # All event configuration (SSI + WordPress)
+│   └── kupittaa-cup-dates.txt            # Date list for batch creation
 ├── scripts/
-│   ├── Connect-SSI.ps1                   # SSI authentication script
+│   ├── Connect-SSI.ps1                   # SSI authentication
 │   ├── Connect-WordPress.ps1             # WordPress authentication (with 2FA)
-│   ├── New-KupittaaCup.ps1               # Main automation script
-│   └── New-TapahtumakalenteriEvent.ps1   # Calendar event creation
+│   ├── New-KupittaaCup.ps1               # Main script - single event creation
+│   ├── New-KupittaaCupBatch.ps1          # Batch creation from date list
+│   ├── New-TapahtumakalenteriEvent.ps1   # Calendar event creation
+│   └── Update-TapahtumakalenteriEvent.ps1 # Statistics update
 ├── docs/
 │   ├── README.md                         # This file
 │   ├── requirements.md                   # Requirements list
-│   ├── tapahtumakalenteri-design.md      # Calendar integration design
-│   └── developer-guide.md                # Technical documentation
+│   ├── developer-guide.md                # Technical documentation
+│   └── RELEASE-NOTES.md                  # Version history
 └── archive/                              # Old/experimental scripts
 ```
 
 ## Limitations
 
 - **Venue coordinates**: Cannot be set programmatically. Must be added manually via SSI map UI after event creation.
-- **WordPress 2FA**: Requires manual OTP entry during calendar event creation (email-based verification).
-- **Calendar event status**: Events are created as drafts and must be published manually in WordPress.
+- **WordPress 2FA**: Requires manual OTP entry (email-based verification). One OTP per batch session.
+- **Session timeout**: WordPress sessions may expire during long operations; re-authentication required.
 
 ## License
 
