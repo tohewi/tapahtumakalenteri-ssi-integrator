@@ -119,12 +119,13 @@ elseif ($PSCmdlet.ParameterSetName -eq "Login") {
 }
 
 # 2. Authenticate to WordPress (if calendar event creation is requested)
-$wpSession = $null
+# Note: $WpSession is the parameter (capital W), we use it directly or authenticate fresh
+$wpSessionActive = $null
 if ($PSCmdlet.ParameterSetName -eq "PreAuth" -and $WpSession) {
     # Use pre-authenticated WordPress session
     Write-Host "`n--- WordPress Authentication ---" -ForegroundColor Yellow
     Write-Host "Using pre-authenticated WordPress session..." -ForegroundColor Gray
-    $wpSession = $WpSession
+    $wpSessionActive = $WpSession
     Write-Host "SUCCESS: WordPress session ready" -ForegroundColor Green
 }
 elseif ($CreateCalendarEvent) {
@@ -135,9 +136,9 @@ elseif ($CreateCalendarEvent) {
     }
     
     $connectWpScript = Join-Path -Path $PSScriptRoot -ChildPath "Connect-WordPress.ps1"
-    $wpSession = & $connectWpScript -Username $WpUsername -Password $WpPassword
+    $wpSessionActive = & $connectWpScript -Username $WpUsername -Password $WpPassword
     
-    if (-not $wpSession) {
+    if (-not $wpSessionActive) {
         Write-Error "WordPress authentication failed"
         exit 1
     }
@@ -704,7 +705,7 @@ foreach ($match in $createdMatches) {
 #region Calendar Event (Tapahtumakalenteri)
 $calendarEvent = $null
 
-if ($wpSession) {
+if ($wpSessionActive) {
     Write-Host "`n" -NoNewline
     Write-Host "========================================" -ForegroundColor Magenta
     Write-Host "    CREATING CALENDAR EVENT" -ForegroundColor Magenta
@@ -727,7 +728,7 @@ if ($wpSession) {
     # Create calendar event
     $newEventScript = Join-Path -Path $PSScriptRoot -ChildPath "New-TapahtumakalenteriEvent.ps1"
     $calendarEvent = & $newEventScript `
-        -Session $wpSession `
+        -Session $wpSessionActive `
         -Title $calendarTitle `
         -Date $dateObj `
         -StartTime $config.general.startTime `
@@ -764,7 +765,7 @@ if ($wpSession) {
         
         # Validate WordPress calendar event URL (preview URL)
         try {
-            $wpCheck = Invoke-WebRequest -Uri $calendarEvent.EventUrl -Method GET -WebSession $wpSession -ErrorAction Stop
+            $wpCheck = Invoke-WebRequest -Uri $calendarEvent.EventUrl -Method GET -WebSession $wpSessionActive -ErrorAction Stop
             if ($wpCheck.StatusCode -eq 200) {
                 $wpUrlValid = $true
                 Write-Host "  Calendar Event URL: OK (HTTP 200)" -ForegroundColor Green
@@ -781,7 +782,7 @@ if ($wpSession) {
             # Get edit page to extract nonces
             $editUrl = $calendarEvent.EditUrl
             try {
-                $editPage = Invoke-WebRequest -Uri $editUrl -WebSession $wpSession -Method GET
+                $editPage = Invoke-WebRequest -Uri $editUrl -WebSession $wpSessionActive -Method GET
                 
                 $wpNonce = $null
                 $acfNonce = $null
@@ -819,7 +820,7 @@ if ($wpSession) {
                     $formBody = $formBodyParts -join "&"
                     
                     # Submit publish
-                    $wpBaseUri = $tkConfig.wordpressUrl
+                    $wpBaseUri = $tkConfig.baseUri
                     $postUrl = "$wpBaseUri/wp-admin/post.php"
                     $headers = @{
                         "Origin" = $wpBaseUri
@@ -828,7 +829,7 @@ if ($wpSession) {
                     
                     $publishResponse = Invoke-WebRequest -Uri $postUrl `
                         -Method POST `
-                        -WebSession $wpSession `
+                        -WebSession $wpSessionActive `
                         -Body $formBody `
                         -Headers $headers `
                         -ContentType "application/x-www-form-urlencoded" `
