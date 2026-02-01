@@ -62,6 +62,12 @@ param(
     [Parameter(Mandatory = $true, ParameterSetName = "Login")]
     [string]$Password,
 
+    [Parameter(Mandatory = $true, ParameterSetName = "PreAuth")]
+    [Microsoft.PowerShell.Commands.WebRequestSession]$SsiSession,
+
+    [Parameter(ParameterSetName = "PreAuth")]
+    [Microsoft.PowerShell.Commands.WebRequestSession]$WpSession,
+
     [string]$BaseUri = "https://shootnscoreit.com",
     
     [string]$ConfigPath,
@@ -89,7 +95,13 @@ Write-Host "========================================" -ForegroundColor Cyan
 
 # 1. Authenticate to SSI
 Write-Host "`n--- SSI Authentication ---" -ForegroundColor Yellow
-if ($PSCmdlet.ParameterSetName -eq "Login") {
+if ($PSCmdlet.ParameterSetName -eq "PreAuth") {
+    # Use pre-authenticated session
+    Write-Host "Using pre-authenticated SSI session..." -ForegroundColor Gray
+    $session = $SsiSession
+    Write-Host "SUCCESS: SSI session ready" -ForegroundColor Green
+}
+elseif ($PSCmdlet.ParameterSetName -eq "Login") {
     Write-Host "Authenticating with username/password..." -ForegroundColor Gray
     $connectScript = Join-Path -Path $PSScriptRoot -ChildPath "Connect-SSI.ps1"
     $session = & $connectScript -Username $Username -Password $Password -BaseUri $BaseUri
@@ -108,7 +120,14 @@ if ($PSCmdlet.ParameterSetName -eq "Login") {
 
 # 2. Authenticate to WordPress (if calendar event creation is requested)
 $wpSession = $null
-if ($CreateCalendarEvent) {
+if ($PSCmdlet.ParameterSetName -eq "PreAuth" -and $WpSession) {
+    # Use pre-authenticated WordPress session
+    Write-Host "`n--- WordPress Authentication ---" -ForegroundColor Yellow
+    Write-Host "Using pre-authenticated WordPress session..." -ForegroundColor Gray
+    $wpSession = $WpSession
+    Write-Host "SUCCESS: WordPress session ready" -ForegroundColor Green
+}
+elseif ($CreateCalendarEvent) {
     Write-Host "`n--- WordPress Authentication ---" -ForegroundColor Yellow
     if (-not $WpUsername -or -not $WpPassword) {
         Write-Error "WordPress credentials required when using -CreateCalendarEvent. Use -WpUsername and -WpPassword parameters."

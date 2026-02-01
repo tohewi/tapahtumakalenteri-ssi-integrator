@@ -147,10 +147,33 @@ for ($i = 0; $i -lt $datesToProcess.Count; $i++) {
 }
 
 # Script paths
+$connectSsiScript = Join-Path $scriptRoot "Connect-SSI.ps1"
+$connectWpScript = Join-Path $scriptRoot "Connect-WordPress.ps1"
 $newCupScript = Join-Path $scriptRoot "New-KupittaaCup.ps1"
 
-Write-Host "`nNote: Each event creation will require WordPress OTP authentication." -ForegroundColor Yellow
-Write-Host "SSI authentication will be done once per event." -ForegroundColor Gray
+# Authenticate once upfront
+Write-Host "`n========================================" -ForegroundColor Cyan
+Write-Host "    AUTHENTICATION (ONE-TIME)" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+
+Write-Host "`n--- SSI Authentication ---" -ForegroundColor Yellow
+$ssiSession = & $connectSsiScript -Username $SsiUsername -Password $SsiPassword
+if (-not $ssiSession) {
+    Write-Error "Failed to authenticate to SSI"
+    return
+}
+
+Write-Host "`n--- WordPress Authentication ---" -ForegroundColor Yellow
+Write-Host "You will only need to enter OTP once for all events." -ForegroundColor Gray
+$wpSession = & $connectWpScript -Username $WpUsername -Password $WpPassword
+if (-not $wpSession) {
+    Write-Error "Failed to authenticate to WordPress"
+    return
+}
+
+Write-Host "`n========================================" -ForegroundColor Cyan
+Write-Host "    AUTHENTICATION COMPLETE" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
 
 # Process each date
 $results = @()
@@ -173,16 +196,12 @@ for ($i = 0; $i -lt $datesToProcess.Count; $i++) {
         $parsedDate = [DateTime]::ParseExact($dateStr, "d.M.yyyy", [System.Globalization.CultureInfo]::InvariantCulture)
         $formattedDate = $parsedDate.ToString("dd-MM-yyyy")
         
-        # Call New-KupittaaCup.ps1 with the date
-        # Note: Each call will re-authenticate (WordPress OTP required per session)
+        # Call New-KupittaaCup.ps1 with pre-authenticated sessions
         & $newCupScript `
             -Date $formattedDate `
             -ConfigPath $ConfigPath `
-            -Username $SsiUsername `
-            -Password $SsiPassword `
-            -CreateCalendarEvent `
-            -WpUsername $WpUsername `
-            -WpPassword $WpPassword
+            -SsiSession $ssiSession `
+            -WpSession $wpSession
         
         $successCount++
         $results += [PSCustomObject]@{
