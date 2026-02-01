@@ -1,20 +1,21 @@
 # Kupittaa Cup Creation - Developer Process Guide
 
-This guide describes the technical process for creating a Kupittaa RESUL CUP with matches and squads on Shoot'n'ScoreIt (SSI).
+This guide describes the technical process for creating a Kupittaa RESUL CUP with matches and squads on Shoot'n'ScoreIt (SSI), with optional integration to the Turun Reservilaiset WordPress event calendar (tapahtumakalenteri).
 
 ## Overview
 
 The creation process follows these steps:
 
 ```
-1. CHECK DUPLICATES → 2. CREATE CUP → 3. CREATE MATCHES → 4. LINK MATCHES TO CUP → 5. CREATE SQUADS
+1. CHECK DUPLICATES → 2. CREATE CUP → 3. CREATE MATCHES → 4. LINK MATCHES TO CUP → 5. CREATE SQUADS → 6. CREATE CALENDAR EVENT (optional)
 ```
 
 ## Prerequisites
 
 - PowerShell 7.0+ (pwsh)
 - `powershell-yaml` module (`Install-Module powershell-yaml`)
-- Valid SSI session ID (browser cookie)
+- SSI account credentials (email/password) or session ID
+- WordPress credentials (for tapahtumakalenteri integration, optional)
 - Configuration file: `config/kupittaa-cup-config.yml`
 
 ## Process Flow
@@ -109,9 +110,9 @@ Three squads per match:
 
 | Squad Name | Max Shooters | Description |
 |------------|--------------|-------------|
-| Oma ase 1 | 9 | Own firearm |
-| Oma ase 2 | 9 | Own firearm |
-| Laina-ase | 7 | Loaner firearm |
+| Laina-ase (pieni puoli) | 9 | Loaner firearm |
+| Oma ase 1 (iso puoli, vasen) | 9 | Own firearm |
+| Oma ase 2 (iso puoli, oikea) | 7 | Own firearm |
 
 **Key Fields:**
 | Field | Value | Description |
@@ -129,11 +130,15 @@ Three squads per match:
 
 ## Authentication
 
-SSI uses Django session-based authentication:
+### SSI Authentication
 
-1. **Session Cookie:** `sessionid` - Obtained from browser after login
-2. **CSRF Token:** Retrieved from form page before each POST request (except squad creation)
-3. **Language Cookie:** `django_language=en` - Ensures English responses
+SSI uses Django session-based authentication. Use `Connect-SSI.ps1` for programmatic login:
+
+```powershell
+$session = .\scripts\Connect-SSI.ps1 -Username "email@example.com" -Password "password"
+```
+
+Alternatively, use a session ID from browser cookies:
 
 ```powershell
 $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
@@ -141,7 +146,25 @@ $session.Cookies.Add((New-Object System.Net.Cookie("sessionid", $SessionId, "/",
 $session.Cookies.Add((New-Object System.Net.Cookie("django_language", "en", "/", "shootnscoreit.com")))
 ```
 
-**Important:** Squad creation endpoint does NOT require CSRF token.
+**Notes:**
+- CSRF Token: Retrieved from form page before each POST (except squad creation)
+- Language Cookie: `django_language=en` ensures English responses
+- Squad creation endpoint does NOT require CSRF token
+
+### WordPress Authentication (Tapahtumakalenteri)
+
+WordPress uses cookie-based authentication with email 2FA. Use `Connect-WordPress.ps1`:
+
+```powershell
+$wpSession = .\scripts\Connect-WordPress.ps1 -Username "wp-username" -Password "wp-password"
+```
+
+**2FA Flow:**
+1. Script submits credentials to `/wp-login.php`
+2. WordPress sends OTP code to registered email
+3. Script auto-clicks resend, waits 3 seconds, then prompts for code
+4. User enters 8-digit code (or presses Enter to resend)
+5. Script submits OTP and returns authenticated session
 
 ---
 
@@ -199,12 +222,20 @@ matchTypes:
 
 squads:
   definitions:
-    - name: "Oma ase 1"
+    - name: "Laina-ase (pieni puoli)"
       maxShooters: 9
-    - name: "Oma ase 2"
+    - name: "Oma ase 1 (iso puoli, vasen)"
       maxShooters: 9
-    - name: "Laina-ase"
+    - name: "Oma ase 2 (iso puoli, oikea)"
       maxShooters: 7
+
+tapahtumakalenteri:
+  baseUri: "https://turun-reservialiupseerit-turun-reservilaiset.reservilaisliitto.fi"
+  titleTemplate: "Kupittaan ampumavuoro {displayDate}"
+  location: "Kupittaan urheiluhallin ampumarata"
+  mapLink: "https://maps.app.goo.gl/..."
+  shortDescription: "..."  # Ingressi text
+  content: "..."           # HTML content with {ssiCupLink} placeholder
 ```
 
 ---
@@ -225,17 +256,27 @@ squads:
 ## Example Usage
 
 ```powershell
-# Production
-.\New-KupittaaCup.ps1 -Date "25-01-2026" -SessionId "your-session-id"
+# SSI Cup only (with username/password)
+.\scripts\New-KupittaaCup.ps1 -Date "14-02-2026" -Username "email" -Password "pass"
+
+# SSI Cup + Tapahtumakalenteri event
+.\scripts\New-KupittaaCup.ps1 -Date "14-02-2026" `
+    -Username "ssi-email" -Password "ssi-pass" `
+    -CreateCalendarEvent `
+    -WpUsername "wp-user" -WpPassword "wp-pass"
 
 # Test mode (adds TEST prefix)
-.\New-KupittaaCup.ps1 -Date "25-01-2026" -SessionId "your-session-id" -TestMode
+.\scripts\New-KupittaaCup.ps1 -Date "14-02-2026" -Username "email" -Password "pass" -TestMode
+
+# Legacy: Using session ID
+.\scripts\New-KupittaaCup.ps1 -Date "14-02-2026" -SessionId "your-session-id"
 ```
 
 This creates:
 - 1 RESUL CUP
 - 3 Matches (Tarkkuus, Pika, Kuvio)
 - 9 Squads (3 per match)
+- 1 Calendar event (optional, as draft)
 
 All linked and configured according to `kupittaa-cup-config.yml`.
 
@@ -245,3 +286,30 @@ All linked and configured according to `kupittaa-cup-config.yml`.
 
 - **Venue coordinates** cannot be set programmatically - must be added via SSI map UI
 - **Event deletion** must be done manually via SSI web interface
+- **WordPress 2FA** requires manual OTP entry during calendar event creation
+- **Calendar events** are created as drafts and must be published manually in WordPress
+
+---
+
+## Step 6: Create Calendar Event (Optional)
+
+When `-CreateCalendarEvent` is specified, a corresponding event is created in the WordPress calendar.
+
+**Script:** `New-TapahtumakalenteriEvent.ps1`
+
+**Key Features:**
+- Creates event as **draft** (safe for production)
+- Permalink includes SSI Cup ID: `kupittaan-ampumavuoro-14-02-2026-cup141`
+- SSI Cup URL embedded in event content via `{ssiCupLink}` placeholder
+- Event format tags: Pistooli (50), Prosenttiammunta (52)
+
+**ACF Fields Used:**
+| Field | ACF Key | Description |
+|-------|---------|-------------|
+| Short Description | `field_5d3e9d9626a82` | Ingressi text |
+| Content | `field_5d3e9dc926a83` | Full HTML content |
+| Start Date | `field_5d3e9ddc26a84` | Format: YYYYMMDD |
+| End Date | `field_5d3e9e5f26a85` | Format: YYYYMMDD |
+| Time | `field_62949bdcbb12e` | e.g., "Klo 09.00-12.00" |
+| Location | `field_5d3e9efab663d` | Nested group |
+| Shots Fired | `field_4k2esk3rske32` | For statistics (Req 39) |
