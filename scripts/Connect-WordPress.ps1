@@ -123,39 +123,8 @@ if (-not $hasAuthCookie) {
                 $wpAuthNonce = $Matches[1]
             }
             
-            # Auto-send OTP before first prompt (WordPress doesn't always send on initial login)
-            Write-Host "  Waiting 3 seconds before requesting code..." -ForegroundColor Gray
-            Start-Sleep -Seconds 3
-            
-            # Send initial OTP
-            Write-Host "  Sending verification code to your email..." -ForegroundColor Yellow
-            $resendBody = @{
-                "provider" = $provider
-                "wp-auth-id" = $wpAuthId
-                "wp-auth-nonce" = $wpAuthNonce
-                "redirect_to" = "$BaseUri/wp-admin/"
-                "rememberme" = "0"
-                "two-factor-email-code-resend" = "Lähetä koodi uudelleen"
-            }
-            try {
-                $resendResponse = Invoke-WebRequest -Uri "$BaseUri/wp-login.php?action=validate_2fa" `
-                    -Method POST `
-                    -WebSession $session `
-                    -Body $resendBody `
-                    -Headers $headers `
-                    -ContentType "application/x-www-form-urlencoded" `
-                    -MaximumRedirection 5 `
-                    -ErrorAction SilentlyContinue
-                
-                # Update nonce from resend response
-                if ($resendResponse.Content -match 'name="wp-auth-nonce"[^>]*value="([^"]+)"') {
-                    $wpAuthNonce = $Matches[1]
-                }
-            }
-            catch {
-                # Ignore errors
-            }
-            Write-Host "  Code sent. Check your email." -ForegroundColor Green
+            # WordPress sends OTP automatically on 2FA page load - no need to resend
+            Write-Host "  OTP code should have been sent to your email automatically." -ForegroundColor Green
             
             # Retry loop for OTP submission (max 2 attempts)
             $maxAttempts = 2
