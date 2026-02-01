@@ -234,8 +234,11 @@ tapahtumakalenteri:
   titleTemplate: "Kupittaan ampumavuoro {displayDate}"
   location: "Kupittaan urheiluhallin ampumarata"
   mapLink: "https://maps.app.goo.gl/..."
-  shortDescription: "..."  # Ingressi text
-  content: "..."           # HTML content with {ssiCupLink} placeholder
+  eventFormatTaxonomyIds:   # WordPress taxonomy term IDs
+    - 50  # 1.6 Pistooli
+    - 52  # 2 Prosenttiammunta
+  shortDescription: "..."   # Ingressi text
+  content: "..."            # HTML content with {ssiCupLink} placeholder
 ```
 
 ---

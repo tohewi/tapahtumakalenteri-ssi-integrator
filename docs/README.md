@@ -156,9 +156,9 @@ SUCCESS: Created Kuvio at: https://shootnscoreit.com/event/91/458/
 
 --- Creating Squads for Matches ---
 Creating squads for Tarkkuus (ID: 456)...
-  SUCCESS: Created squad 'Oma ase 1' (max: 9)
-  SUCCESS: Created squad 'Oma ase 2' (max: 9)
-  SUCCESS: Created squad 'Laina-ase' (max: 7)
+  SUCCESS: Created squad 'Laina-ase (pieni puoli)' (max: 9)
+  SUCCESS: Created squad 'Oma ase 1 (iso puoli, vasen)' (max: 9)
+  SUCCESS: Created squad 'Oma ase 2 (iso puoli, oikea)' (max: 7)
 ...
 
 ========================================
@@ -218,18 +218,19 @@ All settings are stored in `config/kupittaa-cup-config.yml`:
 ```
 windsurf-project/
 ├── config/
-│   └── kupittaa-cup-config.yml  # All event configuration
+│   ├── kupittaa-cup-config.yml           # All event configuration (SSI + Tapahtumakalenteri)
+│   └── wordpress-credentials.yml.template # WordPress credentials template
 ├── scripts/
-│   ├── Connect-SSI.ps1          # SSI authentication script
-│   ├── Connect-WordPress.ps1    # WordPress authentication (with 2FA)
-│   ├── New-KupittaaCup.ps1      # Main automation script
-│   └── New-TapahtumakalenteriEvent.ps1  # Calendar event creation
+│   ├── Connect-SSI.ps1                   # SSI authentication script
+│   ├── Connect-WordPress.ps1             # WordPress authentication (with 2FA)
+│   ├── New-KupittaaCup.ps1               # Main automation script
+│   └── New-TapahtumakalenteriEvent.ps1   # Calendar event creation
 ├── docs/
-│   ├── README.md                # This file
-│   ├── requirements.md          # Requirements list
-│   ├── tapahtumakalenteri-design.md  # Calendar integration design
-│   └── developer-guide.md       # Technical documentation
-└── archive/                     # Old/experimental scripts
+│   ├── README.md                         # This file
+│   ├── requirements.md                   # Requirements list
+│   ├── tapahtumakalenteri-design.md      # Calendar integration design
+│   └── developer-guide.md                # Technical documentation
+└── archive/                              # Old/experimental scripts
 ```
 
 ## Limitations
