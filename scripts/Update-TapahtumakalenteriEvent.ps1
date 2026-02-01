@@ -174,7 +174,7 @@ $formData = @{
     "originalaction" = "editpost"
     "post_type" = "event"
     "post_ID" = $postId
-    "post_status" = "draft"  # Keep as draft
+    "post_status" = "publish"  # Re-publish after updating statistics
     
     # ACF fields
     "_acf_screen" = "post"
