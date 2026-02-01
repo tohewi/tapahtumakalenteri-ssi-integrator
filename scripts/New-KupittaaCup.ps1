@@ -724,6 +724,114 @@ if ($CreateCalendarEvent -and $wpSession) {
     if ($calendarEvent) {
         Write-Host "`nCalendar event created successfully!" -ForegroundColor Green
         Write-Host "  Permalink includes Cup ID: cup$($cupEventInfo.EventId)" -ForegroundColor Gray
+        
+        # Requirement 44: Validate URLs and publish if both are accessible
+        Write-Host "`n--- Validating URLs before publishing ---" -ForegroundColor Yellow
+        
+        $ssiUrlValid = $false
+        $wpUrlValid = $false
+        
+        # Validate SSI Cup URL
+        try {
+            $ssiCheck = Invoke-WebRequest -Uri $cupFinalUrl -Method HEAD -WebSession $session -ErrorAction Stop
+            if ($ssiCheck.StatusCode -eq 200) {
+                $ssiUrlValid = $true
+                Write-Host "  SSI Cup URL: OK (HTTP 200)" -ForegroundColor Green
+            }
+        }
+        catch {
+            Write-Host "  SSI Cup URL: FAILED - $($_.Exception.Message)" -ForegroundColor Red
+        }
+        
+        # Validate WordPress calendar event URL (preview URL)
+        try {
+            $wpCheck = Invoke-WebRequest -Uri $calendarEvent.EventUrl -Method GET -WebSession $wpSession -ErrorAction Stop
+            if ($wpCheck.StatusCode -eq 200) {
+                $wpUrlValid = $true
+                Write-Host "  Calendar Event URL: OK (HTTP 200)" -ForegroundColor Green
+            }
+        }
+        catch {
+            Write-Host "  Calendar Event URL: FAILED - $($_.Exception.Message)" -ForegroundColor Red
+        }
+        
+        # If both URLs are valid, publish the calendar event
+        if ($ssiUrlValid -and $wpUrlValid) {
+            Write-Host "`n--- Publishing Calendar Event ---" -ForegroundColor Yellow
+            
+            # Get edit page to extract nonces
+            $editUrl = $calendarEvent.EditUrl
+            try {
+                $editPage = Invoke-WebRequest -Uri $editUrl -WebSession $wpSession -Method GET
+                
+                $wpNonce = $null
+                $acfNonce = $null
+                if ($editPage.Content -match 'name="_wpnonce"\s+value="([^"]+)"') {
+                    $wpNonce = $Matches[1]
+                }
+                if ($editPage.Content -match 'name="_acf_nonce"\s+value="([^"]+)"') {
+                    $acfNonce = $Matches[1]
+                }
+                
+                if ($wpNonce -and $acfNonce) {
+                    # Build publish form
+                    $publishFormData = @{
+                        "_wpnonce" = $wpNonce
+                        "_wp_http_referer" = "/wp-admin/post.php?post=$($calendarEvent.PostId)&action=edit"
+                        "action" = "editpost"
+                        "originalaction" = "editpost"
+                        "post_type" = "event"
+                        "post_ID" = $calendarEvent.PostId
+                        "post_status" = "publish"
+                        "_acf_screen" = "post"
+                        "_acf_post_id" = $calendarEvent.PostId
+                        "_acf_nonce" = $acfNonce
+                        "_acf_changed" = "0"
+                    }
+                    
+                    # Build form body
+                    Add-Type -AssemblyName System.Web
+                    $formBodyParts = @()
+                    foreach ($key in $publishFormData.Keys) {
+                        $encodedKey = [System.Web.HttpUtility]::UrlEncode($key)
+                        $encodedValue = [System.Web.HttpUtility]::UrlEncode($publishFormData[$key])
+                        $formBodyParts += "$encodedKey=$encodedValue"
+                    }
+                    $formBody = $formBodyParts -join "&"
+                    
+                    # Submit publish
+                    $wpBaseUri = $tkConfig.wordpressUrl
+                    $postUrl = "$wpBaseUri/wp-admin/post.php"
+                    $headers = @{
+                        "Origin" = $wpBaseUri
+                        "Referer" = $editUrl
+                    }
+                    
+                    $publishResponse = Invoke-WebRequest -Uri $postUrl `
+                        -Method POST `
+                        -WebSession $wpSession `
+                        -Body $formBody `
+                        -Headers $headers `
+                        -ContentType "application/x-www-form-urlencoded" `
+                        -MaximumRedirection 5
+                    
+                    if ($publishResponse.StatusCode -eq 200) {
+                        Write-Host "  Calendar event PUBLISHED successfully!" -ForegroundColor Green
+                        $calendarEvent.Status = "publish"
+                    }
+                }
+                else {
+                    Write-Host "  Could not extract nonces for publishing" -ForegroundColor Yellow
+                }
+            }
+            catch {
+                Write-Host "  Failed to publish: $($_.Exception.Message)" -ForegroundColor Red
+            }
+        }
+        else {
+            Write-Host "`nCalendar event remains as DRAFT - URL validation failed" -ForegroundColor Yellow
+            Write-Host "  Please verify URLs manually and publish from WordPress admin" -ForegroundColor Gray
+        }
     }
     else {
         Write-Host "`nWARNING: Failed to create calendar event." -ForegroundColor Yellow
@@ -761,8 +869,14 @@ Write-Host "`nNext steps:" -ForegroundColor Cyan
 Write-Host "  1. Verify Cup and Matches at the URLs above" -ForegroundColor White
 Write-Host "  2. Check squad configuration for each match" -ForegroundColor White
 if ($calendarEvent) {
-    Write-Host "  3. Review and PUBLISH the calendar event (currently draft)" -ForegroundColor White
-    Write-Host "  4. Delete TEST events if this was a test run" -ForegroundColor White
+    if ($calendarEvent.Status -eq "publish") {
+        Write-Host "  3. Calendar event is PUBLISHED - verify at public URL" -ForegroundColor White
+        Write-Host "  4. Delete TEST events if this was a test run" -ForegroundColor White
+    }
+    else {
+        Write-Host "  3. Review and PUBLISH the calendar event (currently draft)" -ForegroundColor White
+        Write-Host "  4. Delete TEST events if this was a test run" -ForegroundColor White
+    }
 }
 else {
     Write-Host "  3. Delete TEST events if this was a test run" -ForegroundColor White
