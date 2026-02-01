@@ -52,12 +52,18 @@
 | 45 | **Batch Creation**: Create multiple events from date list file, sequential processing, skip existing | ✅ |
 | 46 | **Single Authentication**: One-time auth with session reuse for batch processing | ✅ |
 
+## Release 2.1 - Data Integrity (Planned)
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| 47 | **Data Integrity Check**: Modular integrity verification between SSI and WordPress. (1) List all Cups owned by SSI login and verify each has a corresponding Tapahtumakalenteri event. (2) Validate date list file against both systems - all dates should have SSI Cup and WordPress event. (3) Verify cross-references: WordPress permalink contains Cup ID, WordPress content links to SSI Cup URL. Configurable by event type (e.g., Kupittaa Cup) and date list file parameter. | ⬚ Pending |
+
 ## Summary
 
-- **Total Requirements**: 46
+- **Total Requirements**: 47
 - **Completed**: 42
 - **On Hold**: 3 (35, 36, 41)
-- **Pending**: 2 (39, 42)
+- **Pending**: 3 (39, 42, 47)
 
 ## Configuration Files
 
@@ -76,6 +82,7 @@
 | `Connect-WordPress.ps1` | WordPress authentication with 2FA |
 | `New-TapahtumakalenteriEvent.ps1` | Calendar event creation |
 | `Update-TapahtumakalenteriEvent.ps1` | Statistics update |
+| `Test-EventIntegrity.ps1` | Data integrity check between SSI and WordPress |
 
 ## Documentation
 

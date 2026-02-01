@@ -76,6 +76,21 @@ The date list file format:
 28.3.2026
 ```
 
+### Data Integrity Check
+
+```powershell
+.\scripts\Test-EventIntegrity.ps1 -EventType "KupittaaCup" `
+    -ConfigPath "config\kupittaa-cup-config.yml" `
+    -DateListFile "config\kupittaa-cup-dates.txt" `
+    -SsiUsername "ssi-email" -SsiPassword "ssi-password" `
+    -WpUsername "wp-username" -WpPassword "wp-password"
+```
+
+Validates:
+- All SSI Cups have corresponding WordPress calendar events
+- All dates in the date list exist in both systems
+- Cross-references are correct (permalink contains Cup ID, content links to SSI)
+
 ### Test Mode (adds TEST prefix to names)
 
 ```powershell
@@ -258,7 +273,8 @@ windsurf-project/
 │   ├── New-KupittaaCup.ps1               # Main script - single event creation
 │   ├── New-KupittaaCupBatch.ps1          # Batch creation from date list
 │   ├── New-TapahtumakalenteriEvent.ps1   # Calendar event creation
-│   └── Update-TapahtumakalenteriEvent.ps1 # Statistics update
+│   ├── Update-TapahtumakalenteriEvent.ps1 # Statistics update
+│   └── Test-EventIntegrity.ps1           # Data integrity check
 ├── docs/
 │   ├── README.md                         # This file
 │   ├── requirements.md                   # Requirements list
