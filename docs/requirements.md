@@ -44,6 +44,7 @@
 | 41 | Use PowerShell built-in secrets management capabilities to store API keys and credentials. | [parked - OTP required for each WP session makes credential storage less useful] |
 | 42 | Modularize codebase to suit different needs. i.e. there can be another configuration file for another event type. | [ ] |
 | 43 | Statistics: When Cup and all matches are completed, update the total shots fired to the calendar event. Calculation: number of Cup shooters × 100 (max shots per Cup). | [ ] |
+| 44 | Publish Tapahtumakalenteri Event: After successful creation of both SSI Cup and Tapahtumakalenteri event, validate that both URLs are accessible (HTTP 200), then publish the calendar event (change status from draft to publish). Display final URLs in summary for user verification. | [ ] |
 
 ## Configuration Files
 
