@@ -77,21 +77,20 @@ $cupPageUrl = "$SsiBaseUri/event/136/$CupId/"
 try {
     $cupPage = Invoke-WebRequest -Uri $cupPageUrl -WebSession $SsiSession -Method GET
     
-    # Parse the page to find participant count
-    # Look for "Registered: X" or similar pattern in the page
+    # Parse the page to find actual participant count (not max)
     $participantCount = 0
     
-    # Try to find registered competitors count
-    # Pattern: "Registered:</span> <span class="value">X</span>"
-    if ($cupPage.Content -match 'Registered:</span>\s*<span[^>]*>(\d+)</span>') {
+    # Best pattern: "currently X registered" (e.g., "Max 15 competitors allowed, currently 6 registered")
+    if ($cupPage.Content -match 'currently\s+(\d+)\s+registered') {
         $participantCount = [int]$Matches[1]
     }
-    # Alternative pattern: look for competitor list
-    elseif ($cupPage.Content -match 'class="competitor-row"') {
-        $participantCount = ([regex]::Matches($cupPage.Content, 'class="competitor-row"')).Count
+    # Alternative: number-card with Competitors label
+    # Pattern: <div class="number-card-number">6</div>...<div class="number-card-detail">Competitors</div>
+    elseif ($cupPage.Content -match 'number-card-number">\s*(\d+)\s*</div>\s*<div class="number-card-detail">\s*Competitors') {
+        $participantCount = [int]$Matches[1]
     }
-    # Another pattern: "X competitors"
-    elseif ($cupPage.Content -match '(\d+)\s+competitors?') {
+    # Fallback: "X approved" in registration info
+    elseif ($cupPage.Content -match '(\d+)\s+approved') {
         $participantCount = [int]$Matches[1]
     }
     
