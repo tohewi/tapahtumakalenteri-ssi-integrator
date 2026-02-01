@@ -78,21 +78,55 @@ param(
 # Import YAML module
 Import-Module -Name PowerShell-Yaml -ErrorAction Stop
 
-# Create session based on authentication method
+# ============================================
+# AUTHENTICATION PHASE (Requirement 40)
+# Authenticate to all systems upfront before creating any events
+# ============================================
+
+Write-Host "`n========================================" -ForegroundColor Cyan
+Write-Host "    AUTHENTICATION PHASE" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+
+# 1. Authenticate to SSI
+Write-Host "`n--- SSI Authentication ---" -ForegroundColor Yellow
 if ($PSCmdlet.ParameterSetName -eq "Login") {
-    Write-Host "Authenticating with username/password..." -ForegroundColor Cyan
+    Write-Host "Authenticating with username/password..." -ForegroundColor Gray
     $connectScript = Join-Path -Path $PSScriptRoot -ChildPath "Connect-SSI.ps1"
     $session = & $connectScript -Username $Username -Password $Password -BaseUri $BaseUri
     if (-not $session) {
-        Write-Error "Authentication failed"
+        Write-Error "SSI authentication failed"
         exit 1
     }
 } else {
     # Legacy: Use SessionId cookie
+    Write-Host "Using session ID cookie..." -ForegroundColor Gray
     $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
     $session.Cookies.Add((New-Object System.Net.Cookie("sessionid", $SessionId, "/", "shootnscoreit.com")))
     $session.Cookies.Add((New-Object System.Net.Cookie("django_language", "en", "/", "shootnscoreit.com")))
+    Write-Host "SUCCESS: SSI session configured" -ForegroundColor Green
 }
+
+# 2. Authenticate to WordPress (if calendar event creation is requested)
+$wpSession = $null
+if ($CreateCalendarEvent) {
+    Write-Host "`n--- WordPress Authentication ---" -ForegroundColor Yellow
+    if (-not $WpUsername -or -not $WpPassword) {
+        Write-Error "WordPress credentials required when using -CreateCalendarEvent. Use -WpUsername and -WpPassword parameters."
+        exit 1
+    }
+    
+    $connectWpScript = Join-Path -Path $PSScriptRoot -ChildPath "Connect-WordPress.ps1"
+    $wpSession = & $connectWpScript -Username $WpUsername -Password $WpPassword
+    
+    if (-not $wpSession) {
+        Write-Error "WordPress authentication failed"
+        exit 1
+    }
+}
+
+Write-Host "`n========================================" -ForegroundColor Cyan
+Write-Host "    AUTHENTICATION COMPLETE" -ForegroundColor Cyan
+Write-Host "========================================`n" -ForegroundColor Cyan
 
 # Load configuration
 if (-not $ConfigPath) {
@@ -651,63 +685,47 @@ foreach ($match in $createdMatches) {
 #region Calendar Event (Tapahtumakalenteri)
 $calendarEvent = $null
 
-if ($CreateCalendarEvent) {
+if ($CreateCalendarEvent -and $wpSession) {
     Write-Host "`n" -NoNewline
     Write-Host "========================================" -ForegroundColor Magenta
     Write-Host "    CREATING CALENDAR EVENT" -ForegroundColor Magenta
     Write-Host "========================================" -ForegroundColor Magenta
     
-    # Validate WordPress credentials
-    if (-not $WpUsername -or -not $WpPassword) {
-        Write-Host "WARNING: WordPress credentials not provided. Skipping calendar event." -ForegroundColor Yellow
-        Write-Host "  Use -WpUsername and -WpPassword parameters to create calendar events." -ForegroundColor Yellow
+    # wpSession was already authenticated at the beginning (Requirement 40)
+    # Build calendar event content from config
+    $tkConfig = $config.tapahtumakalenteri
+    $calendarTitle = $tkConfig.titleTemplate -replace '\{displayDate\}', $displayDate
+    if ($TestMode) { $calendarTitle = "TEST $calendarTitle" }
+    
+    # Short description from config
+    $calendarShortDesc = $tkConfig.shortDescription.Trim()
+    
+    # Full content from config - replace {ssiCupLink} placeholder with actual link
+    $ssiCupLink = "<a href=`"$cupFinalUrl`" target=`"_blank`">SSI</a>"
+    $calendarContent = $tkConfig.content.Trim() -replace '\{ssiCupLink\}', $ssiCupLink
+    
+    # Create calendar event
+    $newEventScript = Join-Path -Path $PSScriptRoot -ChildPath "New-TapahtumakalenteriEvent.ps1"
+    $calendarEvent = & $newEventScript `
+        -Session $wpSession `
+        -Title $calendarTitle `
+        -Date $dateObj `
+        -StartTime $config.general.startTime `
+        -EndTime $config.general.endTime `
+        -ShortDescription $calendarShortDesc `
+        -Content $calendarContent `
+        -Location $tkConfig.location `
+        -MapLink $tkConfig.mapLink `
+        -SsiCupUrl $cupFinalUrl `
+        -SsiCupId ([int]$cupEventInfo.EventId) `
+        -EventFormatTaxonomyIds $tkConfig.eventFormatTaxonomyIds
+    
+    if ($calendarEvent) {
+        Write-Host "`nCalendar event created successfully!" -ForegroundColor Green
+        Write-Host "  Permalink includes Cup ID: cup$($cupEventInfo.EventId)" -ForegroundColor Gray
     }
     else {
-        # Connect to WordPress
-        Write-Host "`nConnecting to WordPress (tapahtumakalenteri)..." -ForegroundColor Cyan
-        $connectWpScript = Join-Path -Path $PSScriptRoot -ChildPath "Connect-WordPress.ps1"
-        $wpSession = & $connectWpScript -Username $WpUsername -Password $WpPassword
-        
-        if ($wpSession) {
-            # Build calendar event content from config
-            $tkConfig = $config.tapahtumakalenteri
-            $calendarTitle = $tkConfig.titleTemplate -replace '\{displayDate\}', $displayDate
-            if ($TestMode) { $calendarTitle = "TEST $calendarTitle" }
-            
-            # Short description from config
-            $calendarShortDesc = $tkConfig.shortDescription.Trim()
-            
-            # Full content from config - replace {ssiCupLink} placeholder with actual link
-            $ssiCupLink = "<a href=`"$cupFinalUrl`" target=`"_blank`">SSI</a>"
-            $calendarContent = $tkConfig.content.Trim() -replace '\{ssiCupLink\}', $ssiCupLink
-            
-            # Create calendar event
-            $newEventScript = Join-Path -Path $PSScriptRoot -ChildPath "New-TapahtumakalenteriEvent.ps1"
-            $calendarEvent = & $newEventScript `
-                -Session $wpSession `
-                -Title $calendarTitle `
-                -Date $dateObj `
-                -StartTime $config.general.startTime `
-                -EndTime $config.general.endTime `
-                -ShortDescription $calendarShortDesc `
-                -Content $calendarContent `
-                -Location $tkConfig.location `
-                -MapLink $tkConfig.mapLink `
-                -SsiCupUrl $cupFinalUrl `
-                -SsiCupId ([int]$cupEventInfo.EventId) `
-                -EventFormatTaxonomyIds $tkConfig.eventFormatTaxonomyIds
-            
-            if ($calendarEvent) {
-                Write-Host "`nCalendar event created successfully!" -ForegroundColor Green
-                Write-Host "  Permalink includes Cup ID: cup$($cupEventInfo.EventId)" -ForegroundColor Gray
-            }
-            else {
-                Write-Host "`nWARNING: Failed to create calendar event." -ForegroundColor Yellow
-            }
-        }
-        else {
-            Write-Host "WARNING: WordPress authentication failed. Skipping calendar event." -ForegroundColor Yellow
-        }
+        Write-Host "`nWARNING: Failed to create calendar event." -ForegroundColor Yellow
     }
 }
 #endregion
