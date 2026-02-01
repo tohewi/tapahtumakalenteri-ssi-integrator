@@ -3,7 +3,7 @@
     Authenticates to WordPress and returns a web session.
 
 .DESCRIPTION
-    Logs in to WordPress using username, password, and OTP (if required),
+    Logs in to WordPress using username, password, and OTP (email-based 2FA),
     returning a WebRequestSession object with the session cookies for 
     subsequent API calls.
 
@@ -11,62 +11,36 @@
     WordPress account username.
 
 .PARAMETER Password
-    WordPress account password (SecureString recommended).
+    WordPress account password.
 
 .PARAMETER OTP
-    One-Time Password for two-factor authentication.
+    One-Time Password for two-factor authentication (optional, will prompt if needed).
 
 .PARAMETER BaseUri
     WordPress site URL. Defaults to Turun Reservilaiset tapahtumakalenteri.
 
-.PARAMETER CredentialsPath
-    Path to YAML file containing credentials. If provided, Username and Password
-    parameters are ignored.
-
 .EXAMPLE
-    $session = .\Connect-WordPress.ps1 -Username "user" -Password "pass" -OTP "123456"
-    
-.EXAMPLE
-    $session = .\Connect-WordPress.ps1 -CredentialsPath "config/wordpress-credentials.yml"
+    $session = .\Connect-WordPress.ps1 -Username "user" -Password "pass"
 
 .OUTPUTS
     Microsoft.PowerShell.Commands.WebRequestSession
 #>
 
 param(
-    [Parameter(Mandatory = $true, ParameterSetName = "Direct")]
+    [Parameter(Mandatory = $true)]
     [string]$Username,
 
-    [Parameter(Mandatory = $true, ParameterSetName = "Direct")]
+    [Parameter(Mandatory = $true)]
     [string]$Password,
 
     [Parameter(Mandatory = $false)]
     [string]$OTP,
 
     [Parameter(Mandatory = $false)]
-    [string]$BaseUri = "https://turun-reservialiupseerit-turun-reservilaiset.reservilaisliitto.fi",
-
-    [Parameter(Mandatory = $true, ParameterSetName = "File")]
-    [string]$CredentialsPath
+    [string]$BaseUri = "https://turun-reservialiupseerit-turun-reservilaiset.reservilaisliitto.fi"
 )
 
 $ErrorActionPreference = "Stop"
-
-# Load credentials from file if specified
-if ($PSCmdlet.ParameterSetName -eq "File") {
-    if (-not (Test-Path $CredentialsPath)) {
-        Write-Error "Credentials file not found: $CredentialsPath"
-        return $null
-    }
-    
-    Import-Module -Name PowerShell-Yaml -ErrorAction Stop
-    $creds = Get-Content $CredentialsPath -Raw | ConvertFrom-Yaml
-    $Username = $creds.username
-    $Password = $creds.password
-    if ($creds.baseUrl) {
-        $BaseUri = $creds.baseUrl
-    }
-}
 
 Write-Host "Connecting to WordPress at $BaseUri..." -ForegroundColor Cyan
 

@@ -234,7 +234,7 @@ Update-CupStatistics.ps1 (run manually after Cup completion)
 
 ## Security Considerations
 
-1. **Credentials**: WordPress credentials stored in separate file (`config/wordpress-credentials.yml`)
+1. **Credentials**: WordPress credentials passed as command-line parameters (OTP required for each session)
 2. **Draft mode**: Events created as draft to allow review before publishing
 3. **No deletions**: Script will never delete calendar events
 4. **CSRF protection**: Proper nonce handling for all POST requests

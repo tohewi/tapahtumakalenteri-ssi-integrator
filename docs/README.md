@@ -218,8 +218,7 @@ All settings are stored in `config/kupittaa-cup-config.yml`:
 ```
 windsurf-project/
 ├── config/
-│   ├── kupittaa-cup-config.yml           # All event configuration (SSI + Tapahtumakalenteri)
-│   └── wordpress-credentials.yml.template # WordPress credentials template
+│   └── kupittaa-cup-config.yml           # All event configuration (SSI + Tapahtumakalenteri)
 ├── scripts/
 │   ├── Connect-SSI.ps1                   # SSI authentication script
 │   ├── Connect-WordPress.ps1             # WordPress authentication (with 2FA)

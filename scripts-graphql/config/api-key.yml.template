@@ -1,0 +1,11 @@
+# SSI GraphQL API Configuration Template
+# Copy this file to api-key.yml and fill in your credentials
+# DO NOT commit api-key.yml to version control
+
+# API Key - Register at shootnscoreit.com to get your API key
+apiKey: "YOUR_API_KEY_HERE"
+
+# SSI Account Credentials for JWT authentication
+# These are used with the token_auth mutation to get a JWT token
+email: "your.email@example.com"
+password: "your_password_here"
