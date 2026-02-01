@@ -46,6 +46,7 @@
 | 43 | Statistics: When Cup and all matches are completed, update the total shots fired to the calendar event. Calculation: number of Cup shooters × 100 (max shots per Cup). | [x] Implemented in Update-TapahtumakalenteriEvent.ps1 |
 | 44 | Publish Tapahtumakalenteri Event: After successful creation of both SSI Cup and Tapahtumakalenteri event, validate that both URLs are accessible (HTTP 200), then publish the calendar event (change status from draft to publish). Display final URLs in summary for user verification. | [x] Implemented in New-KupittaaCup.ps1 |
 | 45 | Batch Creation: Support creating multiple Kupittaa Cup events from a date list file (one date per line, format: d.M.yyyy). Process dates sequentially, stop on first error, output clear status for each event. Skip dates that already have events created. | [x] Implemented in New-KupittaaCupBatch.ps1 |
+| 46 | Single Authentication: Authentication to SSI and WordPress should happen only once at the beginning of any operation (single event or batch). Session tokens should be retained and reused throughout the entire process. No repeated OTP prompts during batch processing. | [x] Implemented - sessions passed via PreAuth parameter set |
 
 ## Configuration Files
 
