@@ -27,9 +27,9 @@ cup:
   url: "https://turun-reservialiupseerit-turun-reservilaiset.reservilaisliitto.fi/toiminta/ammunta/reservilaisammunta/"
   urlDisplay: "Lisätietoa"
   
-  # Default times
-  startTime: "09:00"
-  endTime: "12:00"
+  # Default times (Finnish format: hh.mm)
+  startTime: "09.00"
+  endTime: "12.00"
   
   # Registration starts one week before the Cup
   registrationDaysBeforeEvent: 7

@@ -171,9 +171,12 @@ $isoDate = $dateObj.ToString("yyyy-MM-dd")
 $displayDate = $dateObj.ToString("dd.MM.yyyy")
 
 
-# Get times from config
-$startTime = $config.cup.startTime
-$endTime = $config.cup.endTime
+# Get times from config (Finnish format: hh.mm)
+# Convert to SSI format (HH:mm) for API calls
+$startTimeDisplay = $config.cup.startTime  # Finnish format for display
+$endTimeDisplay = $config.cup.endTime
+$startTime = $startTimeDisplay -replace '\.', ':'  # SSI API format
+$endTime = $endTimeDisplay -replace '\.', ':'
 
 # Registration settings from config
 $regDaysBefore = $config.cup.registrationDaysBeforeEvent
@@ -182,7 +185,7 @@ $regStartDate = $regStartDateObj.ToString("yyyy-MM-dd")
 $regStartTime = $config.cup.registrationStartTime
 
 # Cup registration closes 12 hours before Cup start time
-$cupStartDateTime = $dateObj.Add([TimeSpan]::Parse($startTime))
+$cupStartDateTime = $dateObj.Add([TimeSpan]::Parse($startTime))  # Uses HH:mm format
 $regCloseDateTime = $cupStartDateTime.AddHours(-12)
 $regCloseDate = $regCloseDateTime.ToString("yyyy-MM-dd", [System.Globalization.CultureInfo]::InvariantCulture)
 $regCloseTime = $regCloseDateTime.ToString("HH:mm", [System.Globalization.CultureInfo]::InvariantCulture)
@@ -731,8 +734,8 @@ if ($wpSessionActive) {
         -Session $wpSessionActive `
         -Title $calendarTitle `
         -Date $dateObj `
-        -StartTime ($startTime -replace ':', '.') `
-        -EndTime ($endTime -replace ':', '.') `
+        -StartTime $startTimeDisplay `
+        -EndTime $endTimeDisplay `
         -ShortDescription $calendarShortDesc `
         -Content $calendarContent `
         -Location $tkConfig.location `
