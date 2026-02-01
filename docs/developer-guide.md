@@ -291,23 +291,23 @@ The following diagram shows the batch creation workflow:
 
 ```mermaid
 flowchart TD
-    subgraph Init["Initialization"]
+    subgraph Init["1. Initialization"]
         A[Read Date List File] --> B{More dates?}
         B -->|No| Z[Done]
-        B -->|Yes| C{Date starts with !?}
+        B -->|Yes| C{Date starts<br/>with !?}
         C -->|Yes| D[Skip - Already Created]
         D --> B
     end
 
-    subgraph Auth["One-Time Authentication"]
+    subgraph Auth["2. One-Time Authentication"]
         C -->|No| E[Connect to SSI]
         E --> F[Connect to WordPress]
         F --> G[2FA OTP Entry]
         G --> H[Sessions Ready]
     end
 
-    subgraph Create["Event Creation Loop"]
-        H --> I[Check Duplicate Cup Name]
+    subgraph Create["3. Event Creation Loop"]
+        H --> I[Check Duplicate<br/>Cup Name]
         I -->|Exists| J[Skip Date]
         J --> K[Mark Date with !]
         K --> B
@@ -315,17 +315,24 @@ flowchart TD
         L --> M[Create 3 Matches]
         M --> N[Link Matches to Cup]
         N --> O[Create 9 Squads]
-        O --> P[Create WP Calendar Event]
+        O --> P[Create WP<br/>Calendar Event]
         P --> Q[Publish Calendar Event]
         Q --> K
     end
 
-    subgraph Error["Error Handling"]
+    subgraph Error["4. Error Handling"]
         L -->|Error| R[Stop Batch]
         M -->|Error| R
         P -->|Error| S[Continue - Log Warning]
         S --> K
     end
+
+    style Init fill:#e1f5fe,stroke:#01579b,color:#000
+    style Auth fill:#fff3e0,stroke:#e65100,color:#000
+    style Create fill:#e8f5e9,stroke:#1b5e20,color:#000
+    style Error fill:#ffebee,stroke:#b71c1c,color:#000
+    style Z fill:#c8e6c9,stroke:#2e7d32,color:#000
+    style R fill:#ffcdd2,stroke:#c62828,color:#000
 ```
 
 ## Data Model & Cross-System Integrity
