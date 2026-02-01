@@ -33,7 +33,7 @@ cup:
   
   # Registration starts one week before the Cup
   registrationDaysBeforeEvent: 7
-  registrationStartTime: "00:00"
+  registrationStartTime: "00.00"
   
   # Categories and divisions
   weaponGroups:

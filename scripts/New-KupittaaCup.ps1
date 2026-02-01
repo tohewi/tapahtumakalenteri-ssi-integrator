@@ -182,7 +182,7 @@ $endTime = $endTimeDisplay -replace '\.', ':'
 $regDaysBefore = $config.cup.registrationDaysBeforeEvent
 $regStartDateObj = $dateObj.AddDays(-$regDaysBefore)
 $regStartDate = $regStartDateObj.ToString("yyyy-MM-dd")
-$regStartTime = $config.cup.registrationStartTime
+$regStartTime = $config.cup.registrationStartTime -replace '\.', ':'  # Convert to SSI API format
 
 # Cup registration closes 12 hours before Cup start time
 $cupStartDateTime = $dateObj.Add([TimeSpan]::Parse($startTime))  # Uses HH:mm format
