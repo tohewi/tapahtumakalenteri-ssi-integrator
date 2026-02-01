@@ -701,7 +701,8 @@ if ($CreateCalendarEvent -and $wpSession) {
     $calendarShortDesc = $tkConfig.shortDescription.Trim()
     
     # Full content from config - replace {ssiCupLink} placeholder with actual link
-    $ssiCupLink = "<a href=`"$cupFinalUrl`" target=`"_blank`">SSI</a>"
+    # Link text is the full SSI Cup name (e.g., "TurRes Kupittaa CUP 14.02.2026")
+    $ssiCupLink = "<a href=`"$cupFinalUrl`" target=`"_blank`">$cupName</a>"
     $calendarContent = $tkConfig.content.Trim() -replace '\{ssiCupLink\}', $ssiCupLink
     
     # Create calendar event
