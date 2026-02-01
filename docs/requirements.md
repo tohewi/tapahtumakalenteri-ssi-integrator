@@ -38,18 +38,16 @@
 | 36 | Copy shooter squadding from Match #1 to Matches #2 and #3 automatically | [ this is on hold. It may not be needed after all. ] |
 | 37 | Login with username/password instead of manual sessionid cookie | [x] Implemented in Connect-SSI.ps1 and New-KupittaaCup.ps1 |
 | | **Release 2.0 Requirements** | |
-| 38 | Tapahtumakalenteri Integration: When a Cup is created, create a corresponding event in the Turun Reservilaiset WordPress event calendar (tapahtumakalenteri). Event is created as draft first. Cup URL is stored in calendar event. Calendar event URL is stored back in Cup (cross-reference via permalink with Cup ID). Standard event data template for Kupittaa Cup events. No automatic deletions allowed. | [x] Implemented in Connect-WordPress.ps1, New-TapahtumakalenteriEvent.ps1, and New-KupittaaCup.ps1 |
+| 38 | Tapahtumakalenteri Integration: When a Cup is created, create a corresponding event in the Turun Reservilaiset WordPress event calendar (tapahtumakalenteri). Event is created as draft first. Cup URL is stored in calendar event. Cross-reference via permalink with Cup ID. Single configuration file (`kupittaa-cup-config.yml`) contains settings for both SSI and Tapahtumakalenteri. Modular/extendable design with no hardcoded parameters - all values read from config. No automatic deletions allowed. | [x] Implemented in Connect-WordPress.ps1, New-TapahtumakalenteriEvent.ps1, and New-KupittaaCup.ps1 |
 | 39 | Statistics: When Cup and all matches are completed, update the total shots fired to the calendar event. Calculation: number of Cup shooters × 100 (max shots per Cup). | [ ] |
-f
+
 ## Configuration Files
 
-- **`config/kupittaa-cup-config.yml`** - Contains all event settings including:
-  - Group ID (25874)
-  - Organizer ID
-  - Cup and Match settings (SSI)
-  - Match type definitions with descriptions
-  - Squad definitions with names and max shooters
-  - Tapahtumakalenteri settings (title, location, content with `{ssiCupLink}` placeholder)
+- **`config/kupittaa-cup-config.yml`** - Single configuration file for both SSI and Tapahtumakalenteri:
+  - **SSI Settings**: Group ID, Cup/Match templates, descriptions, squad definitions
+  - **Tapahtumakalenteri Settings**: WordPress URL, title template, location, content template, taxonomy IDs
+  - All configurable values are externalized - no hardcoded parameters in scripts
+  - Supports `{displayDate}`, `{ssiCupLink}` and other placeholders for dynamic content
 
 ## Developer Documentation
 

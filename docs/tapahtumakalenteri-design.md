@@ -241,13 +241,16 @@ Update-CupStatistics.ps1 (run manually after Cup completion)
 
 ---
 
-## Next Steps
+## Implementation Status
 
-1. [ ] Create `Connect-WordPress.ps1` - WordPress authentication
-2. [ ] Create `New-TapahtumakalenteriEvent.ps1` - Event creation
-3. [ ] Update `New-KupittaaCup.ps1` to integrate calendar event creation
-4. [ ] Create `Update-TapahtumakalenteriEvent.ps1` - Statistics update
-5. [ ] Create `Get-CupStatistics.ps1` - Query SSI for completion status
-6. [ ] Add configuration for tapahtumakalenteri in YAML
-7. [ ] Test end-to-end flow
-8. [ ] Document usage in README
+### Requirement 38 - Event Creation (Complete)
+1. [x] Create `Connect-WordPress.ps1` - WordPress authentication with email 2FA
+2. [x] Create `New-TapahtumakalenteriEvent.ps1` - Event creation as draft
+3. [x] Update `New-KupittaaCup.ps1` to integrate calendar event creation
+4. [x] Add configuration for tapahtumakalenteri in `kupittaa-cup-config.yml`
+5. [x] Test end-to-end flow
+6. [x] Document usage in README and developer-guide.md
+
+### Requirement 39 - Statistics Update (Pending)
+1. [ ] Create `Update-TapahtumakalenteriEvent.ps1` - Statistics update
+2. [ ] Create `Get-CupStatistics.ps1` - Query SSI for completion status
