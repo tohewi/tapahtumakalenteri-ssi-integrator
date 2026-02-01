@@ -1,13 +1,14 @@
 # Kupittaa Cup Automation Tool
 
-A PowerShell script for automating the creation of RESUL CUP events, child matches, and squads on shootnscoreit.com.
+A PowerShell script for automating the creation of RESUL CUP events, child matches, and squads on shootnscoreit.com, with optional integration to the Turun Reservilaiset WordPress event calendar (tapahtumakalenteri).
 
 ## Features
 
 - **Automated Cup Creation**: Creates a RESUL CUP event for a specified date
 - **Child Match Creation**: Automatically creates 3 child matches (Tarkkuus, Pika, Kuvio)
 - **Auto-Linking**: Links all child matches to the parent Cup event
-- **Squad Creation**: Creates 3 squads per match (Oma ase 1, Oma ase 2, Laina-ase)
+- **Squad Creation**: Creates 3 squads per match (Laina-ase, Oma ase 1, Oma ase 2)
+- **Tapahtumakalenteri Integration**: Optionally creates a corresponding event in the WordPress calendar
 - **Duplicate Check**: Prevents creating events with duplicate names
 - **Configuration-Driven**: All settings loaded from YAML configuration file
 - **Test Mode**: Add TEST prefix to event names for testing
@@ -16,7 +17,8 @@ A PowerShell script for automating the creation of RESUL CUP events, child match
 
 - PowerShell 7.0 or later (pwsh)
 - powershell-yaml module (`Install-Module powershell-yaml`)
-- Valid session ID from shootnscoreit.com (obtained from browser cookies)
+- SSI account credentials (email and password)
+- WordPress credentials (for tapahtumakalenteri integration, optional)
 - Internet connectivity
 
 ## Installation
@@ -27,16 +29,25 @@ A PowerShell script for automating the creation of RESUL CUP events, child match
 
 ## Usage
 
-### Basic Usage
+### Basic: SSI Cup Only
 
 ```powershell
-.\scripts\New-KupittaaCup.ps1 -Date "31-01-2026" -SessionId "your-session-id"
+.\scripts\New-KupittaaCup.ps1 -Date "31-01-2026" -Username "your-email@example.com" -Password "your-password"
+```
+
+### With Tapahtumakalenteri Integration
+
+```powershell
+.\scripts\New-KupittaaCup.ps1 -Date "31-01-2026" `
+    -Username "ssi-email" -Password "ssi-password" `
+    -CreateCalendarEvent `
+    -WpUsername "wp-username" -WpPassword "wp-password"
 ```
 
 ### Test Mode (adds TEST prefix to names)
 
 ```powershell
-.\scripts\New-KupittaaCup.ps1 -Date "31-01-2026" -SessionId "your-session-id" -TestMode
+.\scripts\New-KupittaaCup.ps1 -Date "31-01-2026" -Username "your-email@example.com" -Password "your-password" -TestMode
 ```
 
 ### Parameters
@@ -44,17 +55,30 @@ A PowerShell script for automating the creation of RESUL CUP events, child match
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `Date` | String | Yes | - | Match date in dd-mm-yyyy format |
-| `SessionId` | String | Yes | - | Browser session cookie for authentication |
+| `Username` | String | Yes* | - | SSI account email |
+| `Password` | String | Yes* | - | SSI account password |
+| `SessionId` | String | Yes* | - | Browser session cookie (alternative to Username/Password) |
 | `ConfigPath` | String | No | config/kupittaa-cup-config.yml | Path to configuration file |
 | `TestMode` | Switch | No | - | Adds "TEST" prefix to event names |
+| `CreateCalendarEvent` | Switch | No | - | Create event in WordPress calendar |
+| `WpUsername` | String | No* | - | WordPress username (for calendar) |
+| `WpPassword` | String | No* | - | WordPress password (for calendar) |
 
-### Getting Your Session ID
+*Either `Username`+`Password` OR `SessionId` is required for SSI.
+*`WpUsername` and `WpPassword` are required when using `-CreateCalendarEvent`.
 
+### Alternative: Using Session ID (Legacy)
+
+You can use a session ID from browser cookies instead of username/password:
+
+```powershell
+.\scripts\New-KupittaaCup.ps1 -Date "31-01-2026" -SessionId "your-session-id"
+```
+
+To get your session ID:
 1. Log in to shootnscoreit.com in your browser
-2. Open Settings
-3. Go to Manage Cookies -> See all cookies and site data
-4. Search for the `shootnscoreit.com` entry
-5. Copy the value of the `sessionid` cookie
+2. Open Developer Tools (F12) → Application → Cookies
+3. Copy the value of the `sessionid` cookie
 
 ## What Gets Created
 
@@ -87,9 +111,16 @@ Each match has:
 - Venue: Kupittaan urheiluhalli
 
 ### Squads (per match)
-- **Oma ase 1**: Max 9 shooters (own firearm)
-- **Oma ase 2**: Max 9 shooters (own firearm)
-- **Laina-ase**: Max 7 shooters (loaner firearm)
+- **Laina-ase (pieni puoli)**: Max 9 shooters (loaner firearm)
+- **Oma ase 1 (iso puoli, vasen)**: Max 9 shooters (own firearm)
+- **Oma ase 2 (iso puoli, oikea)**: Max 7 shooters (own firearm)
+
+### Tapahtumakalenteri Event (optional)
+When `-CreateCalendarEvent` is used:
+- Creates a draft event in the WordPress calendar
+- Permalink includes SSI Cup ID (e.g., `kupittaan-ampumavuoro-14-02-2026-cup141`)
+- SSI Cup link embedded in event content
+- Event format tags: Pistooli, Prosenttiammunta
 
 ## Example Output
 
@@ -142,9 +173,15 @@ Matches created and linked:
   - Kuvio: https://shootnscoreit.com/event/91/458/ [LINKED]
 
 Squads created per match:
-  - Oma ase 1 (max: 9)
-  - Oma ase 2 (max: 9)
-  - Laina-ase (max: 7)
+  - Laina-ase (pieni puoli) (max: 9)
+  - Oma ase 1 (iso puoli, vasen) (max: 9)
+  - Oma ase 2 (iso puoli, oikea) (max: 7)
+
+Calendar Event (tapahtumakalenteri):
+  - Status: draft
+  - Edit: https://...wp-admin/post.php?post=1234&action=edit
+  - Preview: https://.../?post_type=event&p=1234&preview=true
+  - Permalink: kupittaan-ampumavuoro-31-01-2026-cup123
 ```
 
 ## Configuration
@@ -154,6 +191,7 @@ All settings are stored in `config/kupittaa-cup-config.yml`:
 - **Cup settings**: Name template, description, times, registration settings
 - **Match settings**: Name template, descriptions per match type, venue
 - **Squad definitions**: Names and max shooters per squad
+- **Tapahtumakalenteri settings**: Title template, location, content with `{ssiCupLink}` placeholder
 
 ## Troubleshooting
 
@@ -182,10 +220,14 @@ windsurf-project/
 ├── config/
 │   └── kupittaa-cup-config.yml  # All event configuration
 ├── scripts/
-│   └── New-KupittaaCup.ps1      # Main automation script
+│   ├── Connect-SSI.ps1          # SSI authentication script
+│   ├── Connect-WordPress.ps1    # WordPress authentication (with 2FA)
+│   ├── New-KupittaaCup.ps1      # Main automation script
+│   └── New-TapahtumakalenteriEvent.ps1  # Calendar event creation
 ├── docs/
 │   ├── README.md                # This file
 │   ├── requirements.md          # Requirements list
+│   ├── tapahtumakalenteri-design.md  # Calendar integration design
 │   └── developer-guide.md       # Technical documentation
 └── archive/                     # Old/experimental scripts
 ```
@@ -193,6 +235,8 @@ windsurf-project/
 ## Limitations
 
 - **Venue coordinates**: Cannot be set programmatically. Must be added manually via SSI map UI after event creation.
+- **WordPress 2FA**: Requires manual OTP entry during calendar event creation (email-based verification).
+- **Calendar event status**: Events are created as drafts and must be published manually in WordPress.
 
 ## License
 

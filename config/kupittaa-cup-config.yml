@@ -61,8 +61,8 @@ cup:
   # Max 800 characters for information (Yksityiskohtaiset tiedot / Detailed information)
   information: |
     Ohjattu ammunta lyhennetyillä ampumaohjelmilla:
-    - Tarkkuus- ja pikaosion (SAL 25m urheilupistooli)
-    - Pistoolipika-osion (RESUL pistoolipika-ammunta)
+    - Tarkkuus- ja pikaosio (SAL 25m urheilupistooli)
+    - Pistoolipika-osio (RESUL pistoolipika-ammunta)
     - Laukausmäärä yhteensä: 100
     Tarkkuusosa kiinteään tauluun, pika- ja pikapistooliosio kääntyviin Olympia-tauluihin.
 
@@ -79,7 +79,7 @@ cup:
 
     Maksuväline: MobilePay 24130
 
-    Ammunta alkaa klo 9.30, eikä sen jälkeen voi tulla paikalle.
+    Ovet lukitaan klo 9.30 jolloin ammunta alkaa.
 
     Lisätietoja: ampumajaosto(at)turunreservilaiset.fi
 
@@ -164,14 +164,63 @@ matchTypes:
       2×5 laukauksen sarja, aikaa 8 s/sarja
       2×5 laukauksen sarja, aikaa 6 s/sarja
 
+# Tapahtumakalenteri (WordPress Event Calendar) Settings
+# This is SEPARATE content from SSI - used for the Turun Reservilaiset website calendar
+tapahtumakalenteri:
+  # WordPress site URL
+  baseUri: "https://turun-reservialiupseerit-turun-reservilaiset.reservilaisliitto.fi"
+  
+  # Event title template (date will be substituted)
+  titleTemplate: "Kupittaan ampumavuoro {displayDate}"
+  
+  # Location
+  location: "Kupittaan urheiluhallin ampumarata"
+  mapLink: "https://maps.app.goo.gl/SHDoPm8ZMFjhYGBk9"
+  
+  # Short description (ingressi) - max ~300 chars
+  shortDescription: |
+    Lauantain ampumavuoro Kupittaalla.
+    Hio pistooliammuntatekniikkaa ja kerää harrastuskertoja käsiaseeseen.
+    Ohjattu ammunta lyhennetyillä SAL ja RESUL lajeilla. Laina-aseita saatavilla.
+  
+  # Full content (HTML) - {ssiCupLink} will be replaced with the SSI Cup link
+  content: |
+    Mahdolliset muutokset aikoihin ilmoitetaan sisäampumaradan ilmoitustaululla ja Turun Reserviläisten verkkosivuilla.
+    <div>
+    <div><strong>Ohjattu pienoispistooliammunta</strong> lyhennetyillä ampumaohjelmilla:</div>
+    <div>    - Tarkkuus- ja pikaosio (SAL 25m urheilupistooli)</div>
+    <div>    - Pistoolipika-osio (RESUL pistoolipika-ammunta)</div>
+    <div>    - Laukausmäärä yhteensä: 100</div>
+    <div>Tarkkuusosa ammutaan kiinteään tauluun, pika- ja pikapistooliosio kääntyviin Olympia-tauluihin.</div>
+    </div>
+    <b>Ilmoittautuminen {ssiCupLink}</b>
+
+    <em><strong>Ensikertalaiset vain perehdytysvuoron kautta.</strong></em>
+
+    Vakuutus (Reserviläisen toimintaturva tai SAL) ja suojalasit sekä kuulosuojaimet ovat pakollisia.
+
+    Laina-aseita (pienoispistooli, .22lr) on rajallisesti käytettävissä (valvottu käyttö).
+
+    <strong>Ratamaksut:</strong>
+    <ul>
+    <li>Harjoitusmaksu sisältäen laina-aseen, ratamaksun ja 100 kpl patruunat (.22lr) 20 €</li>
+    <li>Laina-ase (omat patruunat, (.22lr)) 7 €</li>
+    <li>Oma ase (omat patruunat) 6 €</li>
+    </ul>
+    Maksuväline: <strong>MobilePay 24130</strong>
+
+    Ovet sulkeutuvat klo 9.30 ammunnan alkaessa.
+
+    <strong>Lisätiedot sähköpostitse</strong>: <a href="mailto:ampumajaosto@turunreservilaiset.fi">ampumajaosto@turunreservilaiset.fi</a>
+
 # Squad Configuration
 squads:
   # URL format: /nordic/match/{eventId}/add-squads/ (uses EventId only, not TypeId)
   addSquadsUrlTemplate: "/nordic/match/{eventId}/add-squads/"
   definitions:
-    - name: "Oma ase 1"
+    - name: "Laina-ase (pieni puoli)"
       maxShooters: 9
-    - name: "Oma ase 2"
+    - name: "Oma ase 1 (iso puoli, vasen)"
       maxShooters: 9
-    - name: "Laina-ase"
+    - name: "Oma ase 2 (iso puoli, oikea)"
       maxShooters: 7

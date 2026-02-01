@@ -1,0 +1,19 @@
+# API keys and secrets
+scripts-graphql/config/api-key.yml
+
+# WordPress credentials (contains sensitive credentials)
+config/wordpress-credentials.yml
+
+# Debug files
+debug-*.html
+
+# PowerShell module cache
+*.psm1.cache
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db

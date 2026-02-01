@@ -5,13 +5,20 @@
 .DESCRIPTION
     This script creates a RESUL CUP event on shootnscoreit.com for a given date,
     then creates three child matches linked to that Cup, and creates squads for each match.
+    Optionally creates a corresponding event in the Turun Reservilaiset WordPress calendar.
     Configuration is loaded from config/kupittaa-cup-config.yml
 
 .PARAMETER Date
     Match date in dd-mm-yyyy format
 
 .PARAMETER SessionId
-    Browser session ID cookie value for authentication
+    Browser session ID cookie value for authentication (legacy method)
+
+.PARAMETER Username
+    SSI account email/username for login
+
+.PARAMETER Password
+    SSI account password for login
 
 .PARAMETER ConfigPath
     Path to the configuration file (default: config/kupittaa-cup-config.yml)
@@ -19,11 +26,26 @@
 .PARAMETER TestMode
     If specified, adds "TEST" prefix to event names
 
+.PARAMETER CreateCalendarEvent
+    If specified, creates a corresponding event in the WordPress calendar (tapahtumakalenteri)
+
+.PARAMETER WpUsername
+    WordPress username for tapahtumakalenteri (required if -CreateCalendarEvent is used)
+
+.PARAMETER WpPassword
+    WordPress password for tapahtumakalenteri (required if -CreateCalendarEvent is used)
+
 .EXAMPLE
     .\New-KupittaaCup.ps1 -Date "25-01-2026" -SessionId "your-session-id"
 
 .EXAMPLE
+    .\New-KupittaaCup.ps1 -Date "25-01-2026" -Username "user@example.com" -Password "pass"
+
+.EXAMPLE
     .\New-KupittaaCup.ps1 -Date "25-01-2026" -SessionId "your-session-id" -TestMode
+
+.EXAMPLE
+    .\New-KupittaaCup.ps1 -Date "25-01-2026" -Username "user@example.com" -Password "pass" -CreateCalendarEvent -WpUsername "wpuser" -WpPassword "wppass"
 #>
 
 param(
@@ -31,18 +53,46 @@ param(
     [ValidatePattern("^\d{2}-\d{2}-\d{4}$")]
     [string]$Date,  # dd-mm-yyyy format
 
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, ParameterSetName = "SessionId")]
     [string]$SessionId,
+
+    [Parameter(Mandatory = $true, ParameterSetName = "Login")]
+    [string]$Username,
+
+    [Parameter(Mandatory = $true, ParameterSetName = "Login")]
+    [string]$Password,
 
     [string]$BaseUri = "https://shootnscoreit.com",
     
     [string]$ConfigPath,
     
-    [switch]$TestMode
+    [switch]$TestMode,
+    
+    [switch]$CreateCalendarEvent,
+    
+    [string]$WpUsername,
+    
+    [string]$WpPassword
 )
 
 # Import YAML module
 Import-Module -Name PowerShell-Yaml -ErrorAction Stop
+
+# Create session based on authentication method
+if ($PSCmdlet.ParameterSetName -eq "Login") {
+    Write-Host "Authenticating with username/password..." -ForegroundColor Cyan
+    $connectScript = Join-Path -Path $PSScriptRoot -ChildPath "Connect-SSI.ps1"
+    $session = & $connectScript -Username $Username -Password $Password -BaseUri $BaseUri
+    if (-not $session) {
+        Write-Error "Authentication failed"
+        exit 1
+    }
+} else {
+    # Legacy: Use SessionId cookie
+    $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+    $session.Cookies.Add((New-Object System.Net.Cookie("sessionid", $SessionId, "/", "shootnscoreit.com")))
+    $session.Cookies.Add((New-Object System.Net.Cookie("django_language", "en", "/", "shootnscoreit.com")))
+}
 
 # Load configuration
 if (-not $ConfigPath) {
@@ -101,11 +151,7 @@ Write-Host "Creating Kupittaa Cup for $displayDate" -ForegroundColor Cyan
 Write-Host "  Group ID: $GroupId" -ForegroundColor Gray
 Write-Host "  Organizer ID: $OrganizerId" -ForegroundColor Gray
 
-# Create web session with cookies
-$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 $uriObj = [Uri]$BaseUri
-$session.Cookies.Add((New-Object System.Net.Cookie("sessionid", $SessionId, "/", $uriObj.Host)))
-$session.Cookies.Add((New-Object System.Net.Cookie("django_language", "en", "/", $uriObj.Host)))
 
 # Function to get CSRF token
 function Get-CsrfToken {
@@ -602,6 +648,69 @@ foreach ($match in $createdMatches) {
 }
 #endregion
 
+#region Calendar Event (Tapahtumakalenteri)
+$calendarEvent = $null
+
+if ($CreateCalendarEvent) {
+    Write-Host "`n" -NoNewline
+    Write-Host "========================================" -ForegroundColor Magenta
+    Write-Host "    CREATING CALENDAR EVENT" -ForegroundColor Magenta
+    Write-Host "========================================" -ForegroundColor Magenta
+    
+    # Validate WordPress credentials
+    if (-not $WpUsername -or -not $WpPassword) {
+        Write-Host "WARNING: WordPress credentials not provided. Skipping calendar event." -ForegroundColor Yellow
+        Write-Host "  Use -WpUsername and -WpPassword parameters to create calendar events." -ForegroundColor Yellow
+    }
+    else {
+        # Connect to WordPress
+        Write-Host "`nConnecting to WordPress (tapahtumakalenteri)..." -ForegroundColor Cyan
+        $connectWpScript = Join-Path -Path $PSScriptRoot -ChildPath "Connect-WordPress.ps1"
+        $wpSession = & $connectWpScript -Username $WpUsername -Password $WpPassword
+        
+        if ($wpSession) {
+            # Build calendar event content from config
+            $tkConfig = $config.tapahtumakalenteri
+            $calendarTitle = $tkConfig.titleTemplate -replace '\{displayDate\}', $displayDate
+            if ($TestMode) { $calendarTitle = "TEST $calendarTitle" }
+            
+            # Short description from config
+            $calendarShortDesc = $tkConfig.shortDescription.Trim()
+            
+            # Full content from config - replace {ssiCupLink} placeholder with actual link
+            $ssiCupLink = "<a href=`"$cupFinalUrl`" target=`"_blank`">SSI</a>"
+            $calendarContent = $tkConfig.content.Trim() -replace '\{ssiCupLink\}', $ssiCupLink
+            
+            # Create calendar event
+            $newEventScript = Join-Path -Path $PSScriptRoot -ChildPath "New-TapahtumakalenteriEvent.ps1"
+            $calendarEvent = & $newEventScript `
+                -Session $wpSession `
+                -Title $calendarTitle `
+                -Date $dateObj `
+                -StartTime $config.general.startTime `
+                -EndTime $config.general.endTime `
+                -ShortDescription $calendarShortDesc `
+                -Content $calendarContent `
+                -Location $tkConfig.location `
+                -MapLink $tkConfig.mapLink `
+                -SsiCupUrl $cupFinalUrl `
+                -SsiCupId ([int]$cupEventInfo.EventId)
+            
+            if ($calendarEvent) {
+                Write-Host "`nCalendar event created successfully!" -ForegroundColor Green
+                Write-Host "  Permalink includes Cup ID: cup$($cupEventInfo.EventId)" -ForegroundColor Gray
+            }
+            else {
+                Write-Host "`nWARNING: Failed to create calendar event." -ForegroundColor Yellow
+            }
+        }
+        else {
+            Write-Host "WARNING: WordPress authentication failed. Skipping calendar event." -ForegroundColor Yellow
+        }
+    }
+}
+#endregion
+
 #region Summary
 Write-Host "`n" -NoNewline
 Write-Host "========================================" -ForegroundColor Cyan
@@ -621,8 +730,21 @@ foreach ($squadDef in $config.squads.definitions) {
     Write-Host "  - $($squadDef.name) (max: $($squadDef.maxShooters))" -ForegroundColor White
 }
 
+if ($calendarEvent) {
+    Write-Host "`nCalendar Event (tapahtumakalenteri):" -ForegroundColor Magenta
+    Write-Host "  - Status: $($calendarEvent.Status)" -ForegroundColor White
+    Write-Host "  - Edit: $($calendarEvent.EditUrl)" -ForegroundColor White
+    Write-Host "  - Preview: $($calendarEvent.EventUrl)" -ForegroundColor White
+}
+
 Write-Host "`nNext steps:" -ForegroundColor Cyan
 Write-Host "  1. Verify Cup and Matches at the URLs above" -ForegroundColor White
 Write-Host "  2. Check squad configuration for each match" -ForegroundColor White
-Write-Host "  3. Delete TEST events if this was a test run" -ForegroundColor White
+if ($calendarEvent) {
+    Write-Host "  3. Review and PUBLISH the calendar event (currently draft)" -ForegroundColor White
+    Write-Host "  4. Delete TEST events if this was a test run" -ForegroundColor White
+}
+else {
+    Write-Host "  3. Delete TEST events if this was a test run" -ForegroundColor White
+}
 #endregion
