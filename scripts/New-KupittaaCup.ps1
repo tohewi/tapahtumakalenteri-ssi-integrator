@@ -731,8 +731,8 @@ if ($wpSessionActive) {
         -Session $wpSessionActive `
         -Title $calendarTitle `
         -Date $dateObj `
-        -StartTime $config.general.startTime `
-        -EndTime $config.general.endTime `
+        -StartTime ($startTime -replace ':', '.') `
+        -EndTime ($endTime -replace ':', '.') `
         -ShortDescription $calendarShortDesc `
         -Content $calendarContent `
         -Location $tkConfig.location `
