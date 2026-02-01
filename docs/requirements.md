@@ -39,7 +39,11 @@
 | 37 | Login with username/password instead of manual sessionid cookie | [x] Implemented in Connect-SSI.ps1 and New-KupittaaCup.ps1 |
 | | **Release 2.0 Requirements** | |
 | 38 | Tapahtumakalenteri Integration: When a Cup is created, create a corresponding event in the Turun Reservilaiset WordPress event calendar (tapahtumakalenteri). Event is created as draft first. Cup URL is stored in calendar event. Cross-reference via permalink with Cup ID. Single configuration file (`kupittaa-cup-config.yml`) contains settings for both SSI and Tapahtumakalenteri. Modular/extendable design with no hardcoded parameters - all values read from config. No automatic deletions allowed. | [x] Implemented in Connect-WordPress.ps1, New-TapahtumakalenteriEvent.ps1, and New-KupittaaCup.ps1 |
-| 39 | Statistics: When Cup and all matches are completed, update the total shots fired to the calendar event. Calculation: number of Cup shooters × 100 (max shots per Cup). | [ ] |
+| 39 | It must be possible to test functionality with mocking i.e. not actually creating events in SSI or WordPress | [ ] |
+| 40 | Authentication to SSI and WordPress should happen in the beginning of Event creation so that there is no need to authenticate to WordPress in the middle of the process. | [x] Implemented in New-KupittaaCup.ps1 |
+| 41 | Use PowerShell built-in secrets management capabilities to store API keys and credentials. | [ ] |
+| 42 | Modularize codebase to suit different needs. i.e. there can be another configuration file for another event type. | [ ] |
+| 43 | Statistics: When Cup and all matches are completed, update the total shots fired to the calendar event. Calculation: number of Cup shooters × 100 (max shots per Cup). | [ ] |
 
 ## Configuration Files
 
