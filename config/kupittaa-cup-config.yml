@@ -60,7 +60,7 @@ cup:
   
   # Max 800 characters for information (Yksityiskohtaiset tiedot / Detailed information)
   information: |
-    Ohjattu ammunta lyhennetyillä ampumaohjelmilla:
+    Ohjattu pienoispistooliammunta lyhennetyillä ampumaohjelmilla:
     - Tarkkuus- ja pikaosio (SAL 25m urheilupistooli)
     - Pistoolipika-osio (RESUL pistoolipika-ammunta)
     - Laukausmäärä yhteensä: 100
@@ -74,7 +74,7 @@ cup:
 
     Ratamaksut:
     -	Harjoitusmaksu sisältäen laina-aseen, ratamaksun ja 100 kpl patruunat 20 €
-    -	Laina-ase (omat patruunat)	7 €
+    -	Laina-ase (omat patruunat (.22lr))	7 €
     -	Oma ase (omat patruunat) 	6 €
 
     Maksuväline: MobilePay 24130
@@ -176,6 +176,12 @@ tapahtumakalenteri:
   # Location
   location: "Kupittaan urheiluhallin ampumarata"
   mapLink: "https://maps.app.goo.gl/SHDoPm8ZMFjhYGBk9"
+  
+  # Event format taxonomy IDs (checkboxes for activity type)
+  # These are WordPress taxonomy term IDs for the 'eventformat' taxonomy
+  eventFormatTaxonomyIds:
+    - 50  # 1.6 Pistooli
+    - 52  # 2 Prosenttiammunta
   
   # Short description (ingressi) - max ~300 chars
   shortDescription: |

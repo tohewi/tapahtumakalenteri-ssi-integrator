@@ -694,7 +694,8 @@ if ($CreateCalendarEvent) {
                 -Location $tkConfig.location `
                 -MapLink $tkConfig.mapLink `
                 -SsiCupUrl $cupFinalUrl `
-                -SsiCupId ([int]$cupEventInfo.EventId)
+                -SsiCupId ([int]$cupEventInfo.EventId) `
+                -EventFormatTaxonomyIds $tkConfig.eventFormatTaxonomyIds
             
             if ($calendarEvent) {
                 Write-Host "`nCalendar event created successfully!" -ForegroundColor Green

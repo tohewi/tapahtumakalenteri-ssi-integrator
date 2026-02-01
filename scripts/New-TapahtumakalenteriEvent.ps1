@@ -62,6 +62,9 @@ param(
     [string]$MapLink = "",
     [string]$SsiCupUrl = "",
     [int]$SsiCupId = 0,
+    
+    # Event format taxonomy IDs (e.g., 50 = Pistooli, 52 = Prosenttiammunta)
+    [int[]]$EventFormatTaxonomyIds = @(),
 
     [string]$BaseUri = "https://turun-reservialiupseerit-turun-reservilaiset.reservilaisliitto.fi"
 )
@@ -166,10 +169,11 @@ $formData = @{
     "acf[$($ACF_FIELDS.LocationGroup)][$($ACF_FIELDS.LocationAddress)]" = $Location
     "acf[$($ACF_FIELDS.LocationGroup)][$($ACF_FIELDS.LocationMapLink)]" = $MapLink
     "acf[$($ACF_FIELDS.AddRegistrationForm)]" = "0"  # No registration form needed
-    
-    # Event format taxonomy (checkboxes for activity type)
-    # 50 = "1.6 Pistooli", 52 = "2 Prosenttiammunta"
-    "tax_input[eventformat][]" = @("50", "52")
+}
+
+# Add event format taxonomy if provided
+if ($EventFormatTaxonomyIds.Count -gt 0) {
+    $formData["tax_input[eventformat][]"] = $EventFormatTaxonomyIds | ForEach-Object { $_.ToString() }
 }
 
 # Step 4: Submit the form
