@@ -71,6 +71,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Load System.Web for URL encoding
+Add-Type -AssemblyName System.Web
+
 # ACF Field Keys (from WordPress form analysis)
 $ACF_FIELDS = @{
     ShortDescription = "field_5d3e9d9626a82"      # Lyhyt kuvaus (textarea)
@@ -171,12 +174,27 @@ $formData = @{
     "acf[$($ACF_FIELDS.AddRegistrationForm)]" = "0"  # No registration form needed
 }
 
-# Add event format taxonomy if provided
-if ($EventFormatTaxonomyIds.Count -gt 0) {
-    $formData["tax_input[eventformat][]"] = $EventFormatTaxonomyIds | ForEach-Object { $_.ToString() }
+# Step 4: Build form body string (needed for multiple taxonomy values with same key name)
+# WordPress expects: tax_input[eventformat][]=50&tax_input[eventformat][]=52
+$formBodyParts = @()
+foreach ($key in $formData.Keys) {
+    $encodedKey = [System.Web.HttpUtility]::UrlEncode($key)
+    $encodedValue = [System.Web.HttpUtility]::UrlEncode($formData[$key])
+    $formBodyParts += "$encodedKey=$encodedValue"
 }
 
-# Step 4: Submit the form
+# Add event format taxonomy if provided (each ID as separate field)
+if ($EventFormatTaxonomyIds.Count -gt 0) {
+    foreach ($taxId in $EventFormatTaxonomyIds) {
+        $encodedKey = [System.Web.HttpUtility]::UrlEncode("tax_input[eventformat][]")
+        $formBodyParts += "$encodedKey=$taxId"
+    }
+    Write-Host "  Setting Toimintamuoto: $($EventFormatTaxonomyIds -join ', ')" -ForegroundColor Gray
+}
+
+$formBody = $formBodyParts -join "&"
+
+# Step 5: Submit the form
 $postUrl = "$BaseUri/wp-admin/post.php"
 $headers = @{
     "Origin" = $BaseUri
@@ -189,7 +207,7 @@ try {
     $response = Invoke-WebRequest -Uri $postUrl `
         -Method POST `
         -WebSession $Session `
-        -Body $formData `
+        -Body $formBody `
         -Headers $headers `
         -ContentType "application/x-www-form-urlencoded" `
         -MaximumRedirection 5
