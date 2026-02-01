@@ -70,34 +70,23 @@ if ($PSCmdlet.ParameterSetName -eq "ByUrl") {
 
 Write-Host "`nUpdating Tapahtumakalenteri event for Cup ID: $CupId" -ForegroundColor Cyan
 
-# Step 1: Query SSI for Cup participant count
+# Step 1: Query SSI for Cup participant count from participants page
 Write-Host "`n--- Querying SSI for Cup Statistics ---" -ForegroundColor Yellow
 
-$cupPageUrl = "$SsiBaseUri/event/136/$CupId/"
+# Fetch the participants page - more reliable than main Cup page
+$participantsPageUrl = "$SsiBaseUri/event/136/$CupId/participants/"
 try {
-    $cupPage = Invoke-WebRequest -Uri $cupPageUrl -WebSession $SsiSession -Method GET
+    $participantsPage = Invoke-WebRequest -Uri $participantsPageUrl -WebSession $SsiSession -Method GET
     
-    # Parse the page to find actual participant count (not max)
-    $participantCount = 0
+    # Count approved participants by looking for <abbr title="Approved">A</abbr>
+    # This pattern is language-independent (works in Finnish and English)
+    $approvedMatches = [regex]::Matches($participantsPage.Content, '<abbr title="Approved">A</abbr>')
+    $participantCount = $approvedMatches.Count
     
-    # Best pattern: "currently X registered" (e.g., "Max 15 competitors allowed, currently 6 registered")
-    if ($cupPage.Content -match 'currently\s+(\d+)\s+registered') {
-        $participantCount = [int]$Matches[1]
-    }
-    # Alternative: number-card with Competitors label
-    # Pattern: <div class="number-card-number">6</div>...<div class="number-card-detail">Competitors</div>
-    elseif ($cupPage.Content -match 'number-card-number">\s*(\d+)\s*</div>\s*<div class="number-card-detail">\s*Competitors') {
-        $participantCount = [int]$Matches[1]
-    }
-    # Fallback: "X approved" in registration info
-    elseif ($cupPage.Content -match '(\d+)\s+approved') {
-        $participantCount = [int]$Matches[1]
-    }
-    
-    Write-Host "  Cup participants: $participantCount" -ForegroundColor Green
+    Write-Host "  Approved participants: $participantCount" -ForegroundColor Green
 }
 catch {
-    Write-Error "Failed to query SSI Cup page: $_"
+    Write-Error "Failed to query SSI participants page: $_"
     return $null
 }
 
