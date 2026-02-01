@@ -161,11 +161,12 @@ catch {
     return $null
 }
 
-# Step 4: Build and submit the update form
-# Note: We need to find the actual ACF field keys for shots_fired and attendee_count
-# These are placeholders - need to be updated with real field keys from WordPress
+# Step 4: Build and submit the update form with ACF statistics fields
+# ACF Field Keys (discovered from WordPress edit page):
+# - field_4k2esk3rske32 = Ammuttujen laukausten lukumäärä (shots fired)
+# - field_6j3ak3kj2kjs2 = Osallistujien lukumäärä (attendee count)
+# - field_4k3ak3sj2kj6b = Tapahtumien lukumäärä (event count)
 
-# For now, let's try to update using the post meta approach
 $formData = @{
     "_wpnonce" = $wpNonce
     "_wp_http_referer" = "/wp-admin/post.php?post=$postId&action=edit"
@@ -173,13 +174,18 @@ $formData = @{
     "originalaction" = "editpost"
     "post_type" = "event"
     "post_ID" = $postId
-    "post_status" = "draft"  # Keep as draft for now
+    "post_status" = "draft"  # Keep as draft
     
     # ACF fields
     "_acf_screen" = "post"
     "_acf_post_id" = $postId
     "_acf_nonce" = $acfNonce
     "_acf_changed" = "1"
+    
+    # Statistics ACF fields
+    "acf[field_4k2esk3rske32]" = $shotsFired.ToString()      # Ammuttujen laukausten lukumäärä
+    "acf[field_6j3ak3kj2kjs2]" = $participantCount.ToString() # Osallistujien lukumäärä
+    "acf[field_4k3ak3sj2kj6b]" = "1"                          # Tapahtumien lukumäärä (1 event)
 }
 
 # Build form body
@@ -202,12 +208,31 @@ Write-Host "  Updating event with statistics..." -ForegroundColor Gray
 Write-Host "    Participants: $participantCount" -ForegroundColor Gray
 Write-Host "    Shots fired: $shotsFired" -ForegroundColor Gray
 
-# For now, output the values - actual ACF field update needs real field keys
-Write-Host "`nNOTE: ACF field keys for statistics need to be configured." -ForegroundColor Yellow
-Write-Host "  Please update the event manually with:" -ForegroundColor Yellow
-Write-Host "    - Osallistujien lukumäärä: $participantCount" -ForegroundColor White
-Write-Host "    - Ammuttujen laukausten lukumäärä: $shotsFired" -ForegroundColor White
-Write-Host "  Edit URL: $editUrl" -ForegroundColor Cyan
+try {
+    $updateResponse = Invoke-WebRequest -Uri $postUrl `
+        -Method POST `
+        -WebSession $WpSession `
+        -Body $formBody `
+        -Headers $headers `
+        -ContentType "application/x-www-form-urlencoded" `
+        -MaximumRedirection 5
+    
+    # Check if update was successful (redirects back to edit page)
+    if ($updateResponse.StatusCode -eq 200 -or $updateResponse.BaseResponse.ResponseUri -match "post\.php") {
+        Write-Host "`nSUCCESS: Event updated with statistics!" -ForegroundColor Green
+        Write-Host "  Osallistujien lukumäärä: $participantCount" -ForegroundColor White
+        Write-Host "  Ammuttujen laukausten lukumäärä: $shotsFired" -ForegroundColor White
+        Write-Host "  Edit URL: $editUrl" -ForegroundColor Cyan
+    }
+    else {
+        Write-Host "`nWARNING: Update may not have succeeded. Please verify manually." -ForegroundColor Yellow
+        Write-Host "  Edit URL: $editUrl" -ForegroundColor Cyan
+    }
+}
+catch {
+    Write-Error "Failed to update event: $_"
+    return $null
+}
 
 # Return statistics object
 return [PSCustomObject]@{
@@ -216,4 +241,5 @@ return [PSCustomObject]@{
     ParticipantCount = $participantCount
     ShotsFired = $shotsFired
     EditUrl = $editUrl
+    Status = "updated"
 }
