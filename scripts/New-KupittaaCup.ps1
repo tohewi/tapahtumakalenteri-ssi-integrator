@@ -704,7 +704,7 @@ foreach ($match in $createdMatches) {
 #region Calendar Event (Tapahtumakalenteri)
 $calendarEvent = $null
 
-if ($CreateCalendarEvent -and $wpSession) {
+if ($wpSession) {
     Write-Host "`n" -NoNewline
     Write-Host "========================================" -ForegroundColor Magenta
     Write-Host "    CREATING CALENDAR EVENT" -ForegroundColor Magenta
