@@ -285,6 +285,115 @@ All linked and configured according to `kupittaa-cup-config.yml`.
 
 ---
 
+## Batch Creation Process
+
+The following diagram shows the batch creation workflow:
+
+```mermaid
+flowchart TD
+    subgraph Init["Initialization"]
+        A[Read Date List File] --> B{More dates?}
+        B -->|No| Z[Done]
+        B -->|Yes| C{Date starts with !?}
+        C -->|Yes| D[Skip - Already Created]
+        D --> B
+    end
+
+    subgraph Auth["One-Time Authentication"]
+        C -->|No| E[Connect to SSI]
+        E --> F[Connect to WordPress]
+        F --> G[2FA OTP Entry]
+        G --> H[Sessions Ready]
+    end
+
+    subgraph Create["Event Creation Loop"]
+        H --> I[Check Duplicate Cup Name]
+        I -->|Exists| J[Skip Date]
+        J --> K[Mark Date with !]
+        K --> B
+        I -->|New| L[Create SSI Cup]
+        L --> M[Create 3 Matches]
+        M --> N[Link Matches to Cup]
+        N --> O[Create 9 Squads]
+        O --> P[Create WP Calendar Event]
+        P --> Q[Publish Calendar Event]
+        Q --> K
+    end
+
+    subgraph Error["Error Handling"]
+        L -->|Error| R[Stop Batch]
+        M -->|Error| R
+        P -->|Error| S[Continue - Log Warning]
+        S --> K
+    end
+```
+
+## Data Model & Cross-System Integrity
+
+The following diagram shows how SSI and WordPress events are linked:
+
+```mermaid
+erDiagram
+    SSI_CUP {
+        int CupId PK "e.g., 152"
+        string Name "TurRes Kupittaa CUP 14.02.2026"
+        date EventDate
+        string Url "/event/136/152/"
+        int GroupId FK "25874"
+    }
+    
+    SSI_MATCH {
+        int MatchId PK
+        string Name "Kupittaa 14.02.2026 Tarkkuus"
+        int CupId FK
+        string Type "Tarkkuus|Pika|Kuvio"
+    }
+    
+    SSI_SQUAD {
+        int SquadId PK
+        string Name "Oma ase 1"
+        int MatchId FK
+        int MaxShooters
+    }
+    
+    WP_EVENT {
+        int PostId PK "e.g., 1766"
+        string Title "Kupittaan ampumavuoro 14.02.2026"
+        string Permalink "kupittaan-ampumavuoro-14-02-2026-cup152"
+        string Content "Contains SSI Cup link"
+        date EventDate
+        string Time "Klo 09.00-12.00"
+    }
+    
+    DATE_LIST {
+        date EventDate PK
+        bool IsCreated "! prefix = created"
+    }
+
+    SSI_CUP ||--o{ SSI_MATCH : "contains"
+    SSI_MATCH ||--o{ SSI_SQUAD : "has"
+    SSI_CUP ||--|| WP_EVENT : "linked via"
+    DATE_LIST ||--o| SSI_CUP : "creates"
+    DATE_LIST ||--o| WP_EVENT : "creates"
+```
+
+### Cross-Reference Links
+
+| From | To | Link Method |
+|------|-----|-------------|
+| WordPress → SSI | Permalink contains `cup{CupId}` | `kupittaan-ampumavuoro-14-02-2026-cup152` |
+| WordPress → SSI | Content contains SSI URL | `<a href="https://shootnscoreit.com/event/136/152/">` |
+| Date List → Both | Date matching | `14.2.2026` matches Cup and WP event dates |
+
+### Integrity Check Points
+
+1. **Permalink Validation**: WordPress permalink must contain `cup{CupId}`
+2. **Content Link Validation**: WordPress content must link to SSI Cup URL
+3. **Date Consistency**: All dates in date list should exist in both systems
+4. **Ownership Validation**: SSI Cup must be owned by the authenticated user
+
+---
+
 ## Known Limitations
 
 - **Venue coordinates** cannot be set programmatically - must be added via SSI map UI
