@@ -54,15 +54,13 @@ cup:
     - "VO"
   
   # Max 300 characters for description (short summary)
-  description: "Hio pistooliammuntatekniikkaa ja kerää harrastuskertoja käsiaseeseen. 
-    Ohjattu ammunta lyhennetyillä SAL ja RESUL lajeilla. 
-    Laina-aseita saatavilla."
+  description: "Lauantain pistooliampumavuoro Kupittaalla. Ohjattu ammunta sovelletuilla SAL ja RESUL lajeilla."
   
   # Max 800 characters for information (Yksityiskohtaiset tiedot / Detailed information)
   information: |
-    Ohjattu pienoispistooliammunta lyhennetyillä ampumaohjelmilla:
+    Ohjattu pienoispistooliammunta sovelletulla ampumaohjelmalla:
     - Tarkkuus- ja pikaosio (SAL 25m urheilupistooli)
-    - Pistoolipika-osio (RESUL pistoolipika-ammunta)
+    - Pistoolipika-osio (sovellettu RESUL pistoolipika-ammunta)
     - Laukausmäärä yhteensä: 100
     Tarkkuusosa kiinteään tauluun, pika- ja pikapistooliosio kääntyviin Olympia-tauluihin.
 
@@ -185,21 +183,34 @@ tapahtumakalenteri:
   
   # Short description (ingressi) - max ~300 chars
   shortDescription: |
-    Lauantain ampumavuoro Kupittaalla.
-    Hio pistooliammuntatekniikkaa ja kerää harrastuskertoja käsiaseeseen.
-    Ohjattu ammunta lyhennetyillä SAL ja RESUL lajeilla. Laina-aseita saatavilla.
+    Lauantain ampumavuoro Kupittaalla. Ohjattu ammunta sovelletuilla SAL ja RESUL lajeilla.
   
   # Full content (HTML) - {ssiCupLink} will be replaced with the SSI Cup link
   content: |
     Mahdolliset muutokset aikoihin ilmoitetaan sisäampumaradan ilmoitustaululla ja Turun Reserviläisten verkkosivuilla.
     <div>
-    <div><strong>Ohjattu pienoispistooliammunta</strong> lyhennetyillä ampumaohjelmilla:</div>
-    <div>    - Tarkkuus- ja pikaosio (SAL 25m urheilupistooli)</div>
-    <div>    - Pistoolipika-osio (RESUL pistoolipika-ammunta)</div>
-    <div>    - Laukausmäärä yhteensä: 100</div>
-    <div>Tarkkuusosa ammutaan kiinteään tauluun, pika- ja pikapistooliosio kääntyviin Olympia-tauluihin.</div>
-    </div>
-    <b>Ilmoittautuminen {ssiCupLink}</b>
+    <strong>Ohjattu pienoispistooliammunta</strong> sovelletuilla ampumaohjelmilla:
+    <ol>
+    <li>Tarkkuus- ja pikaosio (SAL 25m urheilupistooli)</li>
+    <li>Pistoolipika-osio (RESUL pistoolipika-ammunta)</li>
+    <li>Laukausmäärä yhteensä: 100</li>
+    </ol>
+    Tarkkuusosa ammutaan kiinteään tauluun, pika- ja pikapistooliosio kääntyviin Olympia-tauluihin.</div>
+    
+    <b>Ilmoittautuminen</b>
+    <ol>
+    <li>Ilmoittaudu alla olevan linkin kautta Kupittaa Cup -kilpailuun</li>
+    <li>Cup koostuu kolmesta osakilpailusta. Cup-ilmoittautuminen lisää sinut automaattisesti jokaiseen.</li>
+    <li>Valitse kuhunkin kilpailuun Squad, jossa ammut:
+      <ul>
+      <li>Squad 1 on laina-aseella ampuville</li>
+      <li>Squad 2 on omalla aseella ampuville</li>
+      <li>Squad 3 on omalla aseella ampuville</li>
+      </ul>
+    </li>
+    </ol>
+    {ssiCupLink}
+
 
     <em><strong>Ensikertalaiset vain perehdytysvuoron kautta.</strong></em>
 

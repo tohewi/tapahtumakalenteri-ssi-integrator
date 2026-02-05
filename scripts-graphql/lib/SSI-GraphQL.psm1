@@ -258,10 +258,10 @@ query GetAbstractEvent {
     get_abstract_event(rule: "$Rule", sub_rule: "$SubRule", serie_type: "$SerieType") {
         rule
         sub_rule
-        get_visibility_choices
-        get_status_choices
-        get_registration_choices
-        get_results_choices
+        get_visibility_choices { value display }
+        get_status_choices { value display }
+        get_registration_choices { value display }
+        get_results_choices { value display }
     }
 }
 "@
