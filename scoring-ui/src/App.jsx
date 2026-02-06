@@ -185,7 +185,8 @@ function App() {
     setView('cup')
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try { await api.logout() } catch { /* ignore */ }
     lsRemove(LS_KEYS.CREDS)
     lsRemove(LS_KEYS.CUP)
     lsRemove(LS_KEYS.SCORES)

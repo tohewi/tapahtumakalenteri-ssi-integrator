@@ -1,32 +1,151 @@
 import express from 'express'
 import cors from 'cors'
+import helmet from 'helmet'
+import cookieParser from 'cookie-parser'
+import rateLimit from 'express-rate-limit'
+import crypto from 'node:crypto'
 import path from 'path'
 import { existsSync } from 'fs'
 import { fileURLToPath } from 'url'
-import { ssiGraphQL, ssiLogin, ssiSubmitScore, ssiGetScoringPage } from './lib/ssi-client.js'
+import { ssiGraphQL, ssiLogin, ssiSubmitScore, ssiGetScoringPage, ssiRefreshJWT } from './lib/ssi-client.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
 const PORT = process.env.PORT || 3001
+const IS_PROD = process.env.NODE_ENV === 'production'
 
-app.use(cors({ origin: true, credentials: true }))
+// ============================================================
+// Security middleware
+// ============================================================
+
+// Helmet: security headers (relaxed CSP for Tailwind inline styles)
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+}))
+
+// CORS: locked to own origin in production
+const ALLOWED_ORIGINS = IS_PROD
+  ? [process.env.APP_URL || 'https://ssi-scoring.onrender.com']
+  : true
+app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }))
+
 app.use(express.json())
+app.use(cookieParser())
+
+// Rate limit on login: max 10 attempts per 15 minutes per IP
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts. Try again in 15 minutes.' },
+})
 
 // In production, serve the built UI
 const uiDist = path.join(__dirname, '..', 'scoring-ui', 'dist')
 app.use(express.static(uiDist))
 
 // ============================================================
-// State: JWT token for GraphQL reads, session cookies for writes
+// Session store: per-user isolation for multi-user scoring
+//
+// Map<sessionId, {
+//   jwt, refreshToken, apiKey, ssiCookies,
+//   createdAt, lastUsed
+// }>
 // ============================================================
-let jwtToken = null
-let jwtRefreshToken = null
-let sessionCookies = null
+
+const sessions = new Map()
+const SESSION_TTL = 8 * 60 * 60 * 1000 // 8 hours
+const SESSION_COOKIE = 'ssi_session'
+
+// Cleanup expired sessions every 15 minutes
+setInterval(() => {
+  const now = Date.now()
+  let cleaned = 0
+  for (const [id, s] of sessions) {
+    if (now - s.lastUsed > SESSION_TTL) {
+      sessions.delete(id)
+      cleaned++
+    }
+  }
+  if (cleaned > 0 && !IS_PROD) {
+    console.log(`[session] Cleaned ${cleaned} expired session(s). Active: ${sessions.size}`)
+  }
+}, 15 * 60 * 1000)
+
+// Get session from request cookie
+function getSession(req) {
+  const id = req.cookies?.[SESSION_COOKIE]
+  if (!id) return null
+  const session = sessions.get(id)
+  if (!session) return null
+  if (Date.now() - session.lastUsed > SESSION_TTL) {
+    sessions.delete(id)
+    return null
+  }
+  session.lastUsed = Date.now()
+  return session
+}
+
+// Middleware: require authenticated session
+function requireAuth(req, res, next) {
+  const session = getSession(req)
+  if (!session) return res.status(401).json({ error: 'Not authenticated. Please login.' })
+  req.ssiSession = session
+  next()
+}
+
+// Set session cookie on response
+function setSessionCookie(res, sessionId) {
+  res.cookie(SESSION_COOKIE, sessionId, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: IS_PROD,
+    path: '/api',
+    maxAge: SESSION_TTL,
+  })
+}
+
+// Execute GraphQL with automatic JWT refresh on auth failure
+async function graphqlWithRefresh(session, query, variables = {}) {
+  try {
+    return await ssiGraphQL(session.jwt, query, variables)
+  } catch (err) {
+    // If it looks like a token expiry, try refreshing
+    if (session.refreshToken && (
+      err.message.includes('Signature') ||
+      err.message.includes('expired') ||
+      err.message.includes('401')
+    )) {
+      try {
+        const newTokens = await ssiRefreshJWT(session.refreshToken)
+        session.jwt = newTokens.token
+        session.refreshToken = newTokens.refreshToken
+        return await ssiGraphQL(session.jwt, query, variables)
+      } catch {
+        throw new Error('Session expired. Please login again.')
+      }
+    }
+    throw err
+  }
+}
+
+// ============================================================
+// GET /api/health — Health check
+// ============================================================
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    activeSessions: sessions.size,
+    uptime: Math.round(process.uptime()),
+  })
+})
 
 // ============================================================
 // POST /api/auth/login — Login to SSI (both JWT + session)
 // ============================================================
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   const { email, password, apiKey } = req.body
   if (!email || !password) {
     return res.status(400).json({ error: 'email and password required' })
@@ -51,16 +170,34 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password' })
     }
 
-    jwtToken = authResult.token_auth.token.token
-    jwtRefreshToken = authResult.token_auth.refresh_token.token
+    const jwt = authResult.token_auth.token.token
+    const refreshToken = authResult.token_auth.refresh_token.token
 
     // 2. Get session cookies via web login
-    sessionCookies = await ssiLogin(email, password)
+    const ssiCookies = await ssiLogin(email, password)
+
+    // 3. Create a proxy session
+    const sessionId = crypto.randomUUID()
+    const now = Date.now()
+    sessions.set(sessionId, {
+      jwt,
+      refreshToken,
+      apiKey: apiKey || null,
+      ssiCookies,
+      createdAt: now,
+      lastUsed: now,
+    })
+
+    setSessionCookie(res, sessionId)
+
+    if (!IS_PROD) {
+      console.log(`[session] New session created. Active: ${sessions.size}`)
+    }
 
     res.json({
       success: true,
-      hasJwt: !!jwtToken,
-      hasSession: !!sessionCookies,
+      hasJwt: true,
+      hasSession: !!ssiCookies,
     })
   } catch (err) {
     console.error('Login failed:', err.message)
@@ -72,26 +209,36 @@ app.post('/api/auth/login', async (req, res) => {
 // GET /api/auth/status — Check auth status
 // ============================================================
 app.get('/api/auth/status', (req, res) => {
+  const session = getSession(req)
   res.json({
-    hasJwt: !!jwtToken,
-    hasSession: !!sessionCookies,
+    authenticated: !!session,
+    hasJwt: !!session?.jwt,
+    hasSession: !!session?.ssiCookies,
   })
+})
+
+// ============================================================
+// POST /api/auth/logout — Destroy session
+// ============================================================
+app.post('/api/auth/logout', (req, res) => {
+  const id = req.cookies?.[SESSION_COOKIE]
+  if (id) sessions.delete(id)
+  res.clearCookie(SESSION_COOKIE, { path: '/api' })
+  res.json({ success: true })
 })
 
 // ============================================================
 // GET /api/cups?search=Kupittaa — Search for cups by name
 // Uses SSI events(search:) query, filters to CT=136 (cups)
 // ============================================================
-app.get('/api/cups', async (req, res) => {
-  if (!jwtToken) return res.status(401).json({ error: 'Not authenticated' })
-
+app.get('/api/cups', requireAuth, async (req, res) => {
   const search = req.query.search
   if (!search || search.length < 2) {
     return res.json({ cups: [] })
   }
 
   try {
-    const result = await ssiGraphQL(jwtToken, `
+    const result = await graphqlWithRefresh(req.ssiSession, `
       query SearchCups($search: String!) {
         events(search: $search) {
           id name starts status get_content_type_key
@@ -127,11 +274,9 @@ app.get('/api/cups', async (req, res) => {
 // ============================================================
 // GET /api/cup/:id — Get cup with its component matches
 // ============================================================
-app.get('/api/cup/:id', async (req, res) => {
-  if (!jwtToken) return res.status(401).json({ error: 'Not authenticated' })
-
+app.get('/api/cup/:id', requireAuth, async (req, res) => {
   try {
-    const result = await ssiGraphQL(jwtToken, `
+    const result = await graphqlWithRefresh(req.ssiSession, `
       query CupDetail($id: String!) {
         event(content_type: 136, id: $id) {
           id name starts status
@@ -176,11 +321,9 @@ app.get('/api/cup/:id', async (req, res) => {
 // ============================================================
 // GET /api/match/:id — Get match with squads and competitors
 // ============================================================
-app.get('/api/match/:id', async (req, res) => {
-  if (!jwtToken) return res.status(401).json({ error: 'Not authenticated' })
-
+app.get('/api/match/:id', requireAuth, async (req, res) => {
   try {
-    const result = await ssiGraphQL(jwtToken, `
+    const result = await graphqlWithRefresh(req.ssiSession, `
       query Match($id: String!) {
         event(content_type: 91, id: $id) {
           id
@@ -233,11 +376,9 @@ app.get('/api/match/:id', async (req, res) => {
 // ============================================================
 // GET /api/competitor/:id — Get single competitor scores
 // ============================================================
-app.get('/api/competitor/:id', async (req, res) => {
-  if (!jwtToken) return res.status(401).json({ error: 'Not authenticated' })
-
+app.get('/api/competitor/:id', requireAuth, async (req, res) => {
   try {
-    const result = await ssiGraphQL(jwtToken, `
+    const result = await graphqlWithRefresh(req.ssiSession, `
       query Competitor($id: String!) {
         competitor(content_type: 93, id: $id) {
           id
@@ -265,8 +406,9 @@ app.get('/api/competitor/:id', async (req, res) => {
 // ============================================================
 // POST /api/competitor/:id/score — Submit scores via form POST
 // ============================================================
-app.post('/api/competitor/:id/score', async (req, res) => {
-  if (!sessionCookies) return res.status(401).json({ error: 'No SSI session. Login first.' })
+app.post('/api/competitor/:id/score', requireAuth, async (req, res) => {
+  const session = req.ssiSession
+  if (!session.ssiCookies) return res.status(401).json({ error: 'No SSI session. Login first.' })
 
   const { scores, warning, dqReason, comment } = req.body
   // scores = { 0: { X: 0, '10': 3, '9': 2, ... }, 1: { ... }, ... } (6 series)
@@ -279,7 +421,7 @@ app.post('/api/competitor/:id/score', async (req, res) => {
 
   try {
     // 1. GET the scoring page to extract CSRF token and form structure
-    const { csrfToken, formAction } = await ssiGetScoringPage(competitorId, sessionCookies)
+    const { csrfToken, formAction } = await ssiGetScoringPage(competitorId, session.ssiCookies)
 
     // 2. Build the Django formset data
     const ZONES = ['X', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'M']
@@ -310,11 +452,11 @@ app.post('/api/competitor/:id/score', async (req, res) => {
     formData.append('custom_data', '{}')
 
     // 3. POST to SSI
-    const result = await ssiSubmitScore(competitorId, formData, sessionCookies, csrfToken)
+    const result = await ssiSubmitScore(competitorId, formData, session.ssiCookies, csrfToken)
 
     // 4. Read back the updated scores via GraphQL to confirm
-    if (jwtToken) {
-      const updated = await ssiGraphQL(jwtToken, `
+    if (session.jwt) {
+      const updated = await graphqlWithRefresh(session, `
         query Verify($id: String!) {
           competitor(content_type: 93, id: $id) {
             id first_name last_name
@@ -356,9 +498,13 @@ if (existsSync(indexPath)) {
 // ============================================================
 app.listen(PORT, () => {
   console.log(`Scoring proxy running on http://localhost:${PORT}`)
+  console.log(`Mode: ${IS_PROD ? 'production' : 'development'}`)
+  console.log(`Session TTL: ${SESSION_TTL / 3600000}h`)
   console.log('Endpoints:')
   console.log('  POST /api/auth/login     { email, password, apiKey }')
   console.log('  GET  /api/auth/status')
+  console.log('  POST /api/auth/logout')
+  console.log('  GET  /api/health')
   console.log('  GET  /api/cups?search=')
   console.log('  GET  /api/cup/:id')
   console.log('  GET  /api/match/:id')

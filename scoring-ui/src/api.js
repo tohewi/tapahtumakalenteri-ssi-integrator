@@ -4,6 +4,7 @@ export async function login(email, password, apiKey) {
   const resp = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ email, password, apiKey }),
   })
   const data = await resp.json()
@@ -11,32 +12,36 @@ export async function login(email, password, apiKey) {
   return data
 }
 
+export async function logout() {
+  await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' })
+}
+
 export async function getAuthStatus() {
-  const resp = await fetch(`${API_BASE}/auth/status`)
+  const resp = await fetch(`${API_BASE}/auth/status`, { credentials: 'include' })
   return resp.json()
 }
 
 export async function searchCups(search) {
-  const resp = await fetch(`${API_BASE}/cups?search=${encodeURIComponent(search)}`)
+  const resp = await fetch(`${API_BASE}/cups?search=${encodeURIComponent(search)}`, { credentials: 'include' })
   if (!resp.ok) throw new Error('Failed to search cups')
   const data = await resp.json()
   return data.cups || []
 }
 
 export async function getCup(cupId) {
-  const resp = await fetch(`${API_BASE}/cup/${cupId}`)
+  const resp = await fetch(`${API_BASE}/cup/${cupId}`, { credentials: 'include' })
   if (!resp.ok) throw new Error('Failed to fetch cup')
   return resp.json()
 }
 
 export async function getMatch(matchId) {
-  const resp = await fetch(`${API_BASE}/match/${matchId}`)
+  const resp = await fetch(`${API_BASE}/match/${matchId}`, { credentials: 'include' })
   if (!resp.ok) throw new Error('Failed to fetch match')
   return resp.json()
 }
 
 export async function getCompetitor(competitorId) {
-  const resp = await fetch(`${API_BASE}/competitor/${competitorId}`)
+  const resp = await fetch(`${API_BASE}/competitor/${competitorId}`, { credentials: 'include' })
   if (!resp.ok) throw new Error('Failed to fetch competitor')
   return resp.json()
 }
@@ -45,6 +50,7 @@ export async function submitScore(competitorId, scores, options = {}) {
   const resp = await fetch(`${API_BASE}/competitor/${competitorId}/score`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({
       scores,
       warning: options.warning || false,

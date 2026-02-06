@@ -1,4 +1,4 @@
-const SSI_BASE = 'https://shootnscoreit.com'
+const SSI_BASE = process.env.SSI_BASE_URL || 'https://shootnscoreit.com'
 const SSI_GRAPHQL = `${SSI_BASE}/graphql/`
 
 // ============================================================
@@ -36,6 +36,30 @@ export async function ssiGraphQL(jwtToken, query, variables = {}, apiKey = null)
   }
 
   return json.data
+}
+
+// ============================================================
+// JWT token refresh
+// ============================================================
+
+export async function ssiRefreshJWT(refreshToken) {
+  const result = await ssiGraphQL(null, `
+    mutation Refresh($refreshToken: String!) {
+      refresh_token(refresh_token: $refreshToken) {
+        token { token }
+        refresh_token { token }
+      }
+    }
+  `, { refreshToken })
+
+  if (!result.refresh_token?.token?.token) {
+    throw new Error('Token refresh failed')
+  }
+
+  return {
+    token: result.refresh_token.token.token,
+    refreshToken: result.refresh_token.refresh_token.token,
+  }
 }
 
 // ============================================================
@@ -94,17 +118,19 @@ export async function ssiLogin(email, password) {
   const loginCookies = parseCookies(loginSetCookies)
   const allCookies = { ...cookies, ...loginCookies }
 
-  console.log('Login response status:', loginResp.status, 'Cookies:', Object.keys(allCookies))
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('Login response status:', loginResp.status, 'Cookies:', Object.keys(allCookies))
+  }
 
   // 302 redirect = success
   if (loginResp.status === 302 || loginResp.status === 301) {
-    console.log('SSI web login successful')
+    if (process.env.NODE_ENV !== 'production') console.log('SSI web login successful')
     return allCookies
   }
 
   // 200 with sessionid cookie = success (some configs)
   if (allCookies.sessionid) {
-    console.log('SSI web login successful (no redirect)')
+    if (process.env.NODE_ENV !== 'production') console.log('SSI web login successful (no redirect)')
     return allCookies
   }
 
