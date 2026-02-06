@@ -1,0 +1,98 @@
+name: CI / Deploy
+
+on:
+  push:
+    branches: [feature/scoring-ui-prototype]
+  pull_request:
+    branches: [feature/scoring-ui-prototype]
+
+jobs:
+  test-audit-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: |
+            scoring-ui/package-lock.json
+            scoring-proxy/package-lock.json
+
+      # ── Install ──
+      - name: Install UI dependencies
+        run: npm ci
+        working-directory: scoring-ui
+
+      - name: Install proxy dependencies
+        run: npm ci
+        working-directory: scoring-proxy
+
+      # ── Test ──
+      - name: Run UI tests
+        run: npm test
+        working-directory: scoring-ui
+
+      # ── Vulnerability scan ──
+      - name: Audit UI dependencies
+        run: npm audit --audit-level=high
+        working-directory: scoring-ui
+
+      - name: Audit proxy dependencies
+        run: npm audit --audit-level=high
+        working-directory: scoring-proxy
+
+      # ── Build ──
+      - name: Build UI
+        run: npm run build
+        working-directory: scoring-ui
+
+      # ── Scan report artifact ──
+      - name: Generate scan report
+        run: |
+          echo "# Build Scan Report" > scan-report.md
+          echo "" >> scan-report.md
+          echo "**Build**: #${{ github.run_number }}" >> scan-report.md
+          echo "**Commit**: ${{ github.sha }}" >> scan-report.md
+          echo "**Branch**: ${{ github.ref_name }}" >> scan-report.md
+          echo "**Time**: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> scan-report.md
+          echo "**Node**: $(node --version)" >> scan-report.md
+          echo "**npm**: $(npm --version)" >> scan-report.md
+          echo "" >> scan-report.md
+          echo "## npm Audit" >> scan-report.md
+          echo "" >> scan-report.md
+          echo "| Project | Status |" >> scan-report.md
+          echo "|---|---|" >> scan-report.md
+          echo "| scoring-ui | ✅ Passed |" >> scan-report.md
+          echo "| scoring-proxy | ✅ Passed |" >> scan-report.md
+          echo "" >> scan-report.md
+          echo "## Tests" >> scan-report.md
+          echo "" >> scan-report.md
+          echo "All tests passed." >> scan-report.md
+
+      - name: Upload scan report
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-report-${{ github.run_number }}
+          path: scan-report.md
+          retention-days: 90
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-dist-${{ github.run_number }}
+          path: scoring-ui/dist/
+          retention-days: 30
+
+  deploy:
+    needs: test-audit-build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/scoring-ui-prototype'
+
+    steps:
+      - name: Trigger Render deploy
+        run: |
+          curl -s "${{ secrets.RENDER_DEPLOY_HOOK }}"
+          echo "Deploy triggered on Render"
