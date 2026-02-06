@@ -672,4 +672,21 @@ function App() {
   )
 }
 
-export default App
+function BuildBadge() {
+  return (
+    <div className="fixed bottom-1 left-1 text-[10px] text-gray-300 select-none pointer-events-none z-50">
+      v{__APP_VERSION__}
+    </div>
+  )
+}
+
+function AppWithBadge() {
+  return (
+    <>
+      <App />
+      <BuildBadge />
+    </>
+  )
+}
+
+export default AppWithBadge
