@@ -118,8 +118,65 @@ function App() {
     } else {
       lsRemove(LS_KEYS.CREDS)
     }
-    // Login succeeded — go to cup search
-    setView('cup')
+    // Login succeeded — restore previous navigation state if available
+    await restoreNavState()
+  }
+
+  const restoreNavState = async () => {
+    const nav = lsGet(LS_KEYS.NAV)
+    const savedCup = lsGet(LS_KEYS.CUP)
+
+    // Restore cup + matches
+    let cupData = null
+    if (savedCup) {
+      try {
+        cupData = await api.getCup(savedCup.id)
+        setSelectedCup(cupData)
+        setMatches((cupData.matches || []).map(api.transformMatchListItem))
+      } catch { /* cup load failed */ }
+    }
+
+    if (!nav || !cupData) {
+      setView(cupData ? 'match' : 'cup')
+      return
+    }
+
+    // Restore deeper state: match → squad → series/scoring
+    if (nav.matchId && ['squad', 'series', 'scoring'].includes(nav.view)) {
+      try {
+        const fullMatch = await api.getMatch(nav.matchId)
+        const transformed = api.transformMatch(fullMatch)
+        setSelectedMatch(transformed)
+
+        if (nav.squadId && ['series', 'scoring'].includes(nav.view)) {
+          const squad = transformed.squads.find(s => s.id === nav.squadId)
+          if (squad) {
+            setSelectedSquad(squad)
+            setActiveSeries(nav.activeSeries || 0)
+            const scoreKey = `${nav.matchId}_${nav.squadId}`
+            const savedScores = lsGet(LS_KEYS.SCORES)
+            const restored = savedScores?.[scoreKey]
+            const scores = {}
+            for (const s of squad.shooters) {
+              scores[s.id] = restored?.[s.id] || api.buildScoresFromSSI(s, SERIES_COUNT)
+            }
+            setAllScores(scores)
+
+            if (nav.shooterId && nav.view === 'scoring') {
+              setSelectedShooterId(nav.shooterId)
+              setView('scoring')
+            } else {
+              setView('series')
+            }
+            return
+          }
+        }
+        setView('squad')
+        return
+      } catch { /* match load failed, fall back */ }
+    }
+
+    setView(nav.view === 'cup' ? 'cup' : 'match')
   }
 
   const handleLogout = async () => {
@@ -584,7 +641,7 @@ function App() {
 
 function BuildBadge() {
   return (
-    <div className="fixed top-0 left-0 right-0 text-center text-[9px] text-gray-400 select-none pointer-events-none z-50 leading-tight py-px bg-white/80">
+    <div className="text-center text-[9px] text-gray-400 select-none leading-tight py-px bg-gray-50">
       v{__APP_VERSION__} · {__BUILD_TIME__}
     </div>
   )
@@ -592,10 +649,12 @@ function BuildBadge() {
 
 function AppWithBadge() {
   return (
-    <>
-      <App />
+    <div className="flex flex-col min-h-screen">
       <BuildBadge />
-    </>
+      <div className="flex-1">
+        <App />
+      </div>
+    </div>
   )
 }
 
