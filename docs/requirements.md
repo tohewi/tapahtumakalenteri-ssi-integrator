@@ -73,7 +73,7 @@
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| P1 | Remember me: securely store credentials on device (AES-GCM encrypted in localStorage). Does NOT skip login page — pre-fills login fields so user explicitly logs in each time | ✅ v1.1.0 |
+| P1 | Remember me: securely store credentials on device (AES-GCM encrypted in localStorage). On refresh, auto-login and restore previous navigation state. Falls back to pre-filled login screen if auto-login fails | ✅ v1.2.0 |
 | P2 | Auto-restore login session on app reopen | ❌ Removed (replaced by P1 rework) |
 | P3 | Persist navigation state (cup, match, squad, series) in localStorage | ✅ v1.0.0 |
 | P4 | Persist in-progress scores in localStorage | ✅ v1.0.0 |
