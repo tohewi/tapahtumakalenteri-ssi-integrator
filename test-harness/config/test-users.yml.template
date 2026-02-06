@@ -1,0 +1,45 @@
+# SSI Test User Configuration
+# Copy this file to test-users.yml and fill in actual credentials after running New-TestUsers.ps1
+# DO NOT commit test-users.yml — it is gitignored
+
+# Admin account (used for event management, match enrollment approval)
+admin:
+  email: "tohewi@live.com"
+  password: "YOUR_ADMIN_PASSWORD"
+  apiKey: "YOUR_API_KEY"
+
+# Test users — created by New-TestUsers.ps1
+# Email aliases route to admin inbox (tohewi+ssitest1@live.com → tohewi@live.com)
+users:
+  - id: test1
+    email: "tohewi+ssitest1@live.com"
+    password: "TestAmpuja1!"
+    firstName: "Testi"
+    lastName: "Ampuja1"
+    sex: "m"
+    squad: 1          # Oma ase 1
+    role: "standard"
+
+  - id: test2
+    email: "tohewi+ssitest2@live.com"
+    password: "TestAmpuja2!"
+    firstName: "Testi"
+    lastName: "Ampuja2"
+    sex: "m"
+    squad: 2          # Oma ase 2
+    role: "standard"
+
+  - id: test3
+    email: "tohewi+ssitest3@live.com"
+    password: "TestLainaaja3!"
+    firstName: "Testi"
+    lastName: "Lainaaja"
+    sex: "f"
+    squad: 3          # Laina-ase
+    role: "borrowed_weapon"
+
+# SSI configuration
+ssi:
+  baseUri: "https://shootnscoreit.com"
+  region: "FIN"
+  timezone: "Europe/Helsinki"
