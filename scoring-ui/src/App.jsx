@@ -67,8 +67,8 @@ function lsRemove(key) {
 }
 
 function App() {
-  const hasSavedCreds = !!localStorage.getItem(LS_KEYS.CREDS)
-  const [view, setView] = useState(hasSavedCreds ? 'restoring' : 'login') // 'login' | 'restoring' | 'cup' | 'match' | 'squad' | 'series' | 'scoring'
+  const [view, setView] = useState('login') // 'login' | 'cup' | 'match' | 'squad' | 'series' | 'scoring'
+  const [savedCreds, setSavedCreds] = useState(null) // { email, password, apiKey } from remember-me
   const [selectedCup, setSelectedCup] = useState(null)
   const [matches, setMatches] = useState([])
   const [selectedMatch, setSelectedMatch] = useState(null)
@@ -94,79 +94,16 @@ function App() {
     })
   }, [view, selectedCup, selectedMatch, selectedSquad, selectedShooterId, activeSeries])
 
-  // --- Auto-login and restore full state on mount ---
+  // --- Decrypt saved credentials on mount (pre-fill only, no auto-login) ---
   useEffect(() => {
-    const tryRestore = async () => {
+    const loadSavedCreds = async () => {
       const raw = localStorage.getItem(LS_KEYS.CREDS)
       if (!raw) return
       const creds = await decryptData(raw)
-      if (!creds) { lsRemove(LS_KEYS.CREDS); setView('login'); return }
-
-      try {
-        await api.login(creds.email, creds.password, creds.apiKey)
-      } catch {
-        lsRemove(LS_KEYS.CREDS)
-        setView('login')
-        return
-      }
-
-      const nav = lsGet(LS_KEYS.NAV)
-      const savedCup = lsGet(LS_KEYS.CUP)
-
-      // Restore cup + matches
-      let cupData = null
-      if (savedCup) {
-        try {
-          cupData = await api.getCup(savedCup.id)
-          setSelectedCup(cupData)
-          setMatches((cupData.matches || []).map(api.transformMatchListItem))
-        } catch { /* cup load failed */ }
-      }
-
-      if (!nav || !cupData) {
-        setView(cupData ? 'match' : 'cup')
-        return
-      }
-
-      // Restore deeper state: match → squad → series/scoring
-      if (nav.matchId && ['squad', 'series', 'scoring'].includes(nav.view)) {
-        try {
-          const fullMatch = await api.getMatch(nav.matchId)
-          const transformed = api.transformMatch(fullMatch)
-          setSelectedMatch(transformed)
-
-          if (nav.squadId && ['series', 'scoring'].includes(nav.view)) {
-            const squad = transformed.squads.find(s => s.id === nav.squadId)
-            if (squad) {
-              setSelectedSquad(squad)
-              setActiveSeries(nav.activeSeries || 0)
-              // Restore scores
-              const scoreKey = `${nav.matchId}_${nav.squadId}`
-              const savedScores = lsGet(LS_KEYS.SCORES)
-              const restored = savedScores?.[scoreKey]
-              const scores = {}
-              for (const s of squad.shooters) {
-                scores[s.id] = restored?.[s.id] || api.buildScoresFromSSI(s, SERIES_COUNT)
-              }
-              setAllScores(scores)
-
-              if (nav.shooterId && nav.view === 'scoring') {
-                setSelectedShooterId(nav.shooterId)
-                setView('scoring')
-              } else {
-                setView('series')
-              }
-              return
-            }
-          }
-          setView('squad')
-          return
-        } catch { /* match load failed, fall back */ }
-      }
-
-      setView(nav.view === 'cup' ? 'cup' : 'match')
+      if (!creds) { lsRemove(LS_KEYS.CREDS); return }
+      setSavedCreds(creds)
     }
-    tryRestore()
+    loadSavedCreds()
   }, [])
 
   // --- Login ---
@@ -187,7 +124,7 @@ function App() {
 
   const handleLogout = async () => {
     try { await api.logout() } catch { /* ignore */ }
-    lsRemove(LS_KEYS.CREDS)
+    // Keep LS_KEYS.CREDS — remember-me credentials persist across logouts
     lsRemove(LS_KEYS.CUP)
     lsRemove(LS_KEYS.SCORES)
     lsRemove(LS_KEYS.NAV)
@@ -380,24 +317,10 @@ function App() {
   }
 
   // ============================================================
-  // VIEW: Restoring session (auto-login in progress)
-  // ============================================================
-  if (view === 'restoring') {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-          <p className="text-gray-500 text-sm">Restoring session...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // ============================================================
   // VIEW: Login
   // ============================================================
   if (view === 'login') {
-    return <LoginScreen onLogin={handleLogin} />
+    return <LoginScreen onLogin={handleLogin} initialEmail={savedCreds?.email} initialPassword={savedCreds?.password} initialApiKey={savedCreds?.apiKey} />
   }
 
   // ============================================================
@@ -675,8 +598,8 @@ function App() {
 
 function BuildBadge() {
   return (
-    <div className="fixed bottom-1 left-1 text-[10px] text-gray-300 select-none pointer-events-none z-50">
-      v{__APP_VERSION__}
+    <div className="fixed top-0 left-0 right-0 text-center text-[9px] text-gray-400 select-none pointer-events-none z-50 leading-tight py-px bg-white/80">
+      v{__APP_VERSION__} · {__BUILD_TIME__}
     </div>
   )
 }

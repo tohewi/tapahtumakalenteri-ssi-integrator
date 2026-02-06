@@ -43,6 +43,15 @@ describe('LoginScreen', () => {
     expect(onLogin).toHaveBeenCalledWith('test@test.com', 'pass123', 'mykey', true)
   })
 
+  it('pre-fills fields when initial values are provided', () => {
+    render(<LoginScreen onLogin={vi.fn()} initialEmail="saved@test.com" initialPassword="savedpass" initialApiKey="savedkey" />)
+    expect(screen.getByPlaceholderText('your@email.com')).toHaveValue('saved@test.com')
+    expect(screen.getByPlaceholderText('SSI password')).toHaveValue('savedpass')
+    expect(screen.getByPlaceholderText(/optional/i)).toHaveValue('savedkey')
+    // Login button should be enabled since email and password are pre-filled
+    expect(screen.getByRole('button', { name: /login/i })).not.toBeDisabled()
+  })
+
   it('shows error message on login failure', async () => {
     const onLogin = vi.fn().mockRejectedValue(new Error('Invalid email or password'))
     render(<LoginScreen onLogin={onLogin} />)

@@ -1,9 +1,9 @@
 import { useState } from 'react'
 
-export default function LoginScreen({ onLogin }) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [apiKey, setApiKey] = useState('')
+export default function LoginScreen({ onLogin, initialEmail, initialPassword, initialApiKey }) {
+  const [email, setEmail] = useState(initialEmail || '')
+  const [password, setPassword] = useState(initialPassword || '')
+  const [apiKey, setApiKey] = useState(initialApiKey || '')
   const [rememberMe, setRememberMe] = useState(true)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)

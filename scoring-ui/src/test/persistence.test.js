@@ -110,20 +110,19 @@ describe('Navigation state persistence', () => {
   })
 })
 
-describe('Logout clears all state', () => {
-  it('removes all keys on logout', () => {
+describe('Logout clears session state but keeps credentials', () => {
+  it('removes session keys but preserves credentials on logout', () => {
     lsSet(LS_KEYS.CREDS, { email: 'a@b.com', password: 'p', apiKey: '' })
     lsSet(LS_KEYS.CUP, { id: '141', name: 'Cup' })
     lsSet(LS_KEYS.SCORES, { '1850_4143': {} })
     lsSet(LS_KEYS.NAV, { view: 'scoring' })
 
-    // Simulate logout
-    localStorage.removeItem(LS_KEYS.CREDS)
+    // Simulate logout — credentials persist for remember-me pre-fill
     localStorage.removeItem(LS_KEYS.CUP)
     localStorage.removeItem(LS_KEYS.SCORES)
     localStorage.removeItem(LS_KEYS.NAV)
 
-    expect(lsGet(LS_KEYS.CREDS)).toBeNull()
+    expect(lsGet(LS_KEYS.CREDS)).toEqual({ email: 'a@b.com', password: 'p', apiKey: '' })
     expect(lsGet(LS_KEYS.CUP)).toBeNull()
     expect(lsGet(LS_KEYS.SCORES)).toBeNull()
     expect(lsGet(LS_KEYS.NAV)).toBeNull()

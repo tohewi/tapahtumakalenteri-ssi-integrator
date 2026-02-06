@@ -66,13 +66,14 @@
 | S6 | Read-back verification of submitted scores via GraphQL | ✅ v1.0.0 |
 | S7 | Double-series mode (navigate 6 series per shooter) | ✅ v1.0.0 |
 | S8 | Auto-advance to next unscored shooter after submit | ✅ v1.0.0 |
+| S9 | Build/release details displayed at top of every page in very small font | ⬚ Pending |
 
 ### Persistence Requirements
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| P1 | Remember me: encrypted credentials in localStorage (AES-GCM) | ✅ v1.0.0 |
-| P2 | Auto-restore login session on app reopen | ✅ v1.0.0 |
+| P1 | Remember me: securely store credentials on device (AES-GCM encrypted in localStorage). Does NOT skip login page — pre-fills login fields so user explicitly logs in each time | ⬚ Rework |
+| P2 | Auto-restore login session on app reopen | ❌ Removed (replaced by P1 rework) |
 | P3 | Persist navigation state (cup, match, squad, series) in localStorage | ✅ v1.0.0 |
 | P4 | Persist in-progress scores in localStorage | ✅ v1.0.0 |
 
