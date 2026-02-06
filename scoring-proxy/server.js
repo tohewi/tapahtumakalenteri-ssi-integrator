@@ -301,9 +301,7 @@ app.get('/api/cup/:id', requireAuth, async (req, res) => {
     const matches = (result.event.component_matches || [])
       .filter(cm => cm.included && cm.match)
       .map(cm => ({ ...cm.match, componentNumber: cm.number }))
-      .sort((a, b) =>
-        (a.starts || '').localeCompare(b.starts || '') || a.name.localeCompare(b.name)
-      )
+      .sort((a, b) => (a.componentNumber || 0) - (b.componentNumber || 0))
 
     res.json({
       id: result.event.id,

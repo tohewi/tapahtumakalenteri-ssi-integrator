@@ -157,13 +157,15 @@ describe('GET /api/cup/:id', () => {
     }
   })
 
-  it('matches are sorted by date', async () => {
+  it('matches preserve SSI component order', async () => {
     const { data } = await jsonFetch(`${BASE}/cup/${cupId}`)
     if (data.matches.length >= 2) {
-      assert.ok(
-        data.matches[0].starts <= data.matches[1].starts,
-        'Matches should be sorted by date ascending'
-      )
+      for (let i = 1; i < data.matches.length; i++) {
+        assert.ok(
+          (data.matches[i - 1].componentNumber || 0) <= (data.matches[i].componentNumber || 0),
+          `Match ${i - 1} (component ${data.matches[i - 1].componentNumber}) should come before match ${i} (component ${data.matches[i].componentNumber})`
+        )
+      }
     }
   })
 
