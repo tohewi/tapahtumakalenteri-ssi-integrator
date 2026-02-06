@@ -4,6 +4,7 @@ export default function LoginScreen({ onLogin }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [apiKey, setApiKey] = useState('')
+  const [rememberMe, setRememberMe] = useState(true)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
 
@@ -12,7 +13,7 @@ export default function LoginScreen({ onLogin }) {
     setError(null)
     setLoading(true)
     try {
-      await onLogin(email, password, apiKey)
+      await onLogin(email, password, apiKey, rememberMe)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -66,6 +67,16 @@ export default function LoginScreen({ onLogin }) {
             />
           </div>
         </div>
+
+        <label className="flex items-center gap-2 mt-4 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={rememberMe}
+            onChange={e => setRememberMe(e.target.checked)}
+            className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="text-sm text-gray-700">Remember me</span>
+        </label>
 
         {error && (
           <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-3 text-center">

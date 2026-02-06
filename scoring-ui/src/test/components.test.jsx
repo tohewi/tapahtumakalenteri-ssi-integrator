@@ -40,7 +40,7 @@ describe('LoginScreen', () => {
     await userEvent.type(screen.getByPlaceholderText(/optional/i), 'mykey')
     await userEvent.click(screen.getByRole('button', { name: /login/i }))
 
-    expect(onLogin).toHaveBeenCalledWith('test@test.com', 'pass123', 'mykey')
+    expect(onLogin).toHaveBeenCalledWith('test@test.com', 'pass123', 'mykey', true)
   })
 
   it('shows error message on login failure', async () => {

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
+import { encryptData, decryptData } from './crypto'
 import MatchPicker from './components/MatchPicker'
 import SquadPicker from './components/SquadPicker'
 import ScoringForm from './components/ScoringForm'
@@ -66,7 +67,7 @@ function lsRemove(key) {
 }
 
 function App() {
-  const hasSavedCreds = !!lsGet(LS_KEYS.CREDS)
+  const hasSavedCreds = !!localStorage.getItem(LS_KEYS.CREDS)
   const [view, setView] = useState(hasSavedCreds ? 'restoring' : 'login') // 'login' | 'restoring' | 'cup' | 'match' | 'squad' | 'series' | 'scoring'
   const [selectedCup, setSelectedCup] = useState(null)
   const [matches, setMatches] = useState([])
@@ -96,8 +97,10 @@ function App() {
   // --- Auto-login and restore full state on mount ---
   useEffect(() => {
     const tryRestore = async () => {
-      const creds = lsGet(LS_KEYS.CREDS)
-      if (!creds) return
+      const raw = localStorage.getItem(LS_KEYS.CREDS)
+      if (!raw) return
+      const creds = await decryptData(raw)
+      if (!creds) { lsRemove(LS_KEYS.CREDS); setView('login'); return }
 
       try {
         await api.login(creds.email, creds.password, creds.apiKey)
@@ -168,11 +171,16 @@ function App() {
 
   // --- Login ---
 
-  const handleLogin = async (email, password, apiKey) => {
+  const handleLogin = async (email, password, apiKey, rememberMe) => {
     // This throws on failure — LoginScreen catches and shows the error
     await api.login(email, password, apiKey)
-    // Save credentials for auto-login
-    lsSet(LS_KEYS.CREDS, { email, password, apiKey })
+    // Save encrypted credentials if "Remember me" is checked
+    if (rememberMe) {
+      const encrypted = await encryptData({ email, password, apiKey })
+      localStorage.setItem(LS_KEYS.CREDS, encrypted)
+    } else {
+      lsRemove(LS_KEYS.CREDS)
+    }
     // Login succeeded — go to cup search
     setView('cup')
   }
