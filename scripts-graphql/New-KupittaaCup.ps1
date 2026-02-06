@@ -115,15 +115,15 @@ $dateObj = [DateTime]::ParseExact($Date, "dd-MM-yyyy", $null)
 $isoDate = $dateObj.ToString("yyyy-MM-dd")
 $displayDate = $dateObj.ToString("dd.MM.yyyy")
 
-# Get times from config
-$startTime = $config.cup.startTime
-$endTime = $config.cup.endTime
+# Get times from config (convert Finnish hh.mm to HH:mm)
+$startTime = $config.cup.startTime -replace '\.', ':'
+$endTime = $config.cup.endTime -replace '\.', ':'
 
 # Registration settings from config
 $regDaysBefore = $config.cup.registrationDaysBeforeEvent
 $regStartDateObj = $dateObj.AddDays(-$regDaysBefore)
 $regStartDate = $regStartDateObj.ToString("yyyy-MM-dd")
-$regStartTime = $config.cup.registrationStartTime
+$regStartTime = $config.cup.registrationStartTime -replace '\.', ':'
 
 # Cup registration closes 12 hours before Cup start time
 $cupStartDateTime = $dateObj.Add([TimeSpan]::Parse($startTime))
