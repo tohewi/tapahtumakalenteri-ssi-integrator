@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export default function LoginScreen({ onLogin, initialEmail, initialPassword, initialApiKey }) {
   const [email, setEmail] = useState(initialEmail || '')
@@ -7,6 +7,13 @@ export default function LoginScreen({ onLogin, initialEmail, initialPassword, in
   const [rememberMe, setRememberMe] = useState(true)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
+
+  // Sync fields when saved credentials arrive (async decryption)
+  useEffect(() => {
+    if (initialEmail) setEmail(initialEmail)
+    if (initialPassword) setPassword(initialPassword)
+    if (initialApiKey) setApiKey(initialApiKey)
+  }, [initialEmail, initialPassword, initialApiKey])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
