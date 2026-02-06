@@ -7,7 +7,7 @@ import crypto from 'node:crypto'
 import path from 'path'
 import { existsSync } from 'fs'
 import { fileURLToPath } from 'url'
-import { ssiGraphQL, ssiLogin, ssiSubmitScore, ssiGetScoringPage, ssiRefreshJWT, ssiSearchAndAddParticipant, ssiSetParticipantSquad } from './lib/ssi-client.js'
+import { ssiGraphQL, ssiLogin, ssiSubmitScore, ssiGetScoringPage, ssiRefreshJWT, ssiSearchAndAddParticipant, ssiSetParticipantSquad, ssiFindCompetitorInMatch, ssiFindAndApproveCupParticipant } from './lib/ssi-client.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -647,6 +647,11 @@ app.get('/api/register/cups', registerReadLimiter, async (req, res) => {
           id name starts status get_content_type_key
           max_competitors
           number_of_prematch_competitors_registered
+          registration
+          ... on NordicSerieNode {
+            registration_starts
+            registration_closes
+          }
         }
       }
     `)
@@ -656,14 +661,25 @@ app.get('/api/register/cups', registerReadLimiter, async (req, res) => {
       .filter(e => e.get_content_type_key === 136)
       .filter(e => new Date(e.starts) > now) // future only
       .filter(e => e.status === 'on')         // active only
-      .map(c => ({
-        id: c.id,
-        name: c.name,
-        starts: c.starts,
-        maxCompetitors: c.max_competitors || 25,
-        registered: c.number_of_prematch_competitors_registered || 0,
-        full: (c.number_of_prematch_competitors_registered || 0) >= (c.max_competitors || 25),
-      }))
+      .map(c => {
+        const full = (c.number_of_prematch_competitors_registered || 0) >= (c.max_competitors || 25)
+        const regStarts = c.registration_starts ? new Date(c.registration_starts) : null
+        const regCloses = c.registration_closes ? new Date(c.registration_closes) : null
+        // registrationOpen = mode allows it AND within time window AND not full
+        const registrationOpen = (c.registration === 'op' || c.registration === 'aa')
+          && (!regStarts || now >= regStarts)
+          && (!regCloses || now <= regCloses)
+          && !full
+        return {
+          id: c.id,
+          name: c.name,
+          starts: c.starts,
+          maxCompetitors: c.max_competitors || 25,
+          registered: c.number_of_prematch_competitors_registered || 0,
+          full,
+          registrationOpen,
+        }
+      })
       .sort((a, b) => new Date(a.starts) - new Date(b.starts))
 
     res.json({ cups })
@@ -839,78 +855,66 @@ app.post('/api/register/submit', registerBodyLimit, registerLimiter, async (req,
           registerUrl: 'https://shootnscoreit.com/register/',
         })
       }
+      if (addResult.message === 'Already registered') {
+        return res.status(409).json({
+          error: 'already_registered',
+          message: 'Olet jo ilmoittautunut tähän cupiin.',
+        })
+      }
       return res.status(400).json({ error: addResult.message })
     }
 
-    // 3. Re-query to find participant IDs in each match
-    //    After cup enrollment, user should appear in all matches
-    //    (matchRegistrationMode: "all")
-    if (!IS_PROD) console.log(`[register] Participant added, finding IDs for squad assignment...`)
+    // 3. Get the shooter's name from the registration confirmation form
+    //    _handleRegisterResponse extracts it from the shooter select element.
+    //    Fallback to email prefix if not available.
+    const shooterName = addResult.shooterName || email.split('@')[0].replace(/[+._-]/g, ' ')
+    if (!IS_PROD) console.log(`[register] Participant added (${addResult.message}), shooter: "${shooterName}"`)
 
-    // Brief delay to let SSI propagate the enrollment
-    await new Promise(r => setTimeout(r, 2000))
+    // 4. Approve the CUP participant (default state is Pending)
+    //    Switch to streaming (NDJSON) so the frontend can show progress
+    res.setHeader('Content-Type', 'application/x-ndjson')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('X-Accel-Buffering', 'no')
+    const sendProgress = (data) => res.write(JSON.stringify(data) + '\n')
 
-    const updatedCup = await adminGraphQL(`
-      query CupDetail($id: String!) {
-        event(content_type: 136, id: $id) {
-          ... on NordicSerieNode {
-            component_matches {
-              number included
-              match {
-                id
-                squads {
-                  id number
-                  ... on NordicSquadNode {
-                    competitors {
-                      id first_name last_name status
-                      ... on NordicCompetitorNode { user { email } }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    `, { id: cupId })
+    const totalMatches = componentMatches.length
+    sendProgress({ type: 'progress', step: 'approve', current: 0, total: totalMatches, message: 'Cup-hyväksyntä...' })
 
-    // 4. For each match, find the competitor and assign to the selected squad
+    if (!IS_PROD) console.log(`[register] Approving CUP participant...`)
+    const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, admin.cookies)
+    if (!IS_PROD) console.log(`[register] Approve result: ${approveResult.message}`)
+    if (!approveResult.success) {
+      sendProgress({ type: 'result', success: false, message: `Ilmoittautuminen onnistui mutta hyväksyntä epäonnistui: ${approveResult.message}` })
+      return res.end()
+    }
+
+    // 5. For each component match: register user, then find + approve + assign squad
+    //    SSI does not auto-propagate CUP participants to matches when approved after pending.
+    //    We must add the user to each match individually via participant-search-and-add (ct=91).
     const squadResults = []
-    const matches = (updatedCup.event?.component_matches || [])
-      .filter(cm => cm.included && cm.match)
+    for (let i = 0; i < componentMatches.length; i++) {
+      const cm = componentMatches[i]
+      const matchId = cm.match.id
+      sendProgress({ type: 'progress', step: 'match', current: i + 1, total: totalMatches, message: `Osakilpailu ${i + 1}/${totalMatches}...` })
 
-    for (const cm of matches) {
-      const match = cm.match
-      // Find the competitor in any squad of this match
-      let participantId = null
-      for (const sq of (match.squads || [])) {
-        const comp = (sq.competitors || []).find(c =>
-          c.user?.email?.toLowerCase() === email.toLowerCase()
-        )
-        if (comp) {
-          participantId = comp.id
-          break
-        }
-      }
+      if (!IS_PROD) console.log(`[register] Adding ${email} to match ${matchId}`)
 
+      // 5a. Register to match (search-and-add with contentType=91)
+      const matchAddResult = await ssiSearchAndAddParticipant(91, matchId, email, admin.cookies)
+      if (!IS_PROD) console.log(`[register] Match ${matchId} add result: ${matchAddResult.message}`)
+
+      // 5b. Find competitor in the match
+      const participantId = await ssiFindCompetitorInMatch(matchId, shooterName, admin.cookies)
       if (!participantId) {
-        // Try finding unassigned competitor (no squad)
-        if (!IS_PROD) console.log(`[register] Competitor not found in match ${match.id} squads, checking unsquadded...`)
-        squadResults.push({ matchId: match.id, success: false, message: 'Competitor not found in match' })
+        if (!IS_PROD) console.log(`[register] Competitor not found in match ${matchId}`)
+        squadResults.push({ matchId, success: false, message: 'Competitor not found in match' })
         continue
       }
 
-      // Find the target squad value by squad number
-      const targetSquad = (match.squads || []).find(sq => sq.number === squadNumber)
-      if (!targetSquad) {
-        squadResults.push({ matchId: match.id, success: false, message: `Squad ${squadNumber} not found` })
-        continue
-      }
-
-      // Assign via web scraping
-      if (!IS_PROD) console.log(`[register] Setting squad ${squadNumber} for participant ${participantId} in match ${match.id}`)
-      const editResult = await ssiSetParticipantSquad(participantId, targetSquad.id, admin.cookies)
-      squadResults.push({ matchId: match.id, ...editResult })
+      // 5c. Assign squad + set status to approved via edit form
+      if (!IS_PROD) console.log(`[register] Assigning squad ${squadNumber} to participant ${participantId} in match ${matchId}`)
+      const editResult = await ssiSetParticipantSquad(participantId, squadNumber, admin.cookies)
+      squadResults.push({ matchId, ...editResult })
     }
 
     const allSuccess = squadResults.every(r => r.success)
@@ -918,13 +922,15 @@ app.post('/api/register/submit', registerBodyLimit, registerLimiter, async (req,
     const total = squadResults.length
 
     // RSEC8: Never expose internal IDs, URLs, or debug details in production
-    res.json({
+    sendProgress({
+      type: 'result',
       success: allSuccess,
       message: allSuccess
         ? 'Ilmoittautuminen ja squadiin asettelu onnistui!'
         : `Ilmoittautuminen onnistui. Squadiin asettelu: ${squadded}/${total} osakilpailua.`,
       ...(IS_PROD ? {} : { details: squadResults }),
     })
+    res.end()
   } catch (err) {
     console.error('[register] Registration failed:', err.message)
     res.status(500).json({ error: 'Ilmoittautuminen epäonnistui. Yritä myöhemmin uudelleen.' })
