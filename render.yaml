@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: ssi-scoring
+    runtime: node
+    buildCommand: cd scoring-ui && npm install && npm run build && cd ../scoring-proxy && npm install
+    startCommand: cd scoring-proxy && node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
