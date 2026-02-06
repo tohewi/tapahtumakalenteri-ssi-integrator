@@ -297,23 +297,9 @@ function App() {
     }
     setSaving(false)
 
-    // Move to next unscored shooter
-    const shooters = selectedSquad.shooters
-    const currentIdx = shooters.findIndex(s => s.id === selectedShooterId)
-    let nextShooter = null
-    for (let offset = 1; offset < shooters.length; offset++) {
-      const idx = (currentIdx + offset) % shooters.length
-      const s = shooters[idx]
-      if (!isGroupScored(s.id)) {
-        nextShooter = s
-        break
-      }
-    }
-    if (nextShooter) {
-      setSelectedShooterId(nextShooter.id)
-    } else {
-      setView('series')
-    }
+    // Return to shooter list so user picks who to score next
+    setSelectedShooterId(null)
+    setView('series')
   }
 
   // ============================================================

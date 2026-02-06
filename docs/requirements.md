@@ -65,7 +65,7 @@
 | S5 | Submit scores to SSI via Django form POST through proxy | ✅ v1.0.0 |
 | S6 | Read-back verification of submitted scores via GraphQL | ✅ v1.0.0 |
 | S7 | Double-series mode (navigate 6 series per shooter) | ✅ v1.0.0 |
-| S8 | Auto-advance to next unscored shooter after submit | ✅ v1.0.0 |
+| S8 | After score submit, return to shooter list — unscored shooters are visually highlighted, user picks who to score next | ✅ v1.1.0 |
 | S9 | Build/release details displayed at top of every page in very small font | ✅ v1.1.0 |
 
 ### Persistence Requirements
