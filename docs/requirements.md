@@ -52,6 +52,63 @@
 | 45 | **Batch Creation**: Create multiple events from date list file, sequential processing, skip existing | ✅ |
 | 46 | **Single Authentication**: One-time auth with session reuse for batch processing | ✅ |
 
+## Release 3.0 - Scoring Application
+
+### Functional Requirements
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| S1 | Login with SSI credentials (email, password, API key) via proxy | ✅ v1.0.0 |
+| S2 | Search cups by name, sorted by proximity to today | ✅ v1.0.0 |
+| S3 | Browse cup → match → squad → shooter hierarchy | ✅ v1.0.0 |
+| S4 | Enter scores per series using zone-tap buttons (X, 10–1, M) | ✅ v1.0.0 |
+| S5 | Submit scores to SSI via Django form POST through proxy | ✅ v1.0.0 |
+| S6 | Read-back verification of submitted scores via GraphQL | ✅ v1.0.0 |
+| S7 | Double-series mode (navigate 6 series per shooter) | ✅ v1.0.0 |
+| S8 | Auto-advance to next unscored shooter after submit | ✅ v1.0.0 |
+
+### Persistence Requirements
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| P1 | Remember me: encrypted credentials in localStorage (AES-GCM) | ✅ v1.0.0 |
+| P2 | Auto-restore login session on app reopen | ✅ v1.0.0 |
+| P3 | Persist navigation state (cup, match, squad, series) in localStorage | ✅ v1.0.0 |
+| P4 | Persist in-progress scores in localStorage | ✅ v1.0.0 |
+
+### Mobile & PWA Requirements
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| M1 | PWA installable (manifest, service worker, icons) | ✅ v1.0.0 |
+| M2 | Touch-optimized scoring buttons (large tap targets) | ✅ v1.0.0 |
+| M3 | Responsive layout for mobile scoring at the range | ✅ v1.0.0 |
+
+### Build & Deploy Requirements
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| B1 | GitHub Actions CI/CD (test, audit, build, deploy) | ✅ v1.0.0 |
+| B2 | Render hosting (single process: proxy + static UI) | ✅ v1.0.0 |
+| B3 | Build version badge visible in UI | ✅ v1.0.0 |
+| B4 | Node.js v24 LTS pinned in engines | ✅ v1.0.0 |
+
+### Security Requirements
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| SEC1 | Multi-user session isolation — per-user JWT + cookies in server-side Map, HttpOnly session cookie | ✅ v1.1.0 |
+| SEC2 | JWT token auto-refresh on expiry (transparent to user) | ✅ v1.1.0 |
+| SEC3 | CORS locked to production origin (APP_URL env var) | ✅ v1.1.0 |
+| SEC4 | Login rate limiting — max 10 attempts per 15 min per IP | ✅ v1.1.0 |
+| SEC5 | Session expiry and cleanup — 8h TTL, 15-min sweep | ✅ v1.1.0 |
+| SEC6 | Helmet security headers (HSTS, X-Frame-Options, etc.) | ✅ v1.1.0 |
+| SEC7 | Production log sanitization — no credentials or tokens in logs | ✅ v1.1.0 |
+| SEC8 | SSI base URL configurable via environment variable | ✅ v1.1.0 |
+| SEC9 | Server-side logout endpoint to destroy proxy session | ✅ v1.1.0 |
+| SEC10 | Health check endpoint (`GET /api/health`) | ✅ v1.1.0 |
+| SEC11 | Study: Google authentication support — SSI supports Google login; investigate if OAuth flow can be extended to scoring proxy so users who sign in to SSI with Google identity can also use this app without separate SSI credentials | ⬚ Pending |
+
 ## Release 2.1 - Data Integrity (Planned)
 
 | # | Requirement | Status |
@@ -62,10 +119,10 @@
 
 ## Summary
 
-- **Total Requirements**: 47
-- **Completed**: 42
+- **Total Requirements**: 73
+- **Completed**: 68
 - **On Hold**: 3 (35, 36, 41)
-- **Pending**: 3 (39, 42, 47)
+- **Pending**: 4 (39, 42, 47–48, SEC11)
 
 ## Configuration Files
 
