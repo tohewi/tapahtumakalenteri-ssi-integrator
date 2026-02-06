@@ -1,25 +1,32 @@
 # SSI Scoring — Enhancement Plan
 
 **Date**: 2026-02-06
-**Current version**: 1.0.0
+**Current version**: 1.1.0
 
 ---
 
 ## 1. Security Enhancements (Priority: Critical)
 
-### 1.1 Current Security Posture
+### 1.1 Security Posture (as of v1.1.0)
 
-The proxy currently has several credential exposure risks:
+The following risks were identified in v1.0.0 and resolved in v1.1.0:
+
+| Risk | Severity | Status | Resolution |
+|---|---|---|---|
+| **In-memory plaintext credentials** | 🔴 High | ✅ Fixed | Credentials isolated per session in `Map<sessionId, {...}>` |
+| **Single-user server state** | 🔴 High | ✅ Fixed | Per-session isolation via `ssi_session` HttpOnly cookie |
+| **Credentials in transit to proxy** | 🟡 Medium | ✅ Mitigated | HTTPS in production (Render), credentials never logged |
+| **No token expiry handling** | 🟡 Medium | ✅ Fixed | `graphqlWithRefresh()` auto-refreshes JWT on 401/expiry |
+| **Proxy logs credentials context** | 🟢 Low | ✅ Fixed | Production logs sanitized (gated behind `NODE_ENV !== 'production'`) |
+| **CORS wide open** | 🟡 Medium | ✅ Fixed | Locked to `APP_URL` origin in production |
+| **No rate limiting** | 🟡 Medium | ✅ Fixed | Login endpoint: max 10 attempts per 15 min per IP |
+
+#### Remaining risks
 
 | Risk | Severity | Description |
 |---|---|---|
-| **In-memory plaintext credentials** | 🔴 High | `jwtToken`, `jwtRefreshToken`, and `sessionCookies` are stored as plain module-level variables in `server.js`. Any unhandled error that leaks server state could expose them. |
-| **Single-user server state** | 🔴 High | The proxy holds one global JWT + session. If two users log in, the second overwrites the first. This is a functional and security issue. |
-| **Credentials in transit to proxy** | 🟡 Medium | Email + password are sent as JSON in POST body from browser to proxy. In production (HTTPS on Render), this is encrypted in transit. On local HTTP dev, it is plaintext. |
-| **No token expiry handling** | 🟡 Medium | JWT tokens expire but the proxy never refreshes them. The `jwtRefreshToken` is stored but never used. |
-| **Proxy logs credentials context** | 🟢 Low | `console.log` in `ssiLogin` logs cookie keys. Not credentials directly, but operational info that shouldn't be in production logs. |
-| **CORS wide open** | 🟡 Medium | `cors({ origin: true })` accepts requests from any origin. Fine for dev, risky in production. |
-| **No rate limiting** | 🟡 Medium | Login endpoint has no brute-force protection. |
+| **In-memory session store** | 🟡 Medium | Sessions are lost on server restart. Acceptable for current scale. Consider Redis for high availability. |
+| **No structured logging** | 🟢 Low | `console.log` used directly. Consider `pino` for production-grade logging. |
 
 ### 1.2 Proposed Security Fixes
 
