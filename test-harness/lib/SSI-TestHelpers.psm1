@@ -397,4 +397,125 @@ function Find-MatchPages {
     }
 }
 
-Export-ModuleMember -Function Connect-SSIWeb, Register-SSIAccount, Update-SSIProfile, Register-ToMatch, Find-MatchPages
+function Find-DeactivationLink {
+    <#
+    .SYNOPSIS
+        Discover the SSI account deactivation link for an authenticated user.
+    .DESCRIPTION
+        Scrapes the SSI settings/profile pages looking for the /deactivate-shooter/<token>/ link.
+    .PARAMETER Session
+        Authenticated WebRequestSession.
+    .OUTPUTS
+        [string] The deactivation URL, or $null if not found.
+    #>
+    param(
+        [Parameter(Mandatory)] $Session
+    )
+
+    # Try common settings pages where deactivation link might appear
+    $pagesToCheck = @(
+        "$script:BaseUri/settings/"
+        "$script:BaseUri/settings/account/"
+        "$script:BaseUri/dashboard/"
+        "$script:BaseUri/profile/"
+        "$script:BaseUri/my-account/"
+    )
+
+    foreach ($pageUrl in $pagesToCheck) {
+        try {
+            $page = Invoke-WebRequest -Uri $pageUrl -WebSession $Session -UseBasicParsing -ErrorAction Stop
+            $match = [regex]::Match($page.Content, 'href="(/deactivate-shooter/[^"]+)"')
+            if ($match.Success) {
+                $deactivateUrl = "$script:BaseUri$($match.Groups[1].Value)"
+                return $deactivateUrl
+            }
+            # Also check for full URL
+            $match = [regex]::Match($page.Content, '(https?://[^"]*deactivate-shooter/[^"]+)')
+            if ($match.Success) {
+                return $match.Groups[1].Value
+            }
+        }
+        catch {
+            # 404 or other error — skip this page
+        }
+    }
+
+    return $null
+}
+
+function Disable-SSIAccount {
+    <#
+    .SYNOPSIS
+        Deactivate an SSI account using the /deactivate-shooter/<token>/ endpoint.
+    .DESCRIPTION
+        Fetches the deactivation page and submits the confirmation form.
+        WARNING: This is irreversible. The account will be deactivated.
+    .PARAMETER Session
+        Authenticated WebRequestSession.
+    .PARAMETER DeactivationUrl
+        The full deactivation URL (e.g., https://shootnscoreit.com/deactivate-shooter/xTuC3DLv8y/).
+    .PARAMETER Confirm
+        Must be set to $true to actually deactivate. Safety switch.
+    .OUTPUTS
+        [bool] $true if deactivation succeeded.
+    #>
+    param(
+        [Parameter(Mandatory)] $Session,
+        [Parameter(Mandatory)] [string]$DeactivationUrl,
+        [switch]$Confirm
+    )
+
+    if (-not $Confirm) {
+        Write-Host "  DRY RUN: Would deactivate via $DeactivationUrl" -ForegroundColor Yellow
+        Write-Host "  Pass -Confirm to actually deactivate" -ForegroundColor Yellow
+        return $false
+    }
+
+    # GET the deactivation page
+    Write-Host "  GET $DeactivationUrl" -ForegroundColor Gray
+    try {
+        $page = Invoke-WebRequest -Uri $DeactivationUrl -WebSession $Session -UseBasicParsing -ErrorAction Stop
+    }
+    catch {
+        Write-Host "  Failed to fetch deactivation page: $_" -ForegroundColor Red
+        return $false
+    }
+
+    # Extract CSRF token and form fields
+    $csrfToken = $null
+    if ($page.Content -match 'name="csrfmiddlewaretoken"\s+value="([^"]+)"') {
+        $csrfToken = $Matches[1]
+    }
+
+    # Dump form fields for debugging
+    $formFields = [regex]::Matches($page.Content, 'name="([^"]+)"') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
+    Write-Host "  Deactivation form fields: $($formFields -join ', ')" -ForegroundColor Gray
+
+    # POST the confirmation form
+    $body = @{}
+    if ($csrfToken) { $body["csrfmiddlewaretoken"] = $csrfToken }
+
+    $headers = @{
+        Origin  = $script:BaseUri
+        Referer = $DeactivationUrl
+    }
+
+    try {
+        $null = Invoke-WebRequest -Uri $DeactivationUrl -Method POST -WebSession $Session `
+            -Body $body -Headers $headers -ContentType "application/x-www-form-urlencoded" `
+            -MaximumRedirection 5 -ErrorAction Stop
+
+        Write-Host "  Account deactivated" -ForegroundColor Red
+        return $true
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode -eq 302) {
+            Write-Host "  Account deactivated (redirect)" -ForegroundColor Red
+            return $true
+        }
+        Write-Host "  Deactivation failed: $_" -ForegroundColor Red
+        return $false
+    }
+}
+
+Export-ModuleMember -Function Connect-SSIWeb, Register-SSIAccount, Update-SSIProfile, Register-ToMatch, Find-MatchPages, Find-DeactivationLink, Disable-SSIAccount

@@ -115,8 +115,23 @@ test-harness/
 - `test-users.yml` is **gitignored** — never committed
 - Passwords are stored in plaintext in the YAML file (local machine only)
 - Email aliases (`+tag`) route all SSI emails to the admin inbox
-- `Remove-TestUsers.ps1 -Disable` changes passwords to random values for cleanup
-- Full account deletion requires SSI support (no public API)
+
+### Account Deactivation
+
+SSI provides a per-account deactivation endpoint:
+
+```
+https://shootnscoreit.com/deactivate-shooter/<token>/
+```
+
+Each account has a unique token discoverable from the settings page. `Remove-TestUsers.ps1` discovers these links automatically.
+
+```powershell
+.\Remove-TestUsers.ps1                # report status + show deactivation URLs
+.\Remove-TestUsers.ps1 -Deactivate    # PERMANENTLY deactivate all test accounts
+```
+
+**⚠️ Deactivation is irreversible.** New accounts must be created to replace deactivated ones.
 
 ## For Agents
 
@@ -136,6 +151,6 @@ test-harness/
 ### Known limitations
 
 - SSI GraphQL write mutations are broken (see `docs/ssi-graphql-findings.md`)
-- Account deletion is not available via API — only soft-disable (password change)
+- Account deactivation is **irreversible** — use `Remove-TestUsers.ps1 -Deactivate` with care
 - Email verification is required and must be done manually
 - Match enrollment URL pattern is not yet discovered (Phase 2)

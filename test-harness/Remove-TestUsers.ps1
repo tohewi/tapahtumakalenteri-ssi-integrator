@@ -1,29 +1,31 @@
 <#
 .SYNOPSIS
-    Verify and optionally deactivate SSI test user accounts.
+    Check status and optionally deactivate SSI test user accounts.
 
 .DESCRIPTION
-    Checks which test users exist by attempting login.
-    SSI does not expose a public account deletion API, so this script:
-    1. Reports which test accounts exist and can login
-    2. Optionally changes passwords to random values (soft-disable)
-    
-    For full deletion, contact SSI support or use the SSI web UI manually.
+    For each test user in config:
+    1. Attempts login to verify account is active
+    2. Discovers the /deactivate-shooter/<token>/ link from settings
+    3. Optionally deactivates the account via that link
+
+    SSI deactivation URL pattern: /deactivate-shooter/<token>/
+    Each account has a unique token, discoverable from the settings page.
 
 .PARAMETER ConfigPath
     Path to the test users YAML config.
 
-.PARAMETER Disable
-    If set, change test user passwords to random values to prevent login.
+.PARAMETER Deactivate
+    If set, deactivate accounts using the SSI deactivation endpoint.
+    IRREVERSIBLE — the accounts cannot be re-activated.
 
 .EXAMPLE
-    .\Remove-TestUsers.ps1                # just report status
-    .\Remove-TestUsers.ps1 -Disable       # change passwords to disable accounts
+    .\Remove-TestUsers.ps1                    # report status + deactivation links
+    .\Remove-TestUsers.ps1 -Deactivate        # actually deactivate all test accounts
 #>
 
 param(
     [string]$ConfigPath = (Join-Path $PSScriptRoot "config\test-users.yml"),
-    [switch]$Disable
+    [switch]$Deactivate
 )
 
 $ErrorActionPreference = "Stop"
@@ -39,42 +41,61 @@ $config = Get-Content $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Yaml
 $users = $config.users
 
 Write-Host "=== SSI Test User Status ===" -ForegroundColor Cyan
+if ($Deactivate) {
+    Write-Host "*** DEACTIVATION MODE — accounts will be permanently disabled ***" -ForegroundColor Red
+}
+
+$results = @()
 
 foreach ($user in $users) {
-    Write-Host "--- $($user.id) ($($user.email)) ---" -ForegroundColor Yellow
+    Write-Host "`n--- $($user.id) ($($user.email)) ---" -ForegroundColor Yellow
     try {
         $session = Connect-SSIWeb -Email $user.email -Password $user.password
         Write-Host "  Status: ACTIVE (login successful)" -ForegroundColor Green
 
-        if ($Disable) {
-            Write-Host "  Disabling account (changing password)..." -ForegroundColor Yellow
-            # Navigate to password change page
-            $pwUrl = "$($config.ssi.baseUri)/settings/password/"
-            try {
-                $pwPage = Invoke-WebRequest -Uri $pwUrl -WebSession $session -UseBasicParsing
-                $csrfToken = $null
-                if ($pwPage.Content -match 'name="csrfmiddlewaretoken"\s+value="([^"]+)"') {
-                    $csrfToken = $Matches[1]
-                }
-                $randomPw = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 20 | ForEach-Object { [char]$_ })
-                $pwBody = @{
-                    old_password  = $user.password
-                    new_password1 = "${randomPw}!Aa1"
-                    new_password2 = "${randomPw}!Aa1"
-                }
-                if ($csrfToken) { $pwBody["csrfmiddlewaretoken"] = $csrfToken }
-                $headers = @{ Origin = $config.ssi.baseUri; Referer = $pwUrl }
-                $null = Invoke-WebRequest -Uri $pwUrl -Method POST -WebSession $session `
-                    -Body $pwBody -Headers $headers -ContentType "application/x-www-form-urlencoded" `
-                    -MaximumRedirection 5 -ErrorAction Stop
-                Write-Host "  DISABLED: Password changed to random value" -ForegroundColor Red
+        # Discover the deactivation link
+        Write-Host "  Searching for deactivation link..." -ForegroundColor Gray
+        $deactivateUrl = Find-DeactivationLink -Session $session
+
+        if ($deactivateUrl) {
+            Write-Host "  Deactivation URL: $deactivateUrl" -ForegroundColor White
+
+            if ($Deactivate) {
+                $null = Disable-SSIAccount -Session $session -DeactivationUrl $deactivateUrl -Confirm
+                $results += @{ id = $user.id; status = "deactivated" }
             }
-            catch {
-                Write-Host "  Failed to change password: $_" -ForegroundColor Red
+            else {
+                $results += @{ id = $user.id; status = "active"; deactivateUrl = $deactivateUrl }
             }
+        }
+        else {
+            Write-Host "  Deactivation link not found on settings pages" -ForegroundColor Yellow
+            $results += @{ id = $user.id; status = "active"; deactivateUrl = "not found" }
         }
     }
     catch {
         Write-Host "  Status: INACTIVE (login failed)" -ForegroundColor Gray
+        $results += @{ id = $user.id; status = "inactive" }
+    }
+}
+
+# Summary
+Write-Host "`n=== Summary ===" -ForegroundColor Cyan
+foreach ($r in $results) {
+    $color = switch ($r.status) {
+        "active"      { "Green" }
+        "deactivated" { "Red" }
+        "inactive"    { "Gray" }
+        default       { "White" }
+    }
+    $extra = if ($r.deactivateUrl) { " → $($r.deactivateUrl)" } else { "" }
+    Write-Host "  $($r.id): $($r.status)$extra" -ForegroundColor $color
+}
+
+if (-not $Deactivate) {
+    $active = $results | Where-Object { $_.status -eq "active" }
+    if ($active) {
+        Write-Host "`nTo deactivate these accounts, run:" -ForegroundColor Yellow
+        Write-Host "  .\Remove-TestUsers.ps1 -Deactivate" -ForegroundColor White
     }
 }
