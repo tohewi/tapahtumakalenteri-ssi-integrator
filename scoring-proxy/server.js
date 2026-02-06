@@ -7,7 +7,7 @@ import crypto from 'node:crypto'
 import path from 'path'
 import { existsSync } from 'fs'
 import { fileURLToPath } from 'url'
-import { ssiGraphQL, ssiLogin, ssiSubmitScore, ssiGetScoringPage, ssiRefreshJWT } from './lib/ssi-client.js'
+import { ssiGraphQL, ssiLogin, ssiSubmitScore, ssiGetScoringPage, ssiRefreshJWT, ssiSearchAndAddParticipant, ssiSetParticipantSquad } from './lib/ssi-client.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -482,6 +482,456 @@ app.post('/api/competitor/:id/score', requireAuth, async (req, res) => {
 })
 
 // ============================================================
+// Registration: Admin session (singleton, lazy-init)
+// Uses SSI_ADMIN_EMAIL + SSI_ADMIN_PASSWORD env vars
+// ============================================================
+
+let adminCookies = null
+let adminJwt = null
+let adminRefreshToken = null
+let adminLoginTime = 0
+const ADMIN_SESSION_TTL = 4 * 60 * 60 * 1000 // 4 hours
+
+async function getAdminSession() {
+  const email = process.env.SSI_ADMIN_EMAIL
+  const password = process.env.SSI_ADMIN_PASSWORD
+  const apiKey = process.env.SSI_ADMIN_API_KEY || null
+  if (!email || !password) {
+    throw new Error('Registration not configured: SSI_ADMIN_EMAIL and SSI_ADMIN_PASSWORD required')
+  }
+
+  // Reuse if still fresh
+  if (adminCookies && (Date.now() - adminLoginTime) < ADMIN_SESSION_TTL) {
+    return { cookies: adminCookies, jwt: adminJwt, refreshToken: adminRefreshToken }
+  }
+
+  // Login as admin
+  if (!IS_PROD) console.log('[register] Admin login...')
+  adminCookies = await ssiLogin(email, password)
+
+  // Get JWT for GraphQL reads
+  const authResult = await ssiGraphQL(null, `
+    mutation Auth($email: String!, $password: String!) {
+      token_auth(email: $email, password: $password) {
+        token { token }
+        refresh_token { token }
+      }
+    }
+  `, { email, password }, apiKey)
+  adminJwt = authResult.token_auth?.token?.token || null
+  adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
+  adminLoginTime = Date.now()
+
+  if (!IS_PROD) console.log('[register] Admin session ready')
+  return { cookies: adminCookies, jwt: adminJwt, refreshToken: adminRefreshToken }
+}
+
+// GraphQL query using admin JWT
+async function adminGraphQL(query, variables = {}) {
+  const admin = await getAdminSession()
+  try {
+    return await ssiGraphQL(admin.jwt, query, variables)
+  } catch (err) {
+    if (admin.refreshToken && (err.message.includes('expired') || err.message.includes('Signature'))) {
+      const newTokens = await ssiRefreshJWT(admin.refreshToken)
+      adminJwt = newTokens.token
+      adminRefreshToken = newTokens.refreshToken
+      return await ssiGraphQL(adminJwt, query, variables)
+    }
+    throw err
+  }
+}
+
+// ============================================================
+// Registration: Captcha store
+// Simple math challenge: a + b = ?
+// ============================================================
+
+const captchaChallenges = new Map()
+const CAPTCHA_TTL = 5 * 60 * 1000 // 5 minutes
+
+// Cleanup expired captchas every 5 minutes
+setInterval(() => {
+  const now = Date.now()
+  for (const [id, c] of captchaChallenges) {
+    if (now - c.created > CAPTCHA_TTL) captchaChallenges.delete(id)
+  }
+}, 5 * 60 * 1000)
+
+// Rate limit for registration: 5 submit attempts per hour per IP
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Liian monta yritystä. Yritä uudelleen tunnin kuluttua.' },
+})
+
+// Rate limit for captcha: 30 per hour per IP (prevents enumeration)
+const captchaLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Liian monta pyyntöä.' },
+})
+
+// Rate limit for cup/squad reads: 60 per hour per IP
+const registerReadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Liian monta pyyntöä.' },
+})
+
+// Request body size limit for registration endpoints (1 KB max)
+const registerBodyLimit = express.json({ limit: '1kb' })
+
+// ============================================================
+// Registration: Input validation helpers (RSEC3, RSEC5)
+// ============================================================
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const MAX_EMAIL_LEN = 254
+
+function validateRegistrationInput({ cupId, squadNumber, email, captchaId, captchaAnswer }) {
+  const errors = []
+
+  // cupId: must be a string of digits (SSI event ID)
+  if (typeof cupId !== 'string' && typeof cupId !== 'number') errors.push('cupId: required')
+  else if (!/^\d{1,10}$/.test(String(cupId))) errors.push('cupId: invalid format')
+
+  // squadNumber: small positive integer (1-99)
+  if (squadNumber == null) errors.push('squadNumber: required')
+  else if (!Number.isInteger(Number(squadNumber)) || Number(squadNumber) < 1 || Number(squadNumber) > 99) errors.push('squadNumber: invalid')
+
+  // email: valid format, max 254 chars
+  if (typeof email !== 'string') errors.push('email: required')
+  else if (email.length > MAX_EMAIL_LEN) errors.push('email: too long')
+  else if (!EMAIL_RE.test(email)) errors.push('email: invalid format')
+
+  // captchaId: UUID
+  if (typeof captchaId !== 'string') errors.push('captchaId: required')
+  else if (!UUID_RE.test(captchaId)) errors.push('captchaId: invalid format')
+
+  // captchaAnswer: small integer (-999 to 999)
+  if (captchaAnswer == null) errors.push('captchaAnswer: required')
+  else if (!Number.isInteger(Number(captchaAnswer)) || Math.abs(Number(captchaAnswer)) > 999) errors.push('captchaAnswer: invalid')
+
+  return errors
+}
+
+// ============================================================
+// GET /api/register/captcha — Generate math challenge
+// ============================================================
+app.get('/api/register/captcha', captchaLimiter, (req, res) => {
+  const a = Math.floor(Math.random() * 20) + 1
+  const b = Math.floor(Math.random() * 20) + 1
+  const id = crypto.randomUUID()
+  captchaChallenges.set(id, { answer: a + b, created: Date.now() })
+  res.json({ id, question: `${a} + ${b} = ?` })
+})
+
+// ============================================================
+// GET /api/register/cups — List open cups (public, no auth)
+// Searches for "Kupittaa CUP", returns future cups with
+// registration open and capacity info
+// ============================================================
+app.get('/api/register/cups', registerReadLimiter, async (req, res) => {
+  try {
+    const result = await adminGraphQL(`
+      query {
+        events(search: "Kupittaa CUP") {
+          id name starts status get_content_type_key
+          max_competitors
+          number_of_prematch_competitors_registered
+        }
+      }
+    `)
+
+    const now = new Date()
+    const cups = (result.events || [])
+      .filter(e => e.get_content_type_key === 136)
+      .filter(e => new Date(e.starts) > now) // future only
+      .filter(e => e.status === 'on')         // active only
+      .map(c => ({
+        id: c.id,
+        name: c.name,
+        starts: c.starts,
+        maxCompetitors: c.max_competitors || 25,
+        registered: c.number_of_prematch_competitors_registered || 0,
+        full: (c.number_of_prematch_competitors_registered || 0) >= (c.max_competitors || 25),
+      }))
+      .sort((a, b) => new Date(a.starts) - new Date(b.starts))
+
+    res.json({ cups })
+  } catch (err) {
+    console.error('[register] Failed to list cups:', err.message)
+    res.status(500).json({ error: 'Ilmoittautumispalvelu ei ole käytettävissä.' })
+  }
+})
+
+// ============================================================
+// GET /api/register/cup/:id — Cup squads with capacity (public)
+// Returns squad info aggregated across all matches in the cup
+// ============================================================
+app.get('/api/register/cup/:id', registerReadLimiter, async (req, res) => {
+  // Validate cup ID format (RSEC3)
+  if (!/^\d{1,10}$/.test(req.params.id)) {
+    return res.status(400).json({ error: 'Virheellinen Cup-tunniste.' })
+  }
+
+  try {
+    const result = await adminGraphQL(`
+      query CupDetail($id: String!) {
+        event(content_type: 136, id: $id) {
+          id name starts status
+          max_competitors
+          number_of_prematch_competitors_registered
+          ... on NordicSerieNode {
+            component_matches {
+              number included
+              match {
+                id name starts status
+                squads {
+                  id number comment
+                  ... on NordicSquadNode {
+                    max_competitors
+                    competitors { id status }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `, { id: req.params.id })
+
+    if (!result.event) {
+      return res.status(404).json({ error: 'Cup not found' })
+    }
+
+    const cup = result.event
+    const componentMatches = (cup.component_matches || [])
+      .filter(cm => cm.included && cm.match)
+      .sort((a, b) => a.number - b.number)
+
+    // Aggregate squads across matches: use first match's squads as reference
+    // Capacity = minimum available across all matches for that squad position
+    const firstMatch = componentMatches[0]?.match
+    if (!firstMatch) {
+      return res.status(404).json({ error: 'No matches in cup' })
+    }
+
+    const squads = (firstMatch.squads || []).map((sq, idx) => {
+      // Count active competitors across all matches for this squad position
+      const counts = componentMatches.map(cm => {
+        const matchSquad = cm.match.squads?.[idx]
+        if (!matchSquad) return { current: 0, max: 0 }
+        const active = (matchSquad.competitors || []).filter(c => c.status === 'a').length
+        return { current: active, max: matchSquad.max_competitors || 0 }
+      })
+
+      // Use max of current counts and min of max across matches
+      const maxCurrent = Math.max(...counts.map(c => c.current))
+      const minMax = Math.min(...counts.map(c => c.max))
+
+      return {
+        number: sq.number,
+        name: sq.comment || `Squad ${sq.number}`,
+        current: maxCurrent,
+        max: minMax,
+        full: maxCurrent >= minMax,
+      }
+    })
+
+    res.json({
+      id: cup.id,
+      name: cup.name,
+      starts: cup.starts,
+      status: cup.status,
+      maxCompetitors: cup.max_competitors || 25,
+      registered: cup.number_of_prematch_competitors_registered || 0,
+      squads,
+    })
+  } catch (err) {
+    console.error('[register] Failed to get cup:', err.message)
+    res.status(500).json({ error: 'Ilmoittautumispalvelu ei ole käytettävissä.' })
+  }
+})
+
+// ============================================================
+// POST /api/register/submit — Register shooter to cup + squad
+// Body: { cupId, squadNumber, email, captchaId, captchaAnswer }
+// ============================================================
+app.post('/api/register/submit', registerBodyLimit, registerLimiter, async (req, res) => {
+  const { cupId, squadNumber, email, captchaId, captchaAnswer } = req.body || {}
+
+  // Strict schema validation (RSEC3)
+  const validationErrors = validateRegistrationInput({ cupId, squadNumber, email, captchaId, captchaAnswer })
+  if (validationErrors.length > 0) {
+    return res.status(400).json({ error: 'Virheelliset tiedot.' })
+  }
+
+  // Validate captcha
+  const challenge = captchaChallenges.get(captchaId)
+  if (!challenge) {
+    return res.status(400).json({ error: 'Varmistus vanhentunut. Päivitä sivu ja yritä uudelleen.' })
+  }
+  captchaChallenges.delete(captchaId)
+  if (Date.now() - challenge.created > CAPTCHA_TTL) {
+    return res.status(400).json({ error: 'Varmistus vanhentunut. Päivitä sivu ja yritä uudelleen.' })
+  }
+  if (Number(captchaAnswer) !== challenge.answer) {
+    return res.status(400).json({ error: 'Väärä vastaus. Yritä uudelleen.' })
+  }
+
+  try {
+    const admin = await getAdminSession()
+
+    // 1. Get cup details to find match IDs and squad IDs
+    const cupData = await adminGraphQL(`
+      query CupDetail($id: String!) {
+        event(content_type: 136, id: $id) {
+          id name
+          ... on NordicSerieNode {
+            component_matches {
+              number included
+              match {
+                id
+                squads {
+                  id number comment
+                  ... on NordicSquadNode {
+                    max_competitors
+                    competitors { id status }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `, { id: cupId })
+
+    if (!cupData.event) {
+      return res.status(404).json({ error: 'Cupia ei löydy.' })
+    }
+
+    const componentMatches = (cupData.event.component_matches || [])
+      .filter(cm => cm.included && cm.match)
+      .sort((a, b) => a.number - b.number)
+
+    if (componentMatches.length === 0) {
+      return res.status(400).json({ error: 'Cupissa ei ole osakilpailuja.' })
+    }
+
+    // 2. Add participant to Cup via web scraping
+    if (!IS_PROD) console.log(`[register] Adding ${email} to cup ${cupId}`)
+    const addResult = await ssiSearchAndAddParticipant(136, cupId, email, admin.cookies)
+
+    if (!addResult.success) {
+      if (addResult.message === 'user_not_found') {
+        return res.status(404).json({
+          error: 'user_not_found',
+          message: 'Sähköpostiosoitetta ei löydy SSI-järjestelmästä. Rekisteröidy ensin SSI:hin.',
+          registerUrl: 'https://shootnscoreit.com/register/',
+        })
+      }
+      return res.status(400).json({ error: addResult.message })
+    }
+
+    // 3. Re-query to find participant IDs in each match
+    //    After cup enrollment, user should appear in all matches
+    //    (matchRegistrationMode: "all")
+    if (!IS_PROD) console.log(`[register] Participant added, finding IDs for squad assignment...`)
+
+    // Brief delay to let SSI propagate the enrollment
+    await new Promise(r => setTimeout(r, 2000))
+
+    const updatedCup = await adminGraphQL(`
+      query CupDetail($id: String!) {
+        event(content_type: 136, id: $id) {
+          ... on NordicSerieNode {
+            component_matches {
+              number included
+              match {
+                id
+                squads {
+                  id number
+                  ... on NordicSquadNode {
+                    competitors {
+                      id first_name last_name status
+                      ... on NordicCompetitorNode { user { email } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `, { id: cupId })
+
+    // 4. For each match, find the competitor and assign to the selected squad
+    const squadResults = []
+    const matches = (updatedCup.event?.component_matches || [])
+      .filter(cm => cm.included && cm.match)
+
+    for (const cm of matches) {
+      const match = cm.match
+      // Find the competitor in any squad of this match
+      let participantId = null
+      for (const sq of (match.squads || [])) {
+        const comp = (sq.competitors || []).find(c =>
+          c.user?.email?.toLowerCase() === email.toLowerCase()
+        )
+        if (comp) {
+          participantId = comp.id
+          break
+        }
+      }
+
+      if (!participantId) {
+        // Try finding unassigned competitor (no squad)
+        if (!IS_PROD) console.log(`[register] Competitor not found in match ${match.id} squads, checking unsquadded...`)
+        squadResults.push({ matchId: match.id, success: false, message: 'Competitor not found in match' })
+        continue
+      }
+
+      // Find the target squad value by squad number
+      const targetSquad = (match.squads || []).find(sq => sq.number === squadNumber)
+      if (!targetSquad) {
+        squadResults.push({ matchId: match.id, success: false, message: `Squad ${squadNumber} not found` })
+        continue
+      }
+
+      // Assign via web scraping
+      if (!IS_PROD) console.log(`[register] Setting squad ${squadNumber} for participant ${participantId} in match ${match.id}`)
+      const editResult = await ssiSetParticipantSquad(participantId, targetSquad.id, admin.cookies)
+      squadResults.push({ matchId: match.id, ...editResult })
+    }
+
+    const allSuccess = squadResults.every(r => r.success)
+    const squadded = squadResults.filter(r => r.success).length
+    const total = squadResults.length
+
+    // RSEC8: Never expose internal IDs, URLs, or debug details in production
+    res.json({
+      success: allSuccess,
+      message: allSuccess
+        ? 'Ilmoittautuminen ja squadiin asettelu onnistui!'
+        : `Ilmoittautuminen onnistui. Squadiin asettelu: ${squadded}/${total} osakilpailua.`,
+      ...(IS_PROD ? {} : { details: squadResults }),
+    })
+  } catch (err) {
+    console.error('[register] Registration failed:', err.message)
+    res.status(500).json({ error: 'Ilmoittautuminen epäonnistui. Yritä myöhemmin uudelleen.' })
+  }
+})
+
+// ============================================================
 // SPA fallback — serve index.html for non-API routes (production)
 // ============================================================
 const indexPath = path.join(uiDist, 'index.html')
@@ -508,6 +958,10 @@ app.listen(PORT, () => {
   console.log('  GET  /api/match/:id')
   console.log('  GET  /api/competitor/:id')
   console.log('  POST /api/competitor/:id/score  { scores, warning, dqReason, comment }')
+  console.log('  GET  /api/register/captcha')
+  console.log('  GET  /api/register/cups')
+  console.log('  GET  /api/register/cup/:id')
+  console.log('  POST /api/register/submit     { cupId, squadNumber, email, captchaId, captchaAnswer }')
   if (existsSync(indexPath)) {
     console.log(`  UI served from ${uiDist}`)
   }

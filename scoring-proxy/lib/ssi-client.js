@@ -233,6 +233,170 @@ export async function ssiSubmitScore(competitorId, formData, cookies, csrfToken)
 }
 
 // ============================================================
+// Admin: search-and-add participant to event (web scraping)
+// POST /event/{contentType}/{eventId}/participant-search-and-add/
+// ============================================================
+
+export async function ssiSearchAndAddParticipant(eventContentType, eventId, email, cookies) {
+  const pageUrl = `${SSI_BASE}/event/${eventContentType}/${eventId}/participant-search-and-add/`
+
+  // 1. GET the page to find CSRF token
+  const pageResp = await fetch(pageUrl, {
+    headers: { 'Cookie': formatCookies(cookies) },
+    redirect: 'follow',
+  })
+  if (!pageResp.ok) {
+    throw new Error(`Search-and-add page HTTP ${pageResp.status}`)
+  }
+  const html = await pageResp.text()
+  const csrfMatch = html.match(/name="csrfmiddlewaretoken"\s+value="([^"]+)"/)
+  const csrfToken = csrfMatch?.[1] || cookies.csrftoken || null
+
+  // 2. POST the email to search and add
+  const formData = new URLSearchParams()
+  if (csrfToken) formData.append('csrfmiddlewaretoken', csrfToken)
+  formData.append('email', email)
+
+  const resp = await fetch(pageUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': formatCookies(cookies),
+      'Referer': pageUrl,
+      'Origin': SSI_BASE,
+    },
+    body: formData.toString(),
+    redirect: 'manual',
+  })
+
+  // 302 redirect = success (participant added)
+  if (resp.status === 302 || resp.status === 301) {
+    return { success: true, message: 'Participant added' }
+  }
+
+  // 200 = might have errors
+  if (resp.status === 200) {
+    const respHtml = await resp.text()
+    if (respHtml.includes('errorlist')) {
+      const errorMatch = respHtml.match(/<ul class="errorlist"[^>]*>([\s\S]*?)<\/ul>/)
+      const errorText = errorMatch ? errorMatch[1].replace(/<[^>]+>/g, '').trim() : 'Unknown error'
+      return { success: false, message: errorText }
+    }
+    // Check if user was not found
+    if (respHtml.includes('not found') || respHtml.includes('No user') || respHtml.includes('no results')) {
+      return { success: false, message: 'user_not_found' }
+    }
+    // May have succeeded without redirect
+    return { success: true, message: 'Participant added (no redirect)' }
+  }
+
+  throw new Error(`Search-and-add failed with HTTP ${resp.status}`)
+}
+
+// ============================================================
+// Admin: get participant edit page — extract squad options
+// GET /event/participant/{contentType}/{participantId}/edit/
+// ============================================================
+
+export async function ssiGetParticipantEditForm(participantId, cookies) {
+  const url = `${SSI_BASE}/event/participant/93/${participantId}/edit/`
+  const resp = await fetch(url, {
+    headers: { 'Cookie': formatCookies(cookies) },
+    redirect: 'follow',
+  })
+  if (!resp.ok) throw new Error(`Participant edit page HTTP ${resp.status}`)
+  const html = await resp.text()
+
+  // Extract CSRF token
+  const csrfMatch = html.match(/name="csrfmiddlewaretoken"\s+value="([^"]+)"/)
+  const csrfToken = csrfMatch?.[1] || null
+
+  // Extract squad SELECT options
+  const squadSelectMatch = html.match(/<select[^>]*name="squad"[^>]*>([\s\S]*?)<\/select>/)
+  const squads = []
+  if (squadSelectMatch) {
+    const optionRegex = /<option\s+value="([^"]*)"[^>]*>([\s\S]*?)<\/option>/g
+    let m
+    while ((m = optionRegex.exec(squadSelectMatch[1])) !== null) {
+      if (m[1]) squads.push({ value: m[1], label: m[2].trim() })
+    }
+  }
+
+  // Extract current field values for re-submission
+  const getFieldValue = (name) => {
+    // Check selected option
+    const selectMatch = html.match(new RegExp(`<select[^>]*name="${name}"[^>]*>([\\s\\S]*?)<\\/select>`))
+    if (selectMatch) {
+      const selectedMatch = selectMatch[1].match(/<option[^>]*selected[^>]*value="([^"]*)"/)
+      return selectedMatch ? selectedMatch[1] : ''
+    }
+    // Check input value
+    const inputMatch = html.match(new RegExp(`name="${name}"[^>]*value="([^"]*)"`))
+    return inputMatch ? inputMatch[1] : ''
+  }
+
+  return {
+    csrfToken,
+    squads,
+    currentValues: {
+      status: getFieldValue('status'),
+      weapon_group: getFieldValue('weapon_group'),
+      category: getFieldValue('category'),
+      competence_class: getFieldValue('competence_class'),
+      number: getFieldValue('number'),
+      squad: getFieldValue('squad'),
+    },
+  }
+}
+
+// ============================================================
+// Admin: set participant squad via edit form
+// POST /event/participant/93/{participantId}/edit/
+// ============================================================
+
+export async function ssiSetParticipantSquad(participantId, squadValue, cookies) {
+  // First get current form values
+  const form = await ssiGetParticipantEditForm(participantId, cookies)
+
+  const url = `${SSI_BASE}/event/participant/93/${participantId}/edit/`
+  const formData = new URLSearchParams()
+  if (form.csrfToken) formData.append('csrfmiddlewaretoken', form.csrfToken)
+
+  // Re-submit all current values with updated squad
+  formData.append('squad', squadValue)
+  formData.append('status', form.currentValues.status || 'a')
+  formData.append('weapon_group', form.currentValues.weapon_group || 'STD')
+  formData.append('category', form.currentValues.category || 'Open')
+  formData.append('number', form.currentValues.number || '')
+
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': formatCookies(cookies),
+      'Referer': url,
+      'Origin': SSI_BASE,
+    },
+    body: formData.toString(),
+    redirect: 'manual',
+  })
+
+  if (resp.status === 302 || resp.status === 301) {
+    return { success: true }
+  }
+  if (resp.status === 200) {
+    const html = await resp.text()
+    if (html.includes('errorlist')) {
+      const errorMatch = html.match(/<ul class="errorlist"[^>]*>([\s\S]*?)<\/ul>/)
+      const errorText = errorMatch ? errorMatch[1].replace(/<[^>]+>/g, '').trim() : 'Edit error'
+      return { success: false, message: errorText }
+    }
+    return { success: true }
+  }
+  throw new Error(`Participant edit failed with HTTP ${resp.status}`)
+}
+
+// ============================================================
 // Cookie helpers
 // ============================================================
 

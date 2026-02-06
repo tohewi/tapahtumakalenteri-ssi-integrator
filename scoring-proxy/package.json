@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "node server.js",
+    "dev": "node --env-file=.env server.js",
     "start": "node server.js"
   },
   "engines": {

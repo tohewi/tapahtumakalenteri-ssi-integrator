@@ -1,5 +1,6 @@
 # API keys and secrets
 scripts-graphql/config/api-key.yml
+scoring-proxy/.env
 test-harness/config/test-users.yml
 
 # Debug files

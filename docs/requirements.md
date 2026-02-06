@@ -111,6 +111,38 @@
 | SEC10 | Health check endpoint (`GET /api/health`) | ✅ v1.1.0 |
 | SEC11 | Study: Google authentication support — SSI supports Google login; investigate if OAuth flow can be extended to scoring proxy so users who sign in to SSI with Google identity can also use this app without separate SSI credentials | ⬚ Pending |
 
+## Release 4.0 - Registration Frontend
+
+### Functional Requirements
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| R1 | Public registration page accessible without SSI login (`#/register`) | ⬚ In Progress |
+| R2 | Human verification (math captcha) before showing any data | ⬚ In Progress |
+| R3 | List future Cups open for registration with capacity (registered/max) | ⬚ In Progress |
+| R4 | Show squads per Cup with current/max capacity and full indicator | ⬚ In Progress |
+| R5 | Shooter enters SSI email, selects Cup and Squad, submits registration | ⬚ In Progress |
+| R6 | Backend registers shooter to Cup and assigns selected squad in all matches via SSI admin web scraping | ⬚ In Progress |
+| R7 | If email not found in SSI, inform shooter and provide direct SSI registration link | ⬚ In Progress |
+| R8 | On success, display confirmation with Cup, date, squad, and email | ⬚ In Progress |
+| R9 | Individual matches hidden from shooter — Cup enrollment auto-enrolls all matches | ⬚ In Progress |
+| R10 | Finnish language UI throughout | ⬚ In Progress |
+
+### Registration Security Requirements
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| RSEC1 | **No user enumeration**: Registration endpoints must never expose whether a given email exists in SSI. Error responses must be generic. The only signal is "registration succeeded" or "email not found in SSI — please register on SSI first". No user lists, names, or profile data are ever returned | ⬚ In Progress |
+| RSEC2 | **Minimal API surface**: Registration backend exposes only the endpoints strictly necessary for cup selection, squad selection, and registration submission. No admin, user search, participant listing, or other SSI functionality is exposed through registration APIs | ⬚ In Progress |
+| RSEC3 | **Strict input validation**: All registration endpoint inputs are validated against a strict schema — `cupId` must be a positive integer string, `squadNumber` a small positive integer, `email` a valid email format (max 254 chars), `captchaId` a UUID, `captchaAnswer` a small integer. Reject any request that does not match. No free-form text fields are accepted | ⬚ In Progress |
+| RSEC4 | **Request size limits**: Enforce maximum request body size (e.g. 1 KB) on registration endpoints to prevent buffer/payload attacks | ⬚ In Progress |
+| RSEC5 | **No code injection**: All inputs are treated as opaque strings — never interpolated into HTML, SQL, shell commands, or GraphQL queries without parameterization. GraphQL uses parameterized variables only. Web scraping form POSTs use `URLSearchParams` (auto-escaped) | ⬚ In Progress |
+| RSEC6 | **Rate limiting**: Registration submission limited to 5 attempts per IP per hour. Captcha generation limited to prevent abuse | ⬚ In Progress |
+| RSEC7 | **Admin credentials isolation**: SSI admin credentials used by registration backend are stored in server-side environment variables only, never exposed to the client. Admin session is server-side singleton, not tied to any user request | ⬚ In Progress |
+| RSEC8 | **No SSI internals leakage**: Error responses from SSI admin operations are sanitized before returning to client. Internal SSI URLs, participant IDs, squad IDs, and debug details are never returned in production responses | ⬚ In Progress |
+| RSEC9 | **Captcha anti-replay**: Each captcha challenge is single-use and time-limited (5 min TTL). Expired or already-used captchas are rejected | ⬚ In Progress |
+| RSEC10 | **Helmet + CORS**: Registration endpoints inherit the same Helmet security headers and CORS policy as the scoring application | ⬚ In Progress |
+
 ## Release 2.1 - Data Integrity (Planned)
 
 | # | Requirement | Status |
@@ -121,9 +153,10 @@
 
 ## Summary
 
-- **Total Requirements**: 73
+- **Total Requirements**: 93
 - **Completed**: 68
 - **On Hold**: 3 (35, 36, 41)
+- **In Progress**: 20 (R1–R10, RSEC1–RSEC10)
 - **Pending**: 4 (39, 42, 47–48, SEC11)
 
 ## Configuration Files
