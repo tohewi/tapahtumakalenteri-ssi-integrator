@@ -38,6 +38,48 @@ app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }))
 app.use(express.json({ limit: '10kb' })) // global body size limit (RSEC4)
 app.use(cookieParser())
 
+// ============================================================
+// Rate limit logging (RSEC11)
+// Tracks IPs currently in "curfew" with first-throttled timestamp
+// ============================================================
+const rateLimitLog = new Map() // key: "limiterName:ip", value: { ip, limiter, firstThrottled }
+
+function logRateLimit(limiterName, windowMs, ip, message) {
+  const key = `${limiterName}:${ip}`
+  const now = new Date()
+  if (!rateLimitLog.has(key)) {
+    rateLimitLog.set(key, { ip, limiter: limiterName, firstThrottled: now })
+  }
+  console.warn(`[rate-limit] ${limiterName}: IP ${ip} throttled at ${now.toISOString()}`)
+
+  // Log all currently active throttled IPs
+  const active = [...rateLimitLog.values()]
+  if (active.length > 0) {
+    console.warn(`[rate-limit] Currently throttled IPs (${active.length}):`)
+    for (const entry of active) {
+      console.warn(`  ${entry.limiter}: ${entry.ip} since ${entry.firstThrottled.toISOString()}`)
+    }
+  }
+
+  return message
+}
+
+// Cleanup expired rate limit log entries every 5 minutes
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, entry] of rateLimitLog) {
+    // Remove entries older than the longest window (15 min)
+    if (now - entry.firstThrottled.getTime() > 15 * 60 * 1000) rateLimitLog.delete(key)
+  }
+}, 5 * 60 * 1000)
+
+function rateLimitHandler(limiterName, windowMs, message) {
+  return (req, res) => {
+    logRateLimit(limiterName, windowMs, req.ip, message)
+    res.status(429).json(message)
+  }
+}
+
 // Rate limit on login: max 10 attempts per 15 minutes per IP
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -45,6 +87,7 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many login attempts. Try again in 15 minutes.' },
+  handler: rateLimitHandler('login', 15 * 60 * 1000, { error: 'Too many login attempts. Try again in 15 minutes.' }),
 })
 
 // In production, serve the built UI
@@ -570,6 +613,7 @@ const registerLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Liian monta yritystä. Yritä uudelleen 10 minuutin kuluttua.' },
+  handler: rateLimitHandler('register-submit', 10 * 60 * 1000, { error: 'Liian monta yritystä. Yritä uudelleen 10 minuutin kuluttua.' }),
 })
 
 // Rate limit for captcha: 30 per 10 min per IP (prevents enumeration)
@@ -579,6 +623,7 @@ const captchaLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Liian monta pyyntöä. Yritä uudelleen 10 minuutin kuluttua.' },
+  handler: rateLimitHandler('captcha', 10 * 60 * 1000, { error: 'Liian monta pyyntöä. Yritä uudelleen 10 minuutin kuluttua.' }),
 })
 
 // Rate limit for cup/squad reads: 60 per 10 min per IP
@@ -588,6 +633,7 @@ const registerReadLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Liian monta pyyntöä. Yritä uudelleen 10 minuutin kuluttua.' },
+  handler: rateLimitHandler('register-read', 10 * 60 * 1000, { error: 'Liian monta pyyntöä. Yritä uudelleen 10 minuutin kuluttua.' }),
 })
 
 // Request body size limit for registration endpoints (1 KB max)
