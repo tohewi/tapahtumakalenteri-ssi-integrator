@@ -15,6 +15,10 @@ const app = express()
 const PORT = process.env.PORT || 3001
 const IS_PROD = process.env.NODE_ENV === 'production'
 
+// Trust exactly one reverse proxy (Render). Without this, req.ip is always
+// the Render proxy IP, making all rate limiters share a single counter.
+if (IS_PROD) app.set('trust proxy', 1)
+
 // ============================================================
 // Security middleware
 // ============================================================
@@ -27,7 +31,7 @@ app.use(helmet({
 
 // CORS: locked to own origin in production
 const ALLOWED_ORIGINS = IS_PROD
-  ? [process.env.APP_URL || 'https://ssi-scoring.onrender.com']
+  ? [process.env.APP_URL || 'https://tapahtumakalenteri-ssi-integrator.onrender.com']
   : true
 app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }))
 

@@ -5,6 +5,14 @@ const resend = process.env.RESEND_API_KEY
   : null
 
 const FROM_EMAIL = process.env.EMAIL_FROM || 'noreply@tapahtumakalenteri-ssi-integrator.onrender.com'
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
 const REGISTER_URL = 'https://tapahtumakalenteri-ssi-integrator.onrender.com/#/register'
 const MY_REGISTRATIONS_URL = 'https://shootnscoreit.com/my-registrations/'
 
@@ -25,8 +33,8 @@ export async function sendRegistrationConfirmation(to, shooterName, cupName, mat
 
   const matchRows = matchSquads
     .map(ms => `      <tr>
-        <td style="padding:6px 12px;border:1px solid #ddd;">${ms.matchName}</td>
-        <td style="padding:6px 12px;border:1px solid #ddd;">Squad ${ms.squadNumber}${ms.squadLabel ? ` (${ms.squadLabel})` : ''}</td>
+        <td style="padding:6px 12px;border:1px solid #ddd;">${escapeHtml(ms.matchName)}</td>
+        <td style="padding:6px 12px;border:1px solid #ddd;">Squad ${escapeHtml(ms.squadNumber)}${ms.squadLabel ? ` (${escapeHtml(ms.squadLabel)})` : ''}</td>
       </tr>`)
     .join('\n')
 
@@ -40,10 +48,10 @@ export async function sendRegistrationConfirmation(to, shooterName, cupName, mat
 <head><meta charset="utf-8"></head>
 <body style="font-family:Arial,Helvetica,sans-serif;color:#333;max-width:600px;margin:0 auto;padding:20px;">
   <h2 style="color:#1a73e8;">Ilmoittautuminen vahvistettu ✓</h2>
-  <p>Hei ${shooterName},</p>
+  <p>Hei ${escapeHtml(shooterName)},</p>
   <p>Ilmoittautumisesi on vahvistettu:</p>
 
-  <h3 style="margin-bottom:4px;">${cupName}</h3>
+  <h3 style="margin-bottom:4px;">${escapeHtml(cupName)}</h3>
   <table style="border-collapse:collapse;width:100%;margin:8px 0 16px 0;">
     <thead>
       <tr style="background:#f5f5f5;">
