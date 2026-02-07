@@ -385,7 +385,7 @@ async function _handleRegisterResponse(html, url, cookies, debug) {
 // POST /event/{contentType}/{eventId}/participant-search-and-add/
 // ============================================================
 
-export async function ssiSearchAndAddParticipant(eventContentType, eventId, email, cookies) {
+export async function ssiSearchAndAddParticipant(eventContentType, eventId, email, cookies, { firstName, lastName } = {}) {
   const pageUrl = `${SSI_BASE}/event/${eventContentType}/${eventId}/participant-search-and-add/`
   const debug = process.env.NODE_ENV !== 'production'
 
@@ -393,14 +393,15 @@ export async function ssiSearchAndAddParticipant(eventContentType, eventId, emai
   // Step 1: POST search (last_name, first_name, email, submit=Search) → returns result table
   // Step 2: GET the "add" link for the matching user → redirects to participants page
 
-  // 1. POST search by email
+  // 1. POST search by email or name
   const formData = new URLSearchParams()
-  formData.append('last_name', '')
-  formData.append('first_name', '')
-  formData.append('email', email)
+  formData.append('last_name', lastName || '')
+  formData.append('first_name', firstName || '')
+  formData.append('email', email || '')
   formData.append('submit', 'Search')
 
-  if (debug) console.log(`[search-and-add] POST search email=${email} to ${pageUrl}`)
+  const searchDesc = email ? `email=${email}` : `name=${firstName} ${lastName}`
+  if (debug) console.log(`[search-and-add] POST search ${searchDesc} to ${pageUrl}`)
   const searchResp = await fetch(pageUrl, {
     method: 'POST',
     headers: {
@@ -706,6 +707,59 @@ export async function ssiFindCompetitorInMatch(matchId, shooterName, cookies) {
 
   if (debug) console.log(`[find-competitor] "${shooterName}" not found in match ${matchId}`)
   return null
+}
+
+// ============================================================
+// Fetch any authenticated SSI web page (HTML scraping)
+// ============================================================
+
+export async function ssiFetchPage(path, cookies) {
+  const url = `${SSI_BASE}${path}`
+  const resp = await fetch(url, {
+    headers: {
+      'Cookie': formatCookies(cookies),
+    },
+    redirect: 'follow',
+  })
+  if (!resp.ok) {
+    throw new Error(`SSI page HTTP ${resp.status} for ${path}`)
+  }
+  return await resp.text()
+}
+
+// ============================================================
+// Get event staff by scraping /event/{ct}/{id}/staff/
+// Returns array of { name, role } where role is 'admin'|'staff'|'assistant'|etc.
+// ============================================================
+
+export async function ssiGetEventStaff(contentType, eventId, cookies) {
+  const path = `/event/${contentType}/${eventId}/staff/`
+  const html = await ssiFetchPage(path, cookies)
+
+  // Staff table rows: <td class="center">Name</td> ... <td class="center">role</td>
+  // Pattern: each <tr> in the members table has cells: checkbox, actions, name, contact, event|org, role
+  const staff = []
+  const rowRegex = /<tr>\s*<td[^>]*>\s*<input[^>]*value="(\d+)"[^>]*\/>\s*<\/td>([\s\S]*?)<\/tr>/g
+  let match
+  while ((match = rowRegex.exec(html)) !== null) {
+    const cells = match[2]
+    // Extract all <td> contents
+    const tdRegex = /<td[^>]*>([\s\S]*?)<\/td>/g
+    const tdContents = []
+    let td
+    while ((td = tdRegex.exec(cells)) !== null) {
+      tdContents.push(td[1].replace(/<[^>]+>/g, '').trim())
+    }
+    // tdContents: [actions, name, contact, event|org, role]
+    if (tdContents.length >= 4) {
+      const name = tdContents[1] // name is second td after checkbox
+      const role = tdContents[tdContents.length - 1].toLowerCase() // role is last td
+      if (name) {
+        staff.push({ name, role })
+      }
+    }
+  }
+  return staff
 }
 
 // ============================================================

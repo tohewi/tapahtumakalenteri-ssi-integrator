@@ -7,7 +7,7 @@ import crypto from 'node:crypto'
 import path from 'path'
 import { existsSync } from 'fs'
 import { fileURLToPath } from 'url'
-import { ssiGraphQL, ssiLogin, ssiSubmitScore, ssiGetScoringPage, ssiRefreshJWT, ssiSearchAndAddParticipant, ssiSetParticipantSquad, ssiFindCompetitorInMatch, ssiFindAndApproveCupParticipant } from './lib/ssi-client.js'
+import { ssiGraphQL, ssiLogin, ssiSubmitScore, ssiGetScoringPage, ssiRefreshJWT, ssiSearchAndAddParticipant, ssiSetParticipantSquad, ssiFindCompetitorInMatch, ssiFindAndApproveCupParticipant, ssiGetEventStaff } from './lib/ssi-client.js'
 import { sendRegistrationConfirmation } from './lib/email.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -637,6 +637,184 @@ app.get('/api/manage/cup/:id', requireAuth, async (req, res) => {
 })
 
 // ============================================================
+// POST /api/manage/cup/:id/assign-squad
+// Assign an unsquadded shooter to a squad in all component matches.
+// Body: { shooterName, squadNumber }
+// ============================================================
+app.post('/api/manage/cup/:id/assign-squad', requireAuth, async (req, res) => {
+  const { shooterName, squadNumber } = req.body
+  if (!shooterName || !squadNumber) {
+    return res.status(400).json({ error: 'shooterName and squadNumber required' })
+  }
+
+  const cookies = req.ssiSession.ssiCookies
+  if (!cookies) return res.status(401).json({ error: 'No SSI session cookies' })
+
+  try {
+    // 1. Get cup component matches
+    const cupData = await graphqlWithRefresh(req.ssiSession, `
+      query ManageCup($id: String!) {
+        event(content_type: 136, id: $id) {
+          id
+          ... on NordicSerieNode {
+            component_matches {
+              number included
+              match { id name }
+            }
+          }
+        }
+      }
+    `, { id: req.params.id })
+
+    if (!cupData.event) return res.status(404).json({ error: 'Cup not found' })
+
+    const matchIds = (cupData.event.component_matches || [])
+      .filter(cm => cm.included && cm.match)
+      .map(cm => cm.match.id)
+
+    // Split name into first/last
+    const nameParts = shooterName.trim().split(/\s+/)
+    const firstName = nameParts[0] || ''
+    const lastName = nameParts.slice(1).join(' ') || ''
+
+    const results = []
+    for (const matchId of matchIds) {
+      // 2. Add shooter to match by name
+      if (!IS_PROD) console.log(`[manage] Adding "${shooterName}" to match ${matchId}`)
+      const addResult = await ssiSearchAndAddParticipant(91, matchId, null, cookies, { firstName, lastName })
+      if (!IS_PROD) console.log(`[manage] Add result: ${addResult.message}`)
+
+      // 3. Find participant ID in the match
+      const participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies)
+      if (!participantId) {
+        results.push({ matchId, success: false, message: 'Could not find participant after adding' })
+        continue
+      }
+
+      // 4. Set squad
+      const sqResult = await ssiSetParticipantSquad(participantId, squadNumber, cookies)
+      results.push({ matchId, success: sqResult.success, message: sqResult.message || 'OK' })
+    }
+
+    const allOk = results.every(r => r.success)
+    res.json({ success: allOk, results })
+  } catch (err) {
+    console.error('[manage] assign-squad error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ============================================================
+// POST /api/manage/cup/:id/fix-squad
+// Fix inconsistent squad assignment across matches.
+// Body: { shooterName, targetSquad }
+// ============================================================
+app.post('/api/manage/cup/:id/fix-squad', requireAuth, async (req, res) => {
+  const { shooterName, targetSquad } = req.body
+  if (!shooterName || !targetSquad) {
+    return res.status(400).json({ error: 'shooterName and targetSquad required' })
+  }
+
+  const cookies = req.ssiSession.ssiCookies
+  if (!cookies) return res.status(401).json({ error: 'No SSI session cookies' })
+
+  try {
+    // 1. Get cup component matches
+    const cupData = await graphqlWithRefresh(req.ssiSession, `
+      query ManageCup($id: String!) {
+        event(content_type: 136, id: $id) {
+          id
+          ... on NordicSerieNode {
+            component_matches {
+              number included
+              match { id name }
+            }
+          }
+        }
+      }
+    `, { id: req.params.id })
+
+    if (!cupData.event) return res.status(404).json({ error: 'Cup not found' })
+
+    const matchIds = (cupData.event.component_matches || [])
+      .filter(cm => cm.included && cm.match)
+      .map(cm => cm.match.id)
+
+    const nameParts = shooterName.trim().split(/\s+/)
+    const firstName = nameParts[0] || ''
+    const lastName = nameParts.slice(1).join(' ') || ''
+
+    const results = []
+    for (const matchId of matchIds) {
+      // 2. Find participant in match
+      let participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies)
+
+      // 3. If not found, add them first
+      if (!participantId) {
+        if (!IS_PROD) console.log(`[manage] "${shooterName}" not in match ${matchId}, adding...`)
+        await ssiSearchAndAddParticipant(91, matchId, null, cookies, { firstName, lastName })
+        participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies)
+      }
+
+      if (!participantId) {
+        results.push({ matchId, success: false, message: 'Could not find or add participant' })
+        continue
+      }
+
+      // 4. Set squad
+      const sqResult = await ssiSetParticipantSquad(participantId, targetSquad, cookies)
+      results.push({ matchId, success: sqResult.success, message: sqResult.message || 'OK' })
+    }
+
+    const allOk = results.every(r => r.success)
+    res.json({ success: allOk, results })
+  } catch (err) {
+    console.error('[manage] fix-squad error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ============================================================
+// POST /api/manage/cup/:id/add-to-cup
+// Add a match-only shooter to the CUP and approve.
+// Body: { shooterName }
+// ============================================================
+app.post('/api/manage/cup/:id/add-to-cup', requireAuth, async (req, res) => {
+  const { shooterName } = req.body
+  if (!shooterName) {
+    return res.status(400).json({ error: 'shooterName required' })
+  }
+
+  const cookies = req.ssiSession.ssiCookies
+  if (!cookies) return res.status(401).json({ error: 'No SSI session cookies' })
+
+  try {
+    const cupId = req.params.id
+    const nameParts = shooterName.trim().split(/\s+/)
+    const firstName = nameParts[0] || ''
+    const lastName = nameParts.slice(1).join(' ') || ''
+
+    // 1. Search-and-add to CUP (CT=136)
+    if (!IS_PROD) console.log(`[manage] Adding "${shooterName}" to cup ${cupId}`)
+    const addResult = await ssiSearchAndAddParticipant(136, cupId, null, cookies, { firstName, lastName })
+    if (!IS_PROD) console.log(`[manage] Cup add result: ${addResult.message}`)
+
+    if (!addResult.success) {
+      return res.json({ success: false, message: addResult.message })
+    }
+
+    // 2. Find and approve CUP participant
+    const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies)
+    if (!IS_PROD) console.log(`[manage] Cup approve result: ${approveResult.message}`)
+
+    res.json({ success: approveResult.success, message: approveResult.message })
+  } catch (err) {
+    console.error('[manage] add-to-cup error:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ============================================================
 // Registration: Admin session (singleton, lazy-init)
 // Uses SSI_ADMIN_EMAIL + SSI_ADMIN_PASSWORD env vars
 // ============================================================
@@ -1174,9 +1352,9 @@ app.post('/api/register/submit', registerBodyLimit, registerLimiter, async (req,
 })
 
 // ============================================================
-// GET /api/matches?search= — Search for matches by name
-// Searches cups (CT=136) and extracts their component matches,
-// since individual matches are nested inside cups in SSI.
+// GET /api/matches?search= — Search for all events by name
+// Returns all matching events with rule (sport) and content type.
+// Cups include componentMatches. All filtering done client-side.
 // ============================================================
 app.get('/api/matches', requireAuth, async (req, res) => {
   const search = req.query.search
@@ -1185,56 +1363,93 @@ app.get('/api/matches', requireAuth, async (req, res) => {
   }
 
   try {
-    const result = await graphqlWithRefresh(req.ssiSession, `
-      query SearchMatches($search: String!) {
-        events(search: $search) {
-          id name starts status get_content_type_key
+    // SSI GraphQL events() is hard-capped at 100 results per call.
+    // To get all matches we split into date windows and merge results.
+    const QUERY = `
+      query SearchEvents($search: String!, $after: String, $before: String) {
+        events(search: $search, starts_after: $after, starts_before: $before) {
+          id name starts status rule get_content_type_key
           ... on NordicSerieNode {
             component_matches {
               number included
-              match {
-                id name starts status
-              }
+              match { id name starts status rule }
             }
           }
         }
       }
-    `, { search })
+    `
 
-    // Extract matches from cups (CT=136) component_matches
-    const matches = []
-    for (const event of (result.events || [])) {
-      if (event.get_content_type_key === 136) {
-        const cms = (event.component_matches || [])
+    // Build date windows: each ~6 months, going back 5 years + future
+    const now = new Date()
+    const windows = []
+    // Future window (now → +1 year)
+    const futureEnd = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())
+    windows.push({ after: now.toISOString().split('T')[0], before: futureEnd.toISOString().split('T')[0] })
+    // Past windows: 6-month chunks going back 5 years
+    for (let i = 0; i < 10; i++) {
+      const end = new Date(now)
+      end.setMonth(end.getMonth() - i * 6)
+      const start = new Date(now)
+      start.setMonth(start.getMonth() - (i + 1) * 6)
+      windows.push({
+        after: start.toISOString().split('T')[0],
+        before: end.toISOString().split('T')[0],
+      })
+    }
+
+    // Run all windows in parallel
+    const results = await Promise.all(
+      windows.map(w =>
+        graphqlWithRefresh(req.ssiSession, QUERY, {
+          search,
+          after: w.after,
+          before: w.before,
+        }).catch(err => {
+          if (!IS_PROD) console.log(`[search] Window ${w.after}→${w.before} failed: ${err.message}`)
+          return { events: [] }
+        })
+      )
+    )
+
+    // Merge and deduplicate by event ID
+    const seen = new Set()
+    const allEvents = []
+    for (const result of results) {
+      for (const e of (result.events || [])) {
+        if (!seen.has(e.id)) {
+          seen.add(e.id)
+          allEvents.push(e)
+        }
+      }
+    }
+
+    const matches = allEvents.map(e => {
+      const item = {
+        id: e.id,
+        name: e.name,
+        starts: e.starts,
+        status: e.status,
+        rule: e.rule || null,
+        contentType: e.get_content_type_key,
+      }
+      if (e.get_content_type_key === 136 && e.component_matches) {
+        item.componentMatches = (e.component_matches || [])
           .filter(cm => cm.included && cm.match)
-        for (const cm of cms) {
-          matches.push({
+          .map(cm => ({
             id: cm.match.id,
             name: cm.match.name,
             starts: cm.match.starts,
             status: cm.match.status,
-            cupName: event.name,
-          })
-        }
-      } else if (event.get_content_type_key === 91) {
-        // Also include direct match results if any
-        matches.push({
-          id: event.id,
-          name: event.name,
-          starts: event.starts,
-          status: event.status,
-          cupName: null,
-        })
+            rule: cm.match.rule || null,
+          }))
       }
-    }
-
-    // Sort by date: closest to today first
-    const now = Date.now()
-    matches.sort((a, b) => {
-      const da = Math.abs(new Date(a.starts).getTime() - now)
-      const db = Math.abs(new Date(b.starts).getTime() - now)
-      return da - db
+      return item
     })
+
+    // Sort by date descending (newest first)
+    matches.sort((a, b) => new Date(b.starts) - new Date(a.starts))
+
+    if (!IS_PROD) console.log(`[search] "${search}": ${windows.length} windows → ${matches.length} events`)
 
     res.json({ matches })
   } catch (err) {
@@ -1245,63 +1460,91 @@ app.get('/api/matches', requireAuth, async (req, res) => {
 
 // ============================================================
 // POST /api/report/matches — Generate report for selected matches
-// Body: { matchIds: [id1, id2, ...] }
+// Body: { matches: [{ id, contentType }, ...] }
 // Returns approved shooters per squad per match with admin role
 // ============================================================
 app.post('/api/report/matches', requireAuth, async (req, res) => {
-  const { matchIds } = req.body
-  if (!Array.isArray(matchIds) || matchIds.length === 0) {
-    return res.status(400).json({ error: 'matchIds array required' })
+  // Support both old format { matchIds } and new { matches }
+  let matchList = req.body.matches
+  if (!matchList && Array.isArray(req.body.matchIds)) {
+    matchList = req.body.matchIds.map(id => ({ id, contentType: 91 }))
   }
-  if (matchIds.length > 50) {
+  if (!Array.isArray(matchList) || matchList.length === 0) {
+    return res.status(400).json({ error: 'matches array required' })
+  }
+  if (matchList.length > 50) {
     return res.status(400).json({ error: 'Maximum 50 matches per report' })
   }
 
   try {
     const rows = []
 
-    for (const matchId of matchIds) {
+    for (const { id: matchId, contentType } of matchList) {
+      const ct = contentType || 91
       const result = await graphqlWithRefresh(req.ssiSession, `
-        query ReportMatch($id: String!) {
-          event(content_type: 91, id: $id) {
+        query ReportMatch($ct: Int!, $id: String!) {
+          event(content_type: $ct, id: $id) {
             id
             name
             starts
-            is_current_role_admin
             squads {
               id
               number
               comment
               ... on NordicSquadNode {
-                competitors {
-                  id
-                  first_name
-                  last_name
-                  status
-                }
+                competitors { id first_name last_name status }
+              }
+              ... on IpscSquadNode {
+                competitors { id first_name last_name status }
+              }
+              ... on PpcSquadNode {
+                competitors { id first_name last_name status }
+              }
+              ... on CmpSquadNode {
+                competitors { id first_name last_name status }
+              }
+              ... on PrecisionSquadNode {
+                competitors { id first_name last_name status }
+              }
+              ... on GenericSquadNode {
+                competitors { id first_name last_name status }
               }
             }
           }
         }
-      `, { id: String(matchId) })
+      `, { ct, id: String(matchId) })
 
       if (!result.event) continue
 
       const match = result.event
       const matchDate = match.starts ? match.starts.split('T')[0] : ''
-      const isAdmin = match.is_current_role_admin || false
+
+      // Scrape staff page to get staff names for this event
+      let staffNames = new Set()
+      try {
+        if (req.ssiSession.ssiCookies) {
+          const staff = await ssiGetEventStaff(ct, matchId, req.ssiSession.ssiCookies)
+          for (const s of staff) {
+            staffNames.add(s.name.toLowerCase())
+          }
+        }
+      } catch (staffErr) {
+        if (!IS_PROD) console.log(`[report] Could not fetch staff for event ${ct}/${matchId}: ${staffErr.message}`)
+      }
 
       for (const squad of (match.squads || [])) {
         const squadLabel = squad.comment || `Squad ${squad.number}`
         const approved = (squad.competitors || []).filter(c => c.status === 'a')
 
         for (const comp of approved) {
+          const compName = `${comp.first_name} ${comp.last_name}`.trim()
+          const isStaff = staffNames.has(compName.toLowerCase())
           rows.push({
             match: match.name,
             date: matchDate,
             squad: squadLabel,
-            name: `${comp.first_name} ${comp.last_name}`.trim(),
-            isAdmin: isAdmin ? 'Y' : 'N',
+            name: compName,
+            isAdmin: isStaff ? 'Y' : 'N',
           })
         }
       }
@@ -1350,6 +1593,10 @@ if (isDirectRun) {
     console.log('  GET  /api/register/cups')
     console.log('  GET  /api/register/cup/:id')
     console.log('  POST /api/register/submit     { cupId, squadNumber, email, captchaId, captchaAnswer }')
+    console.log('  GET  /api/manage/cup/:id')
+    console.log('  POST /api/manage/cup/:id/assign-squad  { shooterName, squadNumber }')
+    console.log('  POST /api/manage/cup/:id/fix-squad     { shooterName, targetSquad }')
+    console.log('  POST /api/manage/cup/:id/add-to-cup    { shooterName }')
     console.log('  GET  /api/matches?search=')
     console.log('  POST /api/report/matches       { matchIds }')
     if (existsSync(indexPath)) {

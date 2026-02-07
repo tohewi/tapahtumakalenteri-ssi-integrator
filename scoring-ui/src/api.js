@@ -70,16 +70,56 @@ export async function searchMatches(search) {
   return data.matches || []
 }
 
-export async function getReportData(matchIds) {
+export async function getReportData(matches) {
   const resp = await fetch(`${API_BASE}/report/matches`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ matchIds }),
+    body: JSON.stringify({ matches }),
   })
   const data = await resp.json()
   if (!resp.ok || data.error) throw new Error(data.error || 'Report generation failed')
   return data.rows || []
+}
+
+// ============================================================
+// Management actions
+// ============================================================
+
+export async function manageAssignSquad(cupId, shooterName, squadNumber) {
+  const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/assign-squad`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ shooterName, squadNumber }),
+  })
+  const data = await resp.json()
+  if (!resp.ok || data.error) throw new Error(data.error || 'Assign squad failed')
+  return data
+}
+
+export async function manageFixSquad(cupId, shooterName, targetSquad) {
+  const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/fix-squad`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ shooterName, targetSquad }),
+  })
+  const data = await resp.json()
+  if (!resp.ok || data.error) throw new Error(data.error || 'Fix squad failed')
+  return data
+}
+
+export async function manageAddToCup(cupId, shooterName) {
+  const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/add-to-cup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ shooterName }),
+  })
+  const data = await resp.json()
+  if (!resp.ok || data.error) throw new Error(data.error || 'Add to cup failed')
+  return data
 }
 
 // ============================================================
