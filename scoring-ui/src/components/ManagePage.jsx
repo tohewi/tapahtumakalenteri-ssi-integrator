@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import * as api from '../api'
 import * as regApi from '../register-api'
 import { encryptData, decryptData } from '../crypto'
@@ -124,7 +124,7 @@ export default function ManagePage() {
 }
 
 // ============================================================
-// Squadding Overview Component
+// Squadding Overview — Mobile-first management UI
 // ============================================================
 
 function SquaddingOverview({ data }) {
@@ -132,145 +132,382 @@ function SquaddingOverview({ data }) {
   const matchIds = matches.map(m => m.id)
   const totalMatches = matches.length
 
-  // Short match names (extract last word: Tarkkuus, Pika, Kuvio)
+  // Section refs for scroll-to
+  const unsquaddedRef = useRef(null)
+  const inconsistentRef = useRef(null)
+  const notInCupRef = useRef(null)
+  const squadsRef = useRef(null)
+
+  // Short match labels (last word: Tarkkuus, Pika, Kuvio)
   const matchLabels = matches.map(m => {
     const parts = m.name.split(' ')
     return parts[parts.length - 1]
   })
 
-  // Get unique squad numbers
-  const squadNumbers = [...new Set(matches.flatMap(m => m.squads.map(s => s.number)))].sort((a, b) => a - b)
+  // Classify shooters
+  const classified = useMemo(() => {
+    const unsquadded = [] // in CUP but not in any match squad
+    const inconsistent = [] // in squads but different numbers or missing some matches
+    const ok = [] // same squad in all matches
 
-  // Group shooters by their squad assignment
-  // A shooter is "consistent" if they have the same squad in all matches
-  const squadGroups = squadNumbers.map(sqNum => {
-    const inThisSquad = shooters.filter(s => {
-      return Object.values(s.matches).some(n => n === sqNum)
-    })
+    for (const s of shooters) {
+      const assignedSquads = matchIds.map(id => s.matches[id] ?? null)
+      const nonNull = assignedSquads.filter(a => a !== null)
+
+      if (nonNull.length === 0) {
+        unsquadded.push({ ...s, assignments: assignedSquads })
+        continue
+      }
+
+      const allSame = nonNull.every(a => a === nonNull[0])
+      const allPresent = nonNull.length === totalMatches
+
+      if (allSame && allPresent) {
+        ok.push({ ...s, assignments: assignedSquads, squad: nonNull[0] })
+      } else {
+        // Find majority squad
+        const counts = {}
+        for (const sq of nonNull) { counts[sq] = (counts[sq] || 0) + 1 }
+        const majority = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]
+        inconsistent.push({
+          ...s,
+          assignments: assignedSquads,
+          suggestedSquad: majority ? Number(majority[0]) : nonNull[0],
+          missingCount: totalMatches - nonNull.length,
+        })
+      }
+    }
 
     return {
+      unsquadded: unsquadded.sort((a, b) => a.name.localeCompare(b.name, 'fi')),
+      inconsistent: inconsistent.sort((a, b) => a.name.localeCompare(b.name, 'fi')),
+      ok: ok.sort((a, b) => a.name.localeCompare(b.name, 'fi')),
+    }
+  }, [shooters, matchIds, totalMatches])
+
+  // Squad groups for the overview cards
+  const squadNumbers = [...new Set(matches.flatMap(m => m.squads.map(s => s.number)))].sort((a, b) => a - b)
+  const squadGroups = squadNumbers.map(sqNum => {
+    const squadInfo = matches[0]?.squads.find(s => s.number === sqNum)
+    const inSquad = classified.ok.filter(s => s.squad === sqNum)
+    const issues = classified.inconsistent.filter(s => s.suggestedSquad === sqNum)
+    return {
       number: sqNum,
-      name: matches[0]?.squads.find(s => s.number === sqNum)?.name || `Squad ${sqNum}`,
-      max: matches[0]?.squads.find(s => s.number === sqNum)?.max || 0,
-      shooters: inThisSquad.map(s => {
-        const assignments = matchIds.map(id => s.matches[id] ?? null)
-        const allSame = assignments.every(a => a === sqNum)
-        const missingFromMatches = assignments.filter(a => a === null).length
-        return {
-          name: s.name,
-          assignments,
-          consistent: allSame && missingFromMatches === 0,
-          missingFromMatches,
-          primarySquad: sqNum,
-        }
-      }).sort((a, b) => a.name.localeCompare(b.name, 'fi')),
+      name: squadInfo?.name || `Squad ${sqNum}`,
+      max: squadInfo?.max || 0,
+      okShooters: inSquad,
+      issueShooters: issues,
+      total: inSquad.length + issues.length,
     }
   })
 
-  // Unsquadded = in CUP but not in any match squad
-  const hasIssues = cupOnly.length > 0 || matchOnly.length > 0 ||
-    shooters.some(s => Object.keys(s.matches).length < totalMatches)
+  const totalIssues = classified.unsquadded.length + classified.inconsistent.length + cupOnly.length + matchOnly.length
+  const scrollTo = (ref) => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   return (
-    <div className="p-3 space-y-4">
+    <div className="pb-6">
 
-      {/* Summary badges */}
-      <div className="flex gap-2 flex-wrap">
-        <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-          {shooters.length} ampujaa
-        </span>
-        <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-          {matches.length} osakilpailua
-        </span>
-        {hasIssues && (
-          <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-            Huomioita
-          </span>
-        )}
+      {/* ── Sticky Action Bar ── */}
+      <div className="sticky top-0 z-10 bg-white border-b shadow-sm">
+        <div className="flex gap-1 p-2">
+          {classified.unsquadded.length > 0 && (
+            <button
+              onClick={() => scrollTo(unsquaddedRef)}
+              className="flex-1 flex flex-col items-center py-2 px-1 rounded-lg bg-red-50 active:bg-red-100 transition-colors"
+            >
+              <span className="text-lg font-bold text-red-700">{classified.unsquadded.length}</span>
+              <span className="text-[10px] font-medium text-red-600 leading-tight">Ei sq</span>
+            </button>
+          )}
+          {classified.inconsistent.length > 0 && (
+            <button
+              onClick={() => scrollTo(inconsistentRef)}
+              className="flex-1 flex flex-col items-center py-2 px-1 rounded-lg bg-amber-50 active:bg-amber-100 transition-colors"
+            >
+              <span className="text-lg font-bold text-amber-700">{classified.inconsistent.length}</span>
+              <span className="text-[10px] font-medium text-amber-600 leading-tight">Eri sq</span>
+            </button>
+          )}
+          {(cupOnly.length > 0 || matchOnly.length > 0) && (
+            <button
+              onClick={() => scrollTo(notInCupRef)}
+              className="flex-1 flex flex-col items-center py-2 px-1 rounded-lg bg-purple-50 active:bg-purple-100 transition-colors"
+            >
+              <span className="text-lg font-bold text-purple-700">{cupOnly.length + matchOnly.length}</span>
+              <span className="text-[10px] font-medium text-purple-600 leading-tight">Cup ≠</span>
+            </button>
+          )}
+          <button
+            onClick={() => scrollTo(squadsRef)}
+            className={`flex-1 flex flex-col items-center py-2 px-1 rounded-lg transition-colors ${
+              totalIssues === 0
+                ? 'bg-green-50 active:bg-green-100'
+                : 'bg-gray-50 active:bg-gray-100'
+            }`}
+          >
+            <span className={`text-lg font-bold ${totalIssues === 0 ? 'text-green-700' : 'text-gray-700'}`}>
+              {classified.ok.length}
+            </span>
+            <span className={`text-[10px] font-medium leading-tight ${totalIssues === 0 ? 'text-green-600' : 'text-gray-500'}`}>
+              {totalIssues === 0 ? 'Kaikki ✓' : 'OK'}
+            </span>
+          </button>
+        </div>
       </div>
 
-      {/* Per-squad tables */}
-      {squadGroups.map(group => (
-        <div key={group.number} className="bg-white rounded-xl border overflow-hidden">
-          <div className="px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
-            <h3 className="font-semibold text-gray-800">{group.name}</h3>
-            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-              group.shooters.length >= group.max ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-            }`}>
-              {group.shooters.length}/{group.max}
-            </span>
-          </div>
+      <div className="p-3 space-y-4">
 
-          {group.shooters.length === 0 ? (
+        {/* ── All OK banner ── */}
+        {totalIssues === 0 && (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+            <p className="text-green-700 font-bold text-lg">✓ Kaikki kunnossa</p>
+            <p className="text-green-600 text-xs mt-1">
+              {shooters.length} ampujaa · {matches.length} osakilpailua · kaikki samassa squadissa
+            </p>
+          </div>
+        )}
+
+        {/* ── Section: Unsquadded (in CUP, not in any match squad) ── */}
+        {classified.unsquadded.length > 0 && (
+          <div ref={unsquaddedRef} className="scroll-mt-16">
+            <SectionHeader
+              icon="⚠"
+              title="Ei squadeissa"
+              count={classified.unsquadded.length}
+              color="red"
+            />
+            <div className="space-y-2">
+              {classified.unsquadded.map((s, i) => (
+                <div key={i} className="bg-white rounded-xl border border-red-200 p-3 flex items-center justify-between">
+                  <div>
+                    <div className="font-medium text-gray-800 text-sm">{s.name}</div>
+                    <div className="text-xs text-red-500 mt-0.5">Puuttuu kaikista osakilpailuista</div>
+                  </div>
+                  <button
+                    disabled
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-400"
+                    title="Tulossa: valitse squad"
+                  >
+                    → S?
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Section: Inconsistent squad assignments ── */}
+        {classified.inconsistent.length > 0 && (
+          <div ref={inconsistentRef} className="scroll-mt-16">
+            <SectionHeader
+              icon="↔"
+              title="Eri squadissa"
+              count={classified.inconsistent.length}
+              color="amber"
+            />
+            <div className="space-y-2">
+              {classified.inconsistent.map((s, i) => (
+                <div key={i} className="bg-white rounded-xl border border-amber-200 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-medium text-gray-800 text-sm">{s.name}</div>
+                    <button
+                      disabled
+                      className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-400"
+                      title="Tulossa: korjaa squad"
+                    >
+                      Korjaa → S{s.suggestedSquad}
+                    </button>
+                  </div>
+                  <div className="flex gap-1">
+                    {s.assignments.map((sq, mi) => (
+                      <span
+                        key={mi}
+                        className={`flex-1 text-center py-1 rounded text-xs font-medium ${
+                          sq === null
+                            ? 'bg-red-100 text-red-600'
+                            : sq === s.suggestedSquad
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}
+                      >
+                        <span className="block text-[9px] text-gray-400 leading-none mb-0.5">{matchLabels[mi]}</span>
+                        {sq === null ? '✗' : `S${sq}`}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Section: CUP / Match mismatch ── */}
+        {(cupOnly.length > 0 || matchOnly.length > 0) && (
+          <div ref={notInCupRef} className="scroll-mt-16">
+            {/* CUP-only (in CUP but not in any match) */}
+            {cupOnly.length > 0 && (
+              <>
+                <SectionHeader
+                  icon="📋"
+                  title="Cupissa mutta ei osakilpailuissa"
+                  count={cupOnly.length}
+                  color="red"
+                />
+                <div className="space-y-2 mb-4">
+                  {cupOnly.map((name, i) => (
+                    <div key={i} className="bg-white rounded-xl border border-red-200 p-3 flex items-center justify-between">
+                      <div>
+                        <div className="font-medium text-gray-800 text-sm">{name}</div>
+                        <div className="text-xs text-red-500 mt-0.5">Ilmoittautunut cupiin, ei osakilpailuissa</div>
+                      </div>
+                      <button
+                        disabled
+                        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-400"
+                        title="Tulossa: valitse squad"
+                      >
+                        → S?
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Match-only (in matches but not in CUP) */}
+            {matchOnly.length > 0 && (
+              <>
+                <SectionHeader
+                  icon="+"
+                  title="Ei cupissa"
+                  count={matchOnly.length}
+                  color="purple"
+                />
+                <div className="space-y-2">
+                  {matchOnly.map((name, i) => (
+                    <div key={i} className="bg-white rounded-xl border border-purple-200 p-3 flex items-center justify-between">
+                      <div>
+                        <div className="font-medium text-gray-800 text-sm">{name}</div>
+                        <div className="text-xs text-purple-500 mt-0.5">Osakilpailuissa mutta ei cupissa</div>
+                      </div>
+                      <button
+                        disabled
+                        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-400"
+                        title="Tulossa: lisää cupiin"
+                      >
+                        Lisää
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── Section: Squad overview ── */}
+        <div ref={squadsRef} className="scroll-mt-16">
+          <SectionHeader
+            icon="👥"
+            title="Squadit"
+            count={squadGroups.length}
+            color="blue"
+          />
+          {squadGroups.map(group => (
+            <SquadCard
+              key={group.number}
+              group={group}
+              matchLabels={matchLabels}
+              matchIds={matchIds}
+              totalMatches={totalMatches}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Section header ──
+function SectionHeader({ icon, title, count, color }) {
+  const colors = {
+    red: 'text-red-700',
+    amber: 'text-amber-700',
+    purple: 'text-purple-700',
+    blue: 'text-blue-700',
+    green: 'text-green-700',
+  }
+  return (
+    <h2 className={`text-sm font-semibold uppercase tracking-wide mb-2 px-1 flex items-center gap-2 ${colors[color] || 'text-gray-700'}`}>
+      <span>{icon}</span>
+      <span>{title}</span>
+      <span className="text-xs font-normal opacity-70">({count})</span>
+    </h2>
+  )
+}
+
+// ── Squad card with expandable shooter list ──
+function SquadCard({ group, matchLabels, matchIds, totalMatches }) {
+  const [expanded, setExpanded] = useState(false)
+  const shooterCount = group.total
+  const hasIssues = group.issueShooters.length > 0
+
+  return (
+    <div className={`bg-white rounded-xl border mb-2 overflow-hidden ${hasIssues ? 'border-amber-200' : 'border-gray-200'}`}>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-4 py-3 flex items-center justify-between active:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <svg className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+          <h3 className="font-semibold text-gray-800 text-sm">{group.name}</h3>
+          {hasIssues && <span className="text-amber-500 text-xs">⚠</span>}
+        </div>
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+          shooterCount >= group.max && group.max > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+        }`}>
+          {shooterCount}/{group.max}
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="border-t">
+          {shooterCount === 0 ? (
             <p className="px-4 py-3 text-gray-400 text-sm">Ei ampujia</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-gray-50">
-                  <th className="text-left px-4 py-2 font-medium text-gray-500">Ampuja</th>
-                  {matchLabels.map((label, i) => (
-                    <th key={i} className="text-center px-2 py-2 font-medium text-gray-500 w-16">{label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {group.shooters.map((shooter, idx) => (
-                  <tr key={idx} className={`border-b last:border-0 ${!shooter.consistent ? 'bg-amber-50' : ''}`}>
-                    <td className="px-4 py-2 text-gray-800">{shooter.name}</td>
-                    {shooter.assignments.map((sqNum, i) => (
-                      <td key={i} className="text-center px-2 py-2">
-                        {sqNum === null ? (
-                          <span className="text-red-500 font-bold">✗</span>
-                        ) : sqNum === shooter.primarySquad ? (
-                          <span className="text-green-600">✓</span>
-                        ) : (
-                          <span className="text-amber-600 font-medium">S{sqNum}</span>
-                        )}
-                      </td>
+            <div className="divide-y">
+              {/* OK shooters */}
+              {group.okShooters.map((s, i) => (
+                <div key={`ok-${i}`} className="px-4 py-2.5 flex items-center gap-2">
+                  <span className="text-green-500 text-sm shrink-0">✓</span>
+                  <span className="text-sm text-gray-800 flex-1 truncate">{s.name}</span>
+                </div>
+              ))}
+              {/* Issue shooters */}
+              {group.issueShooters.map((s, i) => (
+                <div key={`issue-${i}`} className="px-4 py-2.5 bg-amber-50">
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-500 text-sm shrink-0">⚠</span>
+                    <span className="text-sm text-gray-800 flex-1 truncate">{s.name}</span>
+                  </div>
+                  <div className="flex gap-1 mt-1 ml-6">
+                    {s.assignments.map((sq, mi) => (
+                      <span key={mi} className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                        sq === null
+                          ? 'bg-red-100 text-red-600'
+                          : sq === s.suggestedSquad
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {matchLabels[mi]}: {sq === null ? '✗' : `S${sq}`}
+                      </span>
                     ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
-        </div>
-      ))}
-
-      {/* CUP-only participants (not in any match) */}
-      {cupOnly.length > 0 && (
-        <div className="bg-white rounded-xl border overflow-hidden">
-          <div className="px-4 py-3 bg-red-50 border-b">
-            <h3 className="font-semibold text-red-800">Cupissa mutta ei osakilpailuissa</h3>
-            <p className="text-red-600 text-xs mt-0.5">Nämä ampujat ovat ilmoittautuneet cupiin mutta puuttuvat osakilpailuista</p>
-          </div>
-          <ul className="divide-y">
-            {cupOnly.map((name, i) => (
-              <li key={i} className="px-4 py-2 text-sm text-gray-800">{name}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Match-only participants (not in CUP) */}
-      {matchOnly.length > 0 && (
-        <div className="bg-white rounded-xl border overflow-hidden">
-          <div className="px-4 py-3 bg-amber-50 border-b">
-            <h3 className="font-semibold text-amber-800">Osakilpailuissa mutta ei cupissa</h3>
-            <p className="text-amber-600 text-xs mt-0.5">Nämä ampujat ovat osakilpailuissa mutta puuttuvat cup-ilmoittautumisesta</p>
-          </div>
-          <ul className="divide-y">
-            {matchOnly.map((name, i) => (
-              <li key={i} className="px-4 py-2 text-sm text-gray-800">{name}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* All OK */}
-      {!hasIssues && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
-          <p className="text-green-700 font-medium">Kaikki kunnossa</p>
-          <p className="text-green-600 text-xs mt-1">Kaikki ampujat ovat kaikissa osakilpailuissa ja squadeissa</p>
         </div>
       )}
     </div>
