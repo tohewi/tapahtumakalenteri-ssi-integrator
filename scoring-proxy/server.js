@@ -548,7 +548,7 @@ async function adminGraphQL(query, variables = {}) {
 // ============================================================
 
 const captchaChallenges = new Map()
-const CAPTCHA_TTL = 5 * 60 * 1000 // 5 minutes
+const CAPTCHA_TTL = 15 * 60 * 1000 // 15 minutes (multi-step form needs breathing room)
 
 // Cleanup expired captchas every 5 minutes
 setInterval(() => {

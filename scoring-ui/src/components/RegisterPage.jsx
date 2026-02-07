@@ -75,12 +75,19 @@ export default function RegisterPage() {
     }
   }
 
-  // Verify captcha and load cups
+  // Verify captcha and load cups (or skip ahead if returning from captcha expiry)
   const handleCaptchaSubmit = useCallback(async (e) => {
     e.preventDefault()
     if (!captchaAnswer.trim()) return
     setError(null)
     setLoading(true)
+
+    // If we already have selections (returning from captcha expiry), skip straight to email
+    if (selectedCup && selectedSquad && email) {
+      setStep('email')
+      setLoading(false)
+      return
+    }
 
     try {
       const cupList = await regApi.getCups()
@@ -95,7 +102,7 @@ export default function RegisterPage() {
       setError(err.message)
     }
     setLoading(false)
-  }, [captchaAnswer])
+  }, [captchaAnswer, selectedCup, selectedSquad, email])
 
   // Select cup and load squads
   const handleSelectCup = useCallback(async (cup) => {
@@ -152,6 +159,12 @@ export default function RegisterPage() {
           message: err.data.message,
         })
         setStep('result')
+      } else if (err.message?.includes('vanhentunut') || err.data?.error?.includes('vanhentunut')) {
+        // Captcha expired — go back to captcha step, preserve selections, auto-load new captcha
+        setCaptchaAnswer('')
+        setError('Varmistus vanhentui. Vastaa uudelleen niin jatketaan siitä mihin jäätiin.')
+        loadCaptcha()
+        setStep('captcha')
       } else {
         setError(err.message || 'Ilmoittautuminen epäonnistui.')
         setStep('email')
