@@ -646,11 +646,20 @@ app.get('/api/register/cups', registerReadLimiter, async (req, res) => {
         events(search: "Kupittaa CUP") {
           id name starts status get_content_type_key
           max_competitors
-          number_of_prematch_competitors_registered
           registration
           ... on NordicSerieNode {
             registration_starts
             registration_closes
+            component_matches {
+              number included
+              match {
+                squads {
+                  ... on NordicSquadNode {
+                    competitors { id status }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -662,7 +671,20 @@ app.get('/api/register/cups', registerReadLimiter, async (req, res) => {
       .filter(e => new Date(e.starts) > now) // future only
       .filter(e => e.status === 'on')         // active only
       .map(c => {
-        const full = (c.number_of_prematch_competitors_registered || 0) >= (c.max_competitors || 25)
+        // Count approved competitors from the first component match's squads
+        // (all matches have the same competitors, so first match is representative)
+        const firstMatch = (c.component_matches || []).find(cm => cm.included && cm.match)
+        const approvedIds = new Set()
+        if (firstMatch?.match?.squads) {
+          for (const s of firstMatch.match.squads) {
+            for (const comp of (s.competitors || [])) {
+              if (comp.status === 'a') approvedIds.add(comp.id)
+            }
+          }
+        }
+        const registered = approvedIds.size
+        const maxCompetitors = c.max_competitors || 25
+        const full = registered >= maxCompetitors
         const regStarts = c.registration_starts ? new Date(c.registration_starts) : null
         const regCloses = c.registration_closes ? new Date(c.registration_closes) : null
         // registrationOpen = mode allows it AND within time window AND not full
@@ -674,8 +696,8 @@ app.get('/api/register/cups', registerReadLimiter, async (req, res) => {
           id: c.id,
           name: c.name,
           starts: c.starts,
-          maxCompetitors: c.max_competitors || 25,
-          registered: c.number_of_prematch_competitors_registered || 0,
+          maxCompetitors,
+          registered,
           full,
           registrationOpen,
         }
