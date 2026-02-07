@@ -83,86 +83,33 @@ sequenceDiagram
     S-->>U: NDJSON: {"type":"result","success":true,"message":"Ilmoittautuminen onnistui!"}
 ```
 
-## Current Re-registration Handling
+## Re-registration Flow
 
-```mermaid
-flowchart TD
-    SUBMIT([User submits with email\nalready registered in CUP]) --> SEARCH[POST search-and-add]
-    SEARCH --> REGISTER[GET register-participant link]
-    REGISTER --> CONFIRM[POST confirmation form]
-    CONFIRM --> CHECK{SSI response?}
-
-    CHECK -->|"Shooter already registered"| ALREADY[addResult.message = 'Already registered'\naddResult.success = true]
-    ALREADY --> SERVER{server.js check}
-    SERVER -->|"message === 'Already registered'"| BLOCK[❌ HTTP 409\n'Olet jo ilmoittautunut tähän cupiin.']
-    BLOCK --> USER_SEES[User sees error\nCannot change squad]
-
-    CHECK -->|302 redirect| SUCCESS[addResult.success = true\nmessage = 'Participant added']
-    SUCCESS --> CONTINUE[Continue to approve + matches + squads]
-
-    style BLOCK fill:#fee,stroke:#c00
-    style USER_SEES fill:#fee,stroke:#c00
-```
-
-### Problem
-
-When a user is already registered in the CUP, the current code returns HTTP 409 and stops. This means:
-
-1. **User cannot change their squad** — they're stuck with whatever they originally picked
-2. **User cannot fix mistakes** — wrong squad selection requires admin intervention
-3. **No feedback** — user doesn't know which squad they're currently in
-
-The CUP registration is blocked, but the user may or may not be registered in the component matches (Tarkkuus, Pika, Kuvio). If they registered before the match registration step completed, they could be in an inconsistent state.
-
-## Proposed Re-registration Flow
-
-Instead of blocking, treat "already registered" as a valid state and proceed to update squad assignments:
+Re-registration (squad change) is fully supported. When a user submits with an email already registered in the CUP, the system skips the CUP add step and proceeds to update squad assignments in all matches.
 
 ```mermaid
 flowchart TD
     SUBMIT([User submits with email]) --> CUP_ADD[POST search-and-add to CUP]
     CUP_ADD --> CHECK{SSI response?}
 
-    CHECK -->|New registration| APPROVE[Approve CUP participant\nstatus = 'a']
-    CHECK -->|"Already registered"| SKIP_CUP[Skip CUP add\nProceed with shooterName]
+    CHECK -->|New registration| APPROVE[Approve CUP participant]
+    CHECK -->|Already registered| SKIP_CUP[Skip CUP add]
 
     APPROVE --> MATCHES
     SKIP_CUP --> MATCHES
 
-    MATCHES[For each match: Tarkkuus, Pika, Kuvio] --> MATCH_ADD[POST search-and-add to match]
-    MATCH_ADD --> MATCH_CHECK{Already in match?}
-
-    MATCH_CHECK -->|New| FIND_AND_SQUAD[Find competitor → Assign squad]
-    MATCH_CHECK -->|Already registered| FIND_AND_SQUAD
-
-    FIND_AND_SQUAD --> SQUAD_EDIT[POST edit form:\nsquad = new selection\nstatus = 'a']
-    SQUAD_EDIT --> NEXT{More matches?}
+    MATCHES[For each match] --> MATCH_ADD[search-and-add to match]
+    MATCH_ADD --> FIND_AND_SQUAD[Find competitor\nAssign squad + approve]
+    FIND_AND_SQUAD --> NEXT{More matches?}
     NEXT -->|Yes| MATCHES
-    NEXT -->|No| RESULT[✅ Success\nNew: 'Ilmoittautuminen onnistui!'\nUpdate: 'Squad päivitetty!']
+    NEXT -->|No| EMAIL[Send confirmation email]
+    EMAIL --> RESULT[New: Ilmoittautuminen onnistui!\nUpdate: Squad päivitetty!]
 
     style SKIP_CUP fill:#ffe,stroke:#aa0
     style RESULT fill:#efe,stroke:#0a0
 ```
 
-### Key changes needed
-
-1. **Don't block on "Already registered"** — treat it as success, continue to match registration
-2. **`ssiSearchAndAddParticipant` for matches** already handles "already registered" gracefully — it returns `success: true`
-3. **`ssiSetParticipantSquad` overwrites** the squad — calling it again simply updates the assignment
-4. **`ssiFindAndApproveCupParticipant` checks** if already approved and skips if so
-5. **Differentiate UI message** — "Ilmoittautuminen onnistui!" vs "Squad päivitetty!"
-
-### What already works for re-registration
-
-| Step | Already handles re-registration? | Notes |
-|---|---|---|
-| CUP search-and-add | ✅ Returns `success: true, message: 'Already registered'` | But server blocks with 409 |
-| CUP approve | ✅ Checks if already approved, skips | `"Already approved"` |
-| Match search-and-add | ✅ Returns `success: true` for both new and existing | Same "Already registered" handling |
-| Match find competitor | ✅ Finds by name regardless of state | Works for existing participants |
-| Squad assignment | ✅ Overwrites squad via edit form | Simply sets new squad value |
-
-**The only change needed is in `server.js`**: remove the 409 block and let the flow continue.
+Every SSI operation is idempotent — re-adding returns "Already registered", re-approving returns "Already approved", squad edit overwrites the previous value.
 
 ## SSI State Diagram (per participant)
 

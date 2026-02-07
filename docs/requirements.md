@@ -158,11 +158,11 @@
 
 ## Summary
 
-- **Total Requirements**: 97
-- **Completed**: 73
-- **On Hold**: 3 (35, 36, 41)
-- **In Progress**: 19 (R1–R10, RSEC1–RSEC8, RSEC10)
-- **Pending**: 4 (39, 42, 47–48, SEC11)
+- **Release 1.0** (SSI Cup Automation): 37 requirements — 35 ✅, 2 on hold (35, 36)
+- **Release 2.0** (WordPress Integration): 9 requirements — 6 ✅, 1 on hold (41), 2 pending (39, 42)
+- **Release 3.0** (Scoring Application): 21 requirements — 20 ✅, 1 pending (SEC11)
+- **Release 4.0** (Registration Frontend): 25 requirements — 25 ✅
+- **Release 2.1** (Data Integrity): 2 requirements — 2 pending (47, 48)
 
 ## Configuration Files
 
@@ -187,6 +187,11 @@
 
 | Document | Purpose |
 |----------|---------|
-| `docs/README.md` | User guide and quick start |
-| `docs/developer-guide.md` | Technical implementation details |
-| `docs/RELEASE-NOTES.md` | Version history |
+| `docs/user-guide.md` | Scoring and registration app user guide |
+| `docs/installation-guide.md` | Render, Resend, and GitHub deployment guide |
+| `docs/RELEASE-NOTES.md` | Version history and changelog |
+| `docs/registration-flow.md` | Backend sequence diagrams and SSI state machine |
+| `docs/scoring-architecture.md` | Proxy architecture, session management, scoring flow |
+| `docs/ssi-admin-operations.md` | Web scraping endpoints and form field reference |
+| `docs/README.md` | Cup creation scripts reference (PowerShell) |
+| `docs/developer-guide.md` | Cup creation process technical details |

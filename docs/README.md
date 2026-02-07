@@ -1,6 +1,8 @@
-# Kupittaa Cup Automation Tool
+# Cup Creation Scripts Reference
 
 PowerShell automation for creating RESUL CUP events on Shoot'n'ScoreIt (SSI) with integrated WordPress calendar event creation for Turun Reservilaiset.
+
+> For the web application, see the [User Guide](user-guide.md) and [Installation Guide](installation-guide.md).
 
 ## Features
 

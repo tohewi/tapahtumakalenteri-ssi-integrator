@@ -1,5 +1,55 @@
 # Release Notes
 
+## Version 4.0 (2026-02-07)
+
+### Overview
+
+Registration frontend and scoring application — shooters can self-register for Kupittaa CUP events via a mobile-friendly web form, and range officers score matches on phones/tablets. Both apps share a single backend deployed on Render.
+
+### New: Registration App (`#/register`)
+
+- **Self-service registration**: Shooters register for CUP events without admin intervention
+- **Mobile-first wizard**: Captcha → Cup selection → Squad selection → Email → Submit
+- **Real-time progress**: NDJSON streaming shows match-by-match registration progress
+- **Re-registration**: Returning shooters can change their squad — system is fully idempotent
+- **Confirmation email**: HTML email via Resend with match list, squad assignments, and instructions
+- **User not found**: Links to SSI signup page when email isn't in the system
+
+### New: Scoring App (`#/`)
+
+- **Touch-optimized scoring**: Zone-tap buttons (X, 10–1, M) for entering scores on the range
+- **PWA installable**: Works offline-capable, installable on mobile devices
+- **Per-user sessions**: Multi-user JWT + cookie isolation with 8h TTL
+- **Remember me**: AES-GCM encrypted credential storage with auto-login
+- **Navigation persistence**: Cup/match/squad/series state survives app restarts
+
+### Security (RSEC1–RSEC11)
+
+All 11 registration security requirements implemented:
+
+- **No user enumeration** — generic error responses only
+- **Strict input validation** — regex/bounds on all fields
+- **Request size limits** — 1KB registration, 10KB global
+- **Rate limiting** — 4 limiters with IP logging and curfew tracking
+- **Captcha anti-replay** — single-use, 15min TTL
+- **HTML injection prevention** — `escapeHtml()` on all SSI data in email templates
+- **Helmet + CORS** — locked to production origin
+- **Admin credential isolation** — server-side env vars only
+
+### Infrastructure
+
+- **Render**: Single web service serving both UI and API
+- **GitHub Actions**: CI pipeline — install → test → audit → build → deploy
+- **Resend**: Transactional email from `no-reply@ssi.towi.me`
+
+### Requirements Met
+
+- R1–R14: Registration functional requirements ✅
+- RSEC1–RSEC11: Registration security requirements ✅
+- S1–S10, P1–P4, M1–M3, B1–B4, SEC1–SEC10: Scoring requirements ✅
+
+---
+
 ## Version 2.0 (2026-02-01)
 
 ### Overview

@@ -5,6 +5,8 @@ test-harness/config/test-users.yml
 
 # Debug files
 debug-*.html
+test-harness/debug-*.mjs
+test-harness/send-*.mjs
 
 # PowerShell module cache
 *.psm1.cache
