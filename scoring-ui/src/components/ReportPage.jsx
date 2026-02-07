@@ -4,7 +4,7 @@ import { encryptData, decryptData } from '../crypto'
 import LoginScreen from './LoginScreen'
 import { AppHeader, ErrorBanner, Spinner, formatDateShort } from './shared'
 
-const LS_REPORT_CREDS = 'ssi_report_credentials'
+const LS_CREDS = 'ssi_credentials'
 
 export default function ReportPage() {
   const [authed, setAuthed] = useState(false)
@@ -26,7 +26,7 @@ export default function ReportPage() {
   // Auto-login on mount
   useEffect(() => {
     const tryAutoLogin = async () => {
-      const raw = localStorage.getItem(LS_REPORT_CREDS)
+      const raw = localStorage.getItem(LS_CREDS)
       if (!raw) return
       const creds = await decryptData(raw)
       if (!creds) return
@@ -44,7 +44,7 @@ export default function ReportPage() {
     await api.login(email, password, apiKey)
     if (rememberMe) {
       const encrypted = await encryptData({ email, password, apiKey })
-      localStorage.setItem(LS_REPORT_CREDS, encrypted)
+      localStorage.setItem(LS_CREDS, encrypted)
     }
     setAuthed(true)
     setView('search')

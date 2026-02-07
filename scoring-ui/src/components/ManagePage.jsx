@@ -5,7 +5,7 @@ import { encryptData, decryptData } from '../crypto'
 import LoginScreen from './LoginScreen'
 import { AppHeader, ErrorBanner, Spinner, CupList } from './shared'
 
-const LS_MANAGE_CREDS = 'ssi_manage_credentials'
+const LS_CREDS = 'ssi_credentials'
 
 export default function ManagePage() {
   const [authed, setAuthed] = useState(false)
@@ -23,7 +23,7 @@ export default function ManagePage() {
   // Auto-login on mount
   useEffect(() => {
     const tryAutoLogin = async () => {
-      const raw = localStorage.getItem(LS_MANAGE_CREDS)
+      const raw = localStorage.getItem(LS_CREDS)
       if (!raw) return
       const creds = await decryptData(raw)
       if (!creds) return
@@ -41,7 +41,7 @@ export default function ManagePage() {
     await api.login(email, password, apiKey)
     if (rememberMe) {
       const encrypted = await encryptData({ email, password, apiKey })
-      localStorage.setItem(LS_MANAGE_CREDS, encrypted)
+      localStorage.setItem(LS_CREDS, encrypted)
     }
     setAuthed(true)
     setView('cups')
@@ -85,7 +85,7 @@ export default function ManagePage() {
     return (
       <div className="min-h-screen bg-gray-50">
         <AppHeader title="Kupittaa Cup — Hallinta" subtitle="Kirjaudu SSI-tunnuksilla" />
-        <LoginScreen onLogin={handleLogin} />
+        <LoginScreen onLogin={handleLogin} hideHeader />
       </div>
     )
   }
