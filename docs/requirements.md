@@ -117,16 +117,16 @@
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| R1 | Public registration page accessible without SSI login (`#/register`) | ⬚ In Progress |
-| R2 | Human verification (math captcha) before showing any data | ⬚ In Progress |
-| R3 | List future Cups open for registration with capacity (registered/max) | ⬚ In Progress |
-| R4 | Show squads per Cup with current/max capacity and full indicator | ⬚ In Progress |
-| R5 | Shooter enters SSI email, selects Cup and Squad, submits registration | ⬚ In Progress |
-| R6 | Backend registers shooter to Cup and assigns selected squad in all matches via SSI admin web scraping | ⬚ In Progress |
-| R7 | If email not found in SSI, inform shooter and provide direct SSI registration link | ⬚ In Progress |
-| R8 | On success, display confirmation with Cup, date, squad, and email | ⬚ In Progress |
-| R9 | Individual matches hidden from shooter — Cup enrollment auto-enrolls all matches | ⬚ In Progress |
-| R10 | Finnish language UI throughout | ⬚ In Progress |
+| R1 | Public registration page accessible without SSI login (`#/register`) | ✅ |
+| R2 | Human verification (math captcha) before showing any data. Server-side verification before proceeding | ✅ |
+| R3 | List future Cups open for registration with capacity (registered/max). Open cups shown first, upcoming cups shown greyed out | ✅ |
+| R4 | Show squads per Cup with current/max capacity and full indicator (TÄYNNÄ). Full squads disabled | ✅ |
+| R5 | Shooter enters SSI email, selects Cup and Squad, submits registration. Summary shown before submit | ✅ |
+| R6 | Backend registers shooter to Cup and assigns selected squad in all matches via SSI admin web scraping. NDJSON streaming progress | ✅ |
+| R7 | If email not found in SSI, inform shooter and provide direct SSI registration link | ✅ |
+| R8 | On success, display confirmation with Cup, date, squad, and email. Re-registration shows "Squad päivitetty!" | ✅ |
+| R9 | Individual matches hidden from shooter — Cup enrollment auto-enrolls all matches | ✅ |
+| R10 | Finnish language UI throughout | ✅ |
 | R11 | **Re-registration**: If shooter is already registered in CUP, allow squad change instead of blocking. UI shows "Squad päivitetty!" for re-registration | ✅ |
 | R12 | **Registered count**: Cup list and cup detail show actual approved shooter count derived from match squad competitor data (not SSI `number_of_prematch_competitors_registered` which is for pre-matches, not applicable to Kupittaa) | ✅ |
 | R13 | **CUP approval via toggle-status**: CUP participant approval uses SSI toggle-status URL. The CUP participant edit form (CT=137) silently ignores status changes — only toggle-status works. Match competitor edit form (CT=93) does support status via edit form | ✅ |
