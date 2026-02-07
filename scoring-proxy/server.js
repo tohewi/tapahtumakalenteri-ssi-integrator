@@ -966,7 +966,7 @@ app.post('/api/register/submit', registerBodyLimit, registerLimiter, async (req,
         return res.status(404).json({
           error: 'user_not_found',
           message: 'Sähköpostiosoitetta ei löydy SSI-järjestelmästä. Rekisteröidy ensin SSI:hin.',
-          registerUrl: 'https://shootnscoreit.com/register/',
+          registerUrl: 'https://shootnscoreit.com/signup/?next=/dashboard/',
         })
       }
       return res.status(400).json({ error: addResult.message })
