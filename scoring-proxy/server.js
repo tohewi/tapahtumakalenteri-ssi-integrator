@@ -573,7 +573,7 @@ const captchaLimiter = rateLimit({
   max: 30,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Liian monta pyyntöä.' },
+  message: { error: 'Liian monta pyyntöä. Yritä uudelleen 10 minuutin kuluttua.' },
 })
 
 // Rate limit for cup/squad reads: 60 per 10 min per IP
@@ -582,7 +582,7 @@ const registerReadLimiter = rateLimit({
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Liian monta pyyntöä.' },
+  message: { error: 'Liian monta pyyntöä. Yritä uudelleen 10 minuutin kuluttua.' },
 })
 
 // Request body size limit for registration endpoints (1 KB max)
