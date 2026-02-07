@@ -30,7 +30,7 @@ const ALLOWED_ORIGINS = IS_PROD
   : true
 app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }))
 
-app.use(express.json())
+app.use(express.json({ limit: '10kb' })) // global body size limit (RSEC4)
 app.use(cookieParser())
 
 // Rate limit on login: max 10 attempts per 15 minutes per IP
@@ -1006,27 +1006,36 @@ if (existsSync(indexPath)) {
 }
 
 // ============================================================
-// Start server
+// Start server (only when run directly, not when imported for tests)
 // ============================================================
-app.listen(PORT, () => {
-  console.log(`Scoring proxy running on http://localhost:${PORT}`)
-  console.log(`Mode: ${IS_PROD ? 'production' : 'development'}`)
-  console.log(`Session TTL: ${SESSION_TTL / 3600000}h`)
-  console.log('Endpoints:')
-  console.log('  POST /api/auth/login     { email, password, apiKey }')
-  console.log('  GET  /api/auth/status')
-  console.log('  POST /api/auth/logout')
-  console.log('  GET  /api/health')
-  console.log('  GET  /api/cups?search=')
-  console.log('  GET  /api/cup/:id')
-  console.log('  GET  /api/match/:id')
-  console.log('  GET  /api/competitor/:id')
-  console.log('  POST /api/competitor/:id/score  { scores, warning, dqReason, comment }')
-  console.log('  GET  /api/register/captcha')
-  console.log('  GET  /api/register/cups')
-  console.log('  GET  /api/register/cup/:id')
-  console.log('  POST /api/register/submit     { cupId, squadNumber, email, captchaId, captchaAnswer }')
-  if (existsSync(indexPath)) {
-    console.log(`  UI served from ${uiDist}`)
-  }
-})
+const isDirectRun = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/'))
+  || process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+
+if (isDirectRun) {
+  app.listen(PORT, () => {
+    console.log(`Scoring proxy running on http://localhost:${PORT}`)
+    console.log(`Mode: ${IS_PROD ? 'production' : 'development'}`)
+    console.log(`Session TTL: ${SESSION_TTL / 3600000}h`)
+    console.log('Endpoints:')
+    console.log('  POST /api/auth/login     { email, password, apiKey }')
+    console.log('  GET  /api/auth/status')
+    console.log('  POST /api/auth/logout')
+    console.log('  GET  /api/health')
+    console.log('  GET  /api/cups?search=')
+    console.log('  GET  /api/cup/:id')
+    console.log('  GET  /api/match/:id')
+    console.log('  GET  /api/competitor/:id')
+    console.log('  POST /api/competitor/:id/score  { scores, warning, dqReason, comment }')
+    console.log('  GET  /api/register/captcha')
+    console.log('  POST /api/register/verify-captcha  { captchaId, captchaAnswer }')
+    console.log('  GET  /api/register/cups')
+    console.log('  GET  /api/register/cup/:id')
+    console.log('  POST /api/register/submit     { cupId, squadNumber, email, captchaId, captchaAnswer }')
+    if (existsSync(indexPath)) {
+      console.log(`  UI served from ${uiDist}`)
+    }
+  })
+}
+
+// Export for testing
+export { app, captchaChallenges, CAPTCHA_TTL }
