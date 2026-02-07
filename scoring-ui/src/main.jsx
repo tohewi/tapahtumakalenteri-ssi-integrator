@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 import RegisterPage from './components/RegisterPage.jsx'
+import ManagePage from './components/ManagePage.jsx'
 
 function Router() {
   const [route, setRoute] = useState(window.location.hash)
@@ -15,6 +16,9 @@ function Router() {
 
   if (route === '#/register') {
     return <RegisterPage />
+  }
+  if (route === '#/manage') {
+    return <ManagePage />
   }
   return <App />
 }

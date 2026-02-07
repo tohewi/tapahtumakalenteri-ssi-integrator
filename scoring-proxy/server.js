@@ -530,6 +530,113 @@ app.post('/api/competitor/:id/score', requireAuth, async (req, res) => {
 })
 
 // ============================================================
+// Match Management: consolidated squadding overview
+// Requires scoring auth (same as /api/cups, /api/match)
+// ============================================================
+
+app.get('/api/manage/cup/:id', requireAuth, async (req, res) => {
+  try {
+    const result = await graphqlWithRefresh(req.ssiSession, `
+      query ManageCup($id: String!) {
+        event(content_type: 136, id: $id) {
+          id name starts status
+          ... on NordicSerieNode {
+            competitors { id status shooter { first_name last_name } }
+            component_matches {
+              number included
+              match {
+                id name
+                squads {
+                  id number comment
+                  ... on NordicSquadNode {
+                    max_competitors
+                    competitors {
+                      id status
+                      first_name last_name
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `, { id: req.params.id })
+
+    if (!result.event) {
+      return res.status(404).json({ error: 'Cup not found' })
+    }
+
+    const cup = result.event
+    const componentMatches = (cup.component_matches || [])
+      .filter(cm => cm.included && cm.match)
+      .sort((a, b) => a.number - b.number)
+
+    // Build match info with squads and competitor names
+    const matches = componentMatches.map(cm => {
+      const m = cm.match
+      const squads = (m.squads || []).map(sq => ({
+        number: sq.number,
+        name: sq.comment || `Squad ${sq.number}`,
+        max: sq.max_competitors || 0,
+        shooters: (sq.competitors || [])
+          .filter(c => c.status === 'a')
+          .map(c => ({ id: c.id, name: `${c.first_name} ${c.last_name}`.trim() })),
+      }))
+
+      // Unsquadded = approved competitors not in any squad
+      // (competitors with no squad show up outside squad lists — fetch from match level if available)
+      // For now, we derive this from squad data
+
+      return {
+        id: m.id,
+        name: m.name,
+        componentNumber: cm.number,
+        squads,
+      }
+    })
+
+    // Collect all shooters across all matches (union by name, track which matches they're in)
+    const shooterMap = new Map() // name → { name, matches: { matchId: squadNumber|null } }
+    for (const match of matches) {
+      for (const squad of match.squads) {
+        for (const shooter of squad.shooters) {
+          if (!shooterMap.has(shooter.name)) {
+            shooterMap.set(shooter.name, { name: shooter.name, matches: {} })
+          }
+          shooterMap.get(shooter.name).matches[match.id] = squad.number
+        }
+      }
+    }
+
+    // CUP-level participants (approved)
+    const cupParticipants = (cup.competitors || [])
+      .filter(c => c.status === 'a')
+      .map(c => `${c.shooter?.first_name || ''} ${c.shooter?.last_name || ''}`.trim())
+      .filter(n => n.length > 0)
+
+    // Find CUP participants not in any match
+    const matchShooterNames = new Set(shooterMap.keys())
+    const cupOnly = cupParticipants.filter(n => !matchShooterNames.has(n))
+
+    // Find match shooters not in CUP
+    const cupParticipantSet = new Set(cupParticipants)
+    const matchOnly = [...matchShooterNames].filter(n => !cupParticipantSet.has(n))
+
+    res.json({
+      cup: { id: cup.id, name: cup.name, starts: cup.starts },
+      matches,
+      shooters: [...shooterMap.values()],
+      cupOnly,
+      matchOnly,
+    })
+  } catch (err) {
+    console.error('Failed to fetch management data:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ============================================================
 // Registration: Admin session (singleton, lazy-init)
 // Uses SSI_ADMIN_EMAIL + SSI_ADMIN_PASSWORD env vars
 // ============================================================
