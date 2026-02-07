@@ -501,7 +501,10 @@ export async function ssiSearchAndAddParticipant(eventContentType, eventId, emai
 // ============================================================
 // Admin: find and approve a CUP participant (web scraping)
 // 1. Scrape /event/136/{cupId}/participants/ to find participant by name
-// 2. Edit via /event/participant/137/{participantId}/edit/ to set status = "a"
+// 2. Use toggle-status to cycle Pending → Approved
+//    NOTE: CUP participant edit form (ct=137) does NOT support status changes.
+//          Only the toggle-status URL works for CUP participants.
+//          Toggle cycle: Pending → Approved → Approved(no results) → Deleted → Pending
 // ============================================================
 
 export async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookies) {
@@ -537,59 +540,41 @@ export async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookie
     return { success: false, message: 'Participant not found in CUP' }
   }
 
-  // 2. Check if already approved (look for status indicator near participant)
+  // 2. Check current status
   const statusMatch = html.match(new RegExp(`/event/participant/137/${participantId}/toggle-status/[^<]*<abbr[^>]*title="([^"]*)"`, 'i'))
-  if (statusMatch && statusMatch[1] === 'Approved') {
+  const currentStatus = statusMatch ? statusMatch[1] : 'unknown'
+  if (debug) console.log(`[cup-approve] Current status: "${currentStatus}"`)
+
+  if (currentStatus === 'Approved') {
     if (debug) console.log(`[cup-approve] Already approved`)
     return { success: true, message: 'Already approved' }
   }
 
-  // 3. Edit participant to set status = approved
-  const editUrl = `${SSI_BASE}/event/participant/137/${participantId}/edit/`
-  if (debug) console.log(`[cup-approve] GET edit form: ${editUrl}`)
-  const editResp = await fetch(editUrl, {
+  // 3. Toggle status: Pending → Approved (one toggle from Pending)
+  //    Toggle cycle: Pending → Approved → Approved(no results) → Deleted → Pending
+  //    We only need to toggle once from Pending to reach Approved.
+  const toggleUrl = `${SSI_BASE}/event/participant/137/${participantId}/toggle-status/?next=${partUrl}`
+  if (debug) console.log(`[cup-approve] GET toggle-status: ${toggleUrl}`)
+
+  const toggleResp = await fetch(toggleUrl, {
     headers: { 'Cookie': formatCookies(cookies) },
     redirect: 'follow',
   })
-  if (!editResp.ok) throw new Error(`CUP participant edit page HTTP ${editResp.status}`)
-  const editHtml = await editResp.text()
+  if (!toggleResp.ok) throw new Error(`Toggle-status HTTP ${toggleResp.status}`)
 
-  const formMatch = editHtml.match(/<form[^>]*method="post"[^>]*>([\s\S]*?)<\/form>/i)
-  if (!formMatch) throw new Error('No edit form found on CUP participant page')
+  // 4. Verify the new status
+  const verifyHtml = await toggleResp.text()
+  const newStatusMatch = verifyHtml.match(new RegExp(`/event/participant/137/${participantId}/toggle-status/[^<]*<abbr[^>]*title="([^"]*)"`, 'i'))
+  const newStatus = newStatusMatch ? newStatusMatch[1] : 'unknown'
+  if (debug) console.log(`[cup-approve] New status: "${newStatus}"`)
 
-  const formData = _extractFormFields(formMatch[1])
-  formData.set('status', 'a')
-
-  if (debug) console.log(`[cup-approve] POST status=a, fields: ${[...formData.keys()].join(', ')}`)
-
-  const postResp = await fetch(editUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Cookie': formatCookies(cookies),
-      'Referer': editUrl,
-      'Origin': SSI_BASE,
-    },
-    body: formData.toString(),
-    redirect: 'manual',
-  })
-
-  if (debug) console.log(`[cup-approve] Response: ${postResp.status}`)
-
-  if (postResp.status === 302 || postResp.status === 301) {
+  if (newStatus === 'Approved') {
     return { success: true, message: 'Approved' }
   }
-  if (postResp.status === 200) {
-    const respHtml = await postResp.text()
-    if (respHtml.includes('errorlist') || respHtml.includes('is-invalid')) {
-      const errMatch = respHtml.match(/<(?:ul|div)[^>]*(?:errorlist|invalid-feedback)[^>]*>([\s\S]*?)<\/(?:ul|div)>/)
-      const errText = errMatch ? errMatch[1].replace(/<[^>]+>/g, '').trim() : 'Edit error'
-      if (debug) console.log(`[cup-approve] Error: ${errText}`)
-      return { success: false, message: errText }
-    }
-    return { success: true, message: 'Approved (no redirect)' }
-  }
-  throw new Error(`CUP participant edit failed HTTP ${postResp.status}`)
+
+  // If not approved after one toggle, something unexpected happened
+  if (debug) console.log(`[cup-approve] Unexpected status after toggle: "${newStatus}"`)
+  return { success: false, message: `Toggle resulted in "${newStatus}", expected "Approved"` }
 }
 
 // ============================================================
