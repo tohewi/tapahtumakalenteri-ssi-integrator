@@ -1174,6 +1174,147 @@ app.post('/api/register/submit', registerBodyLimit, registerLimiter, async (req,
 })
 
 // ============================================================
+// GET /api/matches?search= — Search for matches by name
+// Searches cups (CT=136) and extracts their component matches,
+// since individual matches are nested inside cups in SSI.
+// ============================================================
+app.get('/api/matches', requireAuth, async (req, res) => {
+  const search = req.query.search
+  if (!search || search.length < 2) {
+    return res.json({ matches: [] })
+  }
+
+  try {
+    const result = await graphqlWithRefresh(req.ssiSession, `
+      query SearchMatches($search: String!) {
+        events(search: $search) {
+          id name starts status get_content_type_key
+          ... on NordicSerieNode {
+            component_matches {
+              number included
+              match {
+                id name starts status
+              }
+            }
+          }
+        }
+      }
+    `, { search })
+
+    // Extract matches from cups (CT=136) component_matches
+    const matches = []
+    for (const event of (result.events || [])) {
+      if (event.get_content_type_key === 136) {
+        const cms = (event.component_matches || [])
+          .filter(cm => cm.included && cm.match)
+        for (const cm of cms) {
+          matches.push({
+            id: cm.match.id,
+            name: cm.match.name,
+            starts: cm.match.starts,
+            status: cm.match.status,
+            cupName: event.name,
+          })
+        }
+      } else if (event.get_content_type_key === 91) {
+        // Also include direct match results if any
+        matches.push({
+          id: event.id,
+          name: event.name,
+          starts: event.starts,
+          status: event.status,
+          cupName: null,
+        })
+      }
+    }
+
+    // Sort by date: closest to today first
+    const now = Date.now()
+    matches.sort((a, b) => {
+      const da = Math.abs(new Date(a.starts).getTime() - now)
+      const db = Math.abs(new Date(b.starts).getTime() - now)
+      return da - db
+    })
+
+    res.json({ matches })
+  } catch (err) {
+    console.error('Failed to search matches:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ============================================================
+// POST /api/report/matches — Generate report for selected matches
+// Body: { matchIds: [id1, id2, ...] }
+// Returns approved shooters per squad per match with admin role
+// ============================================================
+app.post('/api/report/matches', requireAuth, async (req, res) => {
+  const { matchIds } = req.body
+  if (!Array.isArray(matchIds) || matchIds.length === 0) {
+    return res.status(400).json({ error: 'matchIds array required' })
+  }
+  if (matchIds.length > 50) {
+    return res.status(400).json({ error: 'Maximum 50 matches per report' })
+  }
+
+  try {
+    const rows = []
+
+    for (const matchId of matchIds) {
+      const result = await graphqlWithRefresh(req.ssiSession, `
+        query ReportMatch($id: String!) {
+          event(content_type: 91, id: $id) {
+            id
+            name
+            starts
+            is_current_role_admin
+            squads {
+              id
+              number
+              comment
+              ... on NordicSquadNode {
+                competitors {
+                  id
+                  first_name
+                  last_name
+                  status
+                }
+              }
+            }
+          }
+        }
+      `, { id: String(matchId) })
+
+      if (!result.event) continue
+
+      const match = result.event
+      const matchDate = match.starts ? match.starts.split('T')[0] : ''
+      const isAdmin = match.is_current_role_admin || false
+
+      for (const squad of (match.squads || [])) {
+        const squadLabel = squad.comment || `Squad ${squad.number}`
+        const approved = (squad.competitors || []).filter(c => c.status === 'a')
+
+        for (const comp of approved) {
+          rows.push({
+            match: match.name,
+            date: matchDate,
+            squad: squadLabel,
+            name: `${comp.first_name} ${comp.last_name}`.trim(),
+            isAdmin: isAdmin ? 'Y' : 'N',
+          })
+        }
+      }
+    }
+
+    res.json({ rows })
+  } catch (err) {
+    console.error('Failed to generate report:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ============================================================
 // SPA fallback — serve index.html for non-API routes (production)
 // ============================================================
 const indexPath = path.join(uiDist, 'index.html')
@@ -1209,6 +1350,8 @@ if (isDirectRun) {
     console.log('  GET  /api/register/cups')
     console.log('  GET  /api/register/cup/:id')
     console.log('  POST /api/register/submit     { cupId, squadNumber, email, captchaId, captchaAnswer }')
+    console.log('  GET  /api/matches?search=')
+    console.log('  POST /api/report/matches       { matchIds }')
     if (existsSync(indexPath)) {
       console.log(`  UI served from ${uiDist}`)
     }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-export default function LoginScreen({ onLogin, initialEmail, initialPassword, initialApiKey }) {
+export default function LoginScreen({ onLogin, initialEmail, initialPassword, initialApiKey, title = 'SSI Scoring', subtitle = 'Login to start scoring', hideHeader = false }) {
   const [email, setEmail] = useState(initialEmail || '')
   const [password, setPassword] = useState(initialPassword || '')
   const [apiKey, setApiKey] = useState(initialApiKey || '')
@@ -29,11 +29,13 @@ export default function LoginScreen({ onLogin, initialEmail, initialPassword, in
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white px-4 py-5">
-        <h1 className="text-xl font-bold">SSI Scoring</h1>
-        <p className="text-blue-200 text-sm mt-1">Login to start scoring</p>
-      </div>
+    <div className={`${hideHeader ? '' : 'min-h-screen'} bg-gray-50 flex flex-col`}>
+      {!hideHeader && (
+        <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white px-4 py-5">
+          <h1 className="text-xl font-bold">{title}</h1>
+          <p className="text-blue-200 text-sm mt-1">{subtitle}</p>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="flex-1 p-4 max-w-sm mx-auto w-full">
         <div className="space-y-4 mt-4">

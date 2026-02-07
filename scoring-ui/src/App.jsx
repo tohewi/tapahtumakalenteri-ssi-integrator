@@ -386,7 +386,15 @@ function App() {
   // VIEW: Login
   // ============================================================
   if (view === 'login') {
-    return <LoginScreen onLogin={handleLogin} initialEmail={savedCreds?.email} initialPassword={savedCreds?.password} initialApiKey={savedCreds?.apiKey} />
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white px-4 py-3">
+          <h1 className="text-xl font-bold">SSI Scoring</h1>
+          <p className="text-blue-200 text-sm mt-0.5">Login to start scoring</p>
+        </div>
+        <LoginScreen onLogin={handleLogin} initialEmail={savedCreds?.email} initialPassword={savedCreds?.password} initialApiKey={savedCreds?.apiKey} hideHeader />
+      </div>
+    )
   }
 
   // ============================================================

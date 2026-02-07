@@ -1,33 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import * as regApi from '../register-api'
-
-// Format date for Finnish display
-function formatDate(isoDate) {
-  if (!isoDate) return ''
-  const d = new Date(isoDate)
-  return d.toLocaleDateString('fi-FI', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-}
-
-function formatDateShort(isoDate) {
-  if (!isoDate) return ''
-  const d = new Date(isoDate)
-  return d.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric', year: 'numeric' })
-}
-
-// Back chevron (same as scoring UI)
-function BackButton({ label, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-1 px-4 pt-2 text-blue-200 text-sm active:text-white"
-    >
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-      </svg>
-      {label}
-    </button>
-  )
-}
+import { formatDate, BackButton, CupList } from './shared'
 
 // Steps: captcha → cups → squads → email → submitting → result
 const STEPS = ['captcha', 'cups', 'squads', 'email', 'submitting', 'result']
@@ -271,103 +244,7 @@ export default function RegisterPage() {
 
         {/* STEP: Cup selection */}
         {step === 'cups' && (
-          <div>
-            {/* Open cups first, then closed */}
-            {(() => {
-              const today = new Date().toISOString().split('T')[0]
-              const openCups = cups.filter(c => c.registrationOpen)
-              const closedCups = cups.filter(c => !c.registrationOpen)
-              return (
-                <>
-                  {openCups.length > 0 && (
-                    <>
-                      <h2 className="text-sm font-semibold text-green-700 uppercase tracking-wide mb-2 px-1 flex items-center gap-1">
-                        <span className="w-2 h-2 bg-green-500 rounded-full inline-block"></span>
-                        Ilmoittautuminen auki
-                      </h2>
-                      {openCups.map(cup => {
-                        const isToday = cup.starts?.split('T')[0] === today
-                        return (
-                          <button
-                            key={cup.id}
-                            onClick={() => handleSelectCup(cup)}
-                            disabled={loading}
-                            className={`w-full flex items-center gap-3 p-4 mb-2 rounded-xl border transition-colors text-left ${
-                              isToday
-                                ? 'border-green-300 bg-white active:bg-green-50'
-                                : 'bg-white border-gray-200 active:bg-blue-50'
-                            }`}
-                          >
-                            <div className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center shrink-0 ${
-                              isToday ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
-                            }`}>
-                              <span className="text-xs font-medium leading-none">
-                                {new Date(cup.starts).toLocaleDateString('fi-FI', { weekday: 'short' })}
-                              </span>
-                              <span className="text-lg font-bold leading-tight">
-                                {new Date(cup.starts).getDate()}
-                              </span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-gray-800 truncate">{cup.name}</div>
-                              <div className="text-xs text-gray-400 mt-0.5">{formatDateShort(cup.starts)}</div>
-                            </div>
-                            <span className="inline-block px-2 py-1 rounded-lg text-xs font-medium shrink-0 bg-green-100 text-green-700">
-                              {cup.registered}/{cup.maxCompetitors}
-                            </span>
-                            <div className="text-gray-300 shrink-0">
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                              </svg>
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </>
-                  )}
-
-                  {openCups.length === 0 && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-center">
-                      <p className="text-amber-700 font-medium">Ei avoimia ilmoittautumisia</p>
-                      <p className="text-amber-500 text-sm mt-1">Ilmoittautuminen ei ole vielä alkanut tai on päättynyt</p>
-                    </div>
-                  )}
-
-                  {closedCups.length > 0 && (
-                    <>
-                      <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2 mt-4 px-1">
-                        Tulossa
-                      </h2>
-                      {closedCups.map(cup => (
-                        <div
-                          key={cup.id}
-                          className="w-full flex items-center gap-3 p-4 mb-2 rounded-xl border border-gray-200 bg-gray-50 opacity-60 text-left"
-                        >
-                          <div className="w-12 h-12 rounded-lg flex flex-col items-center justify-center shrink-0 bg-gray-100 text-gray-400">
-                            <span className="text-xs font-medium leading-none">
-                              {new Date(cup.starts).toLocaleDateString('fi-FI', { weekday: 'short' })}
-                            </span>
-                            <span className="text-lg font-bold leading-tight">
-                              {new Date(cup.starts).getDate()}
-                            </span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-semibold text-gray-500 truncate">{cup.name}</div>
-                            <div className="text-xs text-gray-400 mt-0.5">{formatDateShort(cup.starts)}</div>
-                          </div>
-                          <span className={`inline-block px-2 py-1 rounded-lg text-xs font-medium shrink-0 ${
-                            cup.full ? 'bg-red-100 text-red-700' : 'bg-gray-200 text-gray-500'
-                          }`}>
-                            {cup.full ? 'TÄYNNÄ' : 'Ei auki'}
-                          </span>
-                        </div>
-                      ))}
-                    </>
-                  )}
-                </>
-              )
-            })()}
-          </div>
+          <CupList cups={cups} onSelect={handleSelectCup} loading={loading} />
         )}
 
         {/* STEP: Squad selection */}

@@ -148,6 +148,18 @@
 | RSEC10 | **Helmet + CORS**: Registration endpoints inherit the same Helmet security headers and CORS policy as the scoring application. CSP disabled for Tailwind inline styles (accepted trade-off) | ✅ |
 | RSEC11 | **Rate limit logging**: When an IP is rate-limited (429), log the IP, limiter name, and timestamp. Dump all currently throttled IPs with first-throttled time. Auto-cleanup after 15 min. Applied to all 4 rate limiters | ✅ |
 
+## Release 5.0 - Match Management & UI Consolidation
+
+### Functional Requirements
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| MG1 | **Match Management UI** (`#/manage`): Password-protected (SSI login). After login, pick an active Kupittaa cup. Shows consolidated squadding overview — per-squad cross-match table, unsquadded shooters, CUP/match membership mismatches | ✅ |
+| MG2 | **Cup list sorting**: Sort cups ascending by proximity to today (closest first). Applies to all cup lists (register, manage, scoring) | ⬚ Pending |
+| MG3 | **Scoring route change**: Move scoring app from `#/` to `#/scoring`. Root URL (`#/`) becomes a front page with static links to the three main features: Scoring, Registration, Management | ⬚ Pending |
+| MG4 | **Shared UI components**: Extract and share common components (LoginScreen, CupList, visual design) between scoring, registration, and management features | ⬚ Pending |
+| MG5 | **Manage cup list**: Reuse the same CUP list component as Registration. Only change text from "ilmoittautuminen" to "hallitse" | ⬚ Pending |
+
 ## Release 2.1 - Data Integrity (Planned)
 
 | # | Requirement | Status |
@@ -162,6 +174,7 @@
 - **Release 2.0** (WordPress Integration): 9 requirements — 6 ✅, 1 on hold (41), 2 pending (39, 42)
 - **Release 3.0** (Scoring Application): 21 requirements — 20 ✅, 1 pending (SEC11)
 - **Release 4.0** (Registration Frontend): 25 requirements — 25 ✅
+- **Release 5.0** (Match Management & UI Consolidation): 5 requirements — 1 ✅, 4 pending (MG2–MG5)
 - **Release 2.1** (Data Integrity): 2 requirements — 2 pending (47, 48)
 
 ## Configuration Files

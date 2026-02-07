@@ -1,26 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import * as api from '../api'
+import * as regApi from '../register-api'
 import { encryptData, decryptData } from '../crypto'
 import LoginScreen from './LoginScreen'
+import { AppHeader, ErrorBanner, Spinner, CupList } from './shared'
 
 const LS_MANAGE_CREDS = 'ssi_manage_credentials'
-
-function formatDate(isoDate) {
-  if (!isoDate) return ''
-  const d = new Date(isoDate)
-  return d.toLocaleDateString('fi-FI', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-}
-
-function BackButton({ label, onClick }) {
-  return (
-    <button onClick={onClick} className="flex items-center gap-1 px-4 pt-2 text-blue-200 text-sm active:text-white">
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-      </svg>
-      {label}
-    </button>
-  )
-}
 
 export default function ManagePage() {
   const [authed, setAuthed] = useState(false)
@@ -28,8 +13,7 @@ export default function ManagePage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  // Cup search & selection
-  const [searchText, setSearchText] = useState('Kupittaa')
+  // Cup selection
   const [cups, setCups] = useState([])
   const [selectedCup, setSelectedCup] = useState(null)
 
@@ -63,27 +47,20 @@ export default function ManagePage() {
     setView('cups')
   }
 
-  // Search cups
-  const handleSearch = useCallback(async () => {
-    if (!searchText.trim()) return
-    setLoading(true)
-    setError(null)
-    try {
-      const results = await api.searchCups(searchText)
-      // Filter to active cups only, sort by date descending
-      const filtered = results
-        .filter(c => c.status === 'on')
-        .sort((a, b) => new Date(b.starts) - new Date(a.starts))
-      setCups(filtered)
-    } catch (err) {
-      setError(err.message)
-    }
-    setLoading(false)
-  }, [searchText])
-
-  // Auto-search on view change
+  // Load cups from registration API (same data as Register page)
   useEffect(() => {
-    if (view === 'cups' && cups.length === 0) handleSearch()
+    if (view !== 'cups' || cups.length > 0) return
+    const loadCups = async () => {
+      setLoading(true)
+      try {
+        const cupList = await regApi.getCups()
+        setCups(cupList)
+      } catch (err) {
+        setError(err.message)
+      }
+      setLoading(false)
+    }
+    loadCups()
   }, [view]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load management data for selected cup
@@ -107,10 +84,7 @@ export default function ManagePage() {
   if (!authed) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white px-4 py-3">
-          <h1 className="text-xl font-bold">Kupittaa Cup — Hallinta</h1>
-          <p className="text-blue-200 text-sm mt-0.5">Kirjaudu SSI-tunnuksilla</p>
-        </div>
+        <AppHeader title="Kupittaa Cup — Hallinta" subtitle="Kirjaudu SSI-tunnuksilla" />
         <LoginScreen onLogin={handleLogin} />
       </div>
     )
@@ -118,82 +92,26 @@ export default function ManagePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white">
-        {view === 'overview' && (
-          <BackButton label="Cupit" onClick={() => setView('cups')} />
-        )}
-        <div className="px-4 py-3">
-          <h1 className="text-xl font-bold">Kupittaa Cup — Hallinta</h1>
-          {view === 'overview' && selectedCup && (
-            <p className="text-blue-200 text-sm mt-0.5">{selectedCup.name}</p>
-          )}
-        </div>
-      </div>
+      <AppHeader
+        title="Kupittaa Cup — Hallinta"
+        subtitle={view === 'overview' && selectedCup ? selectedCup.name : undefined}
+        backLabel={view === 'overview' ? 'Cupit' : undefined}
+        onBack={view === 'overview' ? () => setView('cups') : undefined}
+      />
 
-      {/* Error */}
-      {error && (
-        <div className="mx-3 mt-3">
-          <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
-            <p className="text-red-700 text-sm font-medium">{error}</p>
-          </div>
-        </div>
-      )}
+      <ErrorBanner error={error} />
+      {loading && <Spinner />}
 
-      {/* Loading */}
-      {loading && (
-        <div className="flex justify-center py-8">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-        </div>
-      )}
-
-      {/* Cup picker */}
+      {/* Cup picker — same as Registration */}
       {view === 'cups' && !loading && (
         <div className="p-3">
-          <div className="flex gap-2 mb-3">
-            <input
-              type="text"
-              value={searchText}
-              onChange={e => setSearchText(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
-              placeholder="Hae cupia..."
-              className="flex-1 border border-gray-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              onClick={handleSearch}
-              className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium active:bg-blue-700"
-            >
-              Hae
-            </button>
-          </div>
-
-          {cups.length === 0 && (
-            <p className="text-gray-400 text-center text-sm py-4">Ei hakutuloksia</p>
-          )}
-
-          {cups.map(cup => (
-            <button
-              key={cup.id}
-              onClick={() => handleSelectCup(cup)}
-              className="w-full flex items-center gap-3 p-4 mb-2 rounded-xl border bg-white border-gray-200 active:bg-blue-50 text-left"
-            >
-              <div className="w-12 h-12 rounded-lg flex flex-col items-center justify-center shrink-0 bg-blue-100 text-blue-700">
-                <span className="text-xs font-medium leading-none">
-                  {new Date(cup.starts).toLocaleDateString('fi-FI', { weekday: 'short' })}
-                </span>
-                <span className="text-lg font-bold leading-tight">
-                  {new Date(cup.starts).getDate()}
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-gray-800 truncate">{cup.name}</div>
-                <div className="text-xs text-gray-400 mt-0.5">{formatDate(cup.starts)}</div>
-              </div>
-              <svg className="w-5 h-5 text-gray-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          ))}
+          <CupList
+            cups={cups}
+            onSelect={handleSelectCup}
+            loading={loading}
+            openLabel="Hallitse"
+            emptyLabel="Ei cupeja"
+          />
         </div>
       )}
 

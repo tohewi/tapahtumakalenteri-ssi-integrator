@@ -63,6 +63,25 @@ export async function submitScore(competitorId, scores, options = {}) {
   return data
 }
 
+export async function searchMatches(search) {
+  const resp = await fetch(`${API_BASE}/matches?search=${encodeURIComponent(search)}`, { credentials: 'include' })
+  if (!resp.ok) throw new Error('Failed to search matches')
+  const data = await resp.json()
+  return data.matches || []
+}
+
+export async function getReportData(matchIds) {
+  const resp = await fetch(`${API_BASE}/report/matches`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ matchIds }),
+  })
+  const data = await resp.json()
+  if (!resp.ok || data.error) throw new Error(data.error || 'Report generation failed')
+  return data.rows || []
+}
+
 // ============================================================
 // Data transformers: SSI API → UI format
 // ============================================================
