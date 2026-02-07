@@ -6,6 +6,21 @@ export async function getCaptcha() {
   return resp.json()
 }
 
+export async function verifyCaptcha(captchaId, captchaAnswer) {
+  const resp = await fetch(`${API_BASE}/verify-captcha`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ captchaId, captchaAnswer: Number(captchaAnswer) }),
+  })
+  const data = await resp.json()
+  if (!resp.ok) {
+    const err = new Error(data.message || data.error || 'Captcha verification failed')
+    err.data = data
+    throw err
+  }
+  return data
+}
+
 export async function getCups() {
   const resp = await fetch(`${API_BASE}/cups`)
   if (!resp.ok) throw new Error('Failed to load cups')

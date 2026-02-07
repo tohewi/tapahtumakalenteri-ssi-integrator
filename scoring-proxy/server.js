@@ -558,27 +558,27 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000)
 
-// Rate limit for registration: 5 submit attempts per hour per IP
+// Rate limit for registration: 5 submit attempts per 10 min per IP
 const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
+  windowMs: 10 * 60 * 1000,
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Liian monta yritystä. Yritä uudelleen tunnin kuluttua.' },
+  message: { error: 'Liian monta yritystä. Yritä uudelleen 10 minuutin kuluttua.' },
 })
 
-// Rate limit for captcha: 30 per hour per IP (prevents enumeration)
+// Rate limit for captcha: 30 per 10 min per IP (prevents enumeration)
 const captchaLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
+  windowMs: 10 * 60 * 1000,
   max: 30,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Liian monta pyyntöä.' },
 })
 
-// Rate limit for cup/squad reads: 60 per hour per IP
+// Rate limit for cup/squad reads: 60 per 10 min per IP
 const registerReadLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
+  windowMs: 10 * 60 * 1000,
   max: 60,
   standardHeaders: true,
   legacyHeaders: false,
@@ -632,6 +632,38 @@ app.get('/api/register/captcha', captchaLimiter, (req, res) => {
   const id = crypto.randomUUID()
   captchaChallenges.set(id, { answer: a + b, created: Date.now() })
   res.json({ id, question: `${a} + ${b} = ?` })
+})
+
+// ============================================================
+// POST /api/register/verify-captcha — Verify captcha answer early
+// Returns cups list on success (combines verify + cup fetch in one call)
+// Does NOT consume the captcha — it's still needed for final submit
+// ============================================================
+app.post('/api/register/verify-captcha', registerBodyLimit, captchaLimiter, (req, res) => {
+  const { captchaId, captchaAnswer } = req.body || {}
+
+  if (typeof captchaId !== 'string' || !UUID_RE.test(captchaId)) {
+    return res.status(400).json({ error: 'Virheelliset tiedot.' })
+  }
+  if (captchaAnswer == null || !Number.isInteger(Number(captchaAnswer)) || Math.abs(Number(captchaAnswer)) > 999) {
+    return res.status(400).json({ error: 'Virheelliset tiedot.' })
+  }
+
+  const challenge = captchaChallenges.get(captchaId)
+  if (!challenge) {
+    return res.status(400).json({ error: 'Varmistus vanhentunut. Päivitä sivu ja yritä uudelleen.' })
+  }
+  if (Date.now() - challenge.created > CAPTCHA_TTL) {
+    captchaChallenges.delete(captchaId)
+    return res.status(400).json({ error: 'Varmistus vanhentunut. Päivitä sivu ja yritä uudelleen.' })
+  }
+  if (Number(captchaAnswer) !== challenge.answer) {
+    return res.status(400).json({ error: 'Väärä vastaus. Tarkista ja yritä uudelleen.' })
+  }
+
+  // Mark as verified (for audit), but don't delete — still needed at submit time
+  challenge.verified = true
+  res.json({ ok: true })
 })
 
 // ============================================================

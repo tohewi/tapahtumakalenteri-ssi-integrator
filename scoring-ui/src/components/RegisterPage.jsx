@@ -75,21 +75,24 @@ export default function RegisterPage() {
     }
   }
 
-  // Verify captcha and load cups (or skip ahead if returning from captcha expiry)
+  // Verify captcha server-side, then load cups (or skip ahead if returning from captcha expiry)
   const handleCaptchaSubmit = useCallback(async (e) => {
     e.preventDefault()
     if (!captchaAnswer.trim()) return
     setError(null)
     setLoading(true)
 
-    // If we already have selections (returning from captcha expiry), skip straight to email
-    if (selectedCup && selectedSquad && email) {
-      setStep('email')
-      setLoading(false)
-      return
-    }
-
     try {
+      // Verify captcha answer server-side BEFORE proceeding
+      await regApi.verifyCaptcha(captcha.id, captchaAnswer)
+
+      // If we already have selections (returning from captcha expiry), skip straight to email
+      if (selectedCup && selectedSquad && email) {
+        setStep('email')
+        setLoading(false)
+        return
+      }
+
       const cupList = await regApi.getCups()
       if (cupList.length === 0) {
         setError('Ei avoimia ilmoittautumisia tällä hetkellä.')
@@ -99,10 +102,10 @@ export default function RegisterPage() {
       setCups(cupList)
       setStep('cups')
     } catch (err) {
-      setError(err.message)
+      setError(err.data?.error || err.message)
     }
     setLoading(false)
-  }, [captchaAnswer, selectedCup, selectedSquad, email])
+  }, [captcha, captchaAnswer, selectedCup, selectedSquad, email])
 
   // Select cup and load squads
   const handleSelectCup = useCallback(async (cup) => {
