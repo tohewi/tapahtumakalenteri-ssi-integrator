@@ -153,12 +153,6 @@ export default function RegisterPage() {
           registerUrl: err.data.registerUrl,
         })
         setStep('result')
-      } else if (err.data?.error === 'already_registered') {
-        setResult({
-          success: false,
-          message: err.data.message,
-        })
-        setStep('result')
       } else if (err.message?.includes('vanhentunut') || err.data?.error?.includes('vanhentunut')) {
         // Captcha expired — go back to captcha step, preserve selections, auto-load new captcha
         setCaptchaAnswer('')
@@ -496,7 +490,9 @@ export default function RegisterPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
-                  <h2 className="text-xl font-bold text-green-700">Ilmoittautuminen onnistui!</h2>
+                  <h2 className="text-xl font-bold text-green-700">
+                    {result.isReRegistration ? 'Squad päivitetty!' : 'Ilmoittautuminen onnistui!'}
+                  </h2>
                 </div>
                 <p className="text-gray-600 text-center text-sm mb-4">{result.message}</p>
                 <div className="bg-green-50 rounded-xl p-3 text-sm space-y-1">

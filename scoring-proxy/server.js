@@ -847,18 +847,14 @@ app.post('/api/register/submit', registerBodyLimit, registerLimiter, async (req,
     if (!IS_PROD) console.log(`[register] Adding ${email} to cup ${cupId}`)
     const addResult = await ssiSearchAndAddParticipant(136, cupId, email, admin.cookies)
 
+    const isReRegistration = addResult.success && addResult.message === 'Already registered'
+
     if (!addResult.success) {
       if (addResult.message === 'user_not_found') {
         return res.status(404).json({
           error: 'user_not_found',
           message: 'Sähköpostiosoitetta ei löydy SSI-järjestelmästä. Rekisteröidy ensin SSI:hin.',
           registerUrl: 'https://shootnscoreit.com/register/',
-        })
-      }
-      if (addResult.message === 'Already registered') {
-        return res.status(409).json({
-          error: 'already_registered',
-          message: 'Olet jo ilmoittautunut tähän cupiin.',
         })
       }
       return res.status(400).json({ error: addResult.message })
@@ -868,7 +864,7 @@ app.post('/api/register/submit', registerBodyLimit, registerLimiter, async (req,
     //    _handleRegisterResponse extracts it from the shooter select element.
     //    Fallback to email prefix if not available.
     const shooterName = addResult.shooterName || email.split('@')[0].replace(/[+._-]/g, ' ')
-    if (!IS_PROD) console.log(`[register] Participant added (${addResult.message}), shooter: "${shooterName}"`)
+    if (!IS_PROD) console.log(`[register] ${isReRegistration ? 'Re-registration' : 'New registration'} (${addResult.message}), shooter: "${shooterName}"`)
 
     // 4. Approve the CUP participant (default state is Pending)
     //    Switch to streaming (NDJSON) so the frontend can show progress
@@ -925,9 +921,10 @@ app.post('/api/register/submit', registerBodyLimit, registerLimiter, async (req,
     sendProgress({
       type: 'result',
       success: allSuccess,
+      isReRegistration,
       message: allSuccess
-        ? 'Ilmoittautuminen ja squadiin asettelu onnistui!'
-        : `Ilmoittautuminen onnistui. Squadiin asettelu: ${squadded}/${total} osakilpailua.`,
+        ? (isReRegistration ? 'Squad päivitetty!' : 'Ilmoittautuminen ja squadiin asettelu onnistui!')
+        : `${isReRegistration ? 'Squad-päivitys' : 'Ilmoittautuminen'} onnistui osittain. Squadiin asettelu: ${squadded}/${total} osakilpailua.`,
       ...(IS_PROD ? {} : { details: squadResults }),
     })
     res.end()
