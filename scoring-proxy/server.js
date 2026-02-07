@@ -8,6 +8,7 @@ import path from 'path'
 import { existsSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { ssiGraphQL, ssiLogin, ssiSubmitScore, ssiGetScoringPage, ssiRefreshJWT, ssiSearchAndAddParticipant, ssiSetParticipantSquad, ssiFindCompetitorInMatch, ssiFindAndApproveCupParticipant } from './lib/ssi-client.js'
+import { sendRegistrationConfirmation } from './lib/email.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -877,7 +878,7 @@ app.post('/api/register/submit', registerBodyLimit, registerLimiter, async (req,
             component_matches {
               number included
               match {
-                id
+                id name
                 squads {
                   id number comment
                   ... on NordicSquadNode {
@@ -964,14 +965,20 @@ app.post('/api/register/submit', registerBodyLimit, registerLimiter, async (req,
       const participantId = await ssiFindCompetitorInMatch(matchId, shooterName, admin.cookies)
       if (!participantId) {
         if (!IS_PROD) console.log(`[register] Competitor not found in match ${matchId}`)
-        squadResults.push({ matchId, success: false, message: 'Competitor not found in match' })
+        squadResults.push({ matchId, matchName: cm.match.name, success: false, message: 'Competitor not found in match' })
         continue
       }
 
       // 5c. Assign squad + set status to approved via edit form
       if (!IS_PROD) console.log(`[register] Assigning squad ${squadNumber} to participant ${participantId} in match ${matchId}`)
       const editResult = await ssiSetParticipantSquad(participantId, squadNumber, admin.cookies)
-      squadResults.push({ matchId, ...editResult })
+
+      // Find squad label (comment) for the email
+      const matchSquads = cm.match.squads || []
+      const assignedSquad = matchSquads.find(s => s.number === squadNumber)
+      const squadLabel = assignedSquad?.comment || ''
+
+      squadResults.push({ matchId, matchName: cm.match.name, squadLabel, ...editResult })
     }
 
     const allSuccess = squadResults.every(r => r.success)
@@ -988,6 +995,20 @@ app.post('/api/register/submit', registerBodyLimit, registerLimiter, async (req,
         : `${isReRegistration ? 'Squad-päivitys' : 'Ilmoittautuminen'} onnistui osittain. Squadiin asettelu: ${squadded}/${total} osakilpailua.`,
       ...(IS_PROD ? {} : { details: squadResults }),
     })
+
+    // 6. Send confirmation email (non-blocking — don't fail registration if email fails)
+    if (allSuccess || squadded > 0) {
+      const matchSquads = squadResults
+        .filter(r => r.success)
+        .map(r => ({ matchName: r.matchName, squadNumber, squadLabel: r.squadLabel || '' }))
+
+      sendRegistrationConfirmation(email, shooterName, cupData.event.name, matchSquads)
+        .then(result => {
+          if (!result.success) console.warn(`[register] Confirmation email failed: ${result.error}`)
+        })
+        .catch(err => console.error(`[register] Email error: ${err.message}`))
+    }
+
     res.end()
   } catch (err) {
     console.error('[register] Registration failed:', err.message)
