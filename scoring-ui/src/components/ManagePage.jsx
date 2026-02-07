@@ -319,7 +319,7 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                 <div key={i} className="bg-white rounded-xl border border-red-200 p-3 flex items-center justify-between">
                   <div>
                     <div className="font-medium text-gray-800 text-sm">{s.name}</div>
-                    <div className="text-xs text-red-500 mt-0.5">Puuttuu kaikista osakilpailuista</div>
+                    <div className="text-xs text-red-500 mt-0.5">Osakilpailuissa mutta ei squadissa</div>
                   </div>
                   <ActionButton
                     label="→ S?"

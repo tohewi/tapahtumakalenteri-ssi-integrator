@@ -546,6 +546,10 @@ app.get('/api/manage/cup/:id', requireAuth, async (req, res) => {
               number included
               match {
                 id name
+                competitors {
+                  id status
+                  first_name last_name
+                }
                 squads {
                   id number comment
                   ... on NordicSquadNode {
@@ -572,7 +576,7 @@ app.get('/api/manage/cup/:id', requireAuth, async (req, res) => {
       .filter(cm => cm.included && cm.match)
       .sort((a, b) => a.number - b.number)
 
-    // Build match info with squads and competitor names
+    // Build match info with squads, match-level competitors, and squad-level competitors
     const matches = componentMatches.map(cm => {
       const m = cm.match
       const squads = (m.squads || []).map(sq => ({
@@ -584,20 +588,36 @@ app.get('/api/manage/cup/:id', requireAuth, async (req, res) => {
           .map(c => ({ id: c.id, name: `${c.first_name} ${c.last_name}`.trim() })),
       }))
 
-      // Unsquadded = approved competitors not in any squad
-      // (competitors with no squad show up outside squad lists — fetch from match level if available)
-      // For now, we derive this from squad data
+      // All approved match-level participants (includes both squadded and unsquadded)
+      const allParticipants = (m.competitors || [])
+        .filter(c => c.status === 'a')
+        .map(c => ({ id: c.id, name: `${c.first_name} ${c.last_name}`.trim() }))
 
       return {
         id: m.id,
         name: m.name,
         componentNumber: cm.number,
         squads,
+        allParticipants,
       }
     })
 
-    // Collect all shooters across all matches (union by name, track which matches they're in)
+    // Collect all shooters across all matches
+    // Track: which matches they're IN (as participant) and which squad (if any)
     const shooterMap = new Map() // name → { name, matches: { matchId: squadNumber|null } }
+
+    // First: add all match-level participants (squadNumber = null means unsquadded)
+    for (const match of matches) {
+      for (const participant of match.allParticipants) {
+        if (!shooterMap.has(participant.name)) {
+          shooterMap.set(participant.name, { name: participant.name, matches: {} })
+        }
+        // Mark as in-match but unsquadded (null)
+        shooterMap.get(participant.name).matches[match.id] = null
+      }
+    }
+
+    // Then: overlay squad assignments (overwrite null with squad number)
     for (const match of matches) {
       for (const squad of match.squads) {
         for (const shooter of squad.shooters) {
@@ -615,13 +635,13 @@ app.get('/api/manage/cup/:id', requireAuth, async (req, res) => {
       .map(c => `${c.shooter?.first_name || ''} ${c.shooter?.last_name || ''}`.trim())
       .filter(n => n.length > 0)
 
-    // Find CUP participants not in any match
-    const matchShooterNames = new Set(shooterMap.keys())
-    const cupOnly = cupParticipants.filter(n => !matchShooterNames.has(n))
+    // Find CUP participants not in ANY match (not even as unsquadded participant)
+    const matchParticipantNames = new Set(shooterMap.keys())
+    const cupOnly = cupParticipants.filter(n => !matchParticipantNames.has(n))
 
-    // Find match shooters not in CUP
+    // Find match participants not in CUP
     const cupParticipantSet = new Set(cupParticipants)
-    const matchOnly = [...matchShooterNames].filter(n => !cupParticipantSet.has(n))
+    const matchOnly = [...matchParticipantNames].filter(n => !cupParticipantSet.has(n))
 
     res.json({
       cup: { id: cup.id, name: cup.name, starts: cup.starts },
