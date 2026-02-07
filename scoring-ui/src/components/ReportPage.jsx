@@ -14,10 +14,16 @@ export default function ReportPage() {
 
   // Search
   const [searchText, setSearchText] = useState('')
-  const [matches, setMatches] = useState([])
+  const [allResults, setAllResults] = useState([]) // raw results from API
   const [searched, setSearched] = useState(false)
 
-  // Selection
+  // Client-side filters
+  const [filterType, setFilterType] = useState('all') // 'all' | 'cup' | 'match'
+  const [filterSport, setFilterSport] = useState('all') // 'all' | specific rule string
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
+
+  // Selection — always stores match IDs (for cups, the component match IDs)
   const [selected, setSelected] = useState(new Set())
 
   // Report data
@@ -50,7 +56,7 @@ export default function ReportPage() {
     setView('search')
   }
 
-  // Search matches
+  // Search — fetches all results, filtering is client-side
   const handleSearch = useCallback(async (e) => {
     if (e) e.preventDefault()
     if (!searchText.trim() || searchText.length < 2) return
@@ -58,33 +64,99 @@ export default function ReportPage() {
     setError(null)
     setSearched(false)
     try {
-      const results = await api.searchMatches(searchText)
-      setMatches(results)
+      const data = await api.searchMatches(searchText)
+      setAllResults(data)
       setSearched(true)
       setSelected(new Set())
+      setFilterType('all')
+      setFilterSport('all')
+      setFilterDateFrom('')
+      setFilterDateTo('')
     } catch (err) {
       setError(err.message)
     }
     setLoading(false)
   }, [searchText])
 
-  // Toggle single match selection
-  const toggleMatch = (id) => {
+  // Collect unique sport values from results for the filter dropdown
+  const sportOptions = [...new Set(
+    allResults.map(r => r.rule).filter(Boolean)
+  )].sort()
+
+  // Determine if an item is a cup (has component matches) or a standalone match
+  const isCup = (item) => item.componentMatches && item.componentMatches.length > 0
+
+  // Build matchId → contentType map from results
+  // For standalone matches: use item.contentType
+  // For component matches inside cups: use 91 (Nordic match, since cups are NordicSerieNode)
+  const matchContentTypeMap = new Map()
+  for (const item of allResults) {
+    if (isCup(item)) {
+      for (const cm of item.componentMatches) {
+        matchContentTypeMap.set(cm.id, 91)
+      }
+    } else {
+      matchContentTypeMap.set(item.id, item.contentType)
+    }
+  }
+
+  // Apply client-side filters
+  const filteredResults = allResults.filter(item => {
+    if (filterType === 'cup' && !isCup(item)) return false
+    if (filterType === 'match' && isCup(item)) return false
+    if (filterSport !== 'all' && item.rule !== filterSport) return false
+    if (filterDateFrom && item.starts < filterDateFrom) return false
+    if (filterDateTo && item.starts > filterDateTo + 'T23:59:59') return false
+    return true
+  })
+
+  // Get all selectable match IDs for an item
+  // For cups: use componentMatch IDs; for matches: use the event ID directly
+  const getMatchIdsForItem = (item) => {
+    if (item.componentMatches && item.componentMatches.length > 0) {
+      return item.componentMatches.map(m => m.id)
+    }
+    return [item.id]
+  }
+
+  const getAllFilteredMatchIds = useCallback(() => {
+    return filteredResults.flatMap(item => getMatchIdsForItem(item))
+  }, [filteredResults])
+
+  // Toggle a single item
+  const toggleItem = (item) => {
     setSelected(prev => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      const ids = getMatchIdsForItem(item)
+      const allSelected = ids.every(id => next.has(id))
+      if (allSelected) {
+        ids.forEach(id => next.delete(id))
+      } else {
+        ids.forEach(id => next.add(id))
+      }
       return next
     })
   }
 
-  // Select all / deselect all
+  // Select all / deselect all (operates on filtered results only)
   const toggleAll = () => {
-    if (selected.size === matches.length) {
-      setSelected(new Set())
+    const allIds = getAllFilteredMatchIds()
+    if (allIds.length > 0 && allIds.every(id => selected.has(id))) {
+      // Deselect only the filtered ones
+      setSelected(prev => {
+        const next = new Set(prev)
+        allIds.forEach(id => next.delete(id))
+        return next
+      })
     } else {
-      setSelected(new Set(matches.map(m => m.id)))
+      setSelected(prev => new Set([...prev, ...allIds]))
     }
+  }
+
+  // Check if an item is fully selected
+  const isItemSelected = (item) => {
+    const ids = getMatchIdsForItem(item)
+    return ids.length > 0 && ids.every(id => selected.has(id))
   }
 
   // Run report
@@ -93,7 +165,11 @@ export default function ReportPage() {
     setLoading(true)
     setError(null)
     try {
-      const rows = await api.getReportData([...selected])
+      const matchesForReport = [...selected].map(id => ({
+        id,
+        contentType: matchContentTypeMap.get(id) || 91,
+      }))
+      const rows = await api.getReportData(matchesForReport)
       setReportRows(rows)
       setView('report')
     } catch (err) {
@@ -151,7 +227,7 @@ export default function ReportPage() {
               type="text"
               value={searchText}
               onChange={e => setSearchText(e.target.value)}
-              placeholder="Match name, e.g. Kupittaa"
+              placeholder="Name, e.g. Kupittaa"
               className="flex-1 border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
               autoFocus
             />
@@ -164,51 +240,111 @@ export default function ReportPage() {
             </button>
           </form>
 
+          {/* Filters — shown after search */}
+          {searched && allResults.length > 0 && (
+            <>
+              <div className="flex gap-2 mb-2">
+                {/* Type filter */}
+                <div className="flex gap-1 flex-1 bg-gray-100 rounded-xl p-1">
+                  {['all', 'cup', 'match'].map(t => (
+                    <button
+                      key={t}
+                      onClick={() => setFilterType(t)}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        filterType === t ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'
+                      }`}
+                    >
+                      {t === 'all' ? 'All' : t === 'cup' ? 'Cups' : 'Matches'}
+                    </button>
+                  ))}
+                </div>
+                {/* Sport filter */}
+                {sportOptions.length > 0 && (
+                  <select
+                    value={filterSport}
+                    onChange={e => setFilterSport(e.target.value)}
+                    className="border border-gray-300 rounded-xl px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">All sports</option>
+                    {sportOptions.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <div className="flex gap-2 items-center mb-3">
+                <label className="text-xs text-gray-500 shrink-0">From</label>
+                <input
+                  type="date"
+                  value={filterDateFrom}
+                  onChange={e => setFilterDateFrom(e.target.value)}
+                  className="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <label className="text-xs text-gray-500 shrink-0">To</label>
+                <input
+                  type="date"
+                  value={filterDateTo}
+                  onChange={e => setFilterDateTo(e.target.value)}
+                  className="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </>
+          )}
+
           {/* No results */}
-          {searched && matches.length === 0 && (
+          {searched && allResults.length === 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
-              <p className="text-amber-700 font-medium">No matches found</p>
+              <p className="text-amber-700 font-medium">No events found</p>
               <p className="text-amber-500 text-sm mt-1">Try a different search term</p>
             </div>
           )}
 
-          {/* Match list with checkboxes */}
-          {matches.length > 0 && (
+          {/* Filtered but empty */}
+          {searched && allResults.length > 0 && filteredResults.length === 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+              <p className="text-amber-700 font-medium">No events match current filters</p>
+              <p className="text-amber-500 text-sm mt-1">{allResults.length} results hidden by filters</p>
+            </div>
+          )}
+
+          {/* Result list with checkboxes */}
+          {filteredResults.length > 0 && (
             <>
               {/* Select all */}
               <label className="flex items-center gap-3 px-4 py-3 mb-2 bg-gray-100 rounded-xl cursor-pointer select-none">
                 <input
                   type="checkbox"
-                  checked={selected.size === matches.length && matches.length > 0}
+                  checked={getAllFilteredMatchIds().length > 0 && getAllFilteredMatchIds().every(id => selected.has(id))}
                   onChange={toggleAll}
                   className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="text-sm font-semibold text-gray-600">
-                  Select all ({matches.length})
+                  Select all ({filteredResults.length})
                 </span>
               </label>
 
-              {matches.map(match => {
-                const isSelected = selected.has(match.id)
+              {filteredResults.map(item => {
+                const checked = isItemSelected(item)
                 return (
                   <label
-                    key={match.id}
+                    key={item.id}
                     className={`flex items-center gap-3 p-4 mb-2 rounded-xl border cursor-pointer select-none transition-colors ${
-                      isSelected
-                        ? 'border-blue-300 bg-blue-50'
-                        : 'border-gray-200 bg-white'
+                      checked ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white'
                     }`}
                   >
                     <input
                       type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleMatch(match.id)}
+                      checked={checked}
+                      onChange={() => toggleItem(item)}
                       className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-gray-800 truncate">{match.name}</div>
+                      <div className="font-semibold text-gray-800 truncate">{item.name}</div>
                       <div className="text-xs text-gray-400 mt-0.5">
-                        {formatDateShort(match.starts)}{match.cupName ? ` · ${match.cupName}` : ''}
+                        {formatDateShort(item.starts)}
+                        {isCup(item) ? ' · Cup' : ''}
+                        {item.componentMatches ? ` · ${item.componentMatches.length} matches` : ''}
+                        {item.rule ? ` · ${item.rule}` : ''}
                       </div>
                     </div>
                   </label>
