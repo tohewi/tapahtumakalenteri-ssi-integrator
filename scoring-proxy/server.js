@@ -727,7 +727,6 @@ app.get('/api/register/cup/:id', registerReadLimiter, async (req, res) => {
         event(content_type: 136, id: $id) {
           id name starts status
           max_competitors
-          number_of_prematch_competitors_registered
           ... on NordicSerieNode {
             component_matches {
               number included
@@ -785,13 +784,21 @@ app.get('/api/register/cup/:id', registerReadLimiter, async (req, res) => {
       }
     })
 
+    // Count approved competitors from first match's squads (same as cups list endpoint)
+    const approvedIds = new Set()
+    for (const sq of (firstMatch.squads || [])) {
+      for (const comp of (sq.competitors || [])) {
+        if (comp.status === 'a') approvedIds.add(comp.id)
+      }
+    }
+
     res.json({
       id: cup.id,
       name: cup.name,
       starts: cup.starts,
       status: cup.status,
       maxCompetitors: cup.max_competitors || 25,
-      registered: cup.number_of_prematch_competitors_registered || 0,
+      registered: approvedIds.size,
       squads,
     })
   } catch (err) {

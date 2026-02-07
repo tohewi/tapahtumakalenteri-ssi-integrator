@@ -92,6 +92,15 @@ Both are held in server-side variables (`jwtToken`, `sessionCookies`) for the du
 | GET | `/api/competitor/:id` | JWT | Single competitor scores |
 | POST | `/api/competitor/:id/score` | Session | Submit scores via Django formset |
 
+#### Registration API Endpoints (public, no auth)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/register/captcha` | Generate math captcha (15 min TTL) |
+| GET | `/api/register/cups` | List future cups open for registration |
+| GET | `/api/register/cup/:id` | Cup detail with squads and capacity |
+| POST | `/api/register/submit` | Register shooter to cup + squad |
+
 #### SSI Client Module (`lib/ssi-client.js`)
 
 | Function | Purpose |
@@ -178,7 +187,75 @@ When "Remember me" is checked, credentials are encrypted before `localStorage` s
 
 This prevents credentials from being trivially readable in DevTools/localStorage.
 
-### 2.4 Scoring Model
+### 2.4 SSI Data Model — Kupittaa CUP Structure
+
+Understanding the SSI content type hierarchy is critical. Kupittaa CUP uses a specific subset of SSI's event model:
+
+```
+Serie/CUP (CT=136)               ← "Kupittaa CUP 08.02.2026"
+├── CUP Participant (CT=137)     ← One per registered shooter
+│   Status: Pending → Approved   ← via toggle-status URL only
+│
+└── Component Matches (1..N)     ← linked via component_matches[]
+    ├── Match 1 (CT=91)          ← "Tarkkuus" (Precision)
+    │   └── Squads 1..3
+    │       └── Competitors (CT=93) ← status + squad assignment
+    ├── Match 2 (CT=91)          ← "Pika" (Rapid fire)
+    │   └── Squads 1..3
+    │       └── Competitors (CT=93)
+    └── Match 3 (CT=91)          ← "Kuvio" (Silhouette)
+        └── Squads 1..3
+            └── Competitors (CT=93)
+```
+
+#### Content Types
+
+| CT | Entity | Edit Form | Status Change |
+|---|---|---|---|
+| **136** | Serie / CUP | Editable | N/A (event level) |
+| **137** | CUP Participant | Edit form does NOT support status changes | **toggle-status URL only** |
+| **91** | Match | Editable | N/A (event level) |
+| **93** | Match Competitor | Edit form supports status + squad changes | `formData.set('status', 'a')` works |
+
+#### Pre-match vs Match (critical distinction)
+
+SSI distinguishes between **pre-matches** and **matches**:
+
+| Concept | SSI Term | Kupittaa Usage |
+|---|---|---|
+| **Pre-match** | Preliminary round before main competition | **Not used** — Kupittaa has no qualifying rounds |
+| **Match** | Actual competition event (CT=91) | **Used** — Tarkkuus, Pika, Kuvio are all matches |
+| `number_of_prematch_competitors_registered` | Count of shooters registered to pre-matches | **Always 0** for Kupittaa — meaningless field |
+
+**Implication**: To count registered shooters in a Kupittaa CUP, we must query the actual match competitors from squads via GraphQL, not use the `number_of_prematch_competitors_registered` field. The approved competitor count is derived by collecting unique competitor IDs with `status === 'a'` from the first component match's squads.
+
+#### CUP Participant Status Lifecycle
+
+```
+toggle-status cycle (CUP participants, CT=137):
+
+  Pending ──toggle──► Approved ──toggle──► Approved (no results) ──toggle──► Deleted ──toggle──► Pending
+     │                   │
+     │                   └── Target state. Shooter is enrolled.
+     └── Default state after registration via search-and-add.
+```
+
+**Key discovery**: The CUP participant edit form (`/event/participant/137/{id}/edit/`) silently ignores `status` field changes — the POST returns 302 (looks successful) but does not update the status. Only the toggle-status URL (`/event/participant/137/{id}/toggle-status/`) works for CUP participants.
+
+Match competitor edit forms (`/event/participant/93/{id}/edit/`) **do** support status changes via the edit form POST.
+
+#### Registration Admin Operations
+
+| Step | SSI Operation | Method |
+|---|---|---|
+| Add to CUP | `POST /event/136/{cupId}/participant-search-and-add/` | Web scraping (search by email → follow register link → POST confirmation form) |
+| Approve CUP participant | `GET /event/participant/137/{id}/toggle-status/` | Web scraping (toggle Pending → Approved) |
+| Add to Match | `POST /event/91/{matchId}/participant-search-and-add/` | Web scraping (same flow as CUP) |
+| Assign squad + approve | `POST /event/participant/93/{id}/edit/` | Web scraping (set squad + status=a in edit form) |
+
+All admin operations require SSI admin session cookies. The proxy uses a server-side singleton admin session (`getAdminSession()`) with 4-hour TTL.
+
+### 2.5 Scoring Model
 
 Nordic shooting format:
 

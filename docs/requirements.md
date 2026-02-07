@@ -127,6 +127,9 @@
 | R8 | On success, display confirmation with Cup, date, squad, and email | ⬚ In Progress |
 | R9 | Individual matches hidden from shooter — Cup enrollment auto-enrolls all matches | ⬚ In Progress |
 | R10 | Finnish language UI throughout | ⬚ In Progress |
+| R11 | **Re-registration**: If shooter is already registered in CUP, allow squad change instead of blocking. UI shows "Squad päivitetty!" for re-registration | ✅ |
+| R12 | **Registered count**: Cup list and cup detail show actual approved shooter count derived from match squad competitor data (not SSI `number_of_prematch_competitors_registered` which is for pre-matches, not applicable to Kupittaa) | ✅ |
+| R13 | **CUP approval via toggle-status**: CUP participant approval uses SSI toggle-status URL. The CUP participant edit form (CT=137) silently ignores status changes — only toggle-status works. Match competitor edit form (CT=93) does support status via edit form | ✅ |
 
 ### Registration Security Requirements
 
@@ -140,7 +143,7 @@
 | RSEC6 | **Rate limiting**: Registration submission limited to 5 attempts per IP per hour. Captcha generation limited to prevent abuse | ⬚ In Progress |
 | RSEC7 | **Admin credentials isolation**: SSI admin credentials used by registration backend are stored in server-side environment variables only, never exposed to the client. Admin session is server-side singleton, not tied to any user request | ⬚ In Progress |
 | RSEC8 | **No SSI internals leakage**: Error responses from SSI admin operations are sanitized before returning to client. Internal SSI URLs, participant IDs, squad IDs, and debug details are never returned in production responses | ⬚ In Progress |
-| RSEC9 | **Captcha anti-replay**: Each captcha challenge is single-use and time-limited (5 min TTL). Expired or already-used captchas are rejected | ⬚ In Progress |
+| RSEC9 | **Captcha anti-replay**: Each captcha challenge is single-use and time-limited (15 min TTL). Expired or already-used captchas are rejected. On expiry, UI preserves selections and auto-loads new captcha | ✅ |
 | RSEC10 | **Helmet + CORS**: Registration endpoints inherit the same Helmet security headers and CORS policy as the scoring application | ⬚ In Progress |
 
 ## Release 2.1 - Data Integrity (Planned)
@@ -153,10 +156,10 @@
 
 ## Summary
 
-- **Total Requirements**: 93
-- **Completed**: 68
+- **Total Requirements**: 97
+- **Completed**: 73
 - **On Hold**: 3 (35, 36, 41)
-- **In Progress**: 20 (R1–R10, RSEC1–RSEC10)
+- **In Progress**: 19 (R1–R10, RSEC1–RSEC8, RSEC10)
 - **Pending**: 4 (39, 42, 47–48, SEC11)
 
 ## Configuration Files
