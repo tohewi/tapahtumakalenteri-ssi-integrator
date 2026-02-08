@@ -214,7 +214,17 @@ export default function ReportPage() {
   if (!authed) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <AppHeader title="SSI Report" subtitle="Login with SSI credentials" />
+        <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white px-4 py-5">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <h1 className="text-xl font-bold">SSI Report</h1>
+              <p className="text-blue-200 text-sm mt-1">Login with SSI credentials</p>
+            </div>
+            <a href="#/" className="text-blue-200 text-sm active:text-white">
+              {fi.home}
+            </a>
+          </div>
+        </div>
         <LoginScreen onLogin={handleLogin} hideHeader />
       </div>
     )
