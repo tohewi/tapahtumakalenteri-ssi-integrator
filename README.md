@@ -85,6 +85,8 @@ node --env-file=scoring-proxy/.env scoring-proxy/server.js
 |----------|-------------|
 | [User Guide](docs/user-guide.md) | How to use the scoring and registration apps |
 | [Installation Guide](docs/installation-guide.md) | Deploy to Render with Resend email and GitHub CI |
+| **[PR Preview Deployments](docs/PR-PREVIEW-DEPLOYMENTS.md)** | **Deploy PR branches to Render for testing** |
+| [Branching Strategy](docs/BRANCHING-STRATEGY.md) | GitHub Flow branching model and release process |
 | [Release Notes](docs/RELEASE-NOTES.md) | Version history and changelog |
 | [Requirements](docs/requirements.md) | Full requirements traceability matrix |
 | [Registration Flow](docs/registration-flow.md) | Backend sequence diagrams and SSI state machine |
