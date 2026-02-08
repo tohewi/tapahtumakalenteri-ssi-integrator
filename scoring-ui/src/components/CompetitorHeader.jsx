@@ -16,7 +16,7 @@ export default function CompetitorHeader({ competitor, grandTotal, totalHits }) 
       </div>
       {competitor.onDeck && (
         <div className="mt-2 bg-blue-800/50 rounded-lg px-3 py-1.5 text-sm flex items-center justify-between">
-          <span className="text-blue-200">On deck:</span>
+          <span className="text-blue-200">{fi.onDeck}</span>
           <span className="font-medium">{competitor.onDeck.number}. {competitor.onDeck.name}</span>
         </div>
       )}
