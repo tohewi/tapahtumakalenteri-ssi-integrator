@@ -1,6 +1,6 @@
 {
-  "name": "SSI Scoring",
-  "short_name": "SSI Score",
+  "name": "SSI Tools",
+  "short_name": "SSI Tools",
   "description": "Mobile scoring app for ShootNScoreIt competitions",
   "start_url": "/",
   "display": "standalone",
