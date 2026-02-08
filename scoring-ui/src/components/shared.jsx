@@ -12,6 +12,18 @@ export function formatDateShort(isoDate) {
   return d.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric', year: 'numeric' })
 }
 
+export function isToday(isoDate) {
+  if (!isoDate) return false
+  const d = new Date(isoDate).toISOString().split('T')[0]
+  const today = new Date().toISOString().split('T')[0]
+  return d === today
+}
+
+export function isFuture(isoDate) {
+  if (!isoDate) return false
+  return new Date(isoDate) > new Date()
+}
+
 export function BackButton({ label, onClick }) {
   return (
     <button
@@ -70,8 +82,6 @@ export function Spinner() {
  * @param {string} props.emptyLabel - shown when no open cups (default: "Ei avoimia ilmoittautumisia")
  */
 export function CupList({ cups, onSelect, loading, openLabel = 'Ilmoittautuminen auki', emptyLabel = 'Ei avoimia ilmoittautumisia' }) {
-  const today = new Date().toISOString().split('T')[0]
-
   // Sort ascending by proximity to today (closest first)
   const sorted = [...cups].sort((a, b) => {
     const da = Math.abs(new Date(a.starts).getTime() - Date.now())
@@ -91,20 +101,20 @@ export function CupList({ cups, onSelect, loading, openLabel = 'Ilmoittautuminen
             {openLabel}
           </h2>
           {openCups.map(cup => {
-            const isToday = cup.starts?.split('T')[0] === today
+            const cupIsToday = isToday(cup.starts)
             return (
               <button
                 key={cup.id}
                 onClick={() => onSelect(cup)}
                 disabled={loading}
                 className={`w-full flex items-center gap-3 p-4 mb-2 rounded-xl border transition-colors text-left ${
-                  isToday
+                  cupIsToday
                     ? 'border-green-300 bg-white active:bg-green-50'
                     : 'bg-white border-gray-200 active:bg-blue-50'
                 }`}
               >
                 <div className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center shrink-0 ${
-                  isToday ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+                  cupIsToday ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
                 }`}>
                   <span className="text-xs font-medium leading-none">
                     {new Date(cup.starts).toLocaleDateString('fi-FI', { weekday: 'short' })}

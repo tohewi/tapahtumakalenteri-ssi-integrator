@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { formatDateShort } from './shared'
+import { formatDateShort, isToday, isFuture } from './shared'
 
 export default function CupSearch({ onSelectCup, loading, onLogout }) {
   const [search, setSearch] = useState('')
@@ -25,18 +25,6 @@ export default function CupSearch({ onSelectCup, loading, onLogout }) {
       setSearching(false)
     }
   }, [search])
-
-  const isToday = (isoStr) => {
-    if (!isoStr) return false
-    const d = new Date(isoStr).toISOString().split('T')[0]
-    const today = new Date().toISOString().split('T')[0]
-    return d === today
-  }
-
-  const isFuture = (isoStr) => {
-    if (!isoStr) return false
-    return new Date(isoStr) > new Date()
-  }
 
   return (
     <div className="min-h-screen bg-gray-50">
