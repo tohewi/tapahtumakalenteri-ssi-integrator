@@ -1,4 +1,4 @@
-import { SSI_BASE_URL_URL, SSI_GRAPHQL } from './constants.js'
+import { SSI_BASE_URL, SSI_GRAPHQL } from './constants.js'
 
 // ============================================================
 // GraphQL client (JWT auth for reads)

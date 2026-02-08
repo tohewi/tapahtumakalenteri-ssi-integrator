@@ -305,41 +305,6 @@ const registerReadLimiter = rateLimit({
 const registerBodyLimit = express.json({ limit: '1kb' })
 
 // ============================================================
-// Registration: Input validation helpers (RSEC3, RSEC5)
-// ============================================================
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const MAX_EMAIL_LEN = 254
-
-function validateRegistrationInput({ cupId, squadNumber, email, captchaId, captchaAnswer }) {
-  const errors = []
-
-  // cupId: must be a string of digits (SSI event ID)
-  if (typeof cupId !== 'string' && typeof cupId !== 'number') errors.push('cupId: required')
-  else if (!/^\d{1,10}$/.test(String(cupId))) errors.push('cupId: invalid format')
-
-  // squadNumber: small positive integer (1-99)
-  if (squadNumber == null) errors.push('squadNumber: required')
-  else if (!Number.isInteger(Number(squadNumber)) || Number(squadNumber) < 1 || Number(squadNumber) > 99) errors.push('squadNumber: invalid')
-
-  // email: valid format, max 254 chars
-  if (typeof email !== 'string') errors.push('email: required')
-  else if (email.length > MAX_EMAIL_LEN) errors.push('email: too long')
-  else if (!EMAIL_RE.test(email)) errors.push('email: invalid format')
-
-  // captchaId: UUID
-  if (typeof captchaId !== 'string') errors.push('captchaId: required')
-  else if (!UUID_RE.test(captchaId)) errors.push('captchaId: invalid format')
-
-  // captchaAnswer: small integer (-999 to 999)
-  if (captchaAnswer == null) errors.push('captchaAnswer: required')
-  else if (!Number.isInteger(Number(captchaAnswer)) || Math.abs(Number(captchaAnswer)) > 999) errors.push('captchaAnswer: invalid')
-
-  return errors
-}
-
-// ============================================================
 // Mount route modules
 // ============================================================
 
