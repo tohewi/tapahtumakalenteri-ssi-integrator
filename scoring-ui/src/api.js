@@ -195,8 +195,8 @@ export function transformMatchListItem(ssiMatch) {
     type: 'RESUL Nordic',
     date: ssiMatch.starts ? ssiMatch.starts.split('T')[0] : new Date().toISOString().split('T')[0],
     status: ssiMatch.status,
-    squads: [], // placeholder — MatchPicker shows count, so use a fake array
-    squadCount: 0, // real count unknown until match is loaded
+    squads: [], // squad details are omitted in the list view; load via transformMatch if needed
+    squadCount: 0, // placeholder; actual squad count can be set when full match data is loaded
   }
 }
 
