@@ -205,7 +205,7 @@ export function buildScoresFromSSI(shooter, seriesCount = 6) {
   const scores = {}
   for (let i = 0; i < seriesCount; i++) {
     const sKey = `s${i + 1}`
-    scores[i] = parseStringScore(shooter.ssiScores?.[sKey])
+    scores[i] = parseStringScore(shooter?.ssiScores?.[sKey])
   }
   return scores
 }

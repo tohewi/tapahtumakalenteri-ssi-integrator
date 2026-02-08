@@ -49,6 +49,77 @@ describe('parseStringScore', () => {
     expect(result['10']).toBe(0)
     expect(result.M).toBe(0)
   })
+
+  // Edge cases
+  it('handles empty string', () => {
+    const result = parseStringScore('')
+    expect(result).toEqual({ X: 0, '10': 0, '9': 0, '8': 0, '7': 0, '6': 0, '5': 0, '4': 0, '3': 0, '2': 0, '1': 0, M: 0 })
+  })
+
+  it('handles undefined input', () => {
+    const result = parseStringScore(undefined)
+    expect(result).toEqual({ X: 0, '10': 0, '9': 0, '8': 0, '7': 0, '6': 0, '5': 0, '4': 0, '3': 0, '2': 0, '1': 0, M: 0 })
+  })
+
+  it('handles non-numeric segments by converting to NaN then 0', () => {
+    // Number('abc') returns NaN, and NaN || 0 returns 0
+    const result = parseStringScore('1,abc,3,4,5,6,7,8,9,10,11,12,13')
+    expect(result.X).toBe(1)
+    expect(result['10']).toBe(0) // NaN becomes 0 due to || 0
+    expect(result['9']).toBe(3)
+  })
+
+  it('handles partial string (fewer than 13 values)', () => {
+    const result = parseStringScore('1,2,3')
+    expect(result.X).toBe(1)
+    expect(result['10']).toBe(2)
+    expect(result['9']).toBe(3)
+    expect(result['8']).toBe(0) // Missing values default to 0
+    expect(result['7']).toBe(0)
+    expect(result.M).toBe(0)
+  })
+
+  it('handles extra values (more than 13 values)', () => {
+    const result = parseStringScore('1,2,3,4,5,6,7,8,9,10,11,12,13,14,15')
+    expect(result.X).toBe(1)
+    expect(result['10']).toBe(2)
+    expect(result['9']).toBe(3)
+    expect(result.M).toBe(12)
+    // Extra values are ignored
+  })
+
+  it('handles string with whitespace (trimmed by Number())', () => {
+    const result = parseStringScore(' 1 , 2 , 3 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 5 ')
+    expect(result.X).toBe(1)
+    expect(result['10']).toBe(2)
+    expect(result['9']).toBe(3)
+  })
+
+  it('handles negative numbers', () => {
+    const result = parseStringScore('-1,2,3,0,0,0,0,0,0,0,0,0,5')
+    expect(result.X).toBe(-1) // Negative values are preserved
+    expect(result['10']).toBe(2)
+  })
+
+  it('handles floating point numbers', () => {
+    const result = parseStringScore('1.5,2.7,3.2,0,0,0,0,0,0,0,0,0,5')
+    expect(result.X).toBe(1.5)
+    expect(result['10']).toBe(2.7)
+    expect(result['9']).toBe(3.2)
+  })
+
+  it('handles single value', () => {
+    const result = parseStringScore('5')
+    expect(result.X).toBe(5)
+    expect(result['10']).toBe(0)
+    expect(result.M).toBe(0)
+  })
+
+  it('handles all NaN values', () => {
+    const result = parseStringScore('a,b,c,d,e,f,g,h,i,j,k,l,m')
+    // All become 0 due to NaN || 0
+    expect(result).toEqual({ X: 0, '10': 0, '9': 0, '8': 0, '7': 0, '6': 0, '5': 0, '4': 0, '3': 0, '2': 0, '1': 0, M: 0 })
+  })
 })
 
 describe('transformMatch', () => {
@@ -154,6 +225,156 @@ describe('transformMatch', () => {
     const result = transformMatch(noStarts)
     expect(result.date).toBe(new Date().toISOString().split('T')[0])
   })
+
+  // Edge cases
+  it('handles undefined input', () => {
+    expect(transformMatch(undefined)).toBeNull()
+  })
+
+  it('handles empty object', () => {
+    const result = transformMatch({})
+    expect(result.id).toBeNaN() // Number(undefined)
+    expect(result.name).toBeUndefined()
+    expect(result.type).toBe('RESUL Nordic')
+    expect(result.status).toBeUndefined()
+    expect(result.numberOfStrings).toBe(6) // Default value
+    expect(result.roundsPerString).toBe(5) // Default value
+    expect(result.squads).toEqual([])
+  })
+
+  it('handles match with empty squads array', () => {
+    const emptySquads = { ...ssiMatch, squads: [] }
+    const result = transformMatch(emptySquads)
+    expect(result.squads).toEqual([])
+  })
+
+  it('handles match with null squads', () => {
+    const nullSquads = { ...ssiMatch, squads: null }
+    const result = transformMatch(nullSquads)
+    expect(result.squads).toEqual([])
+  })
+
+  it('handles squad with null competitors array', () => {
+    const noCompetitors = { ...ssiMatch, squads: [{ id: '999', number: 1, competitors: null }] }
+    const result = transformMatch(noCompetitors)
+    expect(result.squads[0].shooters).toEqual([])
+  })
+
+  it('handles squad with empty competitors array', () => {
+    const emptyCompetitors = { ...ssiMatch, squads: [{ id: '999', number: 1, competitors: [] }] }
+    const result = transformMatch(emptyCompetitors)
+    expect(result.squads[0].shooters).toEqual([])
+    expect(result.squads[0].maxShooters).toBe(0)
+  })
+
+  it('handles competitor with missing optional fields', () => {
+    const minimalCompetitor = {
+      ...ssiMatch,
+      squads: [{
+        id: '999',
+        competitors: [{
+          id: '1',
+          first_name: 'John',
+          last_name: 'Doe',
+          status: 'a',
+        }],
+      }],
+    }
+    const result = transformMatch(minimalCompetitor)
+    const shooter = result.squads[0].shooters[0]
+    expect(shooter.number).toBe(0)
+    expect(shooter.division).toBe('')
+    expect(shooter.totPoints).toBe(0)
+    expect(shooter.totHits).toBe(0)
+    expect(shooter.isVerified).toBe(false)
+    expect(shooter.isScoringStarted).toBe(false)
+  })
+
+  it('handles competitor with only weapon_group in division', () => {
+    const weaponOnly = {
+      ...ssiMatch,
+      squads: [{
+        id: '999',
+        competitors: [{
+          id: '1',
+          first_name: 'John',
+          last_name: 'Doe',
+          status: 'a',
+          weapon_group: 'Rifle',
+          category: null,
+          classification: null,
+        }],
+      }],
+    }
+    const result = transformMatch(weaponOnly)
+    expect(result.squads[0].shooters[0].division).toBe('Rifle')
+  })
+
+  it('handles competitor with all division fields', () => {
+    const allFields = {
+      ...ssiMatch,
+      squads: [{
+        id: '999',
+        competitors: [{
+          id: '1',
+          first_name: 'John',
+          last_name: 'Doe',
+          status: 'a',
+          weapon_group: 'Rifle',
+          category: 'Open',
+          classification: 'A',
+        }],
+      }],
+    }
+    const result = transformMatch(allFields)
+    expect(result.squads[0].shooters[0].division).toBe('Rifle · Open · A')
+  })
+
+  it('handles match with string id', () => {
+    const stringId = { ...ssiMatch, id: '12345' }
+    const result = transformMatch(stringId)
+    expect(result.id).toBe(12345)
+    expect(typeof result.id).toBe('number')
+  })
+
+  it('handles match with number_of_strings missing', () => {
+    const noStrings = { ...ssiMatch, number_of_strings: undefined }
+    const result = transformMatch(noStrings)
+    expect(result.numberOfStrings).toBe(6) // Default value
+  })
+
+  it('handles match with number_of_rounds_per_string missing', () => {
+    const noRounds = { ...ssiMatch, number_of_rounds_per_string: undefined }
+    const result = transformMatch(noRounds)
+    expect(result.roundsPerString).toBe(5) // Default value
+  })
+
+  it('handles squad with missing comment', () => {
+    const noComment = {
+      ...ssiMatch,
+      squads: [{ ...ssiMatch.squads[0], comment: undefined }],
+    }
+    const result = transformMatch(noComment)
+    expect(result.squads[0].comment).toBe('')
+  })
+
+  it('handles multiple competitor statuses correctly', () => {
+    const multiStatus = {
+      ...ssiMatch,
+      squads: [{
+        id: '999',
+        competitors: [
+          { id: '1', first_name: 'A', last_name: 'Active', status: 'a' },
+          { id: '2', first_name: 'D', last_name: 'Declined', status: 'd' },
+          { id: '3', first_name: 'P', last_name: 'Pending', status: 'p' },
+          { id: '4', first_name: 'W', last_name: 'Withdrawn', status: 'w' },
+        ],
+      }],
+    }
+    const result = transformMatch(multiStatus)
+    expect(result.squads[0].shooters).toHaveLength(1)
+    expect(result.squads[0].shooters[0].name).toBe('A Active')
+  })
 })
 
 describe('transformMatchListItem', () => {
@@ -207,6 +428,95 @@ describe('buildScoresFromSSI', () => {
     const shooter = { ssiScores: {} }
     const scores = buildScoresFromSSI(shooter, 3)
     expect(Object.keys(scores)).toHaveLength(3)
+  })
+
+  // Edge cases
+  it('handles null shooter object', () => {
+    const scores = buildScoresFromSSI(null, 6)
+    expect(Object.keys(scores)).toHaveLength(6)
+    for (let i = 0; i < 6; i++) {
+      expect(scores[i].X).toBe(0)
+      expect(scores[i].M).toBe(0)
+    }
+  })
+
+  it('handles undefined shooter object', () => {
+    const scores = buildScoresFromSSI(undefined, 6)
+    expect(Object.keys(scores)).toHaveLength(6)
+    for (let i = 0; i < 6; i++) {
+      expect(scores[i].X).toBe(0)
+      expect(scores[i].M).toBe(0)
+    }
+  })
+
+  it('handles shooter without ssiScores property', () => {
+    const shooter = { id: 123, name: 'Test Shooter' }
+    const scores = buildScoresFromSSI(shooter, 6)
+    expect(Object.keys(scores)).toHaveLength(6)
+    for (let i = 0; i < 6; i++) {
+      expect(scores[i].X).toBe(0)
+      expect(scores[i].M).toBe(0)
+    }
+  })
+
+  it('handles ssiScores being null', () => {
+    const shooter = { ssiScores: null }
+    const scores = buildScoresFromSSI(shooter, 6)
+    expect(Object.keys(scores)).toHaveLength(6)
+    for (let i = 0; i < 6; i++) {
+      expect(scores[i].X).toBe(0)
+      expect(scores[i].M).toBe(0)
+    }
+  })
+
+  it('handles mixed valid and invalid score strings', () => {
+    const shooter = {
+      ssiScores: {
+        s1: '1,2,3,0,0,0,0,0,0,0,0,0,5',
+        s2: 'invalid,data,here',
+        s3: '0,0,0,0,0,0,0,0,0,0,0,5,5',
+        s4: '',
+        s5: null,
+        s6: undefined,
+      },
+    }
+    const scores = buildScoresFromSSI(shooter, 6)
+    expect(scores[0].X).toBe(1)
+    expect(scores[1].X).toBe(0) // Invalid string becomes all zeros
+    expect(scores[2].M).toBe(5)
+    expect(scores[3].X).toBe(0) // Empty string becomes all zeros
+    expect(scores[4].X).toBe(0) // Null becomes all zeros
+    expect(scores[5].X).toBe(0) // Undefined becomes all zeros
+  })
+
+  it('handles seriesCount of 0', () => {
+    const shooter = { ssiScores: {} }
+    const scores = buildScoresFromSSI(shooter, 0)
+    expect(Object.keys(scores)).toHaveLength(0)
+  })
+
+  it('handles very large seriesCount', () => {
+    const shooter = { ssiScores: {} }
+    const scores = buildScoresFromSSI(shooter, 100)
+    expect(Object.keys(scores)).toHaveLength(100)
+    // Spot check a few
+    expect(scores[0].X).toBe(0)
+    expect(scores[50].X).toBe(0)
+    expect(scores[99].X).toBe(0)
+  })
+
+  it('handles partial SSI data with some strings present', () => {
+    const shooter = {
+      ssiScores: {
+        s1: '5,0,0,0,0,0,0,0,0,0,0,0,5',
+        s3: '0,5,0,0,0,0,0,0,0,0,0,0,5',
+      },
+    }
+    const scores = buildScoresFromSSI(shooter, 6)
+    expect(scores[0].X).toBe(5) // s1
+    expect(scores[1].X).toBe(0) // s2 missing
+    expect(scores[2]['10']).toBe(5) // s3
+    expect(scores[3].X).toBe(0) // s4 missing
   })
 })
 
