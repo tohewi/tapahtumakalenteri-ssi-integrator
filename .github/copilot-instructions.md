@@ -68,12 +68,13 @@ cd scoring-proxy && node server.js
 
 ### Render Production
 
-The service `ssi-scoring` auto-deploys from the branch linked in the Render Blueprint when pushed.
+The service `ssi-scoring` auto-deploys from `main` when code is merged.
 
-1. Build frontend: `cd scoring-ui && npm run build`
-2. Commit changes
-3. Push to `feature/scoring-ui-prototype` branch
-4. Render auto-deploys
+1. Create a feature branch from `main`
+2. Make changes, commit, push the feature branch
+3. Open a PR targeting `main`
+4. CI runs tests, audit, and build
+5. After merge to `main`, Render auto-deploys
 
 ### Render Preview Environments
 
@@ -104,10 +105,11 @@ Use these to check deploy status, view logs, and monitor the service after makin
 
 ## Git Workflow
 
-- **Main deploy branch:** `feature/scoring-ui-prototype`
+- **Production branch:** `main` (auto-deploys to Render)
 - **Remote name:** `tapahtumakalenteri-ssi-integrator`
-- **Push command:** `git push tapahtumakalenteri-ssi-integrator feature/scoring-ui-prototype`
-- **Feature branches:** Create from `feature/scoring-ui-prototype`, open PR when ready
+- **Feature branches:** Create from `main`, open PR targeting `main`
+- **Preview environments:** Add `[render preview]` to PR title for a disposable test instance
+- CI runs on all PRs to `main` (tests, audit, build)
 
 ## Key Files for Common Tasks
 

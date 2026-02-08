@@ -23,7 +23,7 @@ flowchart LR
 ### Repository
 
 1. Fork or clone the repository
-2. Ensure the branch `feature/scoring-ui-prototype` exists (this is the deploy branch)
+2. The `main` branch is the production deploy branch
 
 ### GitHub Actions Secret
 
@@ -58,7 +58,7 @@ No SSI credentials are needed in GitHub — the pipeline only builds, tests, and
 | Setting | Value |
 |---------|-------|
 | **Name** | `ssi-scoring` |
-| **Branch** | `feature/scoring-ui-prototype` |
+| **Branch** | `main` |
 | **Runtime** | Node |
 | **Build Command** | `cd scoring-ui && npm install && npm run build && cd ../scoring-proxy && npm install` |
 | **Start Command** | `cd scoring-proxy && node server.js` |

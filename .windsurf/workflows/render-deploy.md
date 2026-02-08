@@ -8,31 +8,30 @@ description: How to deploy to Render and use preview environments for feature br
 
 - **Service:** `ssi-scoring` (web service on Render)
 - **Blueprint:** `render.yaml` at repo root
-- **Branch:** `feature/scoring-ui-prototype` is the main deploy branch
+- **Branch:** `main` is the production deploy branch
 - **Build:** `cd scoring-ui && npm install && npm run build && cd ../scoring-proxy && npm install`
 - **Start:** `cd scoring-proxy && node server.js`
 
 ## Production Deploy
 
-Production deploys automatically when you push to the branch linked in the Render Blueprint.
+Production deploys automatically when code is merged to `main`.
 
-1. Build the frontend:
-// turbo
+1. Create a feature branch from `main`:
 ```
-cd scoring-ui && npm run build
+git checkout main && git pull && git checkout -b feature/my-feature
 ```
 
-2. Commit all changes (frontend build output is NOT committed — Render builds from source):
+2. Make changes, commit, and push:
 ```
 git add -A && git commit -m "your commit message"
+git push tapahtumakalenteri-ssi-integrator feature/my-feature
 ```
 
-3. Push to the deploy branch:
-```
-git push tapahtumakalenteri-ssi-integrator feature/scoring-ui-prototype
-```
+3. Open a Pull Request targeting `main`
+4. CI runs tests, audit, and build
+5. After PR is approved and merged, Render auto-deploys from `main`
 
-Render auto-deploys on push. Monitor via Render Dashboard or the Render MCP tools (`list_deploys`, `get_deploy`, `list_logs`).
+Monitor via Render Dashboard or the Render MCP tools (`list_deploys`, `get_deploy`, `list_logs`).
 
 ## Preview Environments (Feature Branch Testing)
 
@@ -47,7 +46,7 @@ Preview environments create a disposable copy of the service for each PR, so you
 ### Creating a Preview Environment
 
 1. Push your feature branch to GitHub
-2. Open a Pull Request
+2. Open a Pull Request targeting `main`
 3. Add `[render preview]` to the PR title, e.g.: `[render preview] Add summary drill-down feature`
 4. Render automatically creates a preview instance and posts the URL in the PR status checks
 5. Click "View deployment" in the PR to open the preview
@@ -79,6 +78,13 @@ The Render MCP server is configured and provides these tools:
 - "Show the latest deploy for ssi-scoring"
 - "Show logs for ssi-scoring from the last hour"
 - "What are the CPU metrics for ssi-scoring?"
+
+## Branch Strategy
+
+- **`main`** — production branch, auto-deploys to Render
+- **`feature/*`** — feature branches, create PRs to `main`
+- **Preview environments** — created from PRs with `[render preview]` in title
+- CI runs on all PRs to `main` (tests, audit, build)
 
 ## Troubleshooting
 

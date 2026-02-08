@@ -7,6 +7,8 @@ services:
     name: ssi-scoring
     runtime: node
     plan: starter
+    branch: main
+    repo: https://github.com/tohewi/tapahtumakalenteri-ssi-integrator
     previews:
       plan: starter
     buildCommand: cd scoring-ui && npm install && npm run build && cd ../scoring-proxy && npm install
