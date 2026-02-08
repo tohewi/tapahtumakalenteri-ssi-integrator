@@ -3,6 +3,7 @@ import * as api from '../api'
 import { encryptData, decryptData } from '../crypto'
 import LoginScreen from './LoginScreen'
 import { AppHeader, ErrorBanner, Spinner, formatDateShort } from './shared'
+import fi from '../i18n'
 
 const LS_CREDS = 'ssi_credentials'
 
@@ -55,6 +56,19 @@ export default function SummaryReportPage() {
     }
     setAuthed(true)
     setView('search')
+  }
+
+  // Logout handler
+  const handleLogout = async () => {
+    try { await api.logout() } catch { /* ignore */ }
+    setAuthed(false)
+    setView('login')
+    setSearchText('')
+    setAllResults([])
+    setSearched(false)
+    setSelected(new Set())
+    setReportRows([])
+    setError(null)
   }
 
   // Search
@@ -215,12 +229,30 @@ export default function SummaryReportPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <AppHeader
-        title="Yhteenveto"
-        subtitle={view === 'report' ? `${reportRows.length} kilpailua` : undefined}
-        backLabel={view === 'report' ? 'Haku' : undefined}
-        onBack={view === 'report' ? () => setView('search') : undefined}
-      />
+      <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white px-4 py-5">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <h1 className="text-xl font-bold">Yhteenveto</h1>
+            <p className="text-blue-200 text-sm mt-1">
+              {view === 'report' ? `${reportRows.length} kilpailua` : 'Hae kilpailut yhteenvedon luomiseen'}
+            </p>
+          </div>
+          <button onClick={handleLogout} className="text-blue-200 text-sm active:text-white">
+            {fi.logout}
+          </button>
+        </div>
+        {view === 'report' && (
+          <button
+            onClick={() => setView('search')}
+            className="flex items-center gap-1 mt-2 text-blue-200 text-sm active:text-white"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Haku
+          </button>
+        )}
+      </div>
 
       <ErrorBanner error={error} onClose={() => setError(null)} />
       {loading && <Spinner />}

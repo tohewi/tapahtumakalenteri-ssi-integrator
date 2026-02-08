@@ -10,6 +10,7 @@ export const fi = {
   // Common actions
   search: 'Hae',
   logout: 'Kirjaudu ulos',
+  home: 'Alkuun',
   save: 'Tallenna',
   cancel: 'Peruuta',
   next: 'Seuraava',
@@ -98,6 +99,7 @@ export const en = {
   // Common actions
   search: 'Search',
   logout: 'Logout',
+  home: 'Home',
   save: 'Save',
   cancel: 'Cancel',
   next: 'Next',
