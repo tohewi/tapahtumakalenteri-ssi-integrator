@@ -1479,6 +1479,106 @@ app.get('/api/matches', requireAuth, async (req, res) => {
 })
 
 // ============================================================
+// POST /api/report/summary — Summary report for selected matches
+// Body: { matches: [{ id, contentType }, ...] }
+// Returns per-match: name, date, shooterCount, squadCount, shootersPerSquad, staff, staffCount
+// ============================================================
+app.post('/api/report/summary', requireAuth, async (req, res) => {
+  let matchList = req.body.matches
+  if (!matchList && Array.isArray(req.body.matchIds)) {
+    matchList = req.body.matchIds.map(id => ({ id, contentType: 91 }))
+  }
+  if (!Array.isArray(matchList) || matchList.length === 0) {
+    return res.status(400).json({ error: 'matches array required' })
+  }
+  if (matchList.length > 50) {
+    return res.status(400).json({ error: 'Maximum 50 matches per report' })
+  }
+
+  try {
+    const rows = []
+
+    for (const { id: matchId, contentType } of matchList) {
+      const ct = contentType || 91
+      const result = await graphqlWithRefresh(req.ssiSession, `
+        query SummaryMatch($ct: Int!, $id: String!) {
+          event(content_type: $ct, id: $id) {
+            id
+            name
+            starts
+            squads {
+              id
+              number
+              comment
+              ... on NordicSquadNode {
+                competitors { id status }
+              }
+              ... on IpscSquadNode {
+                competitors { id status }
+              }
+              ... on PpcSquadNode {
+                competitors { id status }
+              }
+              ... on CmpSquadNode {
+                competitors { id status }
+              }
+              ... on PrecisionSquadNode {
+                competitors { id status }
+              }
+              ... on GenericSquadNode {
+                competitors { id status }
+              }
+            }
+          }
+        }
+      `, { ct, id: String(matchId) })
+
+      if (!result.event) continue
+
+      const match = result.event
+      const matchDate = match.starts ? match.starts.split('T')[0] : ''
+
+      // Count approved shooters per squad
+      const squads = (match.squads || [])
+      const squadDetails = squads.map(sq => {
+        const approved = (sq.competitors || []).filter(c => c.status === 'a')
+        return {
+          label: sq.comment || `Squad ${sq.number}`,
+          count: approved.length,
+        }
+      }).filter(sq => sq.count > 0) // only squads with shooters
+
+      const totalShooters = squadDetails.reduce((sum, sq) => sum + sq.count, 0)
+
+      // Scrape staff page to get leaders
+      let staffList = []
+      try {
+        if (req.ssiSession.ssiCookies) {
+          staffList = await ssiGetEventStaff(ct, matchId, req.ssiSession.ssiCookies)
+        }
+      } catch (staffErr) {
+        if (!IS_PROD) console.log(`[summary] Could not fetch staff for event ${ct}/${matchId}: ${staffErr.message}`)
+      }
+
+      rows.push({
+        match: match.name,
+        date: matchDate,
+        shooterCount: totalShooters,
+        squadCount: squadDetails.length,
+        shootersPerSquad: squadDetails.map(sq => `${sq.label}: ${sq.count}`).join(', '),
+        staff: staffList.map(s => s.name).join(', '),
+        staffCount: staffList.length,
+      })
+    }
+
+    res.json({ rows })
+  } catch (err) {
+    console.error('Failed to generate summary report:', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ============================================================
 // POST /api/report/matches — Generate report for selected matches
 // Body: { matches: [{ id, contentType }, ...] }
 // Returns approved shooters per squad per match with admin role
@@ -1618,6 +1718,7 @@ if (isDirectRun) {
     console.log('  POST /api/manage/cup/:id/fix-squad     { shooterName, targetSquad }')
     console.log('  POST /api/manage/cup/:id/add-to-cup    { shooterName }')
     console.log('  GET  /api/matches?search=')
+    console.log('  POST /api/report/summary       { matches }')
     console.log('  POST /api/report/matches       { matchIds }')
     if (existsSync(indexPath)) {
       console.log(`  UI served from ${uiDist}`)

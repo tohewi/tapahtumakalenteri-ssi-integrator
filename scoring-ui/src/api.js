@@ -82,6 +82,18 @@ export async function getReportData(matches) {
   return data.rows || []
 }
 
+export async function getSummaryReport(matches) {
+  const resp = await fetch(`${API_BASE}/report/summary`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ matches }),
+  })
+  const data = await resp.json()
+  if (!resp.ok || data.error) throw new Error(data.error || 'Summary report failed')
+  return data.rows || []
+}
+
 // ============================================================
 // Management actions
 // ============================================================

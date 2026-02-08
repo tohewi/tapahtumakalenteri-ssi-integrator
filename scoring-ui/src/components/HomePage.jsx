@@ -46,6 +46,17 @@ const features = [
     ),
     color: 'amber',
   },
+  {
+    href: '#/summary',
+    title: 'Yhteenveto',
+    description: 'Kilpailujen yhteenvetoraportti',
+    icon: (
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+      </svg>
+    ),
+    color: 'teal',
+  },
 ]
 
 const colorMap = {
@@ -53,6 +64,7 @@ const colorMap = {
   green: { bg: 'bg-green-50', icon: 'text-green-600', border: 'border-green-200', hover: 'active:bg-green-100' },
   purple: { bg: 'bg-purple-50', icon: 'text-purple-600', border: 'border-purple-200', hover: 'active:bg-purple-100' },
   amber: { bg: 'bg-amber-50', icon: 'text-amber-600', border: 'border-amber-200', hover: 'active:bg-amber-100' },
+  teal: { bg: 'bg-teal-50', icon: 'text-teal-600', border: 'border-teal-200', hover: 'active:bg-teal-100' },
 }
 
 export default function HomePage() {

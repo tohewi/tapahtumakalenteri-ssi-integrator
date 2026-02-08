@@ -6,6 +6,7 @@ import App from './App.jsx'
 import RegisterPage from './components/RegisterPage.jsx'
 import ManagePage from './components/ManagePage.jsx'
 import ReportPage from './components/ReportPage.jsx'
+import SummaryReportPage from './components/SummaryReportPage.jsx'
 
 function Router() {
   const [route, setRoute] = useState(window.location.hash)
@@ -27,6 +28,9 @@ function Router() {
   }
   if (route === '#/report') {
     return <ReportPage />
+  }
+  if (route === '#/summary') {
+    return <SummaryReportPage />
   }
   return <HomePage />
 }
