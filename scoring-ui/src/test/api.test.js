@@ -591,7 +591,7 @@ describe('API client', () => {
         json: () => Promise.resolve({ error: 'Server error' }),
       })
 
-      await expect(searchCups('test')).rejects.toThrow('Failed to search cups')
+      await expect(searchCups('test')).rejects.toThrow('Server error')
     })
   })
 
@@ -631,7 +631,7 @@ describe('API client', () => {
         json: () => Promise.resolve({ error: 'Not found' }),
       })
 
-      await expect(getMatch('9999')).rejects.toThrow('Failed to fetch match')
+      await expect(getMatch('9999')).rejects.toThrow('Not found')
     })
   })
 
