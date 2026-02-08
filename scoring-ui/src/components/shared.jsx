@@ -87,9 +87,10 @@ export function Spinner() {
  */
 export function CupList({ cups, onSelect, loading, openLabel = 'Ilmoittautuminen auki', emptyLabel = 'Ei avoimia ilmoittautumisia' }) {
   // Sort ascending by proximity to today (closest first)
+  const now = Date.now()
   const sorted = [...cups].sort((a, b) => {
-    const da = Math.abs(new Date(a.starts).getTime() - Date.now())
-    const db = Math.abs(new Date(b.starts).getTime() - Date.now())
+    const da = Math.abs(new Date(a.starts).getTime() - now)
+    const db = Math.abs(new Date(b.starts).getTime() - now)
     return da - db
   })
 
