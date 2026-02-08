@@ -1,3 +1,5 @@
+import fi from '../i18n'
+
 export default function CompetitorHeader({ competitor, grandTotal, totalHits }) {
   return (
     <div className="px-4 py-3">
@@ -9,7 +11,7 @@ export default function CompetitorHeader({ competitor, grandTotal, totalHits }) 
         </div>
         <div className="text-right">
           <div className="text-3xl font-bold">{grandTotal}</div>
-          <div className="text-blue-200 text-xs">{totalHits} hits</div>
+          <div className="text-blue-200 text-xs">{totalHits} {fi.hits}</div>
         </div>
       </div>
       {competitor.onDeck && (

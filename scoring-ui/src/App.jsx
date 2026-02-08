@@ -7,6 +7,7 @@ import ShooterPicker from './components/ShooterPicker'
 import LoginScreen from './components/LoginScreen'
 import CupSearch from './components/CupSearch'
 import * as api from './api'
+import fi from './i18n'
 
 // ============================================================
 // Scoring constants
@@ -376,7 +377,7 @@ function App() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-          <p className="text-gray-500 text-sm">Restoring session...</p>
+          <p className="text-gray-500 text-sm">{fi.restoringSession}</p>
         </div>
       </div>
     )
@@ -389,8 +390,8 @@ function App() {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white px-4 py-3">
-          <h1 className="text-xl font-bold">SSI Scoring</h1>
-          <p className="text-blue-200 text-sm mt-0.5">Login to start scoring</p>
+          <h1 className="text-xl font-bold">{fi.appTitle}</h1>
+          <p className="text-blue-200 text-sm mt-0.5">{fi.loginSubtitle}</p>
         </div>
         <LoginScreen onLogin={handleLogin} initialEmail={savedCreds?.email} initialPassword={savedCreds?.password} initialApiKey={savedCreds?.apiKey} hideHeader />
       </div>
@@ -412,7 +413,7 @@ function App() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-          <p className="text-gray-500 text-sm">Loading...</p>
+          <p className="text-gray-500 text-sm">{fi.loading}</p>
         </div>
       </div>
     )
@@ -487,11 +488,11 @@ function App() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            Squads
+            {fi.squads}
           </button>
           <div className="px-4 py-3">
             <h1 className="text-lg font-bold">{selectedMatch.name}</h1>
-            <p className="text-blue-200 text-sm">{selectedSquad.name} · {shooters.length} shooters</p>
+            <p className="text-blue-200 text-sm">{selectedSquad.name} · {shooters.length} {fi.shooters}</p>
           </div>
         </div>
 
@@ -562,10 +563,10 @@ function App() {
         {!activeSeriesComplete && activeGroupScored > 0 && (
           <div className="mx-3 mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
             <p className="text-amber-700 font-medium text-sm">
-              Score all shooters before moving to next {doubleSeries ? 'pair' : 'series'}
+              {fi.scoreAllShootersWarning} {doubleSeries ? fi.pairLowerCase : fi.seriesLowerCase}
             </p>
             <p className="text-amber-500 text-xs mt-0.5">
-              {shooters.length - activeGroupScored} remaining
+              {shooters.length - activeGroupScored} {fi.remaining}
             </p>
           </div>
         )}
@@ -573,7 +574,7 @@ function App() {
         {/* Shooter list */}
         <div className="p-3">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">
-            Series {activeSeries + 1} — Pick shooter
+            {fi.series} {activeSeries + 1} — {fi.pickShooter}
           </h2>
           <ShooterPicker
             shooters={shootersWithStatus}
@@ -611,7 +612,7 @@ function App() {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          Squad
+          {fi.squad}
         </button>
         <div className="px-4 py-3 flex items-center justify-between">
           <div>
@@ -620,10 +621,10 @@ function App() {
           </div>
           <div className="text-right">
             <div className="text-xs text-blue-300">
-              {doubleSeries ? `Series ${activeSeries + 1}+${activeSeries + 2}` : `Series ${activeSeries + 1}`}
+              {doubleSeries ? `${fi.series} ${activeSeries + 1}+${activeSeries + 2}` : `${fi.series} ${activeSeries + 1}`}
             </div>
             <div className="text-3xl font-bold">{pts}</div>
-            <div className="text-blue-200 text-xs">{hits}/{effectiveMaxHits} hits</div>
+            <div className="text-blue-200 text-xs">{hits}/{effectiveMaxHits} {fi.hits}</div>
           </div>
         </div>
       </div>
@@ -644,7 +645,7 @@ function App() {
       {error && (
         <div className="mx-3 mt-2 bg-red-50 border border-red-200 rounded-xl p-3 text-center">
           <p className="text-red-700 text-sm font-medium">{error}</p>
-          <button onClick={() => setError(null)} className="text-red-500 text-xs underline mt-1">Dismiss</button>
+          <button onClick={() => setError(null)} className="text-red-500 text-xs underline mt-1">{fi.dismiss}</button>
         </div>
       )}
 
@@ -655,14 +656,14 @@ function App() {
             disabled={saving}
             className="px-4 py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold text-base active:bg-gray-300 disabled:opacity-50"
           >
-            ← Back
+            ← {fi.back}
           </button>
           <button
             onClick={handleSaveAndNext}
             disabled={isOver || saving}
             className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-semibold text-lg active:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500"
           >
-            {saving ? 'Saving...' : isOver ? `Too many shots (${hits}/${effectiveMaxHits})` : 'Save → Next Shooter'}
+            {saving ? fi.saving : isOver ? `${fi.tooManyShotsInButton} (${hits}/${effectiveMaxHits})` : fi.saveAndNext}
           </button>
         </div>
       </div>

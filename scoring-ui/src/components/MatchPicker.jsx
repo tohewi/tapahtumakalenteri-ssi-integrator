@@ -1,3 +1,5 @@
+import fi from '../i18n'
+
 export default function MatchPicker({ matches, onSelect, cupName, onBack }) {
   const now = new Date()
   const year = now.getFullYear()
@@ -18,12 +20,12 @@ export default function MatchPicker({ matches, onSelect, cupName, onBack }) {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            Cups
+            {fi.cups}
           </button>
         )}
         <div className="px-4 py-3">
-          <h1 className="text-xl font-bold">{cupName || 'SSI Scoring'}</h1>
-          <p className="text-blue-200 text-sm mt-1">Select a match to score</p>
+          <h1 className="text-xl font-bold">{cupName || fi.appTitle}</h1>
+          <p className="text-blue-200 text-sm mt-1">{fi.selectMatchSubtitle}</p>
         </div>
       </div>
 
@@ -33,7 +35,7 @@ export default function MatchPicker({ matches, onSelect, cupName, onBack }) {
           <>
             <h2 className="text-sm font-semibold text-green-700 uppercase tracking-wide mb-2 px-1 flex items-center gap-1">
               <span className="w-2 h-2 bg-green-500 rounded-full inline-block"></span>
-              Today — {today}
+              {fi.todayLabel} — {today}
             </h2>
             {todayMatches.map(match => (
               <MatchCard key={match.id} match={match} onSelect={onSelect} highlight={true} />
@@ -43,8 +45,8 @@ export default function MatchPicker({ matches, onSelect, cupName, onBack }) {
 
         {todayMatches.length === 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-center">
-            <p className="text-amber-700 font-medium">No matches today</p>
-            <p className="text-amber-500 text-sm mt-1">Select from upcoming or recent matches below</p>
+            <p className="text-amber-700 font-medium">{fi.noMatchesToday}</p>
+            <p className="text-amber-500 text-sm mt-1">{fi.selectFromOtherMatches}</p>
           </div>
         )}
 
@@ -52,7 +54,7 @@ export default function MatchPicker({ matches, onSelect, cupName, onBack }) {
         {otherMatches.length > 0 && (
           <>
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2 mt-4 px-1">
-              Other matches
+              {fi.otherMatches}
             </h2>
             {otherMatches.map(match => (
               <MatchCard key={match.id} match={match} onSelect={onSelect} highlight={false} />
@@ -89,7 +91,7 @@ function MatchCard({ match, onSelect, highlight }) {
       {/* Match info */}
       <div className="flex-1 min-w-0">
         <div className="font-semibold text-gray-800 truncate">{match.name}</div>
-        <div className="text-xs text-gray-400">{match.status === 'on' ? 'Active' : match.status} · {match.type}</div>
+        <div className="text-xs text-gray-400">{match.status === 'on' ? fi.active : match.status} · {match.type}</div>
       </div>
 
       {/* Arrow */}

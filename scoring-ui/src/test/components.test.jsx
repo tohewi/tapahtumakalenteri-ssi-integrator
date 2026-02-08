@@ -73,29 +73,29 @@ describe('LoginScreen', () => {
 describe('CupSearch', () => {
   it('renders search input and search button', () => {
     render(<CupSearch onSelectCup={vi.fn()} loading={false} />)
-    expect(screen.getByPlaceholderText(/cup name/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /search/i })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/cupin nimi/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /hae/i })).toBeInTheDocument()
   })
 
   it('search button is disabled when input is less than 2 chars', () => {
     render(<CupSearch onSelectCup={vi.fn()} loading={false} />)
-    expect(screen.getByRole('button', { name: /search/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /hae/i })).toBeDisabled()
   })
 
   it('renders logout button when onLogout is provided', () => {
     render(<CupSearch onSelectCup={vi.fn()} loading={false} onLogout={vi.fn()} />)
-    expect(screen.getByText('Logout')).toBeInTheDocument()
+    expect(screen.getByText('Kirjaudu ulos')).toBeInTheDocument()
   })
 
   it('does not render logout button when onLogout is not provided', () => {
     render(<CupSearch onSelectCup={vi.fn()} loading={false} />)
-    expect(screen.queryByText('Logout')).not.toBeInTheDocument()
+    expect(screen.queryByText('Kirjaudu ulos')).not.toBeInTheDocument()
   })
 
   it('calls onLogout when logout button is clicked', async () => {
     const onLogout = vi.fn()
     render(<CupSearch onSelectCup={vi.fn()} loading={false} onLogout={onLogout} />)
-    await userEvent.click(screen.getByText('Logout'))
+    await userEvent.click(screen.getByText('Kirjaudu ulos'))
     expect(onLogout).toHaveBeenCalled()
   })
 })
@@ -131,13 +131,13 @@ describe('MatchPicker', () => {
 
   it('shows back button when onBack is provided', () => {
     render(<MatchPicker matches={matches} onSelect={vi.fn()} onBack={vi.fn()} />)
-    expect(screen.getByText('Cups')).toBeInTheDocument()
+    expect(screen.getByText('Cupit')).toBeInTheDocument()
   })
 
   it('calls onBack when back button is clicked', async () => {
     const onBack = vi.fn()
     render(<MatchPicker matches={matches} onSelect={vi.fn()} onBack={onBack} />)
-    await userEvent.click(screen.getByText('Cups'))
+    await userEvent.click(screen.getByText('Cupit'))
     expect(onBack).toHaveBeenCalled()
   })
 
@@ -150,7 +150,7 @@ describe('MatchPicker', () => {
 
   it('shows "No matches today" when no matches are on today', () => {
     render(<MatchPicker matches={matches} onSelect={vi.fn()} />)
-    expect(screen.getByText('No matches today')).toBeInTheDocument()
+    expect(screen.getByText('Ei otteluita tänään')).toBeInTheDocument()
   })
 })
 
@@ -187,8 +187,8 @@ describe('SquadPicker', () => {
 
   it('shows shooter count', () => {
     render(<SquadPicker match={match} onSelect={vi.fn()} onBack={vi.fn()} />)
-    expect(screen.getByText('1 shooters')).toBeInTheDocument()
-    expect(screen.getByText('0 shooters')).toBeInTheDocument()
+    expect(screen.getByText('1 ampujaa')).toBeInTheDocument()
+    expect(screen.getByText('0 ampujaa')).toBeInTheDocument()
   })
 
   it('calls onSelect when a squad is clicked', async () => {
@@ -201,7 +201,7 @@ describe('SquadPicker', () => {
   it('calls onBack when back button is clicked', async () => {
     const onBack = vi.fn()
     render(<SquadPicker match={match} onSelect={vi.fn()} onBack={onBack} />)
-    await userEvent.click(screen.getByText('Matches'))
+    await userEvent.click(screen.getByText('Ottelut'))
     expect(onBack).toHaveBeenCalled()
   })
 })

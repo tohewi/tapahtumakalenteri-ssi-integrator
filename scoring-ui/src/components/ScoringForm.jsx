@@ -1,4 +1,5 @@
 import ScoreZoneButton from './ScoreZoneButton'
+import fi from '../i18n'
 
 export default function ScoringForm({
   seriesIndex,
@@ -22,22 +23,22 @@ export default function ScoringForm({
     <div className="px-3 pt-4 pb-28 max-w-lg mx-auto">
       {/* Series summary */}
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-gray-800">Series {seriesIndex + 1}</h2>
+        <h2 className="text-xl font-bold text-gray-800">{fi.series} {seriesIndex + 1}</h2>
         <div className="flex items-center gap-3">
           <span className={`text-sm font-medium px-2 py-1 rounded-full ${
             isOver ? 'bg-red-100 text-red-700' : isFull ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
           }`}>
-            {totalHits} / {maxHits} hits
+            {totalHits} / {maxHits} {fi.hits}
           </span>
-          <span className="text-lg font-bold text-gray-800">{totalPoints} pts</span>
+          <span className="text-lg font-bold text-gray-800">{totalPoints} {fi.pts}</span>
         </div>
       </div>
 
       {/* Over-max warning */}
       {isOver && (
         <div className="bg-red-50 border border-red-300 rounded-xl p-3 mb-3 text-center">
-          <p className="text-red-700 font-semibold">Too many shots! ({totalHits}/{maxHits})</p>
-          <p className="text-red-500 text-sm">Remove hits before saving</p>
+          <p className="text-red-700 font-semibold">{fi.tooManyShots} ({totalHits}/{maxHits})</p>
+          <p className="text-red-500 text-sm">{fi.removeHitsBeforeSaving}</p>
         </div>
       )}
 
@@ -81,7 +82,7 @@ export default function ScoringForm({
               : 'bg-gray-200 text-gray-600 active:bg-gray-300'
           }`}
         >
-          {isFull ? `Next → S${seriesIndex + 2}` : `Skip to S${seriesIndex + 2}`}
+          {isFull ? `${fi.nextSeries} → ${fi.series} ${seriesIndex + 2}` : `${fi.skipToSeries} → ${fi.series} ${seriesIndex + 2}`}
         </button>
       )}
     </div>
