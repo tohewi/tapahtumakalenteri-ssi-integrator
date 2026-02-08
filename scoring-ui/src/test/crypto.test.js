@@ -71,8 +71,8 @@ describe('encryptData and decryptData', () => {
   })
 
   it('handles large payloads without stack overflow', async () => {
-    // Create a large object that would cause stack overflow with spread operator
-    const largeText = 'x'.repeat(50000) // 50KB of text
+    // Create a large object (~150KB total) that would cause stack overflow with spread operator
+    const largeText = 'x'.repeat(50000) // 50KB per field
     const original = {
       largeField1: largeText,
       largeField2: largeText,
