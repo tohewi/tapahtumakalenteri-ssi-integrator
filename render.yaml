@@ -1,7 +1,14 @@
+previews:
+  generation: manual
+  expireAfterDays: 3
+
 services:
   - type: web
     name: ssi-scoring
     runtime: node
+    plan: starter
+    previews:
+      plan: starter
     buildCommand: cd scoring-ui && npm install && npm run build && cd ../scoring-proxy && npm install
     startCommand: cd scoring-proxy && node server.js
     envVars:
