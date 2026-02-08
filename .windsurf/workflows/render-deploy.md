@@ -39,26 +39,31 @@ Preview environments create a disposable copy of the service for each PR, so you
 
 ### Configuration (already set up in render.yaml)
 
-- **Generation:** `manual` — only creates a preview when PR title contains `[render preview]`
+- **Generation:** `manual` — previews must be manually created via Render Dashboard or API
 - **Expiry:** 3 days of inactivity
 - **Plan:** `starter` for preview instances
 
 ### Creating a Preview Environment
 
+Previews must be manually created for each PR that needs testing:
+
+**Option 1: Via Render Dashboard (recommended)**
 1. Push your feature branch to GitHub
 2. Open a Pull Request targeting `main`
-3. Add `[render preview]` to the PR title, e.g.: `[render preview] Add summary drill-down feature`
-4. Render automatically creates a preview instance and posts the URL in the PR status checks
-5. Click "View deployment" in the PR to open the preview
+3. Go to the [Render Dashboard](https://dashboard.render.com)
+4. Navigate to the `ssi-scoring` service
+5. Click "Preview Environments" tab
+6. Click "New Preview Environment"
+7. Select the PR or branch to deploy
+8. Render creates the preview and provides a URL
 
-### Skipping Previews
-
-If a PR should NOT get a preview (generation is manual, so this is the default), just don't include `[render preview]` in the title.
+**Option 2: Via Render API**
+Use the Render API to programmatically create previews. See [Render API docs](https://api-docs.render.com/) for details.
 
 ### Preview Environment Lifecycle
 
-- **Created:** When PR with `[render preview]` in title is opened
-- **Updated:** On every push to the PR branch
+- **Created:** Manually via Render Dashboard or API
+- **Updated:** Automatically on every push to the PR branch
 - **Destroyed:** When PR is merged, closed, or after 3 days without commits
 
 ## Render MCP Tools (available in Windsurf)
@@ -83,11 +88,11 @@ The Render MCP server is configured and provides these tools:
 
 - **`main`** — production branch, auto-deploys to Render
 - **`feature/*`** — feature branches, create PRs to `main`
-- **Preview environments** — created from PRs with `[render preview]` in title
+- **Preview environments** — manually created via Render Dashboard for PR testing
 - CI runs on all PRs to `main` (tests, audit, build)
 
 ## Troubleshooting
 
 - **Deploy failed:** Check Render logs with `list_logs` or the Render Dashboard
-- **Preview not created:** Ensure `[render preview]` is in the PR title (case-sensitive)
+- **Preview not created:** Previews must be manually created via the Render Dashboard - navigate to the service and click "New Preview Environment"
 - **Port issues:** The service uses PORT=3001, set via render.yaml envVars
