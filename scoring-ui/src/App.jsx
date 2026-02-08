@@ -89,7 +89,13 @@ function App() {
     setView('login')
   }, [])
 
-  // --- Wrapper to catch SessionExpiredError ---
+  // --- Helper to handle scope mismatch ---
+  const handleScopeMismatch = useCallback(() => {
+    setSessionExpiredMessage('Please login to access this feature.')
+    setView('login')
+  }, [])
+
+  // --- Wrapper to catch SessionExpiredError and ScopeMismatchError ---
   const withSessionCheck = useCallback(async (fn) => {
     try {
       return await fn()
@@ -98,9 +104,13 @@ function App() {
         handleSessionExpired()
         throw err // Re-throw so caller knows it failed
       }
+      if (err instanceof api.ScopeMismatchError) {
+        handleScopeMismatch()
+        throw err
+      }
       throw err
     }
-  }, [handleSessionExpired])
+  }, [handleSessionExpired, handleScopeMismatch])
 
   // --- Save navigation state on changes ---
   useEffect(() => {
@@ -126,7 +136,7 @@ function App() {
       // Attempt auto-login
       setView('restoring')
       try {
-        await api.login(creds.email, creds.password, creds.apiKey)
+        await api.login(creds.email, creds.password, creds.apiKey, 'scoring')
         await restoreNavState()
       } catch {
         // Auto-login failed (expired creds, network error, etc.) → show login
@@ -142,7 +152,7 @@ function App() {
     // Clear session expired message
     setSessionExpiredMessage(null)
     // This throws on failure — LoginScreen catches and shows the error
-    await api.login(email, password, apiKey)
+    await api.login(email, password, apiKey, 'scoring')
     // Save encrypted credentials if "Remember me" is checked
     if (rememberMe) {
       const encrypted = await encryptData({ email, password, apiKey })
@@ -240,7 +250,7 @@ function App() {
         setView('match')
       })
     } catch (err) {
-      if (!(err instanceof api.SessionExpiredError)) {
+      if (!(err instanceof api.SessionExpiredError) && !(err instanceof api.ScopeMismatchError)) {
         setError(err.message)
       }
     } finally {
@@ -261,7 +271,7 @@ function App() {
         setView('squad')
       })
     } catch (err) {
-      if (!(err instanceof api.SessionExpiredError)) {
+      if (!(err instanceof api.SessionExpiredError) && !(err instanceof api.ScopeMismatchError)) {
         setError(err.message)
       }
     } finally {
@@ -390,7 +400,7 @@ function App() {
         console.log('Score saved:', result)
       })
     } catch (err) {
-      if (!(err instanceof api.SessionExpiredError)) {
+      if (!(err instanceof api.SessionExpiredError) && !(err instanceof api.ScopeMismatchError)) {
         setError(err.message)
       }
       setSaving(false)

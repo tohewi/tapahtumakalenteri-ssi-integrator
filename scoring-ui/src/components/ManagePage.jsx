@@ -28,7 +28,14 @@ export default function ManagePage() {
     setView('login')
   }, [])
 
-  // --- Wrapper to catch SessionExpiredError ---
+  // --- Helper to handle scope mismatch ---
+  const handleScopeMismatch = useCallback(() => {
+    setSessionExpiredMessage('Please login to access this feature.')
+    setAuthed(false)
+    setView('login')
+  }, [])
+
+  // --- Wrapper to catch SessionExpiredError and ScopeMismatchError ---
   const withSessionCheck = useCallback(async (fn) => {
     try {
       return await fn()
@@ -37,9 +44,13 @@ export default function ManagePage() {
         handleSessionExpired()
         throw err
       }
+      if (err instanceof api.ScopeMismatchError) {
+        handleScopeMismatch()
+        throw err
+      }
       throw err
     }
-  }, [handleSessionExpired])
+  }, [handleSessionExpired, handleScopeMismatch])
 
   // Auto-login on mount
   useEffect(() => {
@@ -49,7 +60,7 @@ export default function ManagePage() {
       const creds = await decryptData(raw)
       if (!creds) return
       try {
-        await api.login(creds.email, creds.password, creds.apiKey)
+        await api.login(creds.email, creds.password, creds.apiKey, 'manage')
         setAuthed(true)
         setView('cups')
       } catch { /* show login */ }
@@ -60,7 +71,7 @@ export default function ManagePage() {
   // Login handler
   const handleLogin = async (email, password, apiKey, rememberMe) => {
     setSessionExpiredMessage(null)
-    await api.login(email, password, apiKey)
+    await api.login(email, password, apiKey, 'manage')
     if (rememberMe) {
       const encrypted = await encryptData({ email, password, apiKey })
       localStorage.setItem(LS_CREDS, encrypted)

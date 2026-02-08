@@ -543,7 +543,7 @@ describe('API client', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email: 'test@test.com', password: 'pass123', apiKey: 'apikey' }),
+        body: JSON.stringify({ email: 'test@test.com', password: 'pass123', apiKey: 'apikey', scope: 'scoring' }),
       })
     })
 

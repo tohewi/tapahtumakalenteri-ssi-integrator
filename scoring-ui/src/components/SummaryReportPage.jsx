@@ -38,7 +38,14 @@ export default function SummaryReportPage() {
     setView('login')
   }, [])
 
-  // --- Wrapper to catch SessionExpiredError ---
+  // --- Helper to handle scope mismatch ---
+  const handleScopeMismatch = useCallback(() => {
+    setSessionExpiredMessage('Please login to access this feature.')
+    setAuthed(false)
+    setView('login')
+  }, [])
+
+  // --- Wrapper to catch SessionExpiredError and ScopeMismatchError ---
   const withSessionCheck = useCallback(async (fn) => {
     try {
       return await fn()
@@ -47,9 +54,13 @@ export default function SummaryReportPage() {
         handleSessionExpired()
         throw err
       }
+      if (err instanceof api.ScopeMismatchError) {
+        handleScopeMismatch()
+        throw err
+      }
       throw err
     }
-  }, [handleSessionExpired])
+  }, [handleSessionExpired, handleScopeMismatch])
 
   // Auto-login on mount
   useEffect(() => {
@@ -59,7 +70,7 @@ export default function SummaryReportPage() {
       const creds = await decryptData(raw)
       if (!creds) return
       try {
-        await api.login(creds.email, creds.password, creds.apiKey)
+        await api.login(creds.email, creds.password, creds.apiKey, 'reporting')
         setAuthed(true)
         setView('search')
       } catch { /* show login */ }
@@ -70,7 +81,7 @@ export default function SummaryReportPage() {
   // Login handler
   const handleLogin = async (email, password, apiKey, rememberMe) => {
     setSessionExpiredMessage(null)
-    await api.login(email, password, apiKey)
+    await api.login(email, password, apiKey, 'reporting')
     if (rememberMe) {
       const encrypted = await encryptData({ email, password, apiKey })
       localStorage.setItem(LS_CREDS, encrypted)

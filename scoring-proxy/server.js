@@ -141,17 +141,33 @@ function getSession(req) {
   return session
 }
 
-// Middleware: require authenticated session
-function requireAuth(req, res, next) {
-  const session = getSession(req)
-  if (!session) {
-    return res.status(401).json({ 
-      error: 'Session expired. Please login again.',
-      sessionExpired: true 
-    })
+// Middleware: require authenticated session with optional scope validation
+function requireAuth(allowedScopes = null) {
+  return (req, res, next) => {
+    const session = getSession(req)
+    if (!session) {
+      return res.status(401).json({ 
+        error: 'Session expired. Please login again.',
+        sessionExpired: true 
+      })
+    }
+    
+    // Check scope if specified
+    if (allowedScopes) {
+      const scopes = Array.isArray(allowedScopes) ? allowedScopes : [allowedScopes]
+      if (!scopes.includes(session.scope)) {
+        return res.status(403).json({
+          error: 'Access denied. Please login to this feature.',
+          scopeMismatch: true,
+          requiredScope: scopes,
+          currentScope: session.scope
+        })
+      }
+    }
+    
+    req.ssiSession = session
+    next()
   }
-  req.ssiSession = session
-  next()
 }
 
 // Set session cookie on response

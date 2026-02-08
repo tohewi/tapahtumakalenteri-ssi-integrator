@@ -8,11 +8,24 @@ export class SessionExpiredError extends Error {
   }
 }
 
-// Helper to check for session expiry in response
+// Custom error for scope mismatch
+export class ScopeMismatchError extends Error {
+  constructor(message = 'Access denied', requiredScope, currentScope) {
+    super(message)
+    this.name = 'ScopeMismatchError'
+    this.requiredScope = requiredScope
+    this.currentScope = currentScope
+  }
+}
+
+// Helper to check for session expiry or scope mismatch in response
 async function handleResponse(resp) {
   const data = await resp.json()
   if (resp.status === 401 && data.sessionExpired) {
     throw new SessionExpiredError(data.error || 'Session expired. Please login again.')
+  }
+  if (resp.status === 403 && data.scopeMismatch) {
+    throw new ScopeMismatchError(data.error || 'Access denied', data.requiredScope, data.currentScope)
   }
   if (!resp.ok || data.error) {
     throw new Error(data.error || `Request failed with status ${resp.status}`)
@@ -20,12 +33,12 @@ async function handleResponse(resp) {
   return data
 }
 
-export async function login(email, password, apiKey) {
+export async function login(email, password, apiKey, scope = 'scoring') {
   const resp = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ email, password, apiKey }),
+    body: JSON.stringify({ email, password, apiKey, scope }),
   })
   return handleResponse(resp)
 }

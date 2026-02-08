@@ -6,9 +6,9 @@ const router = express.Router()
 export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PROD }) {
   // ============================================================
   // GET /api/manage/cup/:id — Consolidated squadding overview
-  // Requires scoring auth (same as /api/cups, /api/match)
+  // Requires manage auth
   // ============================================================
-  router.get('/cup/:id', requireAuth, async (req, res) => {
+  router.get('/cup/:id', requireAuth('manage'), async (req, res) => {
     try {
       const result = await graphqlWithRefresh(req.ssiSession, `
         query ManageCup($id: String!) {
@@ -135,7 +135,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
   // Assign an unsquadded shooter to a squad in all component matches.
   // Body: { shooterName, squadNumber }
   // ============================================================
-  router.post('/cup/:id/assign-squad', requireAuth, async (req, res) => {
+  router.post('/cup/:id/assign-squad', requireAuth('manage'), async (req, res) => {
     const { shooterName, squadNumber } = req.body
     if (!shooterName || !squadNumber) {
       return res.status(400).json({ error: 'shooterName and squadNumber required' })
@@ -203,7 +203,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
   // Fix inconsistent squad assignment across matches.
   // Body: { shooterName, targetSquad }
   // ============================================================
-  router.post('/cup/:id/fix-squad', requireAuth, async (req, res) => {
+  router.post('/cup/:id/fix-squad', requireAuth('manage'), async (req, res) => {
     const { shooterName, targetSquad } = req.body
     if (!shooterName || !targetSquad) {
       return res.status(400).json({ error: 'shooterName and targetSquad required' })
@@ -273,7 +273,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
   // Add a match-only shooter to the CUP and approve.
   // Body: { shooterName }
   // ============================================================
-  router.post('/cup/:id/add-to-cup', requireAuth, async (req, res) => {
+  router.post('/cup/:id/add-to-cup', requireAuth('manage'), async (req, res) => {
     const { shooterName } = req.body
     if (!shooterName) {
       return res.status(400).json({ error: 'shooterName required' })
