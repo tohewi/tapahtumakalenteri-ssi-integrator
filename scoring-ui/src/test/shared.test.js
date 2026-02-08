@@ -1,5 +1,230 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { isToday, isFuture } from '../components/shared'
+import { parseDateLocal, isToday, isFuture } from '../components/shared'
+
+// ============================================================
+// parseDateLocal()
+// ============================================================
+
+describe('parseDateLocal', () => {
+  it('returns null for null input', () => {
+    expect(parseDateLocal(null)).toBe(null)
+  })
+
+  it('returns null for undefined input', () => {
+    expect(parseDateLocal(undefined)).toBe(null)
+  })
+
+  it('returns null for empty string', () => {
+    expect(parseDateLocal('')).toBe(null)
+  })
+
+  it('parses date-only strings (YYYY-MM-DD) as local midnight', () => {
+    const result = parseDateLocal('2026-02-15')
+    
+    // Should be parsed as local midnight
+    expect(result).toBeInstanceOf(Date)
+    expect(result.getFullYear()).toBe(2026)
+    expect(result.getMonth()).toBe(1) // February (0-indexed)
+    expect(result.getDate()).toBe(15)
+    expect(result.getHours()).toBe(0)
+    expect(result.getMinutes()).toBe(0)
+    expect(result.getSeconds()).toBe(0)
+  })
+
+  it('parses datetime strings with time component correctly', () => {
+    const result = parseDateLocal('2026-02-15T14:30:45')
+    
+    expect(result).toBeInstanceOf(Date)
+    expect(result.getFullYear()).toBe(2026)
+    expect(result.getMonth()).toBe(1)
+    expect(result.getDate()).toBe(15)
+    expect(result.getHours()).toBe(14)
+    expect(result.getMinutes()).toBe(30)
+    expect(result.getSeconds()).toBe(45)
+  })
+
+  it('parses ISO strings with Z (UTC) timezone correctly', () => {
+    const result = parseDateLocal('2026-02-15T14:30:00Z')
+    
+    expect(result).toBeInstanceOf(Date)
+    // When parsed, it should represent the UTC time
+    expect(result.toISOString()).toBe('2026-02-15T14:30:00.000Z')
+  })
+
+  it('parses ISO strings with positive timezone offset correctly', () => {
+    const result = parseDateLocal('2026-02-15T14:30:00+02:00')
+    
+    expect(result).toBeInstanceOf(Date)
+    // Should convert to UTC: 14:30+02:00 = 12:30 UTC
+    expect(result.toISOString()).toBe('2026-02-15T12:30:00.000Z')
+  })
+
+  it('parses ISO strings with negative timezone offset correctly', () => {
+    const result = parseDateLocal('2026-02-15T14:30:00-05:00')
+    
+    expect(result).toBeInstanceOf(Date)
+    // Should convert to UTC: 14:30-05:00 = 19:30 UTC
+    expect(result.toISOString()).toBe('2026-02-15T19:30:00.000Z')
+  })
+
+  it('handles date-only strings without adding UTC offset', () => {
+    // This is the critical test - date-only should be local time, not UTC
+    const result = parseDateLocal('2026-02-15')
+    
+    // Get the timezone offset in minutes
+    const offsetMinutes = result.getTimezoneOffset()
+    
+    // When we convert to ISO string, it converts to UTC
+    // So the date portion should be adjusted based on local timezone
+    const isoString = result.toISOString()
+    
+    // For local midnight, the UTC representation depends on timezone
+    // Example: if timezone is UTC+2 (120 minutes ahead), local midnight is 22:00 UTC previous day
+    // Example: if timezone is UTC-5 (300 minutes behind), local midnight is 05:00 UTC same day
+    
+    // Verify that the constructed date is indeed local midnight
+    expect(result.getHours()).toBe(0)
+    expect(result.getMinutes()).toBe(0)
+    expect(result.getSeconds()).toBe(0)
+  })
+
+  it('handles DST boundary - spring forward (March)', () => {
+    // In many timezones, DST starts in March (spring forward)
+    // Test dates around typical DST transition (last Sunday of March in Europe)
+    const beforeDST = parseDateLocal('2026-03-28') // Saturday before DST
+    const duringDST = parseDateLocal('2026-03-29') // Sunday - DST transition
+    const afterDST = parseDateLocal('2026-03-30')  // Monday after DST
+    
+    // All should be valid Date objects
+    expect(beforeDST).toBeInstanceOf(Date)
+    expect(duringDST).toBeInstanceOf(Date)
+    expect(afterDST).toBeInstanceOf(Date)
+    
+    // All should represent local midnight
+    expect(beforeDST.getHours()).toBe(0)
+    expect(duringDST.getHours()).toBe(0)
+    expect(afterDST.getHours()).toBe(0)
+    
+    // Dates should be consecutive
+    expect(beforeDST.getDate()).toBe(28)
+    expect(duringDST.getDate()).toBe(29)
+    expect(afterDST.getDate()).toBe(30)
+  })
+
+  it('handles DST boundary - fall back (October)', () => {
+    // In many timezones, DST ends in October/November (fall back)
+    // Test dates around typical DST transition (last Sunday of October in Europe)
+    const beforeDST = parseDateLocal('2026-10-24') // Saturday before DST ends
+    const duringDST = parseDateLocal('2026-10-25') // Sunday - DST transition
+    const afterDST = parseDateLocal('2026-10-26')  // Monday after DST ends
+    
+    expect(beforeDST).toBeInstanceOf(Date)
+    expect(duringDST).toBeInstanceOf(Date)
+    expect(afterDST).toBeInstanceOf(Date)
+    
+    // All should represent local midnight
+    expect(beforeDST.getHours()).toBe(0)
+    expect(duringDST.getHours()).toBe(0)
+    expect(afterDST.getHours()).toBe(0)
+    
+    // Dates should be consecutive
+    expect(beforeDST.getDate()).toBe(24)
+    expect(duringDST.getDate()).toBe(25)
+    expect(afterDST.getDate()).toBe(26)
+  })
+
+  it('handles midnight edge case - 00:00:00', () => {
+    const result = parseDateLocal('2026-02-15T00:00:00')
+    
+    expect(result.getHours()).toBe(0)
+    expect(result.getMinutes()).toBe(0)
+    expect(result.getSeconds()).toBe(0)
+  })
+
+  it('handles midnight edge case - 23:59:59', () => {
+    const result = parseDateLocal('2026-02-15T23:59:59')
+    
+    expect(result.getHours()).toBe(23)
+    expect(result.getMinutes()).toBe(59)
+    expect(result.getSeconds()).toBe(59)
+  })
+
+  it('correctly appends T00:00:00 to date-only strings', () => {
+    // This test verifies the implementation detail that prevents UTC interpretation
+    const dateOnly = '2026-02-15'
+    const result = parseDateLocal(dateOnly)
+    
+    // Create a reference date using the same approach
+    const reference = new Date(dateOnly + 'T00:00:00')
+    
+    expect(result.getTime()).toBe(reference.getTime())
+  })
+
+  it('does not modify strings that already contain time component', () => {
+    const dateTime = '2026-02-15T14:30:00'
+    const result = parseDateLocal(dateTime)
+    
+    // Should parse as-is without appending anything
+    const reference = new Date(dateTime)
+    
+    expect(result.getTime()).toBe(reference.getTime())
+  })
+
+  it('handles different date-only format edge cases', () => {
+    // Test various date strings
+    const testCases = [
+      '2026-01-01',  // New Year
+      '2026-12-31',  // New Year's Eve
+      '2024-02-29',  // Leap year
+      '2026-07-15',  // Mid-year
+    ]
+    
+    testCases.forEach(dateStr => {
+      const result = parseDateLocal(dateStr)
+      expect(result).toBeInstanceOf(Date)
+      expect(result.getHours()).toBe(0)
+      expect(result.getMinutes()).toBe(0)
+    })
+  })
+
+  it('preserves milliseconds when present', () => {
+    const result = parseDateLocal('2026-02-15T14:30:45.123Z')
+    
+    expect(result).toBeInstanceOf(Date)
+    expect(result.getMilliseconds()).toBe(123)
+  })
+
+  it('handles date strings from different years correctly', () => {
+    const past = parseDateLocal('2020-06-15')
+    const present = parseDateLocal('2026-06-15')
+    const future = parseDateLocal('2030-06-15')
+    
+    expect(past.getFullYear()).toBe(2020)
+    expect(present.getFullYear()).toBe(2026)
+    expect(future.getFullYear()).toBe(2030)
+    
+    // All should be midnight in local time
+    expect(past.getHours()).toBe(0)
+    expect(present.getHours()).toBe(0)
+    expect(future.getHours()).toBe(0)
+  })
+
+  it('ensures date-only strings never have off-by-one day errors', () => {
+    // This is the key behavior we want to test
+    // Date-only string '2026-02-15' should always represent Feb 15 in local time,
+    // regardless of the timezone the code runs in
+    const result = parseDateLocal('2026-02-15')
+    
+    // The local date components should match exactly
+    expect(result.getFullYear()).toBe(2026)
+    expect(result.getMonth()).toBe(1) // February
+    expect(result.getDate()).toBe(15)
+    
+    // And it should be midnight
+    expect(result.getHours()).toBe(0)
+    expect(result.getMinutes()).toBe(0)
+  })
+})
 
 // ============================================================
 // isToday()
