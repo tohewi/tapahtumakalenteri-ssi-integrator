@@ -10,7 +10,7 @@ The scoring app is a mobile-first web application for range officers to enter sh
 
 1. Open the app on your phone or tablet
 2. Enter your **SSI email**, **password**, and **API key**
-3. Tap **Kirjaudu** (Login)
+3. Tap **Login**
 4. Optional: enable **Remember me** to stay logged in between sessions
 
 > Your credentials are encrypted (AES-GCM) and stored locally on your device. The server never stores your password.
