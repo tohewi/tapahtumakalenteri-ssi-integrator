@@ -1,6 +1,6 @@
-# SSI Kupittaa Cup — Scoring & Registration
+# SSI Kupittaa Cup — Complete Event Management System
 
-Scoring and registration system for TurRes Kupittaa RESUL CUP shooting competitions, integrated with [ShootNScoreIt (SSI)](https://shootnscoreit.com).
+Comprehensive scoring, registration, and management system for TurRes Kupittaa RESUL CUP shooting competitions, integrated with [ShootNScoreIt (SSI)](https://shootnscoreit.com).
 
 ```mermaid
 flowchart LR
@@ -19,12 +19,55 @@ flowchart LR
     PROXY -->|Confirmation\nemail| RESEND
 ```
 
+## Features
+
+### 🎯 Scoring System
+Range officers can enter match scores on mobile devices with real-time validation and SSI synchronization.
+
+**Key capabilities:**
+- Mobile-first responsive UI
+- Browse cups and matches
+- View competitor details and squad assignments
+- Enter and submit scores with validation
+- Secure session-based authentication
+
+### 📝 Self-Registration
+Shooters can register for CUP events without login using a public registration form.
+
+**Key capabilities:**
+- Public, no-login registration form
+- CAPTCHA protection against bots
+- Email confirmation with match details
+- Automatic squad assignment
+- Integration with SSI competitor database
+
+### 👥 Management & Administration
+Backend APIs for managing cup participants, squad assignments, and approvals.
+
+**Key capabilities:**
+- View cup overview with all matches and squads
+- Assign shooters to specific squads
+- Fix squad assignments across matches
+- Approve cup participants
+- Add participants to cup events
+
+### 📊 Reports & Analytics
+Generate summary reports and statistics for matches and competitions.
+
+**Key capabilities:**
+- Multi-match summary reports
+- Shooter counts and squad statistics
+- Staff assignment reports
+- Export data for analysis
+
 ## Applications
 
 | App | URL | Purpose |
 |-----|-----|---------|
 | **Scoring** | `/#/` | Range officers enter match scores on mobile devices |
 | **Registration** | `/#/register` | Shooters self-register for CUP events (no login required) |
+| **Management** | `/api/manage/*` | Squad assignment, cup participant management, and approval workflows |
+| **Reports** | `/api/report/*` | Generate summary reports and match statistics for analysis |
 
 ## Quick Start
 
@@ -42,6 +85,8 @@ node --env-file=scoring-proxy/.env scoring-proxy/server.js
 |----------|-------------|
 | [User Guide](docs/user-guide.md) | How to use the scoring and registration apps |
 | [Installation Guide](docs/installation-guide.md) | Deploy to Render with Resend email and GitHub CI |
+| **[PR Preview Deployments](docs/PR-PREVIEW-DEPLOYMENTS.md)** | **Deploy PR branches to Render for testing** |
+| [Branching Strategy](docs/BRANCHING-STRATEGY.md) | GitHub Flow branching model and release process |
 | [Release Notes](docs/RELEASE-NOTES.md) | Version history and changelog |
 | [Requirements](docs/requirements.md) | Full requirements traceability matrix |
 | [Registration Flow](docs/registration-flow.md) | Backend sequence diagrams and SSI state machine |
