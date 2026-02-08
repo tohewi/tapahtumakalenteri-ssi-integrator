@@ -40,7 +40,7 @@ All SRA trainings at Temppelivuori have the following squads:
 - Only admin accounts can sign up as 'vetäjät'
 - Long-term goal: Track statistics (not immediately important)
 - A 'vetäjä' should be able to cancel their registration
-  - When cancelled, the next person in the queue should be promoted to the training
+  - When canceled, the next person in the queue should be promoted to the training
 
 #### Post-Registration Closing
 - When the registration period closes, excess 'vetäjät' should be placed into regular squads (1-4)
