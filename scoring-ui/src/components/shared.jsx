@@ -58,7 +58,7 @@ export function ErrorBanner({ error, onClose }) {
     <div className="mx-3 mt-3">
       <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
         <p className="text-red-700 text-sm font-medium">{error}</p>
-        {onClose && <button onClick={onClose} className="text-red-500 text-xs underline mt-1">Sulje</button>}
+        {onClose && <button type="button" onClick={onClose} className="text-red-500 text-xs underline mt-1">Sulje</button>}
       </div>
     </div>
   )
