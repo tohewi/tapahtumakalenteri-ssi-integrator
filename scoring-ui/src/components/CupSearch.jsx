@@ -94,10 +94,10 @@ export default function CupSearch({ onSelectCup, loading, onLogout }) {
                 today ? 'bg-green-100 text-green-700' : future ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
               }`}>
                 <span className="text-xs font-medium leading-none">
-                  {new Date(cup.starts + 'T00:00:00').toLocaleDateString('fi-FI', { weekday: 'short' })}
+                  {parseDateLocal(cup.starts).toLocaleDateString('fi-FI', { weekday: 'short' })}
                 </span>
                 <span className="text-lg font-bold leading-tight">
-                  {new Date(cup.starts + 'T00:00:00').getDate()}
+                  {parseDateLocal(cup.starts).getDate()}
                 </span>
               </div>
 
