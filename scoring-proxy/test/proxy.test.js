@@ -13,11 +13,19 @@ import assert from 'node:assert/strict'
 
 const BASE = 'http://localhost:3001/api'
 
-// Test credentials — update these or load from env
+// Test credentials — MUST be loaded from environment variables
+// Required: SSI_EMAIL, SSI_PASSWORD, SSI_API_KEY
+if (!process.env.SSI_EMAIL || !process.env.SSI_PASSWORD || !process.env.SSI_API_KEY) {
+  console.error('ERROR: Missing required environment variables for tests')
+  console.error('Required: SSI_EMAIL, SSI_PASSWORD, SSI_API_KEY')
+  console.error('Set these variables before running tests')
+  process.exit(1)
+}
+
 const CREDS = {
-  email: process.env.SSI_EMAIL || 'tohewi@live.com',
-  password: process.env.SSI_PASSWORD || 'H3it0tt0r00!',
-  apiKey: process.env.SSI_API_KEY || 'sQHSLYQolYMflK1FhQjh8hugYPJIZBv6Tfu0FWppdeA',
+  email: process.env.SSI_EMAIL,
+  password: process.env.SSI_PASSWORD,
+  apiKey: process.env.SSI_API_KEY,
 }
 
 async function jsonFetch(url, opts = {}) {
