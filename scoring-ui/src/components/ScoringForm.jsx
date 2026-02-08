@@ -82,7 +82,7 @@ export default function ScoringForm({
               : 'bg-gray-200 text-gray-600 active:bg-gray-300'
           }`}
         >
-          {isFull ? `${fi.nextSeries} → S${seriesIndex + 2}` : `${fi.skipToSeries} → S${seriesIndex + 2}`}
+          {isFull ? `${fi.nextSeries} → ${fi.series} ${seriesIndex + 2}` : `${fi.skipToSeries} → ${fi.series} ${seriesIndex + 2}`}
         </button>
       )}
     </div>
