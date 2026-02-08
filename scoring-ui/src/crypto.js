@@ -12,6 +12,22 @@
 const ALGO = 'AES-GCM'
 const KEY_STORAGE = 'ssi_device_key'
 
+/**
+ * Convert Uint8Array to base64 string without spreading (avoids stack overflow).
+ * Chunks the array to prevent hitting call stack limits on large payloads.
+ * @param {Uint8Array} uint8Array - The Uint8Array to convert
+ * @returns {string} Base64 encoded string
+ */
+function uint8ToBase64(uint8Array) {
+  const CHUNK_SIZE = 8192
+  let binary = ''
+  for (let i = 0; i < uint8Array.length; i += CHUNK_SIZE) {
+    const chunk = uint8Array.subarray(i, i + CHUNK_SIZE)
+    binary += String.fromCharCode(...chunk)
+  }
+  return btoa(binary)
+}
+
 async function getOrCreateDeviceKey() {
   const stored = localStorage.getItem(KEY_STORAGE)
   if (stored) {
@@ -20,7 +36,7 @@ async function getOrCreateDeviceKey() {
   }
   const key = await crypto.subtle.generateKey({ name: ALGO, length: 256 }, true, ['encrypt', 'decrypt'])
   const exported = await crypto.subtle.exportKey('raw', key)
-  localStorage.setItem(KEY_STORAGE, btoa(String.fromCharCode(...new Uint8Array(exported))))
+  localStorage.setItem(KEY_STORAGE, uint8ToBase64(new Uint8Array(exported)))
   return key
 }
 
@@ -30,8 +46,8 @@ export async function encryptData(data) {
   const encoded = new TextEncoder().encode(JSON.stringify(data))
   const ciphertext = await crypto.subtle.encrypt({ name: ALGO, iv }, key, encoded)
   return JSON.stringify({
-    iv: btoa(String.fromCharCode(...iv)),
-    data: btoa(String.fromCharCode(...new Uint8Array(ciphertext))),
+    iv: uint8ToBase64(iv),
+    data: uint8ToBase64(new Uint8Array(ciphertext)),
   })
 }
 
