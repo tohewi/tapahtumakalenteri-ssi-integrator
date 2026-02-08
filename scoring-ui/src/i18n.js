@@ -67,7 +67,8 @@ export const fi = {
   
   // Series view
   scoreAllShootersWarning: 'Syötä kaikkien ampujien tulokset ennen siirtymistä seuraavaan',
-  pair: 'pariin',
+  seriesLowerCase: 'sarjaan',
+  pairLowerCase: 'pariin',
   remaining: 'jäljellä',
   saveAndNext: 'Tallenna → Seuraava ampuja',
   tooManyShotsInButton: 'Liikaa laukauksia',

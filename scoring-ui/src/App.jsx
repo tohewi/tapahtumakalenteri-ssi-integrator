@@ -563,7 +563,7 @@ function App() {
         {!activeSeriesComplete && activeGroupScored > 0 && (
           <div className="mx-3 mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
             <p className="text-amber-700 font-medium text-sm">
-              {fi.scoreAllShootersWarning} {doubleSeries ? fi.pair : fi.series.toLowerCase()}
+              {fi.scoreAllShootersWarning} {doubleSeries ? fi.pairLowerCase : fi.seriesLowerCase}
             </p>
             <p className="text-amber-500 text-xs mt-0.5">
               {shooters.length - activeGroupScored} {fi.remaining}

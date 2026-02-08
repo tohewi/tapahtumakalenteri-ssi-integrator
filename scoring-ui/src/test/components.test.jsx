@@ -73,7 +73,7 @@ describe('LoginScreen', () => {
 describe('CupSearch', () => {
   it('renders search input and search button', () => {
     render(<CupSearch onSelectCup={vi.fn()} loading={false} />)
-    expect(screen.getByPlaceholderText(/kupittaa/i)).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/cupin nimi/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /hae/i })).toBeInTheDocument()
   })
 
