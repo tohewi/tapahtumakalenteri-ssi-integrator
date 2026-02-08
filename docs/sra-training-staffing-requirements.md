@@ -68,7 +68,7 @@ Can SSI's existing roles be used for these purposes?
 ## Clarification Questions
 
 ### 1. Squad and Staff Count Logic
-**Q1.1:** You mentioned "Oldies max 4 vetäjät, one per squad" and "if there are 3 squads, only 3 vetäjät". This implies that the number of squads (1-4) varies based on shooter count. What is the formula or threshold for determining how many squads to create?
+**Q1.1:** You mentioned "Oldies max 4 'vetäjät', one per squad" and "if there are 3 squads, only 3 'vetäjät'". This implies that the number of squads (1-4) varies based on shooter count. What is the formula or threshold for determining how many squads to create?
 - Example: 0-10 shooters = 1 squad, 11-20 = 2 squads, etc.?
 - Or is it based on the "5 or more shooters per squad" rule you mentioned?
 
