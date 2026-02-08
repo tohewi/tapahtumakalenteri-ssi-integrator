@@ -111,7 +111,7 @@ describe('MatchPicker', () => {
   ]
 
   beforeAll(() => {
-    vi.useFakeTimers()
+    vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-02-20T00:00:00Z'))
   })
 
