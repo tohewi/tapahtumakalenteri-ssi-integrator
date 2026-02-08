@@ -416,8 +416,15 @@ function App() {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white px-4 py-3">
-          <h1 className="text-xl font-bold">{fi.appTitle}</h1>
-          <p className="text-blue-200 text-sm mt-0.5">{fi.loginSubtitle}</p>
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <h1 className="text-xl font-bold">{fi.appTitle}</h1>
+              <p className="text-blue-200 text-sm mt-0.5">{fi.loginSubtitle}</p>
+            </div>
+            <a href="#/" className="text-blue-200 text-sm active:text-white">
+              {fi.home}
+            </a>
+          </div>
         </div>
         {sessionExpiredMessage && (
           <div className="mx-4 mt-4 bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-center">

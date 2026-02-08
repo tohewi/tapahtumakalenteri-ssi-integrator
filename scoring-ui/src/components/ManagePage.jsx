@@ -4,6 +4,7 @@ import * as regApi from '../register-api'
 import { encryptData, decryptData } from '../crypto'
 import LoginScreen from './LoginScreen'
 import { AppHeader, ErrorBanner, Spinner, CupList } from './shared'
+import fi from '../i18n'
 
 const LS_CREDS = 'ssi_credentials'
 const LS_MANAGE_STATE = 'ssi_manage_state'
@@ -108,6 +109,16 @@ export default function ManagePage() {
     }
   }
 
+  // Logout handler
+  const handleLogout = async () => {
+    try { await api.logout() } catch { /* ignore */ }
+    setAuthed(false)
+    setView('login')
+    setSelectedCup(null)
+    setData(null)
+    setError(null)
+  }
+
   // Load cups from registration API (same data as Register page)
   useEffect(() => {
     if (view !== 'cups' || cups.length > 0) return
@@ -155,12 +166,17 @@ export default function ManagePage() {
   if (!authed) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <AppHeader title="Kupittaa Cup — Hallinta" subtitle="Kirjaudu SSI-tunnuksilla" />
-        {sessionExpiredMessage && (
-          <div className="mx-4 mt-4 bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-center">
-            <p className="text-yellow-800 text-sm font-medium">{sessionExpiredMessage}</p>
+        <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white px-4 py-5">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <h1 className="text-xl font-bold">Kupittaa Cup — Hallinta</h1>
+              <p className="text-blue-200 text-sm mt-1">Kirjaudu SSI-tunnuksilla</p>
+            </div>
+            <a href="#/" className="text-blue-200 text-sm active:text-white">
+              {fi.home}
+            </a>
           </div>
-        )}
+        </div>
         <LoginScreen onLogin={handleLogin} hideHeader />
       </div>
     )
@@ -168,12 +184,30 @@ export default function ManagePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <AppHeader
-        title="Kupittaa Cup — Hallinta"
-        subtitle={view === 'overview' && selectedCup ? selectedCup.name : undefined}
-        backLabel={view === 'overview' ? 'Cupit' : undefined}
-        onBack={view === 'overview' ? () => setView('cups') : undefined}
-      />
+      <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white px-4 py-5">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <h1 className="text-xl font-bold">Kupittaa Cup — Hallinta</h1>
+            <p className="text-blue-200 text-sm mt-1">
+              {view === 'overview' && selectedCup ? selectedCup.name : 'Valitse cup hallintaa varten'}
+            </p>
+          </div>
+          <button onClick={handleLogout} className="text-blue-200 text-sm active:text-white">
+            {fi.logout}
+          </button>
+        </div>
+        {view === 'overview' && (
+          <button
+            onClick={() => setView('cups')}
+            className="flex items-center gap-1 mt-2 text-blue-200 text-sm active:text-white"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Cupit
+          </button>
+        )}
+      </div>
 
       <ErrorBanner error={error} />
       {loading && <Spinner />}

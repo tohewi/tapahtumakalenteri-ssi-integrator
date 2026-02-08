@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import fi from '../i18n'
 
 export default function LoginScreen({ onLogin, initialEmail, initialPassword, initialApiKey, title = 'SSI Scoring', subtitle = 'Login to start scoring', hideHeader = false }) {
   const [email, setEmail] = useState(initialEmail || '')
@@ -32,8 +33,15 @@ export default function LoginScreen({ onLogin, initialEmail, initialPassword, in
     <div className={`${hideHeader ? '' : 'min-h-screen'} bg-gray-50 flex flex-col`}>
       {!hideHeader && (
         <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white px-4 py-5">
-          <h1 className="text-xl font-bold">{title}</h1>
-          <p className="text-blue-200 text-sm mt-1">{subtitle}</p>
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <h1 className="text-xl font-bold">{title}</h1>
+              <p className="text-blue-200 text-sm mt-1">{subtitle}</p>
+            </div>
+            <a href="#/" className="text-blue-200 text-sm active:text-white">
+              {fi.home}
+            </a>
+          </div>
         </div>
       )}
 
