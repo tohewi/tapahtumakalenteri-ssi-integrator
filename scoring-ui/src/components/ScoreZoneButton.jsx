@@ -44,7 +44,7 @@ export default function ScoreZoneButton({ zone, count, onIncrement, onDecrement,
           type="button"
           onClick={onDecrement}
           disabled={count === 0}
-          aria-label={`Decrease ${zone} count`}
+          aria-label={`Decrease ${zone}`}
           className={`flex-1 h-11 rounded-lg text-white font-bold text-xl ${c.minus} disabled:opacity-30 disabled:active:bg-inherit`}
         >
           −
@@ -53,7 +53,7 @@ export default function ScoreZoneButton({ zone, count, onIncrement, onDecrement,
           type="button"
           onClick={onIncrement}
           disabled={incrementDisabled}
-          aria-label={`Increase ${zone} count`}
+          aria-label={`Increase ${zone}`}
           className={`flex-1 h-11 rounded-lg text-white font-bold text-xl ${c.plus} disabled:opacity-30 disabled:active:bg-inherit`}
         >
           +
