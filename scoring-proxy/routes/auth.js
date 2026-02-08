@@ -2,7 +2,7 @@ import express from 'express'
 import crypto from 'node:crypto'
 import { ssiGraphQL, ssiLogin } from '../lib/ssi-client.js'
 
-export function createAuthRouter({ sessions, getSession, setSessionCookie, SESSION_COOKIE, IS_PROD, loginLimiter }) {
+export function createAuthRouter({ sessions, getSession, setSessionCookie, SESSION_COOKIE, SESSION_TTL, IS_PROD, loginLimiter }) {
   const router = express.Router()
   // ============================================================
   // POST /api/auth/login — Login to SSI (both JWT + session)
@@ -72,11 +72,23 @@ export function createAuthRouter({ sessions, getSession, setSessionCookie, SESSI
   // ============================================================
   router.get('/status', (req, res) => {
     const session = getSession(req)
-    res.json({
-      authenticated: !!session,
-      hasJwt: !!session?.jwt,
-      hasSession: !!session?.ssiCookies,
-    })
+    if (session) {
+      const now = Date.now()
+      const remainingMs = SESSION_TTL - (now - session.lastUsed)
+      res.json({
+        authenticated: true,
+        hasJwt: !!session.jwt,
+        hasSession: !!session.ssiCookies,
+        remainingMs: Math.max(0, remainingMs),
+      })
+    } else {
+      res.json({
+        authenticated: false,
+        hasJwt: false,
+        hasSession: false,
+        remainingMs: 0,
+      })
+    }
   })
 
   // ============================================================

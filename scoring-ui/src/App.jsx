@@ -81,6 +81,26 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
+
+  // --- Helper to handle session expiry ---
+  const handleSessionExpired = useCallback(() => {
+    setSessionExpiredMessage('Session expired. Please login again.')
+    setView('login')
+  }, [])
+
+  // --- Wrapper to catch SessionExpiredError ---
+  const withSessionCheck = useCallback(async (fn) => {
+    try {
+      return await fn()
+    } catch (err) {
+      if (err instanceof api.SessionExpiredError) {
+        handleSessionExpired()
+        throw err // Re-throw so caller knows it failed
+      }
+      throw err
+    }
+  }, [handleSessionExpired])
 
   // --- Save navigation state on changes ---
   useEffect(() => {
@@ -119,6 +139,8 @@ function App() {
   // --- Login ---
 
   const handleLogin = async (email, password, apiKey, rememberMe) => {
+    // Clear session expired message
+    setSessionExpiredMessage(null)
     // This throws on failure — LoginScreen catches and shows the error
     await api.login(email, password, apiKey)
     // Save encrypted credentials if "Remember me" is checked
@@ -210,13 +232,17 @@ function App() {
     setLoading(true)
     setError(null)
     try {
-      const cupData = await api.getCup(cup.id)
-      setSelectedCup(cupData)
-      lsSet(LS_KEYS.CUP, { id: cupData.id, name: cupData.name })
-      setMatches((cupData.matches || []).map(api.transformMatchListItem))
-      setView('match')
+      await withSessionCheck(async () => {
+        const cupData = await api.getCup(cup.id)
+        setSelectedCup(cupData)
+        lsSet(LS_KEYS.CUP, { id: cupData.id, name: cupData.name })
+        setMatches((cupData.matches || []).map(api.transformMatchListItem))
+        setView('match')
+      })
     } catch (err) {
-      setError(err.message)
+      if (!(err instanceof api.SessionExpiredError)) {
+        setError(err.message)
+      }
     } finally {
       setLoading(false)
     }
@@ -228,12 +254,16 @@ function App() {
     setLoading(true)
     setError(null)
     try {
-      const fullMatch = await api.getMatch(match.id)
-      const transformed = api.transformMatch(fullMatch)
-      setSelectedMatch(transformed)
-      setView('squad')
+      await withSessionCheck(async () => {
+        const fullMatch = await api.getMatch(match.id)
+        const transformed = api.transformMatch(fullMatch)
+        setSelectedMatch(transformed)
+        setView('squad')
+      })
     } catch (err) {
-      setError(err.message)
+      if (!(err instanceof api.SessionExpiredError)) {
+        setError(err.message)
+      }
     } finally {
       setLoading(false)
     }
@@ -354,11 +384,15 @@ function App() {
     setSaving(true)
     setError(null)
     try {
-      const shooterScores = allScores[selectedShooterId]
-      const result = await api.submitScore(selectedShooterId, shooterScores)
-      console.log('Score saved:', result)
+      await withSessionCheck(async () => {
+        const shooterScores = allScores[selectedShooterId]
+        const result = await api.submitScore(selectedShooterId, shooterScores)
+        console.log('Score saved:', result)
+      })
     } catch (err) {
-      setError(err.message)
+      if (!(err instanceof api.SessionExpiredError)) {
+        setError(err.message)
+      }
       setSaving(false)
       return
     }
@@ -393,6 +427,11 @@ function App() {
           <h1 className="text-xl font-bold">{fi.appTitle}</h1>
           <p className="text-blue-200 text-sm mt-0.5">{fi.loginSubtitle}</p>
         </div>
+        {sessionExpiredMessage && (
+          <div className="mx-4 mt-4 bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-center">
+            <p className="text-yellow-800 text-sm font-medium">{sessionExpiredMessage}</p>
+          </div>
+        )}
         <LoginScreen onLogin={handleLogin} initialEmail={savedCreds?.email} initialPassword={savedCreds?.password} initialApiKey={savedCreds?.apiKey} hideHeader />
       </div>
     )

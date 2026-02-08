@@ -108,10 +108,11 @@ app.use(express.static(uiDist))
 // ============================================================
 
 const sessions = new Map()
-const SESSION_TTL = 8 * 60 * 60 * 1000 // 8 hours
+// Session timeout: 1 minute for debugging. Change to 30 * 60 * 1000 (30 min) for production.
+const SESSION_TTL = 1 * 60 * 1000 // 1 minute inactivity timeout
 const SESSION_COOKIE = 'ssi_session'
 
-// Cleanup expired sessions every 15 minutes
+// Cleanup expired sessions every 30 seconds (faster for 1-min timeout)
 setInterval(() => {
   const now = Date.now()
   let cleaned = 0
@@ -124,7 +125,7 @@ setInterval(() => {
   if (cleaned > 0 && !IS_PROD) {
     console.log(`[session] Cleaned ${cleaned} expired session(s). Active: ${sessions.size}`)
   }
-}, 15 * 60 * 1000)
+}, 30 * 1000)
 
 // Get session from request cookie
 function getSession(req) {
@@ -143,7 +144,12 @@ function getSession(req) {
 // Middleware: require authenticated session
 function requireAuth(req, res, next) {
   const session = getSession(req)
-  if (!session) return res.status(401).json({ error: 'Not authenticated. Please login.' })
+  if (!session) {
+    return res.status(401).json({ 
+      error: 'Session expired. Please login again.',
+      sessionExpired: true 
+    })
+  }
   req.ssiSession = session
   next()
 }
@@ -314,6 +320,7 @@ const authRouter = createAuthRouter({
   getSession,
   setSessionCookie,
   SESSION_COOKIE,
+  SESSION_TTL,
   IS_PROD,
   loginLimiter,
 })

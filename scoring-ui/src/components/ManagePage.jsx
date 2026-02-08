@@ -12,6 +12,7 @@ export default function ManagePage() {
   const [view, setView] = useState('login') // login | cups | overview
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
 
   // Cup selection
   const [cups, setCups] = useState([])
@@ -19,6 +20,26 @@ export default function ManagePage() {
 
   // Management data
   const [data, setData] = useState(null)
+
+  // --- Helper to handle session expiry ---
+  const handleSessionExpired = useCallback(() => {
+    setSessionExpiredMessage('Session expired. Please login again.')
+    setAuthed(false)
+    setView('login')
+  }, [])
+
+  // --- Wrapper to catch SessionExpiredError ---
+  const withSessionCheck = useCallback(async (fn) => {
+    try {
+      return await fn()
+    } catch (err) {
+      if (err instanceof api.SessionExpiredError) {
+        handleSessionExpired()
+        throw err
+      }
+      throw err
+    }
+  }, [handleSessionExpired])
 
   // Auto-login on mount
   useEffect(() => {
@@ -38,6 +59,7 @@ export default function ManagePage() {
 
   // Login handler
   const handleLogin = async (email, password, apiKey, rememberMe) => {
+    setSessionExpiredMessage(null)
     await api.login(email, password, apiKey)
     if (rememberMe) {
       const encrypted = await encryptData({ email, password, apiKey })
@@ -69,22 +91,37 @@ export default function ManagePage() {
     setLoading(true)
     setError(null)
     try {
-      const resp = await fetch(`/api/manage/cup/${cup.id}`, { credentials: 'include' })
-      if (!resp.ok) throw new Error('Failed to load management data')
-      const d = await resp.json()
-      setData(d)
-      setView('overview')
+      await withSessionCheck(async () => {
+        const resp = await fetch(`/api/manage/cup/${cup.id}`, { credentials: 'include' })
+        if (resp.status === 401) {
+          const data = await resp.json()
+          if (data.sessionExpired) {
+            throw new api.SessionExpiredError(data.error)
+          }
+        }
+        if (!resp.ok) throw new Error('Failed to load management data')
+        const d = await resp.json()
+        setData(d)
+        setView('overview')
+      })
     } catch (err) {
-      setError(err.message)
+      if (!(err instanceof api.SessionExpiredError)) {
+        setError(err.message)
+      }
     }
     setLoading(false)
-  }, [])
+  }, [withSessionCheck])
 
   // Login screen
   if (!authed) {
     return (
       <div className="min-h-screen bg-gray-50">
         <AppHeader title="Kupittaa Cup — Hallinta" subtitle="Kirjaudu SSI-tunnuksilla" />
+        {sessionExpiredMessage && (
+          <div className="mx-4 mt-4 bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-center">
+            <p className="text-yellow-800 text-sm font-medium">{sessionExpiredMessage}</p>
+          </div>
+        )}
         <LoginScreen onLogin={handleLogin} hideHeader />
       </div>
     )

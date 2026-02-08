@@ -11,6 +11,7 @@ export default function ReportPage() {
   const [view, setView] = useState('login') // login | search | report
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
 
   // Search
   const [searchText, setSearchText] = useState('')
@@ -28,6 +29,26 @@ export default function ReportPage() {
 
   // Report data
   const [reportRows, setReportRows] = useState([])
+
+  // --- Helper to handle session expiry ---
+  const handleSessionExpired = useCallback(() => {
+    setSessionExpiredMessage('Session expired. Please login again.')
+    setAuthed(false)
+    setView('login')
+  }, [])
+
+  // --- Wrapper to catch SessionExpiredError ---
+  const withSessionCheck = useCallback(async (fn) => {
+    try {
+      return await fn()
+    } catch (err) {
+      if (err instanceof api.SessionExpiredError) {
+        handleSessionExpired()
+        throw err
+      }
+      throw err
+    }
+  }, [handleSessionExpired])
 
   // Auto-login on mount
   useEffect(() => {
@@ -47,6 +68,7 @@ export default function ReportPage() {
 
   // Login handler
   const handleLogin = async (email, password, apiKey, rememberMe) => {
+    setSessionExpiredMessage(null)
     await api.login(email, password, apiKey)
     if (rememberMe) {
       const encrypted = await encryptData({ email, password, apiKey })
@@ -64,19 +86,23 @@ export default function ReportPage() {
     setError(null)
     setSearched(false)
     try {
-      const data = await api.searchMatches(searchText)
-      setAllResults(data)
-      setSearched(true)
-      setSelected(new Set())
-      setFilterType('all')
-      setFilterSport('all')
-      setFilterDateFrom('')
-      setFilterDateTo('')
+      await withSessionCheck(async () => {
+        const data = await api.searchMatches(searchText)
+        setAllResults(data)
+        setSearched(true)
+        setSelected(new Set())
+        setFilterType('all')
+        setFilterSport('all')
+        setFilterDateFrom('')
+        setFilterDateTo('')
+      })
     } catch (err) {
-      setError(err.message)
+      if (!(err instanceof api.SessionExpiredError)) {
+        setError(err.message)
+      }
     }
     setLoading(false)
-  }, [searchText])
+  }, [searchText, withSessionCheck])
 
   // Collect unique sport values from results for the filter dropdown
   const sportOptions = [...new Set(
@@ -165,15 +191,19 @@ export default function ReportPage() {
     setLoading(true)
     setError(null)
     try {
-      const matchesForReport = [...selected].map(id => ({
-        id,
-        contentType: matchContentTypeMap.get(id) || 91,
-      }))
-      const rows = await api.getReportData(matchesForReport)
-      setReportRows(rows)
-      setView('report')
+      await withSessionCheck(async () => {
+        const matchesForReport = [...selected].map(id => ({
+          id,
+          contentType: matchContentTypeMap.get(id) || 91,
+        }))
+        const rows = await api.getReportData(matchesForReport)
+        setReportRows(rows)
+        setView('report')
+      })
     } catch (err) {
-      setError(err.message)
+      if (!(err instanceof api.SessionExpiredError)) {
+        setError(err.message)
+      }
     }
     setLoading(false)
   }
@@ -201,6 +231,11 @@ export default function ReportPage() {
     return (
       <div className="min-h-screen bg-gray-50">
         <AppHeader title="SSI Report" subtitle="Login with SSI credentials" />
+        {sessionExpiredMessage && (
+          <div className="mx-4 mt-4 bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-center">
+            <p className="text-yellow-800 text-sm font-medium">{sessionExpiredMessage}</p>
+          </div>
+        )}
         <LoginScreen onLogin={handleLogin} hideHeader />
       </div>
     )

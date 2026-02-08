@@ -1,5 +1,25 @@
 const API_BASE = '/api'
 
+// Custom error for session expiry
+export class SessionExpiredError extends Error {
+  constructor(message = 'Session expired') {
+    super(message)
+    this.name = 'SessionExpiredError'
+  }
+}
+
+// Helper to check for session expiry in response
+async function handleResponse(resp) {
+  const data = await resp.json()
+  if (resp.status === 401 && data.sessionExpired) {
+    throw new SessionExpiredError(data.error || 'Session expired. Please login again.')
+  }
+  if (!resp.ok || data.error) {
+    throw new Error(data.error || `Request failed with status ${resp.status}`)
+  }
+  return data
+}
+
 export async function login(email, password, apiKey) {
   const resp = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
@@ -7,9 +27,7 @@ export async function login(email, password, apiKey) {
     credentials: 'include',
     body: JSON.stringify({ email, password, apiKey }),
   })
-  const data = await resp.json()
-  if (!resp.ok || data.error) throw new Error(data.error || 'Login failed')
-  return data
+  return handleResponse(resp)
 }
 
 export async function logout() {
@@ -23,27 +41,23 @@ export async function getAuthStatus() {
 
 export async function searchCups(search) {
   const resp = await fetch(`${API_BASE}/cups?search=${encodeURIComponent(search)}`, { credentials: 'include' })
-  if (!resp.ok) throw new Error('Failed to search cups')
-  const data = await resp.json()
+  const data = await handleResponse(resp)
   return data.cups || []
 }
 
 export async function getCup(cupId) {
   const resp = await fetch(`${API_BASE}/cup/${cupId}`, { credentials: 'include' })
-  if (!resp.ok) throw new Error('Failed to fetch cup')
-  return resp.json()
+  return handleResponse(resp)
 }
 
 export async function getMatch(matchId) {
   const resp = await fetch(`${API_BASE}/match/${matchId}`, { credentials: 'include' })
-  if (!resp.ok) throw new Error('Failed to fetch match')
-  return resp.json()
+  return handleResponse(resp)
 }
 
 export async function getCompetitor(competitorId) {
   const resp = await fetch(`${API_BASE}/competitor/${competitorId}`, { credentials: 'include' })
-  if (!resp.ok) throw new Error('Failed to fetch competitor')
-  return resp.json()
+  return handleResponse(resp)
 }
 
 export async function submitScore(competitorId, scores, options = {}) {
@@ -58,15 +72,12 @@ export async function submitScore(competitorId, scores, options = {}) {
       comment: options.comment || '',
     }),
   })
-  const data = await resp.json()
-  if (!resp.ok || data.error) throw new Error(data.error || 'Score submission failed')
-  return data
+  return handleResponse(resp)
 }
 
 export async function searchMatches(search) {
   const resp = await fetch(`${API_BASE}/matches?search=${encodeURIComponent(search)}`, { credentials: 'include' })
-  if (!resp.ok) throw new Error('Failed to search matches')
-  const data = await resp.json()
+  const data = await handleResponse(resp)
   return data.matches || []
 }
 
@@ -77,8 +88,7 @@ export async function getReportData(matches) {
     credentials: 'include',
     body: JSON.stringify({ matches }),
   })
-  const data = await resp.json()
-  if (!resp.ok || data.error) throw new Error(data.error || 'Report generation failed')
+  const data = await handleResponse(resp)
   return data.rows || []
 }
 
@@ -89,8 +99,7 @@ export async function getSummaryReport(matches) {
     credentials: 'include',
     body: JSON.stringify({ matches }),
   })
-  const data = await resp.json()
-  if (!resp.ok || data.error) throw new Error(data.error || 'Summary report failed')
+  const data = await handleResponse(resp)
   return data.rows || []
 }
 
@@ -105,9 +114,7 @@ export async function manageAssignSquad(cupId, shooterName, squadNumber) {
     credentials: 'include',
     body: JSON.stringify({ shooterName, squadNumber }),
   })
-  const data = await resp.json()
-  if (!resp.ok || data.error) throw new Error(data.error || 'Assign squad failed')
-  return data
+  return handleResponse(resp)
 }
 
 export async function manageFixSquad(cupId, shooterName, targetSquad) {
@@ -117,9 +124,7 @@ export async function manageFixSquad(cupId, shooterName, targetSquad) {
     credentials: 'include',
     body: JSON.stringify({ shooterName, targetSquad }),
   })
-  const data = await resp.json()
-  if (!resp.ok || data.error) throw new Error(data.error || 'Fix squad failed')
-  return data
+  return handleResponse(resp)
 }
 
 export async function manageAddToCup(cupId, shooterName) {
@@ -129,9 +134,7 @@ export async function manageAddToCup(cupId, shooterName) {
     credentials: 'include',
     body: JSON.stringify({ shooterName }),
   })
-  const data = await resp.json()
-  if (!resp.ok || data.error) throw new Error(data.error || 'Add to cup failed')
-  return data
+  return handleResponse(resp)
 }
 
 // ============================================================
