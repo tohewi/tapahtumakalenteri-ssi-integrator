@@ -14,9 +14,13 @@ export function formatDateShort(isoDate) {
 
 export function isToday(isoDate) {
   if (!isoDate) return false
-  const d = new Date(isoDate).toISOString().split('T')[0]
-  const today = new Date().toISOString().split('T')[0]
-  return d === today
+  const target = new Date(isoDate)
+  const now = new Date()
+  return (
+    target.getFullYear() === now.getFullYear() &&
+    target.getMonth() === now.getMonth() &&
+    target.getDate() === now.getDate()
+  )
 }
 
 export function isFuture(isoDate) {
