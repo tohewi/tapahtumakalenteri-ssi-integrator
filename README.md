@@ -64,7 +64,7 @@ Generate summary reports and statistics for matches and competitions.
 
 | App | URL | Purpose |
 |-----|-----|---------|
-| **Scoring** | `/#/` | Range officers enter match scores on mobile devices |
+| **Scoring** | `/#/scoring` | Range officers enter match scores on mobile devices |
 | **Registration** | `/#/register` | Shooters self-register for CUP events (no login required) |
 | **Management** | `/api/manage/*` | Squad assignment, cup participant management, and approval workflows |
 | **Reports** | `/api/report/*` | Generate summary reports and match statistics for analysis |

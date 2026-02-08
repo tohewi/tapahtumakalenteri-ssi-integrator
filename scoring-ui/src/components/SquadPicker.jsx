@@ -1,21 +1,17 @@
+import { AppHeader, BackButton } from './shared';
+
 export default function SquadPicker({ match, onSelect, onBack }) {
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1 px-4 pt-2 text-blue-200 text-sm active:text-white"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Matches
-        </button>
+      <AppHeader>
+        <BackButton onClick={onBack}>Matches</BackButton>
         <div className="px-4 py-3">
           <h1 className="text-lg font-bold">{match.name}</h1>
-          <p className="text-blue-200 text-sm">{match.date} · {match.type}</p>
+          <p className="text-blue-200 text-sm">
+            {match.date} · {match.type}
+          </p>
         </div>
-      </div>
+      </AppHeader>
 
       <div className="p-3">
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">
