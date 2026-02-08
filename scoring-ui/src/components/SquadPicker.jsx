@@ -1,17 +1,14 @@
-import { AppHeader, BackButton } from './shared';
+import { AppHeader } from './shared';
 
 export default function SquadPicker({ match, onSelect, onBack }) {
   return (
     <div className="min-h-screen bg-gray-50">
-      <AppHeader>
-        <BackButton onClick={onBack}>Matches</BackButton>
-        <div className="px-4 py-3">
-          <h1 className="text-lg font-bold">{match.name}</h1>
-          <p className="text-blue-200 text-sm">
-            {match.date} · {match.type}
-          </p>
-        </div>
-      </AppHeader>
+      <AppHeader
+        backLabel="Matches"
+        onBack={onBack}
+        title={match.name}
+        subtitle={`${match.date} · ${match.type}`}
+      />
 
       <div className="p-3">
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">
