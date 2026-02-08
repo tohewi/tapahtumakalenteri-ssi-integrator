@@ -1,8 +1,41 @@
-# Cup Creation Scripts Reference
+# Documentation Index
 
-PowerShell automation for creating RESUL CUP events on Shoot'n'ScoreIt (SSI) with integrated WordPress calendar event creation for Turun Reservilaiset.
+This directory contains comprehensive documentation for the tapahtumakalenteri-ssi-integrator project.
 
 > For the web application, see the [User Guide](user-guide.md) and [Installation Guide](installation-guide.md).
+
+## Core Documentation
+
+### User Documentation
+- **[User Guide](user-guide.md)** - How to use the scoring and registration apps
+- **[Installation Guide](installation-guide.md)** - Deploy to Render with Resend email and GitHub CI
+
+### Technical Documentation
+- **[Scoring Architecture](scoring-architecture.md)** - Proxy architecture, session management, scoring flow
+- **[Registration Flow](registration-flow.md)** - Backend sequence diagrams and SSI state machine
+- **[SSI Admin Operations](ssi-admin-operations.md)** - Web scraping endpoints and form field reference
+- **[Requirements](requirements.md)** - Full requirements traceability matrix
+
+### Architecture & Refactoring
+- **[Refactoring Plan](refactoring-plan.md)** - Comprehensive software architecture analysis and refactoring strategy
+- **[Refactoring Visual Summary](refactoring-visual-summary.md)** - Quick reference with diagrams and comparisons
+- **[AI Agent Guidelines](ai-agent-guidelines.md)** - Token-efficient development with AI assistants
+
+### Release Information
+- **[Release Notes](RELEASE-NOTES.md)** - Version history and changelog
+- **[Release v1.0.0](RELEASE-v1.0.0.md)** - Initial release details
+
+### Design & Planning
+- **[Developer Guide](developer-guide.md)** - Technical documentation for developers
+- **[UI Design Guidelines](ui-design-guidelines.md)** - Design patterns and component guidelines
+- **[Manage Page Design](manage-page-design.md)** - Management console design
+- **[Scoring Enhancements](scoring-enhancements.md)** - Planned improvements
+
+---
+
+## PowerShell Scripts Documentation
+
+PowerShell automation for creating RESUL CUP events on Shoot'n'ScoreIt (SSI) with integrated WordPress calendar event creation for Turun Reservilaiset.
 
 ## Features
 
