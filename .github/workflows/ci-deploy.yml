@@ -2,9 +2,9 @@ name: CI / Deploy
 
 on:
   push:
-    branches: [feature/scoring-ui-prototype]
+    branches: [main]
   pull_request:
-    branches: [feature/scoring-ui-prototype]
+    branches: [main]
 
 jobs:
   test-audit-build:
@@ -34,6 +34,10 @@ jobs:
       - name: Run UI tests
         run: npm test
         working-directory: scoring-ui
+
+      - name: Run proxy tests
+        run: npm test
+        working-directory: scoring-proxy
 
       # ── Vulnerability scan ──
       - name: Audit UI dependencies
@@ -89,7 +93,7 @@ jobs:
   deploy:
     needs: test-audit-build
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/scoring-ui-prototype'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
       - name: Trigger Render deploy
