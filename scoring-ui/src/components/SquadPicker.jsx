@@ -1,9 +1,10 @@
 import { AppHeader } from './shared';
+import fi from '../i18n';
 
 export default function SquadPicker({ match, onSelect, onBack }) {
   return (
     <div className="min-h-screen bg-gray-50">
-      <AppHeader backLabel="Matches" onBack={onBack}>
+      <AppHeader backLabel={fi.matches} onBack={onBack}>
         <div className="px-4 py-3">
           <h1 className="text-lg font-bold">{match.name}</h1>
           <p className="text-blue-200 text-sm">
@@ -14,7 +15,7 @@ export default function SquadPicker({ match, onSelect, onBack }) {
 
       <div className="p-3">
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">
-          Select squad
+          {fi.selectSquad}
         </h2>
         {match.squads.map(squad => (
           <button
@@ -33,7 +34,7 @@ export default function SquadPicker({ match, onSelect, onBack }) {
             <div className="flex-1 min-w-0">
               <div className="font-semibold text-gray-800">{squad.name}</div>
               {squad.comment && <div className="text-xs text-gray-500">{squad.comment}</div>}
-              <div className="text-xs text-gray-400">{squad.shooters.length} shooters</div>
+              <div className="text-xs text-gray-400">{squad.shooters.length} {fi.shooters}</div>
             </div>
 
             {/* Arrow */}

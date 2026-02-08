@@ -1,3 +1,5 @@
+import fi from '../i18n'
+
 export default function ShooterPicker({ shooters, onSelect, currentShooterId }) {
   // Show unscored first, then scored
   const sorted = [...shooters].sort((a, b) => (a.scored === b.scored ? 0 : a.scored ? 1 : -1))
@@ -5,7 +7,7 @@ export default function ShooterPicker({ shooters, onSelect, currentShooterId }) 
   return (
     <div>
       {sorted.length === 0 && (
-        <p className="text-center text-gray-400 py-8">No shooters found</p>
+        <p className="text-center text-gray-400 py-8">{fi.noShootersFound}</p>
       )}
       {sorted.map(shooter => (
         <button
@@ -37,8 +39,8 @@ export default function ShooterPicker({ shooters, onSelect, currentShooterId }) 
           {/* Status: series points if scored, arrow if not */}
           {shooter.scored ? (
             <div className="text-right shrink-0">
-              <div className="text-sm font-bold text-green-600">{shooter.seriesPoints} pts</div>
-              <div className="text-xs text-green-500">✓ Scored</div>
+              <div className="text-sm font-bold text-green-600">{shooter.seriesPoints} {fi.pts}</div>
+              <div className="text-xs text-green-500">✓ {fi.scored}</div>
             </div>
           ) : (
             <div className="text-blue-400 shrink-0">
