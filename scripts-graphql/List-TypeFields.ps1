@@ -1,5 +1,10 @@
 param([string]$TypeName = "ScoringProgressNode")
-$schema = Get-Content (Join-Path $PSScriptRoot "schema-output.json") -Raw | ConvertFrom-Json
+$schemaPath = Join-Path $PSScriptRoot "schema-output.json"
+if (-not (Test-Path -Path $schemaPath)) {
+    Write-Error "GraphQL schema file not found at '$schemaPath'. Ensure 'schema-output.json' has been generated before running List-TypeFields.ps1."
+    return
+}
+$schema = Get-Content $schemaPath -Raw | ConvertFrom-Json
 $t = $schema.data.__schema.types | Where-Object { $_.name -eq $TypeName }
 if ($t) {
     Write-Host "$TypeName ($($t.kind)):"
