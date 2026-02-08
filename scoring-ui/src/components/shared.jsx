@@ -1,5 +1,15 @@
 // Shared UI components used across scoring, registration, and management features
 
+/**
+ * Parse a date string as local time to avoid UTC timezone issues.
+ * Date-only strings (YYYY-MM-DD) are treated as UTC by default, which can cause
+ * off-by-one-day bugs. This helper appends 'T00:00:00' to force local interpretation.
+ */
+export function parseDateLocal(isoDate) {
+  if (!isoDate) return null
+  return new Date(isoDate.includes('T') ? isoDate : isoDate + 'T00:00:00')
+}
+
 export function formatDate(isoDate) {
   if (!isoDate) return ''
   const d = new Date(isoDate)
@@ -8,7 +18,7 @@ export function formatDate(isoDate) {
 
 export function formatDateShort(isoDate) {
   if (!isoDate) return ''
-  const d = new Date(isoDate)
+  const d = parseDateLocal(isoDate)
   return d.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric', year: 'numeric' })
 }
 
@@ -89,8 +99,8 @@ export function CupList({ cups, onSelect, loading, openLabel = 'Ilmoittautuminen
   // Sort ascending by proximity to today (closest first)
   const now = Date.now()
   const sorted = [...cups].sort((a, b) => {
-    const da = Math.abs(new Date(a.starts + 'T00:00:00').getTime() - now)
-    const db = Math.abs(new Date(b.starts + 'T00:00:00').getTime() - now)
+    const da = Math.abs(parseDateLocal(a.starts).getTime() - now)
+    const db = Math.abs(parseDateLocal(b.starts).getTime() - now)
     return da - db
   })
 
@@ -122,10 +132,10 @@ export function CupList({ cups, onSelect, loading, openLabel = 'Ilmoittautuminen
                   cupIsToday ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
                 }`}>
                   <span className="text-xs font-medium leading-none">
-                    {new Date(cup.starts + 'T00:00:00').toLocaleDateString('fi-FI', { weekday: 'short' })}
+                    {parseDateLocal(cup.starts).toLocaleDateString('fi-FI', { weekday: 'short' })}
                   </span>
                   <span className="text-lg font-bold leading-tight">
-                    {new Date(cup.starts + 'T00:00:00').getDate()}
+                    {parseDateLocal(cup.starts).getDate()}
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
@@ -165,10 +175,10 @@ export function CupList({ cups, onSelect, loading, openLabel = 'Ilmoittautuminen
             >
               <div className="w-12 h-12 rounded-lg flex flex-col items-center justify-center shrink-0 bg-gray-100 text-gray-400">
                 <span className="text-xs font-medium leading-none">
-                  {new Date(cup.starts + 'T00:00:00').toLocaleDateString('fi-FI', { weekday: 'short' })}
+                  {parseDateLocal(cup.starts).toLocaleDateString('fi-FI', { weekday: 'short' })}
                 </span>
                 <span className="text-lg font-bold leading-tight">
-                  {new Date(cup.starts + 'T00:00:00').getDate()}
+                  {parseDateLocal(cup.starts).getDate()}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
