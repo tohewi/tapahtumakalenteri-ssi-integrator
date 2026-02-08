@@ -1,9 +1,8 @@
 import express from 'express'
 import { ssiGetEventStaff } from '../lib/ssi-client.js'
 
-const router = express.Router()
-
 export function createReportsRouter({ requireAuth, graphqlWithRefresh, IS_PROD }) {
+  const router = express.Router()
   // ============================================================
   // POST /api/report/summary — Summary report for selected matches
   // Body: { matches: [{ id, contentType }, ...] }
