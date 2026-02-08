@@ -125,26 +125,20 @@ function App() {
     })
   }, [view, selectedCup, selectedMatch, selectedSquad, selectedShooterId, activeSeries])
 
-  // --- On mount: try auto-login with saved credentials, else show login screen ---
+  // --- On mount: load saved credentials for pre-fill (no auto-login) ---
   useEffect(() => {
-    const tryAutoLogin = async () => {
+    const loadSavedCreds = async () => {
       const raw = localStorage.getItem(LS_KEYS.CREDS)
-      if (!raw) return // no saved creds → stay on login
+      if (!raw) return
       const creds = await decryptData(raw)
-      if (!creds) { lsRemove(LS_KEYS.CREDS); return }
-      setSavedCreds(creds) // pre-fill in case auto-login fails
-      // Attempt auto-login
-      setView('restoring')
-      try {
-        await api.login(creds.email, creds.password, creds.apiKey, 'scoring')
-        await restoreNavState()
-      } catch {
-        // Auto-login failed (expired creds, network error, etc.) → show login
-        setView('login')
+      if (creds) {
+        setSavedCreds(creds) // pre-fill form only
+      } else {
+        lsRemove(LS_KEYS.CREDS) // corrupted data
       }
     }
-    tryAutoLogin()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    loadSavedCreds()
+  }, [])
 
   // --- Login ---
 
@@ -411,20 +405,6 @@ function App() {
     // Return to shooter list so user picks who to score next
     setSelectedShooterId(null)
     setView('series')
-  }
-
-  // ============================================================
-  // VIEW: Restoring session (auto-login in progress)
-  // ============================================================
-  if (view === 'restoring') {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-          <p className="text-gray-500 text-sm">{fi.restoringSession}</p>
-        </div>
-      </div>
-    )
   }
 
   // ============================================================
