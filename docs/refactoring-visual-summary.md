@@ -47,28 +47,22 @@ flowchart TB
 
 ---
 
-### Proposed Architecture (Alternative 2 - Recommended)
+### Proposed Architecture (Alternative 1 - Recommended)
 
 ```mermaid
 flowchart TB
     subgraph "Frontend"
-        UI[scoring-ui<br/>React App<br/>Thin Client]
+        UI[scoring-ui<br/>React App<br/>Uses shared constants]
     end
     
-    subgraph "API Gateway"
-        GW[api-gateway<br/>Request Router]
+    subgraph "Backend - Monolithic (Refactored)"
+        PROXY[scoring-proxy<br/>Modular Structure]
+        ROUTES[routes/<br/>auth.js, scoring.js,<br/>registration.js, reports.js]
+        CORE[lib/ssi-core/<br/>Shared Client + Constants]
     end
     
-    subgraph "Backend Services"
-        AUTH[auth-service<br/>Authentication]
-        SCORING[scoring-service<br/>Score Management]
-        REG[registration-service<br/>Self Registration]
-        CUP[cup-management-service<br/>Cup Lifecycle + CLI]
-        REPORT[reporting-service<br/>Analytics]
-    end
-    
-    subgraph "Shared"
-        SDK[ssi-sdk<br/>Unified SSI Client<br/>Constants<br/>Types]
+    subgraph "Admin Tools"
+        S2[scripts-graphql/<br/>GraphQL API<br/>Single Implementation]
     end
     
     subgraph "External"
@@ -76,28 +70,26 @@ flowchart TB
         EMAIL[Resend Email]
     end
     
-    UI --> GW
-    GW --> AUTH
-    GW --> SCORING
-    GW --> REG
-    GW --> CUP
-    GW --> REPORT
+    UI -->|REST API| PROXY
+    PROXY --> ROUTES
+    ROUTES --> CORE
+    CORE --> SSI
+    PROXY --> EMAIL
+    S2 --> SSI
+    UI -.Imports.-> CORE
     
-    AUTH -.Uses.-> SDK
-    SCORING -.Uses.-> SDK
-    REG -.Uses.-> SDK
-    CUP -.Uses.-> SDK
-    REPORT -.Uses.-> SDK
-    
-    SDK --> SSI
-    REG --> EMAIL
-    
-    style SDK fill:#ccffcc
-    style GW fill:#ccccff
+    style CORE fill:#ccffcc
+    style ROUTES fill:#ccffee
+    style PROXY fill:#e8f5e9
 ```
 
 **Benefits:**
-- ✅ Single cup creation implementation (in cup-management-service)
+- ✅ Single cup creation implementation (scripts-graphql only)
+- ✅ Modular server.js (split into route files ~100-150 lines each)
+- ✅ Shared constants in lib/ssi-core/
+- ✅ **No Docker/Kubernetes overhead**
+- ✅ **Maintains monolithic benefits** (simple debugging, deployment)
+- ✅ **No infrastructure costs** (container registries, orchestration)
 - ✅ Small, focused services (100-200 lines each)
 - ✅ Shared constants in ssi-sdk
 - ✅ Reusable SSI library across all services
@@ -106,15 +98,15 @@ flowchart TB
 
 ## Comparison at a Glance
 
-| Aspect | Current | After Refactoring |
-|--------|---------|-------------------|
-| **Cup Creation Scripts** | 2 implementations (2,000 lines) | 1 implementation (400 lines) |
-| **Largest File** | server.js (900 lines) | Any service (~200 lines) |
-| **Constants** | Duplicated in 2+ places | Single source (ssi-sdk) |
-| **SSI Integration** | 3+ implementations | 1 shared SDK |
-| **Token Consumption** | ~4,000 tokens/task | ~600 tokens/task (85% savings) |
-| **Deployment** | 2 apps (UI + Proxy) | 6 services (scalable) |
-| **Testing** | Mixed (hard to isolate) | Per-service (easy isolation) |
+| Aspect | Current | After Refactoring (Alt 1) |
+|--------|---------|---------------------------|
+| **Cup Creation Scripts** | 2 implementations (2,000 lines) | 1 implementation (800 lines) |
+| **Largest File** | server.js (900 lines) | Any route file (~150 lines) |
+| **Constants** | Duplicated in 2+ places | Single source (lib/ssi-core/) |
+| **SSI Integration** | 3+ implementations | 1 shared library |
+| **Token Consumption** | ~3,875 tokens/task | ~1,940 tokens/task (50% savings) |
+| **Deployment** | 2 apps (UI + Proxy) | 2 apps (UI + Proxy) - Same! |
+| **Infrastructure** | Simple (no containers) | Simple (no containers) - Same! |
 
 ---
 
@@ -130,10 +122,10 @@ Agent must load:
 Total: ~4,000 tokens
 ```
 
-**After Refactoring:**
+**After Refactoring (Alternative 1):**
 ```
 Agent loads only:
-- packages/ssi-sdk/src/constants.js (50 lines)
+- scoring-proxy/lib/ssi-core/constants.js (50 lines)
 Total: ~200 tokens (95% savings)
 ```
 
@@ -147,25 +139,25 @@ Agent must load:
 Total: ~3,500 tokens
 ```
 
-**After Refactoring:**
+**After Refactoring (Alternative 1):**
 ```
 Agent loads only:
-- packages/scoring-service/src/routes/scoring.js (100 lines)
-- apps/scoring-ui/src/services/scoring-api.js (80 lines)
-Total: ~800 tokens (77% savings)
+- scoring-proxy/routes/scoring.js (150 lines)
+- scoring-ui/src/api.js (200 lines)
+Total: ~1,200 tokens (66% savings)
 ```
 
 ### Overall Impact
 
-| Task Category | Current Avg | Refactored Avg | Savings |
-|---------------|-------------|----------------|---------|
-| Add endpoint | 3,500 tokens | 800 tokens | 77% |
+| Task Category | Current Avg | Alt 1 (Monolith) | Savings |
+|---------------|-------------|------------------|---------|
+| Add endpoint | 3,500 tokens | 1,200 tokens | 66% |
 | Update constants | 4,000 tokens | 200 tokens | 95% |
-| Fix bug | 3,000 tokens | 600 tokens | 80% |
-| Add feature | 5,000 tokens | 1,200 tokens | 76% |
-| **Average** | **3,875 tokens** | **700 tokens** | **82%** |
+| Fix bug | 3,000 tokens | 1,500 tokens | 50% |
+| Add feature | 5,000 tokens | 2,500 tokens | 50% |
+| **Average** | **3,875 tokens** | **1,940 tokens** | **50%** |
 
-**Translation:** For a 100-task project, refactoring saves ~320,000 tokens (~$5-10 in API costs, plus faster development).
+**Translation:** For a 100-task project, Alternative 1 saves ~193,500 tokens with no infrastructure overhead.
 
 ---
 
@@ -185,7 +177,26 @@ scoring-ui/src/App.jsx
 └─ Token cost per edit: ~1,500
 ```
 
-### After Refactoring
+### After Refactoring (Alternative 1 - Monolith)
+
+```
+scoring-proxy/server.js
+├─ Lines: 150 (just route mounting)
+├─ Concerns: 1 (bootstrapping)
+└─ Token cost per edit: ~500
+
+scoring-proxy/routes/scoring.js
+├─ Lines: 150
+├─ Concerns: 1 (scoring endpoints)
+└─ Token cost per edit: ~500
+
+scoring-proxy/lib/ssi-core/constants.js
+├─ Lines: 50
+├─ Concerns: 1 (shared constants)
+└─ Token cost per edit: ~200
+```
+
+**Average file size:** 900 lines → 150 lines (83% reduction)
 
 ```
 packages/scoring-service/src/
@@ -213,95 +224,82 @@ apps/scoring-ui/src/
 
 ## Two Alternative Approaches
 
-### Alternative 1: Consolidation with Shared Utilities
+### Alternative 1: Monolithic Consolidation ⭐ **RECOMMENDED**
 
 **Timeline:** 2-3 weeks  
 **Complexity:** Low  
 **Risk:** Low  
 
 **What it does:**
-- ✅ Creates shared `ssi-sdk` package for common code
-- ✅ Consolidates cup creation scripts (removes duplication)
-- ✅ Splits server.js into route modules
-- ❌ Keeps proxy as monolithic service
+- ✅ Creates shared `lib/ssi-core/` library for common code
+- ✅ Consolidates cup creation (removes scripts/, keeps scripts-graphql/)
+- ✅ Splits server.js into route modules (~150 lines each)
+- ✅ **Maintains monolithic architecture** (proven benefits)
+- ✅ **No Docker/Kubernetes** (avoids infrastructure costs)
 
 **Good for:**
-- Small teams
-- Limited resources
-- Quick improvements
-- Maintaining current deployment
+- Teams preferring monolithic architecture
+- Avoiding Docker infrastructure overhead
+- No container registry costs or limitations
+- Quick improvements with immediate value
+- Simple deployment (current infrastructure)
 
-**Score:** 3.6/5
+**Token savings:** 50% (3,875 → 1,940 tokens average)
+
+**Score:** 4.2/5 (best fit for this project)
 
 ---
 
-### Alternative 2: Modular Microservice Architecture ⭐ RECOMMENDED
+### Alternative 2: Microservice Architecture - NOT RECOMMENDED
 
 **Timeline:** 7-10 weeks (phased)  
-**Complexity:** Medium-High  
-**Risk:** Medium (mitigated by phased rollout)  
+**Complexity:** High  
+**Risk:** Medium-High  
 
 **What it does:**
-- ✅ Creates comprehensive `ssi-sdk` (TypeScript)
-- ✅ Splits proxy into 5 independent services
-- ✅ Implements API gateway
-- ✅ Professional CLI tools (replaces PowerShell)
-- ✅ Docker + Kubernetes deployment
+- Creates comprehensive `ssi-sdk` (TypeScript)
+- Splits proxy into 5 independent services
+- Implements API gateway
+- **Requires Docker + Kubernetes deployment**
+- **Requires container registry** (costs/limitations)
 
-**Good for:**
-- Long-term maintainability
-- Team scalability
-- Professional quality
-- Token efficiency (85% savings)
+**Issues:**
+- ❌ Docker infrastructure costs (container registries)
+- ❌ Runtime limitations (local Docker Desktop now requires licenses)
+- ❌ Orchestration complexity (Kubernetes, DevOps overhead)
+- ❌ Overkill for current scale
 
-**Score:** 4.3/5
+**Only consider when:**
+- Team grows to 5+ developers
+- Need independent service scaling
+- Docker infrastructure already available
+- Have dedicated DevOps resources
 
----
+**Token savings:** 82% (but at high infrastructure cost)
 
-## Phased Implementation
-
-### Phase 1: Quick Wins (Weeks 1-3)
-
-**Goal:** Eliminate redundancies
-
-```
-✅ Create ssi-sdk package
-✅ Consolidate cup creation (remove scripts/)
-✅ Update UI and proxy to use shared SDK
-```
-
-**Deliverable:** Single source of truth, 50% duplication removed
+**Score:** 2.8/5 (infrastructure overhead outweighs benefits)
 
 ---
 
-### Phase 2: Service Extraction (Weeks 4-6)
+## Implementation Plan (Alternative 1 - Recommended)
 
-**Goal:** Split monolithic proxy
+### Phase 1: Consolidation (Weeks 1-3)
 
-```
-✅ Create scoring-service
-✅ Create registration-service
-✅ Create cup-management-service
-✅ Create api-gateway
-✅ Docker development environment
-```
-
-**Deliverable:** Independent services, 70% token savings
-
----
-
-### Phase 3: Production Readiness (Weeks 7-10)
-
-**Goal:** Deploy to production
+**Goal:** Eliminate redundancies within monolith
 
 ```
-✅ Kubernetes deployment
-✅ Monitoring (logs, traces, metrics)
-✅ CI/CD pipelines
-✅ Complete documentation
+✅ Create lib/ssi-core/ shared library (not separate package)
+✅ Consolidate cup creation (archive scripts/, keep scripts-graphql/)
+✅ Split server.js into route modules
+✅ Update UI and proxy to use shared constants
 ```
 
-**Deliverable:** Production-ready microservices, 85% token savings
+**Deliverable:** 
+- Modular monolith structure
+- 50% token reduction
+- No infrastructure changes needed
+
+**Timeline:** 2-3 weeks total
 
 ---
 
@@ -309,7 +307,7 @@ apps/scoring-ui/src/
 
 ### Updating Score Zones
 
-**Before (Alternative 0 - Current):**
+**Before (Current):**
 
 ```javascript
 // File: scoring-ui/src/App.jsx (line 15)
@@ -323,7 +321,7 @@ const ZONES = ['X', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'M'];
 
 ---
 
-**After (Alternative 1 - Consolidation):**
+**After (Alternative 1 - Monolith Consolidation):**
 
 ```javascript
 // File: packages/ssi-core/src/constants.js
@@ -349,77 +347,87 @@ export const SCORE_ZONES = ['X', '10', '9', '8', '7', '6', '5', '4', '3', '2', '
 export type ScoreZone = typeof SCORE_ZONES[number];
 // ScoreZone type = 'X' | '10' | '9' | ... | 'M'
 
-// File: apps/scoring-ui/src/App.tsx
-import { SCORE_ZONES, ScoreZone } from '@ssi-integrator/ssi-sdk';
+```javascript
+// File: scoring-proxy/lib/ssi-core/constants.js
+export const SCORE_ZONES = ['X', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'M'];
 
-function validateScore(score: ScoreZone) {
-  // TypeScript ensures score is valid at compile time
-}
+// File: scoring-ui/src/App.jsx
+import { SCORE_ZONES } from '../../../scoring-proxy/lib/ssi-core/constants.js';
 
-// File: packages/scoring-service/src/validation/validator.ts
-import { SCORE_ZONES, ScoreZone } from '@ssi-integrator/ssi-sdk';
+// File: scoring-proxy/routes/scoring.js
+import { SCORE_ZONES } from '../lib/ssi-core/constants.js';
 ```
 
-**Additional Benefit:** Type safety prevents runtime errors
+**Benefit:** Single update point, guaranteed consistency, no NPM packaging needed
 
 ---
 
 ## Resource Requirements
 
-### Alternative 1: Consolidation
+### Alternative 1: Monolith Consolidation ⭐ RECOMMENDED
 
 **Development:**
 - 1 developer, 2-3 weeks full-time
 - Node.js experience required
-- Basic NPM workspaces knowledge
+- NO Docker/Kubernetes knowledge needed
+- NO TypeScript required
 
 **Infrastructure:**
-- No changes to current deployment
-- Same hosting (Render or similar)
+- ✅ No changes to current deployment
+- ✅ Same hosting (Render or similar)
+- ✅ NO Docker infrastructure needed
+- ✅ NO container registry costs
 
 **Maintenance:**
-- Slightly reduced (less duplication)
+- Reduced duplication
+- Simpler debugging (monolithic benefits)
+- Same operational model
 
 ---
 
-### Alternative 2: Microservices
+### Alternative 2: Microservices - NOT RECOMMENDED
 
 **Development:**
 - 2-3 developers, 7-10 weeks combined
 - Node.js, TypeScript experience required
-- Docker, Kubernetes knowledge needed
+- **Docker, Kubernetes knowledge required**
+- DevOps expertise needed
 
 **Infrastructure:**
-- Container orchestration (Kubernetes)
-- Load balancer for API gateway
-- Monitoring stack (logs, metrics, traces)
-- CI/CD pipelines
+- ❌ Container orchestration (Kubernetes) - Complex & Costly
+- ❌ **Container registry** - Paid service or limitations
+- ❌ **Docker Desktop** - Now requires license for companies
+- ❌ Load balancer, monitoring stack
+- ❌ Significantly higher operational overhead
 
 **Maintenance:**
-- Significantly reduced (modular, isolated services)
-- Easier onboarding (smaller codebases)
+- More complex (distributed systems)
+- Harder debugging (across services)
+- Requires dedicated DevOps
 
 ---
 
 ## Risk Assessment
 
-### Alternative 1: Low Risk
+### Alternative 1: Very Low Risk ⭐
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
 | Breaking changes during refactor | Low | Medium | Comprehensive testing |
-| NPM workspace issues | Low | Low | Well-documented pattern |
-| Adoption resistance | Low | Low | Minimal workflow changes |
+| Integration issues | Very Low | Low | Maintaining monolith structure |
+| Adoption resistance | Very Low | Very Low | Minimal workflow changes |
+| **Infrastructure costs** | **None** | **None** | **No new infrastructure** |
 
 ---
 
-### Alternative 2: Medium Risk
+### Alternative 2: High Risk ❌
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
-| Service orchestration complexity | Medium | High | Phased rollout, Docker Compose first |
-| Network latency between services | Low | Medium | Co-locate services, use caching |
-| Debugging distributed systems | Medium | Medium | Centralized logging, distributed tracing |
+| **Docker infrastructure costs** | **High** | **High** | **Requires paid container registry** |
+| **Docker Desktop licensing** | **High** | **High** | **Enterprise license required** |
+| Service orchestration complexity | High | High | Requires DevOps expertise |
+| Debugging distributed systems | Medium | High | Expensive tooling needed |
 | Team learning curve | Medium | Medium | Training, documentation, pair programming |
 | Deployment complexity | Medium | High | Infrastructure as Code, automated pipelines |
 
@@ -434,82 +442,89 @@ import { SCORE_ZONES, ScoreZone } from '@ssi-integrator/ssi-sdk';
 - [ ] ssi-sdk package published and used by UI + proxy
 - [ ] Single cup creation script (scripts-graphql only)
 - [ ] All existing tests pass
+### Phase 1 Success Criteria (Alternative 1)
+
+- [ ] lib/ssi-core/ shared library created and used
+- [ ] Single cup creation implementation (scripts-graphql only)
+- [ ] server.js split into route modules (~150 lines each)
+- [ ] All existing tests pass
 - [ ] No regressions in functionality
-
-### Phase 2 Success Criteria
-
-- [ ] 5 services running independently in Docker
-- [ ] API gateway routing correctly
-- [ ] Token consumption reduced by 70%+
-- [ ] Service response time < 300ms (p95)
-
-### Phase 3 Success Criteria
-
-- [ ] Production deployment on Kubernetes
-- [ ] Zero-downtime deployments working
-- [ ] Monitoring dashboards operational
-- [ ] Developer satisfaction score > 8/10
-- [ ] Token consumption reduced by 85%+
+- [ ] Token consumption reduced by 50%+
+- [ ] No new infrastructure dependencies
 
 ---
 
 ## Return on Investment (ROI)
 
-### Alternative 1: High ROI, Quick Payback
+### Alternative 1: Excellent ROI, Quick Payback ⭐ RECOMMENDED
 
 **Investment:**
-- 120-160 hours (3-4 weeks)
-- ~$15,000-20,000 (developer time)
+- 120-160 hours (2-3 weeks)
+- ~$12,000-18,000 (developer time only)
+- **$0 infrastructure costs**
 
 **Returns:**
 - 50% less code duplication → easier maintenance
-- 40% faster bug fixes (smaller files)
-- 50% token savings → $200-500/year (AI costs)
+- 50% faster bug fixes (smaller files)
+- 50% token savings → $400-750/year (AI costs)
+- **No ongoing infrastructure costs**
+- Maintains monolithic debugging benefits
 
-**Payback period:** 6-12 months
+**Payback period:** 3-6 months
+
+**Total 3-year value:** Saves ~$36,000-45,000 (maintenance + AI tokens)
 
 ---
 
-### Alternative 2: Very High ROI, Longer Payback
+### Alternative 2: Negative ROI, High Costs ❌ NOT RECOMMENDED
 
 **Investment:**
 - 400-600 hours (7-10 weeks)
-- ~$50,000-75,000 (developer time + infrastructure)
+- ~$50,000-75,000 (developer time)
+- **$5,000-10,000/year infrastructure** (registries, monitoring, orchestration)
 
 **Returns:**
-- 85% token savings → $800-1,500/year (AI costs)
-- 60% faster feature development (isolation)
-- 70% faster onboarding (smaller codebases)
-- Independent scaling → handle 10x load without rewrite
+- 82% token savings → $800-1,500/year (AI costs)
+- BUT: Requires ongoing infrastructure costs
+- BUT: Higher operational complexity
+- BUT: Requires DevOps expertise
 
-**Payback period:** 18-24 months
+**Payback period:** Never (infrastructure costs exceed token savings)
 
-**Long-term value:** Avoids future rewrite (estimated $150,000+ saved)
+**Total 3-year value:** **Costs** ~$75,000-105,000 (investment + infrastructure)
 
 ---
 
 ## Recommendation Summary
 
-✅ **Recommended:** Alternative 2 (Microservices) with phased approach
+✅ **Recommended:** Alternative 1 (Monolithic Consolidation)
 
 **Why:**
-1. **Eliminates all identified issues** (not just some)
-2. **Massive token savings** (85% vs 50%)
-3. **Future-proof architecture** (scales with team and usage)
-4. **Industry best practices** (professional quality)
-5. **Phased rollout** (mitigates risk, delivers incremental value)
+1. **Eliminates redundancy** (single source of truth for code and constants)
+2. **Maintains monolithic benefits** (simple debugging, proven architecture)
+3. **No infrastructure overhead** (no Docker, Kubernetes, or container costs)
+4. **Quick implementation** (2-3 weeks vs 7-10 weeks)
+5. **50% token savings** (sufficient for AI efficiency)
+6. **Excellent ROI** (3-6 month payback, no ongoing costs)
 
-**Start with Phase 1 to get quick wins, then proceed to Phases 2-3 for full benefits.**
+**Alternative 2 (Microservices) NOT recommended because:**
+- ❌ Requires Docker infrastructure (container registry costs/limitations)
+- ❌ Docker Desktop now requires enterprise license
+- ❌ Adds operational complexity (Kubernetes, orchestration)
+- ❌ Negative ROI (infrastructure costs > token savings)
+- ❌ Overkill for current scale and team size
 
 ---
 
 ## Next Steps
 
 1. **Review this plan** with stakeholders
-2. **Approve chosen alternative** (1 or 2)
-3. **Allocate resources** (developers, infrastructure)
-4. **Create implementation tickets** from roadmap
-5. **Begin Phase 1** development
+2. **Begin Alternative 1 implementation** (monolithic consolidation)
+3. **Create implementation tickets** for:
+   - Create lib/ssi-core/ shared library
+   - Archive scripts/ directory
+   - Split server.js into route modules
+4. **Start development** (2-3 week timeline)
 
 **Questions?** See full details in `docs/refactoring-plan.md`
 

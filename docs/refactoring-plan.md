@@ -17,7 +17,7 @@ This document provides a comprehensive analysis of the tapahtumakalenteri-ssi-in
 - ⚠️ **No shared library** for common SSI operations
 - ⚠️ **Mixed authentication patterns** without unified abstraction
 
-**Recommended Approach:** **Alternative 2** (Modular Microservice Architecture with Shared Libraries)
+**Recommended Approach:** **Alternative 1** (Consolidation with Shared Utilities - Monolith Refactoring)
 
 ---
 
@@ -837,34 +837,35 @@ services:
 | Future extensibility | 🔴 Limited | 🟡 Moderate | 🟢 Excellent | Alt 2 |
 | Token consumption (AI) | 🔴 High | 🟡 Medium | 🟢 Low | Alt 2 |
 
-### Recommendation: **Alternative 2** (with phased approach)
+### Recommendation: **Alternative 1** (Consolidation with Shared Utilities)
 
 **Rationale:**
 
-1. **Long-term value:** While Alt 2 requires more upfront effort, it provides a solid foundation for future growth
-2. **Token efficiency:** Smaller, focused services are easier for AI agents to understand and modify
-3. **Professional quality:** Matches industry best practices for modern web applications
-4. **Eliminates redundancy:** Completely removes duplicate implementations
-5. **Team scalability:** Enables multiple developers/teams to work independently
+1. **Monolith benefits:** Maintains proven monolithic architecture with its simplicity and debugging advantages
+2. **No infrastructure overhead:** Avoids Docker/Kubernetes costs and complexity (container registries, orchestration)
+3. **Eliminates redundancy:** Removes duplicate cup creation implementations and shared constants
+4. **Quick wins:** 2-3 week implementation delivers immediate value
+5. **Token efficiency:** Achieves 50% token reduction through shared libraries and smaller files
+6. **Simple deployment:** Works with current deployment infrastructure (no container orchestration needed)
 
-**Phased Implementation Plan:**
+**Implementation Plan:**
 
-**Phase 1 (2-3 weeks):** Quick wins from Alt 1
-- Create `ssi-sdk` package with shared constants and client
-- Consolidate cup creation scripts
-- Update UI and proxy to use shared SDK
+**Phase 1 (2-3 weeks):** Consolidation and shared libraries
+- Create `lib/ssi-core/` shared library with constants and client
+- Consolidate cup creation (remove scripts/, keep scripts-graphql/)
+- Split server.js into route modules (auth, scoring, registration, reports)
+- Update UI to use shared constants
 
-**Phase 2 (3-4 weeks):** Microservice foundation
-- Split proxy into services (start with scoring + registration)
-- Implement API gateway
-- Setup Docker development environment
+**Total Timeline:** 2-3 weeks with immediate benefits
 
-**Phase 3 (2-3 weeks):** Complete migration
-- Migrate remaining services
-- Setup CI/CD pipelines
-- Production deployment with Kubernetes
+**Note on Alternative 2 (Microservices):**
+While microservices offer additional benefits (independent scaling, service isolation), they require:
+- Docker infrastructure (container registry, runtime costs/limitations)
+- Orchestration complexity (Kubernetes)
+- Additional operational overhead
+- Longer implementation timeline (7-10 weeks)
 
-**Total Timeline:** 7-10 weeks with incremental value delivery
+For this project, Alternative 1 provides the best balance of eliminating redundancy while maintaining operational simplicity.
 
 ---
 
@@ -1067,136 +1068,69 @@ Context: Loads entire repository (~10,000 tokens)
 
 ## Implementation Roadmap
 
-### Phase 1: Foundation (Weeks 1-3)
+## Implementation Roadmap
 
-**Goal:** Eliminate redundancies with minimal disruption
+### Phase 1: Foundation (Weeks 1-3) - **RECOMMENDED APPROACH**
+
+**Goal:** Eliminate redundancies within monolithic architecture
 
 **Tasks:**
-1. ✅ Create `packages/ssi-sdk/` NPM package
-   - Migrate constants from UI and proxy
-   - Implement unified SSI client
-   - Add TypeScript definitions
+1. ✅ Create `lib/ssi-core/` shared library (NOT a separate package)
+   - Migrate constants from UI and proxy to `scoring-proxy/lib/ssi-core/constants.js`
+   - Implement unified SSI client in `scoring-proxy/lib/ssi-core/client.js`
    - Write comprehensive tests
+   - Export as local module (no NPM packaging needed)
 
 2. ✅ Consolidate cup creation
-   - Archive `scripts/` (web scraping version)
-   - Refactor `scripts-graphql/New-KupittaaCup.ps1`
-   - Extract logic to JavaScript module in `ssi-sdk`
-   - Create cross-platform CLI wrapper
+   - Archive `scripts/` (web scraping version) to `archive/scripts-legacy/`
+   - Keep `scripts-graphql/` as the single implementation
+   - Document that GraphQL approach is now the standard
 
-3. ✅ Update existing components
-   - Modify `scoring-ui` to import from `ssi-sdk`
-   - Modify `scoring-proxy/lib` to use shared client
-   - Update `package.json` files with workspace dependencies
+3. ✅ Split server.js into route modules
+   - Create `scoring-proxy/routes/auth.js` (~100 lines)
+   - Create `scoring-proxy/routes/scoring.js` (~150 lines)
+   - Create `scoring-proxy/routes/registration.js` (~120 lines)
+   - Create `scoring-proxy/routes/reports.js` (~100 lines)
+   - Create `scoring-proxy/routes/management.js` (~80 lines)
+   - Update `server.js` to just mount routes (~150 lines)
+
+4. ✅ Update existing components
+   - Modify `scoring-ui` to import from `lib/ssi-core/constants.js`
+   - Modify `scoring-proxy/lib` modules to use shared client
+   - Remove duplicate constant definitions
 
 **Validation:**
 - All existing tests pass
-- Cup creation works via new CLI
+- Cup creation works via scripts-graphql
 - UI and proxy function identically
+- No Docker/container dependencies
 
 **Deliverables:**
-- `packages/ssi-sdk/` published to NPM (private registry or GitHub Packages)
-- Single cup creation implementation
+- `scoring-proxy/lib/ssi-core/` shared library
+- Single cup creation implementation (scripts-graphql only)
+- Modular route structure in scoring-proxy
 - Updated documentation
 
-### Phase 2: Service Extraction (Weeks 4-6)
+**Token Savings:** 50% reduction (3,875 → 1,940 tokens average per task)
 
-**Goal:** Split monolithic proxy into microservices
+---
 
-**Tasks:**
-1. ✅ Create service scaffolds
-   - `packages/scoring-service/`
-   - `packages/registration-service/`
-   - `packages/cup-management-service/`
-   - `packages/api-gateway/`
+### Alternative: Microservice Approach (NOT RECOMMENDED for this project)
 
-2. ✅ Migrate scoring logic
-   - Extract from `server.js` lines 200-400
-   - Implement session management module
-   - Implement score validation module
-   - Create REST API endpoints
+**Why NOT recommended:**
+- ❌ Requires Docker infrastructure (container registry costs, runtime limitations)
+- ❌ Adds orchestration complexity (Kubernetes, container management)
+- ❌ Increases operational overhead (multiple deployment units)
+- ❌ Longer implementation timeline (7-10 weeks vs 2-3 weeks)
+- ❌ Overkill for current team size and scale
 
-3. ✅ Migrate registration logic
-   - Extract from `server.js` lines 600-800
-   - Implement CAPTCHA module
-   - Implement email module
-   - Create streaming NDJSON endpoints
+**When to reconsider:**
+- Team grows to 5+ developers
+- Need to scale components independently
+- Have dedicated DevOps resources
+- Docker infrastructure is already available
 
-4. ✅ Setup API gateway
-   - Route definitions for all services
-   - Middleware (CORS, rate limiting, auth)
-   - Request/response transformation
-
-5. ✅ Docker development environment
-   - `docker-compose.yml` for local development
-   - Dockerfiles for each service
-   - Environment variable management
-
-**Validation:**
-- Each service runs independently
-- API gateway correctly routes requests
-- All existing features work through new architecture
-- Performance comparable to monolithic version
-
-**Deliverables:**
-- 4 independent services running in Docker
-- Updated UI pointing to API gateway
-- Migration guide document
-
-### Phase 3: Production Readiness (Weeks 7-10)
-
-**Goal:** Deploy to production with monitoring and CI/CD
-
-**Tasks:**
-1. ✅ Production deployment
-   - Kubernetes manifests for each service
-   - Helm charts for configuration
-   - Ingress controller setup
-   - SSL/TLS certificates
-
-2. ✅ Observability
-   - Logging aggregation (e.g., ELK stack)
-   - Distributed tracing (e.g., Jaeger)
-   - Metrics collection (Prometheus + Grafana)
-   - Health check endpoints
-
-3. ✅ CI/CD pipelines
-   - GitHub Actions for automated testing
-   - Automated deployment on merge to main
-   - Rollback procedures
-   - Canary deployments
-
-4. ✅ Documentation
-   - Update all docs in `/docs/` directory
-   - API documentation (OpenAPI/Swagger)
-   - Deployment runbooks
-   - Troubleshooting guides
-
-**Validation:**
-- Zero-downtime deployment works
-- Monitoring dashboards functional
-- CI/CD pipeline executes successfully
-- Load testing shows acceptable performance
-
-**Deliverables:**
-- Production-ready Kubernetes cluster
-- Complete monitoring setup
-- Automated deployment pipeline
-- Updated documentation
-
-### Phase 4: Optimization (Ongoing)
-
-**Goal:** Continuous improvement and feature additions
-
-**Tasks:**
-1. 🔄 Performance optimization
-   - Database query optimization (if added)
-   - Caching strategies (Redis)
-   - CDN for static assets
-   - Response compression
-
-2. 🔄 Feature enhancements
-   - Real-time scoring updates (WebSockets)
+For now, Alternative 1 (monolithic consolidation) provides all the benefits of eliminating redundancy without the infrastructure overhead.
    - Mobile apps (React Native)
    - Offline mode support
    - Multi-language support
@@ -1386,34 +1320,39 @@ Operations:
 
 This refactoring plan provides two viable approaches to modernizing the tapahtumakalenteri-ssi-integrator architecture:
 
-1. **Alternative 1:** Quick consolidation with shared utilities (2-3 weeks)
-   - Best for: Small teams, limited resources, immediate improvements
-   - Eliminates: Redundancy and duplication
-   - Maintains: Current deployment model
+1. **Alternative 1:** Monolithic consolidation with shared utilities (2-3 weeks) ⭐ **RECOMMENDED**
+   - Best for: Maintaining monolithic benefits, avoiding Docker infrastructure costs
+   - Eliminates: Redundancy and code duplication (50% token savings)
+   - Maintains: Current deployment model, operational simplicity
+   - No infrastructure overhead: No Docker, Kubernetes, or container registries needed
 
-2. **Alternative 2:** Comprehensive microservice architecture (7-10 weeks)
-   - Best for: Long-term maintainability, team scalability, professional quality
-   - Eliminates: All architectural issues identified
-   - Enables: Independent service scaling, team autonomy, 85% token savings
+2. **Alternative 2:** Comprehensive microservice architecture (7-10 weeks) - **NOT RECOMMENDED**
+   - Requires: Docker infrastructure (container registries, runtime costs/limitations)
+   - Requires: Kubernetes orchestration and DevOps expertise
+   - Best for: Large teams (5+ developers), independent scaling needs
+   - Only consider when: Infrastructure is already available or team/scale demands it
 
-**Recommended path:** Start with Alt 1 (Phase 1) to get quick wins, then migrate to Alt 2 (Phases 2-3) for long-term success.
+**Recommended path:** Alternative 1 provides all the benefits of eliminating redundancy while maintaining the proven advantages of monolithic architecture and avoiding infrastructure complexity.
 
-The phased approach ensures:
-- ✅ Continuous delivery of value
-- ✅ Low risk (incremental changes)
-- ✅ Business continuity (no downtime)
-- ✅ Team learning (gradual complexity increase)
+The consolidated monolith approach ensures:
+- ✅ Eliminates code duplication (scripts/ vs scripts-graphql/)
+- ✅ Single source of truth for constants and business logic
+- ✅ Modular code structure (split server.js into route modules)
+- ✅ 50% token consumption reduction
+- ✅ No Docker/Kubernetes overhead
+- ✅ Simple deployment (current infrastructure)
+- ✅ Quick implementation (2-3 weeks)
 
 **Next steps:**
 1. Review this plan with stakeholders
-2. Approve chosen alternative
+2. Begin Alternative 1 implementation
 3. Create detailed implementation tickets
-4. Begin Phase 1 development
+4. Archive legacy scripts/ directory
 
 ---
 
 **Document Metadata:**
 - Author: GitHub Copilot
-- Review Status: Awaiting Approval
-- Version: 1.0
+- Review Status: Updated based on feedback
+- Version: 2.0
 - Last Updated: 2026-02-08
