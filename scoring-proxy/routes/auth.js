@@ -2,9 +2,8 @@ import express from 'express'
 import crypto from 'node:crypto'
 import { ssiGraphQL, ssiLogin } from '../lib/ssi-client.js'
 
-const router = express.Router()
-
 export function createAuthRouter({ sessions, getSession, setSessionCookie, SESSION_COOKIE, IS_PROD, loginLimiter }) {
+  const router = express.Router()
   // ============================================================
   // POST /api/auth/login — Login to SSI (both JWT + session)
   // ============================================================
