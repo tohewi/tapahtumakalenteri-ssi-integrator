@@ -15,7 +15,7 @@ Registration frontend and scoring application — shooters can self-register for
 - **Confirmation email**: HTML email via Resend with match list, squad assignments, and instructions
 - **User not found**: Links to SSI signup page when email isn't in the system
 
-### New: Scoring App (`#/`)
+### New: Scoring App (`#/scoring`)
 
 - **Touch-optimized scoring**: Zone-tap buttons (X, 10–1, M) for entering scores on the range
 - **PWA installable**: Works offline-capable, installable on mobile devices
