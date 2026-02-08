@@ -7,12 +7,14 @@ import { AppHeader, ErrorBanner, Spinner, CupList } from './shared'
 import fi from '../i18n'
 
 const LS_CREDS = 'ssi_credentials'
+const LS_MANAGE_STATE = 'ssi_manage_state'
 
 export default function ManagePage() {
   const [authed, setAuthed] = useState(false)
   const [view, setView] = useState('login') // login | cups | overview
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
 
   // Cup selection
   const [cups, setCups] = useState([])
@@ -21,31 +23,90 @@ export default function ManagePage() {
   // Management data
   const [data, setData] = useState(null)
 
-  // Auto-login on mount
+  // --- Save navigation state on changes ---
   useEffect(() => {
-    const tryAutoLogin = async () => {
+    if (!authed || view === 'login') return
+    localStorage.setItem(LS_MANAGE_STATE, JSON.stringify({
+      view,
+      cupId: selectedCup?.id,
+      cupName: selectedCup?.name,
+    }))
+  }, [authed, view, selectedCup])
+
+  // --- Helper to handle session expiry ---
+  const handleSessionExpired = useCallback(() => {
+    setSessionExpiredMessage('Session expired. Please login again.')
+    // Navigation state is already saved in localStorage
+    // It will be restored after successful re-login
+    setAuthed(false)
+    setView('login')
+  }, [])
+
+  // --- Helper to handle scope mismatch ---
+  const handleScopeMismatch = useCallback(() => {
+    setSessionExpiredMessage('Please login to access this feature.')
+    setAuthed(false)
+    setView('login')
+  }, [])
+
+  // --- Wrapper to catch SessionExpiredError and ScopeMismatchError ---
+  const withSessionCheck = useCallback(async (fn) => {
+    try {
+      return await fn()
+    } catch (err) {
+      if (err instanceof api.SessionExpiredError) {
+        handleSessionExpired()
+        throw err
+      }
+      if (err instanceof api.ScopeMismatchError) {
+        handleScopeMismatch()
+        throw err
+      }
+      throw err
+    }
+  }, [handleSessionExpired, handleScopeMismatch])
+
+  // Load saved credentials for pre-fill (no auto-login)
+  useEffect(() => {
+    const loadSavedCreds = async () => {
       const raw = localStorage.getItem(LS_CREDS)
       if (!raw) return
       const creds = await decryptData(raw)
-      if (!creds) return
-      try {
-        await api.login(creds.email, creds.password, creds.apiKey)
-        setAuthed(true)
-        setView('cups')
-      } catch { /* show login */ }
+      // Just load for potential pre-fill, don't auto-login
+      // (LoginScreen handles the pre-fill via props if needed)
     }
-    tryAutoLogin()
+    loadSavedCreds()
   }, [])
 
   // Login handler
   const handleLogin = async (email, password, apiKey, rememberMe) => {
-    await api.login(email, password, apiKey)
+    setSessionExpiredMessage(null)
+    await api.login(email, password, apiKey, 'manage')
     if (rememberMe) {
       const encrypted = await encryptData({ email, password, apiKey })
       localStorage.setItem(LS_CREDS, encrypted)
     }
     setAuthed(true)
-    setView('cups')
+    
+    // Restore previous state if available
+    const savedState = localStorage.getItem(LS_MANAGE_STATE)
+    if (savedState) {
+      try {
+        const state = JSON.parse(savedState)
+        if (state.cupId && state.view === 'overview') {
+          // Try to restore to the overview page
+          setSelectedCup({ id: state.cupId, name: state.cupName })
+          setView('overview')
+          // The data will be loaded by the useEffect that watches selectedCup
+        } else {
+          setView('cups')
+        }
+      } catch {
+        setView('cups')
+      }
+    } else {
+      setView('cups')
+    }
   }
 
   // Logout handler
@@ -80,16 +141,26 @@ export default function ManagePage() {
     setLoading(true)
     setError(null)
     try {
-      const resp = await fetch(`/api/manage/cup/${cup.id}`, { credentials: 'include' })
-      if (!resp.ok) throw new Error('Failed to load management data')
-      const d = await resp.json()
-      setData(d)
-      setView('overview')
+      await withSessionCheck(async () => {
+        const resp = await fetch(`/api/manage/cup/${cup.id}`, { credentials: 'include' })
+        if (resp.status === 401) {
+          const data = await resp.json()
+          if (data.sessionExpired) {
+            throw new api.SessionExpiredError(data.error)
+          }
+        }
+        if (!resp.ok) throw new Error('Failed to load management data')
+        const d = await resp.json()
+        setData(d)
+        setView('overview')
+      })
     } catch (err) {
-      setError(err.message)
+      if (!(err instanceof api.SessionExpiredError)) {
+        setError(err.message)
+      }
     }
     setLoading(false)
-  }, [])
+  }, [withSessionCheck]) // withSessionCheck is stable, but included for clarity
 
   // Login screen
   if (!authed) {

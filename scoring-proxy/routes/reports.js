@@ -8,7 +8,7 @@ export function createReportsRouter({ requireAuth, graphqlWithRefresh, IS_PROD }
   // Body: { matches: [{ id, contentType }, ...] }
   // Returns per-match: name, date, shooterCount, squadCount, shootersPerSquad, staff, staffCount
   // ============================================================
-  router.post('/summary', requireAuth, async (req, res) => {
+  router.post('/summary', requireAuth('reporting'), async (req, res) => {
     let matchList = req.body.matches
     if (!matchList && Array.isArray(req.body.matchIds)) {
       matchList = req.body.matchIds.map(id => ({ id, contentType: 91 }))
@@ -126,7 +126,7 @@ export function createReportsRouter({ requireAuth, graphqlWithRefresh, IS_PROD }
   // Body: { matches: [{ id, contentType }, ...] }
   // Returns approved shooters per squad per match with admin role
   // ============================================================
-  router.post('/matches', requireAuth, async (req, res) => {
+  router.post('/matches', requireAuth('reporting'), async (req, res) => {
     // Support both old format { matchIds } and new { matches }
     let matchList = req.body.matches
     if (!matchList && Array.isArray(req.body.matchIds)) {

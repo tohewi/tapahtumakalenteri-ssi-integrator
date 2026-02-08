@@ -2,16 +2,20 @@ import express from 'express'
 import crypto from 'node:crypto'
 import { ssiGraphQL, ssiLogin } from '../lib/ssi-client.js'
 
-export function createAuthRouter({ sessions, getSession, setSessionCookie, SESSION_COOKIE, IS_PROD, loginLimiter }) {
+export function createAuthRouter({ sessions, getSession, setSessionCookie, SESSION_COOKIE, SESSION_TTL, IS_PROD, loginLimiter }) {
   const router = express.Router()
   // ============================================================
   // POST /api/auth/login — Login to SSI (both JWT + session)
   // ============================================================
   router.post('/login', loginLimiter, async (req, res) => {
-    const { email, password, apiKey } = req.body
+    const { email, password, apiKey, scope } = req.body
     if (!email || !password) {
       return res.status(400).json({ error: 'email and password required' })
     }
+
+    // Validate scope - must be one of: scoring, manage, reporting
+    const validScopes = ['scoring', 'manage', 'reporting']
+    const sessionScope = scope && validScopes.includes(scope) ? scope : 'scoring'
 
     try {
       // 1. Get JWT token via GraphQL
@@ -38,7 +42,7 @@ export function createAuthRouter({ sessions, getSession, setSessionCookie, SESSI
       // 2. Get session cookies via web login
       const ssiCookies = await ssiLogin(email, password)
 
-      // 3. Create a proxy session
+      // 3. Create a proxy session with scope
       const sessionId = crypto.randomUUID()
       const now = Date.now()
       sessions.set(sessionId, {
@@ -46,6 +50,7 @@ export function createAuthRouter({ sessions, getSession, setSessionCookie, SESSI
         refreshToken,
         apiKey: apiKey || null,
         ssiCookies,
+        scope: sessionScope,
         createdAt: now,
         lastUsed: now,
       })
@@ -53,13 +58,14 @@ export function createAuthRouter({ sessions, getSession, setSessionCookie, SESSI
       setSessionCookie(res, sessionId)
 
       if (!IS_PROD) {
-        console.log(`[session] New session created. Active: ${sessions.size}`)
+        console.log(`[session] New ${sessionScope} session created. Active: ${sessions.size}`)
       }
 
       res.json({
         success: true,
         hasJwt: true,
         hasSession: !!ssiCookies,
+        scope: sessionScope,
       })
     } catch (err) {
       console.error('Login failed:', err)
@@ -72,11 +78,23 @@ export function createAuthRouter({ sessions, getSession, setSessionCookie, SESSI
   // ============================================================
   router.get('/status', (req, res) => {
     const session = getSession(req)
-    res.json({
-      authenticated: !!session,
-      hasJwt: !!session?.jwt,
-      hasSession: !!session?.ssiCookies,
-    })
+    if (session) {
+      const now = Date.now()
+      const remainingMs = SESSION_TTL - (now - session.lastUsed)
+      res.json({
+        authenticated: true,
+        hasJwt: !!session.jwt,
+        hasSession: !!session.ssiCookies,
+        remainingMs: Math.max(0, remainingMs),
+      })
+    } else {
+      res.json({
+        authenticated: false,
+        hasJwt: false,
+        hasSession: false,
+        remainingMs: 0,
+      })
+    }
   })
 
   // ============================================================

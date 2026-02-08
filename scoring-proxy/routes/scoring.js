@@ -8,7 +8,7 @@ export function createScoringRouter({ requireAuth, graphqlWithRefresh, IS_PROD }
   // GET /api/cups?search=Kupittaa — Search for cups by name
   // Uses SSI events(search:) query, filters to CT=136 (cups)
   // ============================================================
-  router.get('/cups', requireAuth, async (req, res) => {
+  router.get('/cups', requireAuth('scoring'), async (req, res) => {
     const search = req.query.search
     if (!search || search.length < 2) {
       return res.json({ cups: [] })
@@ -51,7 +51,7 @@ export function createScoringRouter({ requireAuth, graphqlWithRefresh, IS_PROD }
   // ============================================================
   // GET /api/cup/:id — Get cup with its component matches
   // ============================================================
-  router.get('/cup/:id', requireAuth, async (req, res) => {
+  router.get('/cup/:id', requireAuth('scoring'), async (req, res) => {
     try {
       const result = await graphqlWithRefresh(req.ssiSession, `
         query CupDetail($id: String!) {
@@ -96,7 +96,7 @@ export function createScoringRouter({ requireAuth, graphqlWithRefresh, IS_PROD }
   // ============================================================
   // GET /api/match/:id — Get match with squads and competitors
   // ============================================================
-  router.get('/match/:id', requireAuth, async (req, res) => {
+  router.get('/match/:id', requireAuth('scoring'), async (req, res) => {
     try {
       const result = await graphqlWithRefresh(req.ssiSession, `
         query Match($id: String!) {
@@ -151,7 +151,7 @@ export function createScoringRouter({ requireAuth, graphqlWithRefresh, IS_PROD }
   // ============================================================
   // GET /api/competitor/:id — Get single competitor scores
   // ============================================================
-  router.get('/competitor/:id', requireAuth, async (req, res) => {
+  router.get('/competitor/:id', requireAuth('scoring'), async (req, res) => {
     try {
       const result = await graphqlWithRefresh(req.ssiSession, `
         query Competitor($id: String!) {
@@ -181,7 +181,7 @@ export function createScoringRouter({ requireAuth, graphqlWithRefresh, IS_PROD }
   // ============================================================
   // POST /api/competitor/:id/score — Submit scores via form POST
   // ============================================================
-  router.post('/competitor/:id/score', requireAuth, async (req, res) => {
+  router.post('/competitor/:id/score', requireAuth('scoring'), async (req, res) => {
     const session = req.ssiSession
     if (!session.ssiCookies) return res.status(401).json({ error: 'No SSI session. Login first.' })
 
@@ -261,7 +261,7 @@ export function createScoringRouter({ requireAuth, graphqlWithRefresh, IS_PROD }
   // ============================================================
   // GET /api/matches — Search matches across all time windows
   // ============================================================
-  router.get('/matches', requireAuth, async (req, res) => {
+  router.get('/matches', requireAuth(['scoring', 'reporting']), async (req, res) => {
     const search = req.query.search
     if (!search || search.length < 2) {
       return res.json({ matches: [] })
