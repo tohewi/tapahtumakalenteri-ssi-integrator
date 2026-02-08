@@ -89,8 +89,8 @@ export function CupList({ cups, onSelect, loading, openLabel = 'Ilmoittautuminen
   // Sort ascending by proximity to today (closest first)
   const now = Date.now()
   const sorted = [...cups].sort((a, b) => {
-    const da = Math.abs(new Date(a.starts).getTime() - now)
-    const db = Math.abs(new Date(b.starts).getTime() - now)
+    const da = Math.abs(new Date(a.starts + 'T00:00:00').getTime() - now)
+    const db = Math.abs(new Date(b.starts + 'T00:00:00').getTime() - now)
     return da - db
   })
 
@@ -122,10 +122,10 @@ export function CupList({ cups, onSelect, loading, openLabel = 'Ilmoittautuminen
                   cupIsToday ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
                 }`}>
                   <span className="text-xs font-medium leading-none">
-                    {new Date(cup.starts).toLocaleDateString('fi-FI', { weekday: 'short' })}
+                    {new Date(cup.starts + 'T00:00:00').toLocaleDateString('fi-FI', { weekday: 'short' })}
                   </span>
                   <span className="text-lg font-bold leading-tight">
-                    {new Date(cup.starts).getDate()}
+                    {new Date(cup.starts + 'T00:00:00').getDate()}
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
@@ -165,10 +165,10 @@ export function CupList({ cups, onSelect, loading, openLabel = 'Ilmoittautuminen
             >
               <div className="w-12 h-12 rounded-lg flex flex-col items-center justify-center shrink-0 bg-gray-100 text-gray-400">
                 <span className="text-xs font-medium leading-none">
-                  {new Date(cup.starts).toLocaleDateString('fi-FI', { weekday: 'short' })}
+                  {new Date(cup.starts + 'T00:00:00').toLocaleDateString('fi-FI', { weekday: 'short' })}
                 </span>
                 <span className="text-lg font-bold leading-tight">
-                  {new Date(cup.starts).getDate()}
+                  {new Date(cup.starts + 'T00:00:00').getDate()}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
