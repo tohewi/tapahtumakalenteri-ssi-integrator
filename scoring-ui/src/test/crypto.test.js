@@ -185,7 +185,7 @@ describe('encryption produces valid structure', () => {
     expect(() => atob(parsed.data)).not.toThrow()
   })
 
-  it('produces 12-byte IV', async () => {
+  it('produces IV with correct length of 12 bytes for AES-GCM', async () => {
     const data = { test: 'value' }
     const encrypted = await encryptData(data)
     const parsed = JSON.parse(encrypted)
