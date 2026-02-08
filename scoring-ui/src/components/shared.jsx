@@ -12,7 +12,7 @@ export function parseDateLocal(isoDate) {
 
 export function formatDate(isoDate) {
   if (!isoDate) return ''
-  const d = new Date(isoDate)
+  const d = parseDateLocal(isoDate)
   return d.toLocaleDateString('fi-FI', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
 
@@ -24,7 +24,7 @@ export function formatDateShort(isoDate) {
 
 export function isToday(isoDate) {
   if (!isoDate) return false
-  const target = new Date(isoDate)
+  const target = parseDateLocal(isoDate)
   const now = new Date()
   return (
     target.getFullYear() === now.getFullYear() &&
@@ -35,7 +35,7 @@ export function isToday(isoDate) {
 
 export function isFuture(isoDate) {
   if (!isoDate) return false
-  return new Date(isoDate) > new Date()
+  return parseDateLocal(isoDate) > new Date()
 }
 
 export function BackButton({ label, onClick }) {
