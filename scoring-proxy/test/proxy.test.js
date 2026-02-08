@@ -5,7 +5,7 @@
  * and valid SSI credentials. Run with:
  *   node --test test/proxy.test.js
  * 
- * Environment: Node.js 18+ built-in test runner
+ * Environment: Node.js 24+ built-in test runner (aligned with package.json engines)
  */
 
 import { describe, it, before, after } from 'node:test'
