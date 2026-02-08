@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { formatDateShort, isToday, isFuture } from './shared'
+import { formatDateShort, isToday, isFuture, parseDateLocal } from './shared'
 import fi from '../i18n'
 
 export default function CupSearch({ onSelectCup, loading, onLogout }) {
