@@ -41,15 +41,19 @@ export default function ScoreZoneButton({ zone, count, onIncrement, onDecrement,
       {/* +/- buttons - large tap targets */}
       <div className="flex gap-2 w-full">
         <button
+          type="button"
           onClick={onDecrement}
           disabled={count === 0}
+          aria-label={`Decrease ${zone}`}
           className={`flex-1 h-11 rounded-lg text-white font-bold text-xl ${c.minus} disabled:opacity-30 disabled:active:bg-inherit`}
         >
           −
         </button>
         <button
+          type="button"
           onClick={onIncrement}
           disabled={incrementDisabled}
+          aria-label={`Increase ${zone}`}
           className={`flex-1 h-11 rounded-lg text-white font-bold text-xl ${c.plus} disabled:opacity-30 disabled:active:bg-inherit`}
         >
           +
