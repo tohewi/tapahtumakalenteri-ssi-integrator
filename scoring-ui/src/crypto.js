@@ -1,11 +1,12 @@
 /**
  * Encrypt/decrypt credentials in localStorage using AES-GCM.
  * 
- * A device-specific key is derived from a fixed salt + random key stored
- * alongside the data. This prevents plain-text credentials in localStorage.
- * The key is generated once per device and stored in localStorage itself.
+ * A random device-local AES-GCM key is generated once and stored (base64-encoded)
+ * in localStorage under `ssi_device_key`. This prevents storing credentials as
+ * plain-text JSON in localStorage but does not derive the key from a salt or
+ * any other secret.
  * 
- * This is NOT a substitute for a secure keychain, but it ensures credentials
+ * This is NOT a substitute for a secure OS keychain; it only ensures credentials
  * are not trivially readable as plain JSON in localStorage / DevTools.
  */
 
