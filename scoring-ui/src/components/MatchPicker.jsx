@@ -1,5 +1,9 @@
 export default function MatchPicker({ matches, onSelect, cupName, onBack }) {
-  const today = new Date().toISOString().split('T')[0]
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const today = `${year}-${month}-${day}`
   const todayMatches = matches.filter(m => m.date === today)
   const otherMatches = matches.filter(m => m.date !== today)
 
