@@ -63,8 +63,8 @@ export function createAuthRouter({ sessions, getSession, setSessionCookie, SESSI
         hasSession: !!ssiCookies,
       })
     } catch (err) {
-      console.error('Login failed:', err.message)
-      res.status(401).json({ error: err.message })
+      console.error('Login failed:', err)
+      res.status(401).json({ error: 'Login failed' })
     }
   })
 
