@@ -103,7 +103,7 @@ export default function SummaryReportPage() {
       }
     }
     setLoading(false)
-  }, [searchText, withSessionCheck])
+  }, [searchText, withSessionCheck]) // withSessionCheck is stable, but included for clarity
 
   // Sport filter options
   const sportOptions = [...new Set(

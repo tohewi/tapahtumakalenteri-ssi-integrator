@@ -110,7 +110,7 @@ export default function ManagePage() {
       }
     }
     setLoading(false)
-  }, [withSessionCheck])
+  }, [withSessionCheck]) // withSessionCheck is stable, but included for clarity
 
   // Login screen
   if (!authed) {

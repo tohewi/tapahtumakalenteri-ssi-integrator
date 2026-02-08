@@ -102,7 +102,7 @@ export default function ReportPage() {
       }
     }
     setLoading(false)
-  }, [searchText, withSessionCheck])
+  }, [searchText, withSessionCheck]) // withSessionCheck is stable, but included for clarity
 
   // Collect unique sport values from results for the filter dropdown
   const sportOptions = [...new Set(
