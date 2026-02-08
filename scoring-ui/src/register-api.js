@@ -80,6 +80,22 @@ export async function submitRegistration({ cupId, squadNumber, email, captchaId,
     }
   }
 
+  // Flush any remaining decoded data and process the final line(s)
+  buffer += decoder.decode()
+  if (buffer) {
+    const lines = buffer.split('\n')
+    for (const line of lines) {
+      if (!line.trim()) continue
+      try {
+        const event = JSON.parse(line)
+        if (event.type === 'progress' && onProgress) {
+          onProgress(event)
+        } else if (event.type === 'result') {
+          result = event
+        }
+      } catch { /* skip malformed lines */ }
+    }
+  }
   if (!result) throw new Error('No result received')
   if (!result.success) {
     const err = new Error(result.message || 'Registration failed')
