@@ -17,8 +17,20 @@ export const fi = {
   dismiss: 'Sulje',
   
   // App header
-  appTitle: 'SSI Scoring',
+  appTitle: 'SSI Tools',
   loginSubtitle: 'Kirjaudu sisään aloittaaksesi tulosten syötön',
+  
+  // HomePage features
+  scoringTitle: 'Kupittaa Cup tulosten syöttö',
+  scoringDescription: 'Syötä kilpailutulokset puhelimella',
+  registrationTitle: 'Kupittaa Cup ilmoittautuminen',
+  registrationDescription: 'Ilmoittaudu Kupittaa CUP -kilpailuun',
+  managementTitle: 'Kupittaa Cup hallinta',
+  managementDescription: 'Squadien ja ilmoittautumisten hallinta',
+  reportTitle: 'Raportti',
+  reportDescription: 'Kilpailuraportit ja tilastot',
+  summaryTitle: 'Yhteenveto',
+  summaryDescription: 'Kilpailujen yhteenvetoraportti',
   
   // Loading states
   loading: 'Ladataan...',
@@ -74,4 +86,105 @@ export const fi = {
   tooManyShotsInButton: 'Liikaa laukauksia',
 }
 
-export default fi
+// English UI strings
+export const en = {
+  // Navigation
+  back: 'Back',
+  cups: 'Cups',
+  matches: 'Matches',
+  squads: 'Squads',
+  squad: 'Squad',
+  
+  // Common actions
+  search: 'Search',
+  logout: 'Logout',
+  save: 'Save',
+  cancel: 'Cancel',
+  next: 'Next',
+  skip: 'Skip',
+  dismiss: 'Close',
+  
+  // App header
+  appTitle: 'SSI Tools',
+  loginSubtitle: 'Login to start scoring',
+  
+  // HomePage features
+  scoringTitle: 'Kupittaa Cup Scoring',
+  scoringDescription: 'Enter competition scores by phone',
+  registrationTitle: 'Kupittaa Cup Registration',
+  registrationDescription: 'Register for Kupittaa CUP competition',
+  managementTitle: 'Kupittaa Cup Management',
+  managementDescription: 'Squad and registration management',
+  reportTitle: 'Report',
+  reportDescription: 'Competition reports and statistics',
+  summaryTitle: 'Summary',
+  summaryDescription: 'Competition summary report',
+  
+  // Loading states
+  loading: 'Loading...',
+  restoringSession: 'Restoring session...',
+  
+  // CupSearch
+  searchCupPlaceholder: 'Cup name, e.g. Kupittaa',
+  searchCupSubtitle: 'Search for a cup to start scoring',
+  noCupsFound: 'No cups found',
+  tryDifferentSearch: 'Try a different search term',
+  today: 'TODAY',
+  
+  // MatchPicker
+  selectMatchSubtitle: 'Select a match for scoring',
+  todayLabel: 'Today',
+  otherMatches: 'Other matches',
+  noMatchesToday: 'No matches today',
+  selectFromOtherMatches: 'Select from upcoming or past matches',
+  active: 'Active',
+  
+  // SquadPicker
+  selectSquad: 'Select squad',
+  shooters: 'shooters',
+  
+  // ShooterPicker
+  noShootersFound: 'No shooters found',
+  scored: 'Scored',
+  pts: 'pts',
+  pickShooter: 'Pick shooter',
+  
+  // ScoringForm
+  series: 'Series',
+  hits: 'hits',
+  tooManyShots: 'Too many shots!',
+  removeHitsBeforeSaving: 'Remove hits before saving',
+  nextSeries: 'Next',
+  skipToSeries: 'Skip',
+  
+  // CompetitorHeader
+  saveScores: 'Save scores',
+  saving: 'Saving...',
+  saved: 'Saved!',
+  saveFailed: 'Save failed',
+  total: 'Total',
+  xCount: 'X-count',
+  
+  // Series view
+  scoreAllShootersWarning: 'Enter scores for all shooters before moving to the next',
+  seriesLowerCase: 'series',
+  pairLowerCase: 'pair',
+  remaining: 'remaining',
+  saveAndNext: 'Save → Next shooter',
+  tooManyShotsInButton: 'Too many shots',
+}
+
+// Detect browser language and return appropriate translations
+function getLanguage() {
+  // In test environment or when navigator is not available, default to Finnish
+  if (typeof navigator === 'undefined' || !navigator.language) {
+    return fi
+  }
+  const browserLang = navigator.language.toLowerCase()
+  if (browserLang.startsWith('en')) {
+    return en
+  }
+  return fi // Default to Finnish
+}
+
+export default getLanguage()
