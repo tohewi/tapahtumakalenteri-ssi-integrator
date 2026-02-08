@@ -8,7 +8,7 @@ const LS_CREDS = 'ssi_credentials'
 
 export default function ReportPage() {
   const [authed, setAuthed] = useState(false)
-  const [view, setView] = useState('login') // login | search | report
+  const [view, setView] = useState('checking') // checking | login | search | report
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
@@ -65,14 +65,22 @@ export default function ReportPage() {
   useEffect(() => {
     const tryAutoLogin = async () => {
       const raw = localStorage.getItem(LS_CREDS)
-      if (!raw) return
+      if (!raw) {
+        setView('login')
+        return
+      }
       const creds = await decryptData(raw)
-      if (!creds) return
+      if (!creds) {
+        setView('login')
+        return
+      }
       try {
         await api.login(creds.email, creds.password, creds.apiKey, 'reporting')
         setAuthed(true)
         setView('search')
-      } catch { /* show login */ }
+      } catch {
+        setView('login')
+      }
     }
     tryAutoLogin()
   }, [])
@@ -235,6 +243,18 @@ export default function ReportPage() {
     a.download = `report-${new Date().toISOString().split('T')[0]}.csv`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  // Checking authentication state
+  if (view === 'checking') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <p className="text-gray-500 text-sm">Checking authentication...</p>
+        </div>
+      </div>
+    )
   }
 
   // Login screen
