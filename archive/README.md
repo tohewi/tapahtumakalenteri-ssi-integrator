@@ -5,14 +5,14 @@ This directory contains deprecated code that has been replaced by better impleme
 ## scripts-legacy/
 
 **Archived:** 2026-02-08  
-**Reason:** Web scraping-based cup creation has been replaced by GraphQL API approach
+**Reason:** Pure web scraping-based cup creation has been superseded by a mixed GraphQL + scraping approach (GraphQL for reads, scraping still required for writes because SSI GraphQL mutations like `create_event` are currently broken).
 
 The legacy `scripts/` directory used web scraping and form parsing to create cups in ShootNScoreIt. This approach was:
 - Fragile (broke when SSI HTML changed)
 - Slower than API calls
 - Harder to maintain
 
-**Replacement:** Use `scripts-graphql/` which uses the official ShootNScoreIt GraphQL API.
+**Replacement:** Use `scripts-graphql/`, which uses the official ShootNScoreIt GraphQL API for reads while retaining maintained web-scraping fallbacks for write operations until the SSI GraphQL mutations are reliable.
 
 ### What was in scripts-legacy/
 - `New-KupittaaCup.ps1` - Cup creation via form scraping
