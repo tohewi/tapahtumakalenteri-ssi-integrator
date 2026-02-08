@@ -1,7 +1,4 @@
-import { SSI_BASE_URL, SSI_GRAPHQL } from './constants.js'
-
-// Alias for backward compatibility
-const SSI_BASE = SSI_BASE_URL
+import { SSI_BASE_URL_URL, SSI_GRAPHQL } from './constants.js'
 
 // ============================================================
 // GraphQL client (JWT auth for reads)
@@ -78,7 +75,7 @@ export async function ssiRefreshJWT(refreshToken) {
 export async function ssiLogin(email, password) {
   // 1. GET the login page to get cookies (no CSRF token expected)
   // SSI login URL is /login/ (not /accounts/login/)
-  const loginUrl = `${SSI_BASE}/login/?next=/dashboard/`
+  const loginUrl = `${SSI_BASE_URL}/login/?next=/dashboard/`
   const loginPageResp = await fetch(loginUrl, {
     redirect: 'manual',
     headers: {
@@ -109,7 +106,7 @@ export async function ssiLogin(email, password) {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Cookie': formatCookies(cookies),
       'Referer': loginUrl,
-      'Origin': SSI_BASE,
+      'Origin': SSI_BASE_URL,
     },
     body: formData.toString(),
     redirect: 'manual',
@@ -157,7 +154,7 @@ export async function ssiLogin(email, password) {
 // ============================================================
 
 export async function ssiGetScoringPage(competitorId, cookies) {
-  const url = `${SSI_BASE}/nordic/competitor/${competitorId}/score-in-match/`
+  const url = `${SSI_BASE_URL}/nordic/competitor/${competitorId}/score-in-match/`
 
   const resp = await fetch(url, {
     headers: {
@@ -195,13 +192,13 @@ export async function ssiGetScoringPage(competitorId, cookies) {
 // ============================================================
 
 export async function ssiSubmitScore(competitorId, formData, cookies, csrfToken) {
-  const url = `${SSI_BASE}/nordic/competitor/${competitorId}/score-in-match/`
+  const url = `${SSI_BASE_URL}/nordic/competitor/${competitorId}/score-in-match/`
 
   const headers = {
     'Content-Type': 'application/x-www-form-urlencoded',
     'Cookie': formatCookies(cookies),
     'Referer': url,
-    'Origin': SSI_BASE,
+    'Origin': SSI_BASE_URL,
   }
   if (csrfToken) {
     headers['X-CSRFToken'] = csrfToken
@@ -337,14 +334,14 @@ async function _handleRegisterResponse(html, url, cookies, debug) {
 
     if (debug) console.log(`[search-and-add] POST confirm to: ${formAction}, fields: ${[...formData.keys()].join(', ')}`)
 
-    const fullAction = formAction.startsWith('http') ? formAction : `${SSI_BASE}${formAction}`
+    const fullAction = formAction.startsWith('http') ? formAction : `${SSI_BASE_URL}${formAction}`
     const confirmResp = await fetch(fullAction, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Cookie': formatCookies(cookies),
         'Referer': url,
-        'Origin': SSI_BASE,
+        'Origin': SSI_BASE_URL,
       },
       body: formData.toString(),
       redirect: 'manual',
@@ -388,7 +385,7 @@ async function _handleRegisterResponse(html, url, cookies, debug) {
 // ============================================================
 
 export async function ssiSearchAndAddParticipant(eventContentType, eventId, email, cookies, { firstName, lastName } = {}) {
-  const pageUrl = `${SSI_BASE}/event/${eventContentType}/${eventId}/participant-search-and-add/`
+  const pageUrl = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/participant-search-and-add/`
   const debug = process.env.NODE_ENV !== 'production'
 
   // SSI search-and-add is a two-step form (NO CSRF tokens — SSI doesn't use them):
@@ -410,7 +407,7 @@ export async function ssiSearchAndAddParticipant(eventContentType, eventId, emai
       'Content-Type': 'application/x-www-form-urlencoded',
       'Cookie': formatCookies(cookies),
       'Referer': pageUrl,
-      'Origin': SSI_BASE,
+      'Origin': SSI_BASE_URL,
     },
     body: formData.toString(),
     redirect: 'manual',
@@ -468,7 +465,7 @@ export async function ssiSearchAndAddParticipant(eventContentType, eventId, emai
   ]
   if (registerLinks.length > 0) {
     const registerUrl = registerLinks[0][1]
-    const fullUrl = registerUrl.startsWith('http') ? registerUrl : `${SSI_BASE}${registerUrl}`
+    const fullUrl = registerUrl.startsWith('http') ? registerUrl : `${SSI_BASE_URL}${registerUrl}`
     if (debug) console.log(`[search-and-add] Found register link: ${fullUrl}`)
 
     const result = await _followRegisterLink(fullUrl, pageUrl, cookies, debug)
@@ -484,7 +481,7 @@ export async function ssiSearchAndAddParticipant(eventContentType, eventId, emai
     .filter(l => !l.includes('search/?') && !l.includes('send-invitation') && !l.includes('create-'))
 
   if (actionLinks.length > 0) {
-    const fullUrl = `${SSI_BASE}${actionLinks[0]}`
+    const fullUrl = `${SSI_BASE_URL}${actionLinks[0]}`
     if (debug) console.log(`[search-and-add] Found action link: ${fullUrl}`)
     const result = await _followRegisterLink(fullUrl, pageUrl, cookies, debug)
     if (!result.shooterName && searchShooterName) result.shooterName = searchShooterName
@@ -514,7 +511,7 @@ export async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookie
   const debug = process.env.NODE_ENV !== 'production'
 
   // 1. Scrape CUP participants page
-  const partUrl = `${SSI_BASE}/event/136/${cupId}/participants/`
+  const partUrl = `${SSI_BASE_URL}/event/136/${cupId}/participants/`
   if (debug) console.log(`[cup-approve] GET ${partUrl} (looking for "${shooterName}")`)
   const resp = await fetch(partUrl, {
     headers: { 'Cookie': formatCookies(cookies) },
@@ -556,7 +553,7 @@ export async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookie
   // 3. Toggle status: Pending → Approved (one toggle from Pending)
   //    Toggle cycle: Pending → Approved → Approved(no results) → Deleted → Pending
   //    We only need to toggle once from Pending to reach Approved.
-  const toggleUrl = `${SSI_BASE}/event/participant/137/${participantId}/toggle-status/?next=${partUrl}`
+  const toggleUrl = `${SSI_BASE_URL}/event/participant/137/${participantId}/toggle-status/?next=${partUrl}`
   if (debug) console.log(`[cup-approve] GET toggle-status: ${toggleUrl}`)
 
   const toggleResp = await fetch(toggleUrl, {
@@ -588,7 +585,7 @@ export async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookie
 
 export async function ssiSetParticipantSquad(participantId, squadNumber, cookies, statusOverride = 'a') {
   const debug = process.env.NODE_ENV !== 'production'
-  const url = `${SSI_BASE}/event/participant/93/${participantId}/edit/`
+  const url = `${SSI_BASE_URL}/event/participant/93/${participantId}/edit/`
 
   // 1. GET the edit form
   if (debug) console.log(`[squad-edit] GET ${url}`)
@@ -645,7 +642,7 @@ export async function ssiSetParticipantSquad(participantId, squadNumber, cookies
       'Content-Type': 'application/x-www-form-urlencoded',
       'Cookie': formatCookies(cookies),
       'Referer': url,
-      'Origin': SSI_BASE,
+      'Origin': SSI_BASE_URL,
     },
     body: formData.toString(),
     redirect: 'manual',
@@ -677,7 +674,7 @@ export async function ssiSetParticipantSquad(participantId, squadNumber, cookies
 
 export async function ssiFindCompetitorInMatch(matchId, shooterName, cookies) {
   const debug = process.env.NODE_ENV !== 'production'
-  const url = `${SSI_BASE}/event/91/${matchId}/participants/`
+  const url = `${SSI_BASE_URL}/event/91/${matchId}/participants/`
 
   if (debug) console.log(`[find-competitor] GET ${url} (looking for "${shooterName}")`)
   const resp = await fetch(url, {
@@ -716,7 +713,7 @@ export async function ssiFindCompetitorInMatch(matchId, shooterName, cookies) {
 // ============================================================
 
 export async function ssiFetchPage(path, cookies) {
-  const url = `${SSI_BASE}${path}`
+  const url = `${SSI_BASE_URL}${path}`
   const resp = await fetch(url, {
     headers: {
       'Cookie': formatCookies(cookies),

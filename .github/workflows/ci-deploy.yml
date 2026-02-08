@@ -1,5 +1,6 @@
 name: CI / Deploy
 
+# GitHub Flow: Runs tests on all PRs, deploys only from main
 on:
   push:
     branches: [main]
