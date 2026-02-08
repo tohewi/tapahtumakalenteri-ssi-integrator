@@ -1,6 +1,8 @@
 # Kupittaa Cup Automation - GraphQL API Version
 
-This folder contains the GraphQL API-based implementation for creating Kupittaa RESUL CUP events on shootnscoreit.com.
+**This is the STANDARD implementation for cup creation.**
+
+This folder contains the GraphQL API-based implementation for creating Kupittaa RESUL CUP events on shootnscoreit.com. The legacy web scraping approach has been archived to `archive/scripts-legacy/`.
 
 ## Folder Structure
 

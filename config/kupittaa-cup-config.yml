@@ -5,7 +5,7 @@
 # Event Management
 management:
   groupId: "25874"  # Group that manages both Cup and Matches (use "xxx" for self-administered)
-  organizerId: ""  # toShootOrNot organizer (use "" for no club organizer)
+  organizerId: "1215"  # TurRes Kupittaa (TurResKu)
 
 # Cup Settings
 cup:
