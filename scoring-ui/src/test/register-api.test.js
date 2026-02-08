@@ -1,9 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { getCaptcha, verifyCaptcha, getCups, getCupDetail, submitRegistration } from '../register-api'
 
+const originalFetch = global.fetch
+
 describe('Registration API client', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    if (typeof originalFetch === 'undefined') {
+      delete global.fetch
+    } else {
+      global.fetch = originalFetch
+    }
   })
 
   // ============================================================
