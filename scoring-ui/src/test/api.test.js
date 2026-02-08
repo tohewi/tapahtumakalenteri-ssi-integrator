@@ -233,7 +233,7 @@ describe('transformMatch', () => {
 
   it('handles empty object', () => {
     const result = transformMatch({})
-    expect(result.id).toBeNaN() // Number(undefined)
+    expect(Number.isNaN(result.id)).toBe(true) // Number(undefined) returns NaN
     expect(result.name).toBeUndefined()
     expect(result.type).toBe('RESUL Nordic')
     expect(result.status).toBeUndefined()
