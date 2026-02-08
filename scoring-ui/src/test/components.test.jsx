@@ -110,6 +110,14 @@ describe('MatchPicker', () => {
     { id: 2, name: 'Match B', date: '2026-02-15', type: 'RESUL Nordic', status: 'on', squads: [] },
   ]
 
+  beforeAll(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-02-20T00:00:00Z'))
+  })
+
+  afterAll(() => {
+    vi.useRealTimers()
+  })
   it('renders all matches', () => {
     render(<MatchPicker matches={matches} onSelect={vi.fn()} />)
     expect(screen.getByText('Match A')).toBeInTheDocument()
