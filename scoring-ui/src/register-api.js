@@ -38,7 +38,7 @@ export async function submitRegistration({ cupId, squadNumber, email, captchaId,
   const resp = await fetch(`${API_BASE}/submit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cupId, squadNumber, email, captchaId, captchaAnswer }),
+    body: JSON.stringify({ cupId, squadNumber, email, captchaId, captchaAnswer: Number(captchaAnswer) }),
   })
 
   // Non-streaming error responses (4xx/5xx return JSON)
