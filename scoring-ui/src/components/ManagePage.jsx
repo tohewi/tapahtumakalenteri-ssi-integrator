@@ -6,6 +6,7 @@ import LoginScreen from './LoginScreen'
 import { AppHeader, ErrorBanner, Spinner, CupList } from './shared'
 
 const LS_CREDS = 'ssi_credentials'
+const LS_MANAGE_STATE = 'ssi_manage_state'
 
 export default function ManagePage() {
   const [authed, setAuthed] = useState(false)
@@ -21,9 +22,21 @@ export default function ManagePage() {
   // Management data
   const [data, setData] = useState(null)
 
+  // --- Save navigation state on changes ---
+  useEffect(() => {
+    if (!authed || view === 'login') return
+    localStorage.setItem(LS_MANAGE_STATE, JSON.stringify({
+      view,
+      cupId: selectedCup?.id,
+      cupName: selectedCup?.name,
+    }))
+  }, [authed, view, selectedCup])
+
   // --- Helper to handle session expiry ---
   const handleSessionExpired = useCallback(() => {
     setSessionExpiredMessage('Session expired. Please login again.')
+    // Navigation state is already saved in localStorage
+    // It will be restored after successful re-login
     setAuthed(false)
     setView('login')
   }, [])
@@ -73,7 +86,26 @@ export default function ManagePage() {
       localStorage.setItem(LS_CREDS, encrypted)
     }
     setAuthed(true)
-    setView('cups')
+    
+    // Restore previous state if available
+    const savedState = localStorage.getItem(LS_MANAGE_STATE)
+    if (savedState) {
+      try {
+        const state = JSON.parse(savedState)
+        if (state.cupId && state.view === 'overview') {
+          // Try to restore to the overview page
+          setSelectedCup({ id: state.cupId, name: state.cupName })
+          setView('overview')
+          // The data will be loaded by the useEffect that watches selectedCup
+        } else {
+          setView('cups')
+        }
+      } catch {
+        setView('cups')
+      }
+    } else {
+      setView('cups')
+    }
   }
 
   // Load cups from registration API (same data as Register page)

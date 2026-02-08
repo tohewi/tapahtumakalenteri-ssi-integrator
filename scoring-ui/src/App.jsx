@@ -86,6 +86,8 @@ function App() {
   // --- Helper to handle session expiry ---
   const handleSessionExpired = useCallback(() => {
     setSessionExpiredMessage('Session expired. Please login again.')
+    // Navigation state is already saved in localStorage via useEffect
+    // It will be restored after successful re-login via restoreNavState()
     setView('login')
   }, [])
 

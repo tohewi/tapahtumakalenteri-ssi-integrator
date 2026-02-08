@@ -5,6 +5,7 @@ import LoginScreen from './LoginScreen'
 import { AppHeader, ErrorBanner, Spinner, formatDateShort } from './shared'
 
 const LS_CREDS = 'ssi_credentials'
+const LS_REPORT_STATE = 'ssi_report_state'
 
 export default function ReportPage() {
   const [authed, setAuthed] = useState(false)
@@ -30,9 +31,20 @@ export default function ReportPage() {
   // Report data
   const [reportRows, setReportRows] = useState([])
 
+  // --- Save navigation state on changes ---
+  useEffect(() => {
+    if (!authed || view === 'login') return
+    localStorage.setItem(LS_REPORT_STATE, JSON.stringify({
+      view,
+      searchText: view === 'search' || view === 'report' ? searchText : '',
+    }))
+  }, [authed, view, searchText])
+
   // --- Helper to handle session expiry ---
   const handleSessionExpired = useCallback(() => {
     setSessionExpiredMessage('Session expired. Please login again.')
+    // Navigation state is already saved in localStorage
+    // It will be restored after successful re-login
     setAuthed(false)
     setView('login')
   }, [])
@@ -81,7 +93,22 @@ export default function ReportPage() {
       localStorage.setItem(LS_CREDS, encrypted)
     }
     setAuthed(true)
-    setView('search')
+    
+    // Restore previous state if available
+    const savedState = localStorage.getItem(LS_REPORT_STATE)
+    if (savedState) {
+      try {
+        const state = JSON.parse(savedState)
+        if (state.searchText) {
+          setSearchText(state.searchText)
+        }
+        setView(state.view || 'search')
+      } catch {
+        setView('search')
+      }
+    } else {
+      setView('search')
+    }
   }
 
   // Search — fetches all results, filtering is client-side
