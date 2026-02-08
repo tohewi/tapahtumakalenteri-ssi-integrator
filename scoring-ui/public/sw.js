@@ -34,6 +34,11 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
+  // Never cache the service worker script or manifest
+  if (url.pathname === '/sw.js' || url.pathname === '/manifest.json') {
+    return
+  }
+
   // For app shell and assets: network-first with cache fallback
   event.respondWith(
     fetch(request)
