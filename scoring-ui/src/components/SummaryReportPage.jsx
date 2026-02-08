@@ -28,6 +28,7 @@ export default function SummaryReportPage() {
 
   // Report data
   const [reportRows, setReportRows] = useState([])
+  const [expandedSquads, setExpandedSquads] = useState(new Set())
 
   // Auto-login on mount
   useEffect(() => {
@@ -172,19 +173,22 @@ export default function SummaryReportPage() {
   // Export to CSV
   const handleExportCSV = () => {
     if (reportRows.length === 0) return
-    const headers = ['Kilpailu', 'Pvm', 'Ampujia', 'Squadeja', 'Ampujat/squad', 'Vetäjät', 'Vetäjien lkm']
-    const csvRows = [
-      headers.join(';'),
-      ...reportRows.map(r => [
-        r.match,
-        r.date,
-        r.shooterCount,
-        r.squadCount,
-        `"${r.shootersPerSquad}"`,
-        `"${r.staff}"`,
-        r.staffCount,
-      ].join(';'))
-    ]
+    const headers = ['Kilpailu', 'Pvm', 'Squadeja', 'Squad', 'Ampujia', 'Vetäjiä', 'Yht. ampujia', 'Yht. vetäjiä']
+    const csvRows = [headers.join(';')]
+    for (const r of reportRows) {
+      for (const sq of (r.squads || [])) {
+        csvRows.push([
+          r.match,
+          r.date,
+          r.squadCount,
+          sq.label,
+          sq.shooters,
+          sq.admins,
+          r.uniqueShooters,
+          r.uniqueAdmins,
+        ].join(';'))
+      }
+    }
     const csv = csvRows.join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
@@ -195,9 +199,9 @@ export default function SummaryReportPage() {
     URL.revokeObjectURL(url)
   }
 
-  // Totals
-  const totalShooters = reportRows.reduce((sum, r) => sum + r.shooterCount, 0)
-  const totalStaff = reportRows.reduce((sum, r) => sum + r.staffCount, 0)
+  // Totals across all matches
+  const totalShooters = reportRows.reduce((sum, r) => sum + r.uniqueShooters, 0)
+  const totalAdmins = reportRows.reduce((sum, r) => sum + r.uniqueAdmins, 0)
 
   // Login screen
   if (!authed) {
@@ -381,7 +385,7 @@ export default function SummaryReportPage() {
                   {totalShooters} ampujaa yht.
                 </span>
                 <span className="px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-                  {totalStaff} vetäjää yht.
+                  {totalAdmins} vetäjää yht.
                 </span>
               </div>
 
@@ -393,28 +397,75 @@ export default function SummaryReportPage() {
                 Vie CSV
               </button>
 
-              {/* Summary table — card layout for mobile */}
+              {/* Summary cards */}
               <div className="space-y-3">
                 {reportRows.map((row, idx) => (
                   <div key={idx} className="bg-white rounded-xl border border-gray-200 p-4">
-                    <div className="font-semibold text-gray-800 mb-2">{row.match}</div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                      <div className="text-gray-500">Pvm</div>
-                      <div className="text-gray-800">{row.date}</div>
+                    <div className="font-semibold text-gray-800 mb-1">{row.match}</div>
+                    <div className="text-sm text-gray-500 mb-3">{row.date}</div>
 
-                      <div className="text-gray-500">Ampujia</div>
-                      <div className="text-gray-800 font-medium">{row.shooterCount}</div>
+                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                      Squadit ({row.squadCount})
+                    </div>
+                    <div className="bg-gray-50 rounded-lg overflow-hidden mb-3">
+                      {(row.squads || []).map((sq, si) => {
+                        const sqKey = `${idx}-${si}`
+                        const isOpen = expandedSquads.has(sqKey)
+                        const toggleSq = () => setExpandedSquads(prev => {
+                          const next = new Set(prev)
+                          if (next.has(sqKey)) next.delete(sqKey); else next.add(sqKey)
+                          return next
+                        })
+                        return (
+                          <div key={si} className={si > 0 ? 'border-t border-gray-200' : ''}>
+                            <button
+                              onClick={toggleSq}
+                              className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-100 transition-colors text-left"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <span className="text-gray-700 font-medium">{sq.label}</span>
+                                {sq.description && sq.description !== sq.label && (
+                                  <span className="text-gray-400 ml-1 text-xs">({sq.description})</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 shrink-0">
+                                <span className="text-gray-800 font-medium">{sq.shooters}</span>
+                                <span className="text-purple-600 font-medium">{sq.admins || '–'}</span>
+                                <svg className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </div>
+                            </button>
+                            {isOpen && (
+                              <div className="px-3 pb-2">
+                                <div className="text-xs text-gray-500 space-y-0.5">
+                                  {(sq.names || []).map((name, ni) => {
+                                    const isAdmin = (sq.adminNames || []).includes(name)
+                                    return (
+                                      <div key={ni} className="flex items-center gap-1">
+                                        <span className={isAdmin ? 'text-purple-600 font-medium' : 'text-gray-600'}>{name}</span>
+                                        {isAdmin && <span className="text-[10px] bg-purple-100 text-purple-600 px-1 rounded">vetäjä</span>}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
 
-                      <div className="text-gray-500">Squadeja</div>
-                      <div className="text-gray-800">{row.squadCount}</div>
+                    {/* Column headers for squad counts */}
+                    <div className="flex items-center justify-end gap-3 text-[10px] text-gray-400 px-3 -mt-1 mb-1">
+                      <span>ampujia</span>
+                      <span>vetäjiä</span>
+                    </div>
 
-                      <div className="text-gray-500 col-span-2 mt-1 border-t border-gray-100 pt-1">Ampujat / squad</div>
-                      <div className="text-gray-700 text-xs col-span-2">{row.shootersPerSquad || '–'}</div>
-
-                      <div className="text-gray-500 col-span-2 mt-1 border-t border-gray-100 pt-1">
-                        Vetäjät ({row.staffCount})
-                      </div>
-                      <div className="text-gray-700 text-xs col-span-2">{row.staff || '–'}</div>
+                    <div className="flex gap-3 text-sm">
+                      <span className="text-gray-500">Yhteensä:</span>
+                      <span className="font-medium text-gray-800">{row.uniqueShooters} ampujaa</span>
+                      <span className="font-medium text-purple-600">{row.uniqueAdmins} vetäjää</span>
                     </div>
                   </div>
                 ))}

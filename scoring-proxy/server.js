@@ -1511,22 +1511,22 @@ app.post('/api/report/summary', requireAuth, async (req, res) => {
               number
               comment
               ... on NordicSquadNode {
-                competitors { id status }
+                competitors { id status first_name last_name }
               }
               ... on IpscSquadNode {
-                competitors { id status }
+                competitors { id status first_name last_name }
               }
               ... on PpcSquadNode {
-                competitors { id status }
+                competitors { id status first_name last_name }
               }
               ... on CmpSquadNode {
-                competitors { id status }
+                competitors { id status first_name last_name }
               }
               ... on PrecisionSquadNode {
-                competitors { id status }
+                competitors { id status first_name last_name }
               }
               ... on GenericSquadNode {
-                competitors { id status }
+                competitors { id status first_name last_name }
               }
             }
           }
@@ -1538,36 +1538,54 @@ app.post('/api/report/summary', requireAuth, async (req, res) => {
       const match = result.event
       const matchDate = match.starts ? match.starts.split('T')[0] : ''
 
-      // Count approved shooters per squad
-      const squads = (match.squads || [])
-      const squadDetails = squads.map(sq => {
-        const approved = (sq.competitors || []).filter(c => c.status === 'a')
-        return {
-          label: sq.comment || `Squad ${sq.number}`,
-          count: approved.length,
-        }
-      }).filter(sq => sq.count > 0) // only squads with shooters
-
-      const totalShooters = squadDetails.reduce((sum, sq) => sum + sq.count, 0)
-
-      // Scrape staff page to get leaders
-      let staffList = []
+      // Scrape staff page to get admin names
+      let staffNames = new Set()
       try {
         if (req.ssiSession.ssiCookies) {
-          staffList = await ssiGetEventStaff(ct, matchId, req.ssiSession.ssiCookies)
+          const staffList = await ssiGetEventStaff(ct, matchId, req.ssiSession.ssiCookies)
+          for (const s of staffList) {
+            staffNames.add(s.name.toLowerCase())
+          }
         }
       } catch (staffErr) {
         if (!IS_PROD) console.log(`[summary] Could not fetch staff for event ${ct}/${matchId}: ${staffErr.message}`)
       }
 
+      // Build per-squad details with shooter count and admin count
+      const allShooterNames = new Set()
+      const allAdminNames = new Set()
+      const squadDetails = (match.squads || []).map(sq => {
+        const approved = (sq.competitors || []).filter(c => c.status === 'a')
+        let adminCount = 0
+        const names = []
+        const adminNames = []
+        for (const c of approved) {
+          const name = `${c.first_name} ${c.last_name}`.trim()
+          names.push(name)
+          allShooterNames.add(name.toLowerCase())
+          if (staffNames.has(name.toLowerCase())) {
+            adminCount++
+            adminNames.push(name)
+            allAdminNames.add(name.toLowerCase())
+          }
+        }
+        return {
+          label: sq.comment || `Squad ${sq.number}`,
+          description: sq.comment || '',
+          shooters: approved.length,
+          admins: adminCount,
+          names,
+          adminNames,
+        }
+      }).filter(sq => sq.shooters > 0)
+
       rows.push({
         match: match.name,
         date: matchDate,
-        shooterCount: totalShooters,
         squadCount: squadDetails.length,
-        shootersPerSquad: squadDetails.map(sq => `${sq.label}: ${sq.count}`).join(', '),
-        staff: staffList.map(s => s.name).join(', '),
-        staffCount: staffList.length,
+        squads: squadDetails,
+        uniqueShooters: allShooterNames.size,
+        uniqueAdmins: allAdminNames.size,
       })
     }
 
