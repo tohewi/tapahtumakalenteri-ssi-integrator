@@ -15,6 +15,7 @@ export function formatDateShort(isoDate) {
 export function BackButton({ label, onClick }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className="flex items-center gap-1 px-4 pt-2 text-blue-200 text-sm active:text-white"
     >
