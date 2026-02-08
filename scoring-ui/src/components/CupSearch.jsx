@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { formatDateShort } from './shared.jsx'
+import { formatDateShort } from './shared'
 
 export default function CupSearch({ onSelectCup, loading, onLogout }) {
   const [search, setSearch] = useState('')
