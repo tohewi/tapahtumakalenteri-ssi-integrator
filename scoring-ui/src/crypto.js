@@ -15,6 +15,8 @@ const KEY_STORAGE = 'ssi_device_key'
 /**
  * Convert Uint8Array to base64 string without spreading (avoids stack overflow).
  * Chunks the array to prevent hitting call stack limits on large payloads.
+ * @param {Uint8Array} uint8Array - The Uint8Array to convert
+ * @returns {string} Base64 encoded string
  */
 function uint8ToBase64(uint8Array) {
   const CHUNK_SIZE = 8192
