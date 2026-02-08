@@ -69,6 +69,19 @@ describe('encryptData and decryptData', () => {
     expect(decrypted1).toEqual(data1)
     expect(decrypted2).toEqual(data2)
   })
+
+  it('handles large payloads without stack overflow', async () => {
+    // Create a large object that would cause stack overflow with spread operator
+    const largeText = 'x'.repeat(50000) // 50KB of text
+    const original = {
+      largeField1: largeText,
+      largeField2: largeText,
+      largeField3: largeText,
+    }
+    const encrypted = await encryptData(original)
+    const decrypted = await decryptData(encrypted)
+    expect(decrypted).toEqual(original)
+  })
 })
 
 describe('decryptData failure modes', () => {
