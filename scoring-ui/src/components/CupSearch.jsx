@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { formatDateShort } from './shared'
 
 export default function CupSearch({ onSelectCup, loading, onLogout }) {
   const [search, setSearch] = useState('')
@@ -24,12 +25,6 @@ export default function CupSearch({ onSelectCup, loading, onLogout }) {
       setSearching(false)
     }
   }, [search])
-
-  const formatDate = (isoStr) => {
-    if (!isoStr) return ''
-    const d = new Date(isoStr)
-    return d.toLocaleDateString('fi-FI', { weekday: 'short', day: 'numeric', month: 'numeric', year: 'numeric' })
-  }
 
   const isToday = (isoStr) => {
     if (!isoStr) return false
@@ -121,7 +116,7 @@ export default function CupSearch({ onSelectCup, loading, onLogout }) {
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-gray-800 truncate">{cup.name}</div>
                 <div className="text-xs text-gray-400">
-                  {formatDate(cup.starts)} · {cup.status === 'on' ? 'Active' : cup.status}
+                  {formatDateShort(cup.starts)} · {cup.status === 'on' ? 'Active' : cup.status}
                 </div>
               </div>
 
