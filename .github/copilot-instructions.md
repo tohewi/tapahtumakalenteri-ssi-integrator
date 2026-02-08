@@ -80,15 +80,17 @@ The service `ssi-scoring` auto-deploys from `main` when code is merged.
 
 Preview environments are configured for PR-based testing:
 
-- **Generation:** Manual — add `[render preview]` to PR title to trigger
+- **Generation:** Manual — created via Render Dashboard or API
 - **Expiry:** 3 days of inactivity
 - **Plan:** Starter instances for cost control
 
 **To create a preview:**
 1. Push feature branch to GitHub
-2. Open a PR with `[render preview]` in the title
-3. Render creates a disposable instance and posts the URL in PR status checks
-4. Preview is destroyed when PR is merged/closed or after 3 days
+2. Open a PR targeting `main`
+3. Go to Render Dashboard → `ssi-scoring` service → Preview Environments tab
+4. Click "New Preview Environment" and select the PR/branch
+5. Render creates a disposable instance and provides a URL
+6. Preview is destroyed when PR is merged/closed or after 3 days
 
 ### Render MCP Tools
 
@@ -108,7 +110,7 @@ Use these to check deploy status, view logs, and monitor the service after makin
 - **Production branch:** `main` (auto-deploys to Render)
 - **Remote name:** `tapahtumakalenteri-ssi-integrator`
 - **Feature branches:** Create from `main`, open PR targeting `main`
-- **Preview environments:** Add `[render preview]` to PR title for a disposable test instance
+- **Preview environments:** Manually created via Render Dashboard for PR testing
 - CI runs on all PRs to `main` (tests, audit, build)
 
 ## Key Files for Common Tasks
