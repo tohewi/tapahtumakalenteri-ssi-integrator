@@ -45,19 +45,26 @@ Render's native preview environment feature automatically creates temporary depl
 
 3. **Update render.yaml (optional):**
    ```yaml
-   services:
-     - type: web
-       name: ssi-scoring
-       runtime: node
-       buildCommand: cd scoring-ui && npm install && npm run build && cd ../scoring-proxy && npm install
-       startCommand: cd scoring-proxy && node server.js
-       previewsEnabled: true  # Enable preview deployments
-       previewsExpireAfterDays: 7  # Clean up after 7 days
-       envVars:
-         - key: NODE_ENV
-           value: production
-         - key: PORT
-           value: 3001
+   projects:
+     - name: My project
+       environments:
+         - name: production
+           previews:
+             generation: manual
+             expireAfterDays: 7
+           services:
+             - type: web
+               name: ssi-scoring
+               runtime: node
+               buildCommand: cd scoring-ui && npm install && npm run build && cd ../scoring-proxy && npm install
+               startCommand: cd scoring-proxy && node server.js
+               previews:
+                 plan: starter
+               envVars:
+                 - key: NODE_ENV
+                   value: production
+                 - key: PORT
+                   value: 3001
    ```
 
 4. **Test the Setup:**
