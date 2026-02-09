@@ -356,6 +356,10 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
     runAction(() => api.manageApprovePending(cupId, shooter.name, shooter.email), shooter.name)
   }
 
+  const handleRemovePending = (shooter) => {
+    runAction(() => api.manageRemovePending(cupId, shooter.name, shooter.email), shooter.name)
+  }
+
   return (
     <div className="pb-6">
 
@@ -578,12 +582,20 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                         <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
                       )}
                     </div>
-                    <ActionButton
-                      label="Hyväksy"
-                      loading={actionLoading === s.name}
-                      onClick={() => handleApprovePending(s)}
-                      color="blue"
-                    />
+                    <div className="flex gap-2">
+                      <ActionButton
+                        label="Hyväksy"
+                        loading={actionLoading === s.name}
+                        onClick={() => handleApprovePending(s)}
+                        color="blue"
+                      />
+                      <ActionButton
+                        label="Poista"
+                        loading={actionLoading === s.name}
+                        onClick={() => handleRemovePending(s)}
+                        color="red"
+                      />
+                    </div>
                   </div>
                   <div className="text-xs text-gray-600 space-y-0.5">
                     {s.inCup && <div>• Cupissa (pending)</div>}
@@ -625,6 +637,7 @@ function ActionButton({ label, loading, onClick, color = 'blue' }) {
     blue: 'bg-blue-100 text-blue-700 active:bg-blue-200',
     amber: 'bg-amber-100 text-amber-700 active:bg-amber-200',
     purple: 'bg-purple-100 text-purple-700 active:bg-purple-200',
+    red: 'bg-red-100 text-red-700 active:bg-red-200',
   }
   if (loading) {
     return (

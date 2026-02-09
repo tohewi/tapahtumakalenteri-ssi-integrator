@@ -1,5 +1,5 @@
 import express from 'express'
-import { ssiSearchAndAddParticipant, ssiFindCompetitorInMatch, ssiSetParticipantSquad, ssiFindAndApproveCupParticipant } from '../lib/ssi-client.js'
+import { ssiSearchAndAddParticipant, ssiFindCompetitorInMatch, ssiSetParticipantSquad, ssiFindAndApproveCupParticipant, ssiFindAndDeleteCupParticipant } from '../lib/ssi-client.js'
 
 const router = express.Router()
 
@@ -218,8 +218,24 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
 
       // Find CUP participants not in any match
       // Strict matching by (firstName, lastName, email) triplet
+      // Exclude pending shooters from this comparison
       const cupOnly = []
       const cupKeySet = new Set(cupParticipants.map(p => makeShooterKey(p.firstName, p.lastName, p.email)))
+      const pendingKeySet = new Set()
+
+      // First, collect all pending shooter keys from CUP
+      for (const p of cupPending) {
+        const key = makeShooterKey(p.firstName, p.lastName, p.email)
+        pendingKeySet.add(key)
+      }
+
+      // Also collect pending shooter keys from matches
+      for (const match of matches) {
+        for (const p of match.pendingParticipants) {
+          const key = makeShooterKey(p.firstName, p.lastName, p.email)
+          pendingKeySet.add(key)
+        }
+      }
 
       for (const cupP of cupParticipants) {
         const cupKey = makeShooterKey(cupP.firstName, cupP.lastName, cupP.email)
@@ -229,7 +245,8 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
           console.warn(`[manage] WARNING: CUP participant missing email: ${cupP.firstName} ${cupP.lastName}`)
         }
 
-        if (!shooterMap.has(cupKey)) {
+        // Only add to cupOnly if not in matches AND not pending
+        if (!shooterMap.has(cupKey) && !pendingKeySet.has(cupKey)) {
           cupOnly.push({
             firstName: cupP.firstName,
             lastName: cupP.lastName,
@@ -242,6 +259,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
 
       // Find match participants not in CUP
       // Strict matching by (firstName, lastName, email) triplet
+      // Exclude pending shooters from this comparison
       const matchOnly = []
       for (const [key, shooter] of shooterMap) {
         // Defensive check: warn if email is missing (should never happen per SSI requirements)
@@ -249,7 +267,8 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
           console.warn(`[manage] WARNING: Match participant missing email: ${shooter.firstName} ${shooter.lastName}`)
         }
 
-        if (!cupKeySet.has(key)) {
+        // Only add to matchOnly if not in CUP AND not pending
+        if (!cupKeySet.has(key) && !pendingKeySet.has(key)) {
           matchOnly.push({
             firstName: shooter.firstName,
             lastName: shooter.lastName,
@@ -533,6 +552,40 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       res.json({ success: true, message: approveResult.message })
     } catch (err) {
       console.error('[manage] approve-pending error:', err.message)
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ============================================================
+  // POST /api/manage/cup/:id/remove-pending
+  // Remove/delete a pending shooter from CUP
+  // Body: { shooterName, email }
+  // ============================================================
+  router.post('/cup/:id/remove-pending', requireAuth('manage'), async (req, res) => {
+    const { shooterName, email } = req.body
+    if (!shooterName) {
+      return res.status(400).json({ error: 'shooterName required' })
+    }
+
+    const cookies = req.ssiSession.ssiCookies
+    if (!cookies) return res.status(401).json({ error: 'No SSI session cookies' })
+
+    try {
+      const cupId = req.params.id
+
+      // Delete CUP participant
+      if (!IS_PROD) console.log(`[manage] Removing pending shooter "${shooterName}" from cup ${cupId}`)
+      const deleteResult = await ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies)
+      if (!IS_PROD) console.log(`[manage] Cup delete result: ${deleteResult.message}`)
+
+      if (!deleteResult.success) {
+        console.error(`[manage] Failed to remove "${shooterName}" from cup: ${deleteResult.message}`)
+        return res.status(400).json({ error: `Failed to remove competitor: ${deleteResult.message}` })
+      }
+
+      res.json({ success: true, message: deleteResult.message })
+    } catch (err) {
+      console.error('[manage] remove-pending error:', err.message)
       res.status(500).json({ error: err.message })
     }
   })
