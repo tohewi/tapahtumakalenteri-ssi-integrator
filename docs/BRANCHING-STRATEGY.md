@@ -66,6 +66,10 @@ git push origin feature/my-new-feature
    - Testing performed
    - Any deployment notes
 5. Request review from team members
+6. **Automatic preview environment** - GitHub Actions creates a preview deployment
+   - Check PR comments for preview URL
+   - Share preview link with reviewers
+   - See [PR Preview Deployments](./PR-PREVIEW-DEPLOYMENTS.md) for details
 
 ### 4. Code Review
 
@@ -73,6 +77,8 @@ git push origin feature/my-new-feature
 - Address review feedback
 - Push additional commits as needed
 - CI must pass (tests, linting, security audit)
+- **Test in preview environment** - Use the preview URL to validate changes
+- Preview environment updates automatically with each commit
 
 ### 5. Merge to Main
 
@@ -81,11 +87,13 @@ Once approved and CI passes:
 ```bash
 # Use "Squash and merge" or "Create a merge commit" on GitHub
 # Delete feature branch after merge
+# Preview environment is automatically deleted
 ```
 
 ### 6. Automatic Deployment
 
 - Merging to `main` triggers automatic deployment to production via Render
+- Preview environment is automatically cleaned up
 - Monitor deployment in Render dashboard
 - Verify production functionality after deployment
 
@@ -194,18 +202,35 @@ git push origin main
 
 ## CI/CD Pipeline
 
-Our CI/CD pipeline (`ci-deploy.yml`) runs on:
+Our CI/CD pipeline includes two workflows:
 
+### 1. Main CI/CD Workflow (`ci-deploy.yml`)
+
+Runs on:
 - **Every pull request** - Runs tests, audits, and builds
 - **Every push to main** - Runs tests + deploys to production
 
-### Pipeline Stages
-
+**Pipeline Stages:**
 1. **Install** - Install dependencies for UI and proxy
 2. **Test** - Run unit tests for both components
 3. **Audit** - Security vulnerability scan
 4. **Build** - Build production assets
 5. **Deploy** - Trigger Render deployment (main branch only)
+
+### 2. Preview Environment Workflow (`pr-preview.yml`)
+
+Runs on:
+- **PR opened/reopened** - Creates preview service on Render
+- **PR updated (new commits)** - Triggers preview deployment
+- **PR closed/merged** - Deletes preview service
+
+**Preview Features:**
+- Unique preview URL per PR (format: `ssi-scoring-pr-{NUMBER}`)
+- Automatic deployment on every commit
+- Posted as PR comment with preview link
+- Automatic cleanup when PR closes
+
+See [PR Preview Deployments](./PR-PREVIEW-DEPLOYMENTS.md) for complete details.
 
 ### Pipeline Requirements
 
@@ -214,6 +239,7 @@ All stages must pass for PR to be mergeable:
 - ✅ Proxy tests pass
 - ✅ No high-severity vulnerabilities
 - ✅ Build succeeds
+- ✅ Preview environment created (informational)
 
 ## Best Practices
 
@@ -221,9 +247,11 @@ All stages must pass for PR to be mergeable:
 2. **Small, focused PRs** - Easier to review and less risky to deploy
 3. **Write descriptive commit messages** - Follow conventional commits if possible
 4. **Test locally first** - Run tests and linting before pushing
-5. **Update documentation** - Keep docs in sync with code changes
-6. **Monitor production** - Check logs and metrics after deployment
-7. **Communicate** - Announce significant deploys to the team
+5. **Use preview environments** - Test changes in the PR preview before merging
+6. **Update documentation** - Keep docs in sync with code changes
+7. **Monitor production** - Check logs and metrics after deployment
+8. **Communicate** - Announce significant deploys to the team
+9. **Share preview links** - Include preview URL in PR description for reviewers
 
 ## FAQ
 
@@ -232,8 +260,18 @@ All stages must pass for PR to be mergeable:
 **A:** No. All changes must go through pull requests. This ensures:
 - Code review
 - Automated testing
+- Preview environment validation
 - Documentation
 - Quality control
+
+### Q: How do I access the preview environment for my PR?
+
+**A:**
+1. Open your pull request on GitHub
+2. Check the PR comments for a comment from github-actions bot
+3. Click the preview URL in the comment
+4. Wait 30-60 seconds if the service is spinning up
+5. Test your changes in the preview environment
 
 ### Q: What if CI fails on my PR?
 
@@ -242,6 +280,7 @@ All stages must pass for PR to be mergeable:
 2. Fix the issue in your branch
 3. Push the fix
 4. CI will run automatically
+5. Preview environment will automatically redeploy
 
 ### Q: How do I keep my branch up to date with main?
 

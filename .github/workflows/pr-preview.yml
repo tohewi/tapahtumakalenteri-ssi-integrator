@@ -1,0 +1,325 @@
+name: PR Preview Environment
+
+# Automatically creates, updates, and deletes Render preview environments for pull requests.
+#
+# This workflow:
+# 1. Creates a new Render service when a PR is opened (format: ssi-scoring-pr-{NUMBER})
+# 2. Triggers redeployment when new commits are pushed to the PR
+# 3. Deletes the preview service when the PR is closed or merged
+# 4. Posts preview URLs and status as PR comments
+#
+# Required GitHub Secrets:
+# - RENDER_API_KEY: Render API token (generate in Render Dashboard → Account Settings → API Keys)
+# - RENDER_OWNER_ID: Render workspace ID (format: tea-XXXXXXXXXXXXX)
+#   Find by running: curl --request GET --url 'https://api.render.com/v1/owners?limit=20' --header 'authorization: Bearer YOUR_API_KEY' | jq '.[0].owner.id'
+#   For this repo: tea-d62r4ucoud1c73d50qg0
+#
+# Preview services are created with the same configuration as production:
+# - Runtime: Node.js
+# - Plan: Starter
+# - Region: Frankfurt
+# - Build: cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install
+# - Start: cd scoring-proxy && node server.js
+#
+# Documentation: docs/PR-PREVIEW-DEPLOYMENTS.md
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [main]
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        if: github.event.action != 'closed'
+
+      - name: Generate preview service name
+        id: preview-name
+        run: |
+          # Generate a unique service name for this PR
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          SERVICE_NAME="ssi-scoring-pr-${PR_NUMBER}"
+          echo "service_name=${SERVICE_NAME}" >> $GITHUB_OUTPUT
+          echo "Preview service name: ${SERVICE_NAME}"
+
+      - name: Check if preview service exists
+        id: check-service
+        if: github.event.action != 'closed'
+        run: |
+          SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
+
+          # Query Render API to check if service exists
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services?name=${SERVICE_NAME}")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          if [ "$HTTP_CODE" = "200" ]; then
+            # Check if any services were returned
+            SERVICE_COUNT=$(echo "$BODY" | jq '. | length')
+            if [ "$SERVICE_COUNT" -gt 0 ]; then
+              SERVICE_ID=$(echo "$BODY" | jq -r '.[0].service.id')
+              BUILD_CMD=$(echo "$BODY" | jq -r '.[0].service.serviceDetails.envSpecificDetails.buildCommand')
+              echo "exists=true" >> $GITHUB_OUTPUT
+              echo "service_id=${SERVICE_ID}" >> $GITHUB_OUTPUT
+              echo "build_command=${BUILD_CMD}" >> $GITHUB_OUTPUT
+              echo "Service exists with ID: ${SERVICE_ID}"
+              echo "Current build command: ${BUILD_CMD}"
+            else
+              echo "exists=false" >> $GITHUB_OUTPUT
+              echo "Service does not exist"
+            fi
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Service does not exist or API error (HTTP ${HTTP_CODE})"
+          fi
+
+      - name: Delete service if build command is outdated
+        id: delete-if-outdated
+        if: github.event.action != 'closed' && steps.check-service.outputs.exists == 'true' && (contains(steps.check-service.outputs.build_command, 'npm ci') || !contains(steps.check-service.outputs.build_command, '--include=dev'))
+        run: |
+          SERVICE_ID="${{ steps.check-service.outputs.service_id }}"
+          SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
+          
+          echo "⚠️  Service has outdated build command, deleting and will recreate..."
+          
+          DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services/${SERVICE_ID}")
+          
+          DELETE_HTTP_CODE=$(echo "$DELETE_RESPONSE" | tail -n1)
+          
+          if [ "$DELETE_HTTP_CODE" = "204" ]; then
+            echo "✅ Outdated service deleted successfully"
+            echo "deleted=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️  Failed to delete service (HTTP ${DELETE_HTTP_CODE})"
+            echo "deleted=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create preview service
+        id: create-service
+        if: github.event.action != 'closed' && (steps.check-service.outputs.exists != 'true' || steps.delete-if-outdated.outputs.deleted == 'true')
+        run: |
+          SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
+          BRANCH_NAME="${{ github.head_ref }}"
+
+          # Create the service using Render API
+          PAYLOAD=$(cat <<EOF
+          {
+            "type": "web_service",
+            "name": "${SERVICE_NAME}",
+            "ownerId": "${{ secrets.RENDER_OWNER_ID }}",
+            "repo": "https://github.com/${{ github.repository }}",
+            "branch": "${BRANCH_NAME}",
+            "autoDeploy": "yes",
+            "serviceDetails": {
+              "env": "node",
+              "plan": "starter",
+              "region": "frankfurt",
+              "envSpecificDetails": {
+                "buildCommand": "cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install",
+                "startCommand": "cd scoring-proxy && node server.js"
+              }
+            },
+            "envVars": [
+              {
+                "key": "NODE_ENV",
+                "value": "production"
+              }
+            ]
+          }
+          EOF
+          )
+
+          echo "Creating preview service: ${SERVICE_NAME}"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "https://api.render.com/v1/services")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          if [ "$HTTP_CODE" = "201" ]; then
+            SERVICE_ID=$(echo "$BODY" | jq -r '.service.id')
+            SERVICE_URL=$(echo "$BODY" | jq -r '.service.serviceDetails.url')
+            echo "service_id=${SERVICE_ID}" >> $GITHUB_OUTPUT
+            echo "service_url=${SERVICE_URL}" >> $GITHUB_OUTPUT
+            echo "✅ Preview service created successfully"
+            echo "   Service ID: ${SERVICE_ID}"
+            echo "   URL: ${SERVICE_URL}"
+          else
+            echo "❌ Failed to create preview service (HTTP ${HTTP_CODE})"
+            echo "$BODY" | jq '.' || echo "$BODY"
+            exit 1
+          fi
+
+      - name: Trigger deploy for existing service
+        id: deploy-service
+        if: github.event.action != 'closed' && steps.check-service.outputs.exists == 'true' && steps.delete-if-outdated.outputs.deleted != 'true'
+        run: |
+          SERVICE_ID="${{ steps.check-service.outputs.service_id }}"
+
+          # Trigger a deploy for the existing service
+          PAYLOAD='{"clearCache": "do_not_clear"}'
+
+          echo "Triggering deploy for service: ${SERVICE_ID}"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "https://api.render.com/v1/services/${SERVICE_ID}/deploys")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          if [ "$HTTP_CODE" = "201" ]; then
+            DEPLOY_ID=$(echo "$BODY" | jq -r '.id')
+            echo "deploy_id=${DEPLOY_ID}" >> $GITHUB_OUTPUT
+            echo "✅ Deploy triggered successfully"
+            echo "   Deploy ID: ${DEPLOY_ID}"
+
+            # Get service URL
+            SERVICE_INFO=$(curl -s \
+              -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              "https://api.render.com/v1/services/${SERVICE_ID}")
+
+            SERVICE_URL=$(echo "$SERVICE_INFO" | jq -r '.serviceDetails.url')
+            echo "service_url=${SERVICE_URL}" >> $GITHUB_OUTPUT
+            echo "   URL: ${SERVICE_URL}"
+          else
+            echo "❌ Failed to trigger deploy (HTTP ${HTTP_CODE})"
+            echo "$BODY" | jq '.' || echo "$BODY"
+            exit 1
+          fi
+
+      - name: Comment on PR with preview URL
+        if: github.event.action != 'closed'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const serviceName = '${{ steps.preview-name.outputs.service_name }}';
+            const serviceUrl = '${{ steps.create-service.outputs.service_url || steps.deploy-service.outputs.service_url }}';
+            const serviceId = '${{ steps.create-service.outputs.service_id || steps.check-service.outputs.service_id }}';
+            const isNewService = '${{ steps.check-service.outputs.exists }}' !== 'true';
+
+            const action = isNewService ? 'created' : 'updated';
+            const emoji = isNewService ? '🎉' : '🔄';
+
+            const body = `${emoji} **Preview environment ${action}!**
+
+            🚀 **Service:** \`${serviceName}\`
+            🔗 **URL:** ${serviceUrl}
+            📊 **Dashboard:** https://dashboard.render.com/web/${serviceId}
+
+            ${isNewService ? '⏳ **First deployment in progress** - The preview environment is being built and will be available in a few minutes.' : '⏳ **Deployment in progress** - Your changes are being deployed.'}
+
+            ${isNewService ? '> **Note:** Preview services on Render may take 30-60 seconds to wake up on the first request after inactivity.' : ''}
+
+            This preview environment will be automatically deleted when this PR is closed or merged.`;
+
+            // Check if we already commented on this PR
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Preview environment')
+            );
+
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
+      - name: Delete preview service
+        if: github.event.action == 'closed'
+        run: |
+          SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
+
+          echo "Checking for preview service to delete: ${SERVICE_NAME}"
+
+          # Query Render API to find the service
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services?name=${SERVICE_NAME}")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          if [ "$HTTP_CODE" = "200" ]; then
+            SERVICE_COUNT=$(echo "$BODY" | jq '. | length')
+
+            if [ "$SERVICE_COUNT" -gt 0 ]; then
+              SERVICE_ID=$(echo "$BODY" | jq -r '.[0].service.id')
+
+              echo "Deleting preview service: ${SERVICE_ID}"
+
+              DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
+                -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+                "https://api.render.com/v1/services/${SERVICE_ID}")
+
+              DELETE_HTTP_CODE=$(echo "$DELETE_RESPONSE" | tail -n1)
+
+              if [ "$DELETE_HTTP_CODE" = "204" ]; then
+                echo "✅ Preview service deleted successfully"
+              else
+                echo "⚠️  Failed to delete preview service (HTTP ${DELETE_HTTP_CODE})"
+                echo "$DELETE_RESPONSE" | sed '$d'
+                # Don't fail the workflow if deletion fails
+              fi
+            else
+              echo "ℹ️  No preview service found to delete"
+            fi
+          else
+            echo "⚠️  Failed to query services (HTTP ${HTTP_CODE})"
+            echo "$BODY"
+            # Don't fail the workflow if query fails
+          fi
+
+      - name: Comment on PR about deletion
+        if: github.event.action == 'closed'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const serviceName = '${{ steps.preview-name.outputs.service_name }}';
+
+            const body = `🗑️ **Preview environment deleted**
+
+            The preview environment \`${serviceName}\` has been deleted as this PR is now closed.`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
