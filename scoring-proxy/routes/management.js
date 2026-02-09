@@ -81,12 +81,26 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
             name: `${c.first_name} ${c.last_name}`.trim()
           }))
 
+        // Pending match-level participants
+        const pendingParticipants = (m.competitors || [])
+          .filter(c => c.status === 'p')
+          .map(c => ({
+            id: c.id,
+            firstName: c.first_name || '',
+            lastName: c.last_name || '',
+            email: c.email || '',
+            hasEmailError: !c.email,
+            name: `${c.first_name} ${c.last_name}`.trim(),
+            status: 'p'
+          }))
+
         return {
           id: m.id,
           name: m.name,
           componentNumber: cm.number,
           squads,
           allParticipants,
+          pendingParticipants,
         }
       })
 
@@ -178,8 +192,28 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
         })
         .filter(p => p.firstName || p.lastName) // filter out completely empty entries
 
+      // CUP-level participants (pending) - track separately
+      const cupPending = (cup.competitors || [])
+        .filter(c => c.status === 'p')
+        .map(c => {
+          const email = c.email || c.shooter?.email || ''
+          const firstName = c.shooter?.first_name || ''
+          const lastName = c.shooter?.last_name || ''
+          return {
+            id: c.id,
+            firstName,
+            lastName,
+            email,
+            hasEmailError: !email,
+            name: `${firstName} ${lastName}`.trim(),
+            status: 'p',
+            location: 'cup'
+          }
+        })
+        .filter(p => p.firstName || p.lastName)
+
       if (!IS_PROD) {
-        console.log(`[manage] CUP participants: ${cupParticipants.length}, Match participants: ${shooterMap.size}`)
+        console.log(`[manage] CUP participants: ${cupParticipants.length}, CUP pending: ${cupPending.length}, Match participants: ${shooterMap.size}`)
       }
 
       // Find CUP participants not in any match
@@ -226,12 +260,58 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
         }
       }
 
+      // Consolidate pending shooters from CUP and matches
+      // Group by shooter (email triplet) and track where they're pending
+      const pendingMap = new Map()
+
+      // Add CUP pending shooters
+      for (const p of cupPending) {
+        const key = makeShooterKey(p.firstName, p.lastName, p.email)
+        if (!pendingMap.has(key)) {
+          pendingMap.set(key, {
+            firstName: p.firstName,
+            lastName: p.lastName,
+            email: p.email,
+            hasEmailError: p.hasEmailError,
+            name: p.name,
+            inCup: true,
+            inMatches: []
+          })
+        }
+      }
+
+      // Add match pending shooters
+      for (const match of matches) {
+        for (const p of match.pendingParticipants) {
+          const key = makeShooterKey(p.firstName, p.lastName, p.email)
+          if (!pendingMap.has(key)) {
+            pendingMap.set(key, {
+              firstName: p.firstName,
+              lastName: p.lastName,
+              email: p.email,
+              hasEmailError: p.hasEmailError,
+              name: p.name,
+              inCup: false,
+              inMatches: []
+            })
+          }
+          pendingMap.get(key).inMatches.push({
+            matchId: match.id,
+            matchName: match.name,
+            componentNumber: match.componentNumber
+          })
+        }
+      }
+
+      const pendingShooters = [...pendingMap.values()]
+
       res.json({
         cup: { id: cup.id, name: cup.name, starts: cup.starts },
         matches,
         shooters: [...shooterMap.values()],
         cupOnly,
         matchOnly,
+        pendingShooters,
       })
     } catch (err) {
       console.error('Failed to fetch management data:', err.message)
@@ -419,6 +499,40 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       res.json({ success: true, message: approveResult.message })
     } catch (err) {
       console.error('[manage] add-to-cup error:', err.message)
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ============================================================
+  // POST /api/manage/cup/:id/approve-pending
+  // Approve a pending shooter in CUP (and optionally in matches)
+  // Body: { shooterName, email }
+  // ============================================================
+  router.post('/cup/:id/approve-pending', requireAuth('manage'), async (req, res) => {
+    const { shooterName, email } = req.body
+    if (!shooterName) {
+      return res.status(400).json({ error: 'shooterName required' })
+    }
+
+    const cookies = req.ssiSession.ssiCookies
+    if (!cookies) return res.status(401).json({ error: 'No SSI session cookies' })
+
+    try {
+      const cupId = req.params.id
+
+      // Approve CUP participant
+      if (!IS_PROD) console.log(`[manage] Approving pending shooter "${shooterName}" in cup ${cupId}`)
+      const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies)
+      if (!IS_PROD) console.log(`[manage] Cup approve result: ${approveResult.message}`)
+
+      if (!approveResult.success) {
+        console.error(`[manage] Failed to approve "${shooterName}" in cup: ${approveResult.message}`)
+        return res.status(400).json({ error: `Failed to approve competitor: ${approveResult.message}` })
+      }
+
+      res.json({ success: true, message: approveResult.message })
+    } catch (err) {
+      console.error('[manage] approve-pending error:', err.message)
       res.status(500).json({ error: err.message })
     }
   })

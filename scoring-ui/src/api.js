@@ -150,6 +150,16 @@ export async function manageAddToCup(cupId, shooterName, email = null) {
   return handleResponse(resp)
 }
 
+export async function manageApprovePending(cupId, shooterName, email = null) {
+  const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/approve-pending`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ shooterName, email }),
+  })
+  return handleResponse(resp)
+}
+
 // ============================================================
 // Data transformers: SSI API → UI format
 // ============================================================

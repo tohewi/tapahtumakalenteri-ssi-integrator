@@ -238,7 +238,7 @@ export default function ManagePage() {
 // ============================================================
 
 function SquaddingOverview({ data, cupId, onRefresh }) {
-  const { matches, shooters, cupOnly, matchOnly } = data
+  const { matches, shooters, cupOnly, matchOnly, pendingShooters = [] } = data
   const matchIds = matches.map(m => m.id)
   const totalMatches = matches.length
 
@@ -246,6 +246,7 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
   const unsquaddedRef = useRef(null)
   const inconsistentRef = useRef(null)
   const notInCupRef = useRef(null)
+  const pendingRef = useRef(null)
   const squadsRef = useRef(null)
 
   // Action state
@@ -322,7 +323,7 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
     }
   })
 
-  const totalIssues = classified.unsquadded.length + classified.inconsistent.length + cupOnly.length + matchOnly.length
+  const totalIssues = classified.unsquadded.length + classified.inconsistent.length + cupOnly.length + matchOnly.length + pendingShooters.length
   const scrollTo = (ref) => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   // ── Action handlers ──
@@ -349,6 +350,10 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
 
   const handleAddToCup = (shooter) => {
     runAction(() => api.manageAddToCup(cupId, shooter.name, shooter.email), shooter.name)
+  }
+
+  const handleApprovePending = (shooter) => {
+    runAction(() => api.manageApprovePending(cupId, shooter.name, shooter.email), shooter.name)
   }
 
   return (
@@ -382,6 +387,15 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
             >
               <span className="text-lg font-bold text-purple-700">{cupOnly.length + matchOnly.length}</span>
               <span className="text-[10px] font-medium text-purple-600 leading-tight">Cup ≠</span>
+            </button>
+          )}
+          {pendingShooters.length > 0 && (
+            <button
+              onClick={() => scrollTo(pendingRef)}
+              className="flex-1 flex flex-col items-center py-2 px-1 rounded-lg bg-blue-50 active:bg-blue-100 transition-colors"
+            >
+              <span className="text-lg font-bold text-blue-700">{pendingShooters.length}</span>
+              <span className="text-[10px] font-medium text-blue-600 leading-tight">Odottaa</span>
             </button>
           )}
           <button
@@ -545,6 +559,41 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* ── Section: Pending shooters ── */}
+        {pendingShooters.length > 0 && (
+          <div ref={pendingRef} className="scroll-mt-16">
+            <SectionHeader icon="⏳" title="Odottaa hyväksyntää" count={pendingShooters.length} color="blue" />
+            <div className="space-y-2">
+              {pendingShooters.map((s, i) => (
+                <div key={i} className="bg-white rounded-xl border border-blue-200 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-800 text-sm">{s.name}</div>
+                      {s.email ? (
+                        <div className="text-xs text-gray-500 truncate">{s.email}</div>
+                      ) : (
+                        <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
+                      )}
+                    </div>
+                    <ActionButton
+                      label="Hyväksy"
+                      loading={actionLoading === s.name}
+                      onClick={() => handleApprovePending(s)}
+                      color="blue"
+                    />
+                  </div>
+                  <div className="text-xs text-gray-600 space-y-0.5">
+                    {s.inCup && <div>• Cupissa (pending)</div>}
+                    {s.inMatches.length > 0 && (
+                      <div>• Osakilpailuissa: {s.inMatches.map(m => `${m.componentNumber}. ${m.matchName}`).join(', ')}</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
