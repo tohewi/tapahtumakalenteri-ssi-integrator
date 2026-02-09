@@ -68,7 +68,7 @@ Preview services are configured with:
 - **Runtime:** Node.js
 - **Plan:** Starter (same as production)
 - **Region:** Frankfurt (same as production)
-- **Build:** `cd scoring-ui && npm ci && npm run build && cd ../scoring-proxy && npm ci`
+- **Build:** `cd scoring-ui && npm install && npm run build && cd ../scoring-proxy && npm install`
 - **Start:** `cd scoring-proxy && node server.js`
 - **Auto-deploy:** Yes (on every commit to PR branch)
 

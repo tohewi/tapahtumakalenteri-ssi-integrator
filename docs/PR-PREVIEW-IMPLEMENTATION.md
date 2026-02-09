@@ -102,7 +102,7 @@ Preview services mirror production configuration:
 - **Runtime:** Node.js
 - **Plan:** Starter
 - **Region:** Frankfurt
-- **Build:** `cd scoring-ui && npm ci && npm run build && cd ../scoring-proxy && npm ci`
+- **Build:** `cd scoring-ui && npm install && npm run build && cd ../scoring-proxy && npm install`
 - **Start:** `cd scoring-proxy && node server.js`
 - **Environment Variables:**
   - `NODE_ENV=production`

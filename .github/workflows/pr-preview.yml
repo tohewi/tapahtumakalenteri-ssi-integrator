@@ -18,7 +18,7 @@ name: PR Preview Environment
 # - Runtime: Node.js
 # - Plan: Starter
 # - Region: Frankfurt
-# - Build: cd scoring-ui && npm ci && npm run build && cd ../scoring-proxy && npm ci
+# - Build: cd scoring-ui && npm install && npm run build && cd ../scoring-proxy && npm install
 # - Start: cd scoring-proxy && node server.js
 #
 # Documentation: docs/PR-PREVIEW-DEPLOYMENTS.md
@@ -101,7 +101,7 @@ jobs:
               "plan": "starter",
               "region": "frankfurt",
               "envSpecificDetails": {
-                "buildCommand": "cd scoring-ui && npm ci && npm run build && cd ../scoring-proxy && npm ci",
+                "buildCommand": "cd scoring-ui && npm install && npm run build && cd ../scoring-proxy && npm install",
                 "startCommand": "cd scoring-proxy && node server.js"
               }
             },
