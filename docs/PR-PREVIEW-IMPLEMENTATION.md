@@ -129,7 +129,7 @@ The workflow requires two secrets to be configured in repository settings:
 2. **RENDER_OWNER_ID**
    - Purpose: Specify which Render workspace to use
    - Format: `tea-XXXXXXXXXXXXX` (workspace ID)
-   - Find: Run `curl -H "Authorization: Bearer YOUR_API_KEY" https://api.render.com/v1/services | jq '.[0].ownerId'`
+   - Find: Run `curl --request GET --url 'https://api.render.com/v1/owners?limit=20' --header 'authorization: Bearer YOUR_API_KEY' | jq '.[0].owner.id'`
    - For this repository: `tea-d62r4ucoud1c73d50qg0`
 
 ### Workflow Permissions
