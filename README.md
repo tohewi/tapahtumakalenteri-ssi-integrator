@@ -92,6 +92,7 @@ node --env-file=scoring-proxy/.env scoring-proxy/server.js
 | [Registration Flow](docs/registration-flow.md) | Backend sequence diagrams and SSI state machine |
 | [Scoring Architecture](docs/scoring-architecture.md) | Proxy architecture, session management, scoring flow |
 | [SSI Admin Operations](docs/ssi-admin-operations.md) | Web scraping endpoints and form field reference |
+| **[Render Services](docs/render-services.md)** | **Render MCP server integration and available services** |
 | **[Refactoring Plan](docs/refactoring-plan.md)** | **Software architecture analysis and refactoring strategy** |
 | [Refactoring Visual Summary](docs/refactoring-visual-summary.md) | Quick reference with diagrams and comparisons |
 | [AI Agent Guidelines](docs/ai-agent-guidelines.md) | Token-efficient development with AI assistants |
