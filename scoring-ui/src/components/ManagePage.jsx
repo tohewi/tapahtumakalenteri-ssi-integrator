@@ -427,8 +427,9 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
             <div className="space-y-2">
               {classified.unsquadded.map((s, i) => (
                 <div key={i} className="bg-white rounded-xl border border-red-200 p-3 flex items-center justify-between">
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <div className="font-medium text-gray-800 text-sm">{s.name}</div>
+                    {s.email && <div className="text-xs text-gray-500 mt-0.5 truncate">{s.email}</div>}
                     <div className="text-xs text-red-500 mt-0.5">Osakilpailuissa mutta ei squadissa</div>
                   </div>
                   <ActionButton
@@ -451,7 +452,10 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
               {classified.inconsistent.map((s, i) => (
                 <div key={i} className="bg-white rounded-xl border border-amber-200 p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium text-gray-800 text-sm">{s.name}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-800 text-sm">{s.name}</div>
+                      {s.email && <div className="text-xs text-gray-500 truncate">{s.email}</div>}
+                    </div>
                     <ActionButton
                       label={`Korjaa → S${s.suggestedSquad}`}
                       loading={actionLoading === s.name}
@@ -484,16 +488,17 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
               <>
                 <SectionHeader icon="📋" title="Cupissa mutta ei osakilpailuissa" count={cupOnly.length} color="red" />
                 <div className="space-y-2 mb-4">
-                  {cupOnly.map((name, i) => (
+                  {cupOnly.map((s, i) => (
                     <div key={i} className="bg-white rounded-xl border border-red-200 p-3 flex items-center justify-between">
-                      <div>
-                        <div className="font-medium text-gray-800 text-sm">{name}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-800 text-sm">{s.name}</div>
+                        {s.email && <div className="text-xs text-gray-500 mt-0.5 truncate">{s.email}</div>}
                         <div className="text-xs text-red-500 mt-0.5">Ilmoittautunut cupiin, ei osakilpailuissa</div>
                       </div>
                       <ActionButton
                         label="→ S?"
-                        loading={actionLoading === name}
-                        onClick={() => setSquadPicker({ shooterName: name, type: 'assignCupOnly' })}
+                        loading={actionLoading === s.name}
+                        onClick={() => setSquadPicker({ shooterName: s.name, type: 'assignCupOnly' })}
                         color="blue"
                       />
                     </div>
@@ -506,16 +511,17 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
               <>
                 <SectionHeader icon="+" title="Ei cupissa" count={matchOnly.length} color="purple" />
                 <div className="space-y-2">
-                  {matchOnly.map((name, i) => (
+                  {matchOnly.map((s, i) => (
                     <div key={i} className="bg-white rounded-xl border border-purple-200 p-3 flex items-center justify-between">
-                      <div>
-                        <div className="font-medium text-gray-800 text-sm">{name}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-800 text-sm">{s.name}</div>
+                        {s.email && <div className="text-xs text-gray-500 mt-0.5 truncate">{s.email}</div>}
                         <div className="text-xs text-purple-500 mt-0.5">Osakilpailuissa mutta ei cupissa</div>
                       </div>
                       <ActionButton
                         label="Lisää"
-                        loading={actionLoading === name}
-                        onClick={() => handleAddToCup(name)}
+                        loading={actionLoading === s.name}
+                        onClick={() => handleAddToCup(s.name)}
                         color="purple"
                       />
                     </div>
@@ -668,16 +674,24 @@ function SquadCard({ group, matchLabels }) {
           ) : (
             <div className="divide-y">
               {group.okShooters.map((s, i) => (
-                <div key={`ok-${i}`} className="px-4 py-2.5 flex items-center gap-2">
-                  <span className="text-green-500 text-sm shrink-0">✓</span>
-                  <span className="text-sm text-gray-800 flex-1 truncate">{s.name}</span>
+                <div key={`ok-${i}`} className="px-4 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-500 text-sm shrink-0">✓</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-gray-800 truncate">{s.name}</div>
+                      {s.email && <div className="text-xs text-gray-500 truncate">{s.email}</div>}
+                    </div>
+                  </div>
                 </div>
               ))}
               {group.issueShooters.map((s, i) => (
                 <div key={`issue-${i}`} className="px-4 py-2.5 bg-amber-50">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 mb-1">
                     <span className="text-amber-500 text-sm shrink-0">⚠</span>
-                    <span className="text-sm text-gray-800 flex-1 truncate">{s.name}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-gray-800 truncate">{s.name}</div>
+                      {s.email && <div className="text-xs text-gray-500 truncate">{s.email}</div>}
+                    </div>
                   </div>
                   <div className="flex gap-1 mt-1 ml-6">
                     {s.assignments.map((sq, mi) => (

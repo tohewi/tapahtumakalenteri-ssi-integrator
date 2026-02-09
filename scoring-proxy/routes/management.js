@@ -15,14 +15,14 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
           event(content_type: 136, id: $id) {
             id name starts status
             ... on NordicSerieNode {
-              competitors { id status shooter { first_name last_name } }
+              competitors { id status shooter { first_name last_name email } }
               component_matches {
                 number included
                 match {
                   id name
                   competitors {
                     id status
-                    first_name last_name
+                    first_name last_name email
                   }
                   squads {
                     id number comment
@@ -30,7 +30,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
                       max_competitors
                       competitors {
                         id status
-                        first_name last_name
+                        first_name last_name email
                       }
                     }
                   }
@@ -59,13 +59,25 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
           max: sq.max_competitors || 0,
           shooters: (sq.competitors || [])
             .filter(c => c.status === 'a')
-            .map(c => ({ id: c.id, name: `${c.first_name} ${c.last_name}`.trim() })),
+            .map(c => ({
+              id: c.id,
+              firstName: c.first_name || '',
+              lastName: c.last_name || '',
+              email: c.email || '',
+              name: `${c.first_name} ${c.last_name}`.trim()
+            })),
         }))
 
         // All approved match-level participants (includes both squadded and unsquadded)
         const allParticipants = (m.competitors || [])
           .filter(c => c.status === 'a')
-          .map(c => ({ id: c.id, name: `${c.first_name} ${c.last_name}`.trim() }))
+          .map(c => ({
+            id: c.id,
+            firstName: c.first_name || '',
+            lastName: c.last_name || '',
+            email: c.email || '',
+            name: `${c.first_name} ${c.last_name}`.trim()
+          }))
 
         return {
           id: m.id,
@@ -78,16 +90,25 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
 
       // Collect all shooters across all matches
       // Track: which matches they're IN (as participant) and which squad (if any)
-      const shooterMap = new Map() // name → { name, matches: { matchId: squadNumber|null } }
+      // Use (firstName, lastName, email) triplet as key for unique identification
+      const shooterMap = new Map() // key → { firstName, lastName, email, name, matches: { matchId: squadNumber|null } }
+      const makeShooterKey = (firstName, lastName, email) => `${firstName}|||${lastName}|||${email}`
 
       // First: add all match-level participants (squadNumber = null means unsquadded)
       for (const match of matches) {
         for (const participant of match.allParticipants) {
-          if (!shooterMap.has(participant.name)) {
-            shooterMap.set(participant.name, { name: participant.name, matches: {} })
+          const key = makeShooterKey(participant.firstName, participant.lastName, participant.email)
+          if (!shooterMap.has(key)) {
+            shooterMap.set(key, {
+              firstName: participant.firstName,
+              lastName: participant.lastName,
+              email: participant.email,
+              name: participant.name,
+              matches: {}
+            })
           }
           // Mark as in-match but unsquadded (null)
-          shooterMap.get(participant.name).matches[match.id] = null
+          shooterMap.get(key).matches[match.id] = null
         }
       }
 
@@ -95,27 +116,57 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       for (const match of matches) {
         for (const squad of match.squads) {
           for (const shooter of squad.shooters) {
-            if (!shooterMap.has(shooter.name)) {
-              shooterMap.set(shooter.name, { name: shooter.name, matches: {} })
+            const key = makeShooterKey(shooter.firstName, shooter.lastName, shooter.email)
+            if (!shooterMap.has(key)) {
+              shooterMap.set(key, {
+                firstName: shooter.firstName,
+                lastName: shooter.lastName,
+                email: shooter.email,
+                name: shooter.name,
+                matches: {}
+              })
             }
-            shooterMap.get(shooter.name).matches[match.id] = squad.number
+            shooterMap.get(key).matches[match.id] = squad.number
           }
         }
       }
 
-      // CUP-level participants (approved)
-      const cupParticipants = (cup.competitors || [])
+      // CUP-level participants (approved) - store as keys for comparison
+      const cupParticipantKeys = (cup.competitors || [])
         .filter(c => c.status === 'a')
-        .map(c => `${c.shooter?.first_name || ''} ${c.shooter?.last_name || ''}`.trim())
-        .filter(n => n.length > 0)
+        .map(c => {
+          const firstName = c.shooter?.first_name || ''
+          const lastName = c.shooter?.last_name || ''
+          const email = c.shooter?.email || ''
+          return makeShooterKey(firstName, lastName, email)
+        })
+        .filter(key => key !== '||||||') // filter out empty entries
 
-      // Find CUP participants not in ANY match (not even as unsquadded participant)
-      const matchParticipantNames = new Set(shooterMap.keys())
-      const cupOnly = cupParticipants.filter(n => !matchParticipantNames.has(n))
+      // Build cupOnly list (CUP participants not in any match)
+      const cupParticipantSet = new Set(cupParticipantKeys)
+      const matchParticipantKeys = new Set(shooterMap.keys())
+      const cupOnlyKeys = cupParticipantKeys.filter(key => !matchParticipantKeys.has(key))
+      const cupOnly = cupOnlyKeys.map(key => {
+        const [firstName, lastName, email] = key.split('|||')
+        return {
+          firstName,
+          lastName,
+          email,
+          name: `${firstName} ${lastName}`.trim()
+        }
+      })
 
       // Find match participants not in CUP
-      const cupParticipantSet = new Set(cupParticipants)
-      const matchOnly = [...matchParticipantNames].filter(n => !cupParticipantSet.has(n))
+      const matchOnlyKeys = [...matchParticipantKeys].filter(key => !cupParticipantSet.has(key))
+      const matchOnly = matchOnlyKeys.map(key => {
+        const shooter = shooterMap.get(key)
+        return {
+          firstName: shooter.firstName,
+          lastName: shooter.lastName,
+          email: shooter.email,
+          name: shooter.name
+        }
+      })
 
       res.json({
         cup: { id: cup.id, name: cup.name, starts: cup.starts },
