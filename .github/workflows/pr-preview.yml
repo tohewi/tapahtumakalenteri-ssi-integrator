@@ -95,11 +95,16 @@ jobs:
             "ownerId": "${{ secrets.RENDER_OWNER_ID }}",
             "repo": "https://github.com/${{ github.repository }}",
             "branch": "${BRANCH_NAME}",
-            "runtime": "node",
-            "plan": "starter",
-            "region": "frankfurt",
-            "buildCommand": "cd scoring-ui && npm ci && npm run build && cd ../scoring-proxy && npm ci",
-            "startCommand": "cd scoring-proxy && node server.js",
+            "autoDeploy": "yes",
+            "serviceDetails": {
+              "env": "node",
+              "plan": "starter",
+              "region": "frankfurt",
+              "envSpecificDetails": {
+                "buildCommand": "cd scoring-ui && npm ci && npm run build && cd ../scoring-proxy && npm ci",
+                "startCommand": "cd scoring-proxy && node server.js"
+              }
+            },
             "envVars": [
               {
                 "key": "NODE_ENV",
@@ -109,8 +114,7 @@ jobs:
                 "key": "PORT",
                 "value": "3001"
               }
-            ],
-            "autoDeploy": "yes"
+            ]
           }
           EOF
           )
