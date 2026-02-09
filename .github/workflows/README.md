@@ -54,17 +54,17 @@ This directory contains the CI/CD workflows for the tapahtumakalenteri-ssi-integ
   - Generate in: Render Dashboard → Account Settings → API Keys
   - Needs permissions: Create, update, delete services
 - `RENDER_OWNER_ID` - Your Render workspace ID (format: `tea-XXXXXXXXXXXXX`)
-  - Find by running: `curl --request GET --url 'https://api.render.com/v1/owners?limit=20' --header 'authorization: Bearer YOUR_API_KEY' | jq '.[0].owner.id'`
+  - Find by running: `curl -H "Authorization: Bearer YOUR_API_KEY" https://api.render.com/v1/services | jq '.[0].ownerId'`
   - For this repository: `tea-d62r4ucoud1c73d50qg0`
 
 **Preview Service Configuration:**
 - **Runtime:** Node.js
 - **Plan:** Starter (same as production)
 - **Region:** Frankfurt (same as production)
-- **Build Command:** `cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install`
+- **Build Command:** `cd scoring-ui && npm ci && npm run build && cd ../scoring-proxy && npm ci`
 - **Start Command:** `cd scoring-proxy && node server.js`
 - **Auto-deploy:** Yes (on every commit to PR branch)
-- **Environment Variables:** `NODE_ENV=production` (PORT is automatically set by Render to 10000)
+- **Environment Variables:** `NODE_ENV=production`, `PORT=3001`
 
 **Preview URLs:**
 - Format: `https://ssi-scoring-pr-{NUMBER}.onrender.com`
@@ -90,15 +90,11 @@ This directory contains the CI/CD workflows for the tapahtumakalenteri-ssi-integ
    - Name: `RENDER_OWNER_ID`
    - Value: Your Render workspace ID (format: `tea-XXXXXXXXXXXXX`)
    - **To find this ID:**
-     - **Method 1 (Recommended):** Use the Render API `/v1/owners` endpoint:
-       ```bash
-       # In Bash or PowerShell:
-       curl --request GET --url 'https://api.render.com/v1/owners?limit=20' --header 'accept: application/json' --header 'authorization: Bearer YOUR_API_KEY' | jq '.[0].owner.id'
-       
-       # In Windows CMD:
-       curl --request GET --url "https://api.render.com/v1/owners?limit=20" --header "accept: application/json" --header "authorization: Bearer YOUR_API_KEY" | jq ".[0].owner.id"
-       ```
-     - **Method 2 (Alternative):** Query existing services:
+     - Go to Render Dashboard → Select any existing service
+     - In the browser URL bar, you'll see: `https://dashboard.render.com/web/srv-XXXXX`
+     - Click on the service, then view the service in the Render API by appending `/api` to see the `ownerId` field
+     - **OR** Look at the existing service in this repository (e.g., `tapahtumakalenteri-ssi-integrator`)
+     - **OR** Use the Render API with your API key:
        ```bash
        curl -H "Authorization: Bearer YOUR_API_KEY" https://api.render.com/v1/services | jq '.[0].ownerId'
        ```

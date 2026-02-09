@@ -10,7 +10,9 @@ name: PR Preview Environment
 #
 # Required GitHub Secrets:
 # - RENDER_API_KEY: Render API token (generate in Render Dashboard → Account Settings → API Keys)
-# - RENDER_OWNER_ID: Render workspace/team ID (find in Render Dashboard or via API)
+# - RENDER_OWNER_ID: Render workspace ID (format: tea-XXXXXXXXXXXXX)
+#   Find by running: curl -H "Authorization: Bearer YOUR_API_KEY" https://api.render.com/v1/services | jq '.[0].ownerId'
+#   For this repo: tea-d62r4ucoud1c73d50qg0
 #
 # Preview services are created with the same configuration as production:
 # - Runtime: Node.js
