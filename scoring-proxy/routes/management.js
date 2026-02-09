@@ -150,35 +150,19 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       }
 
       // Find CUP participants not in any match
-      // Match by (firstName, lastName, email) if all present, otherwise by (firstName, lastName)
+      // Strict matching by (firstName, lastName, email) triplet
       const cupOnly = []
+      const cupKeySet = new Set(cupParticipants.map(p => makeShooterKey(p.firstName, p.lastName, p.email)))
+
       for (const cupP of cupParticipants) {
         const cupKey = makeShooterKey(cupP.firstName, cupP.lastName, cupP.email)
-        const cupNameKey = makeShooterKey(cupP.firstName, cupP.lastName, '')
 
-        let found = false
-        // First try exact match with email
-        if (cupP.email && shooterMap.has(cupKey)) {
-          found = true
-        }
-        // If not found and email is present, try matching by name only
-        if (!found) {
-          for (const [key, shooter] of shooterMap) {
-            if (shooter.firstName === cupP.firstName && shooter.lastName === cupP.lastName) {
-              found = true
-              // If CUP has email but match doesn't, update the match entry with the email
-              if (cupP.email && !shooter.email) {
-                if (!IS_PROD) {
-                  console.log(`[manage] Updating match shooter with email from CUP: ${cupP.firstName} ${cupP.lastName} -> ${cupP.email}`)
-                }
-                shooter.email = cupP.email
-              }
-              break
-            }
-          }
+        // Defensive check: warn if email is missing (should never happen per SSI requirements)
+        if (!cupP.email) {
+          console.warn(`[manage] WARNING: CUP participant missing email: ${cupP.firstName} ${cupP.lastName}`)
         }
 
-        if (!found) {
+        if (!shooterMap.has(cupKey)) {
           cupOnly.push({
             firstName: cupP.firstName,
             lastName: cupP.lastName,
@@ -189,20 +173,15 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       }
 
       // Find match participants not in CUP
-      // Match by (firstName, lastName, email) if all present, otherwise by (firstName, lastName)
+      // Strict matching by (firstName, lastName, email) triplet
       const matchOnly = []
       for (const [key, shooter] of shooterMap) {
-        let found = false
-        // Try to find in CUP participants
-        for (const cupP of cupParticipants) {
-          // Match by name (email might be missing in either place)
-          if (cupP.firstName === shooter.firstName && cupP.lastName === shooter.lastName) {
-            found = true
-            break
-          }
+        // Defensive check: warn if email is missing (should never happen per SSI requirements)
+        if (!shooter.email) {
+          console.warn(`[manage] WARNING: Match participant missing email: ${shooter.firstName} ${shooter.lastName}`)
         }
 
-        if (!found) {
+        if (!cupKeySet.has(key)) {
           matchOnly.push({
             firstName: shooter.firstName,
             lastName: shooter.lastName,
