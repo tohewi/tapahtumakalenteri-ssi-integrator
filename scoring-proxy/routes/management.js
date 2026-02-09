@@ -64,6 +64,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
               firstName: c.first_name || '',
               lastName: c.last_name || '',
               email: c.email || '',
+              hasEmailError: !c.email, // Flag for missing email
               name: `${c.first_name} ${c.last_name}`.trim()
             })),
         }))
@@ -76,6 +77,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
             firstName: c.first_name || '',
             lastName: c.last_name || '',
             email: c.email || '',
+            hasEmailError: !c.email, // Flag for missing email
             name: `${c.first_name} ${c.last_name}`.trim()
           }))
 
@@ -91,8 +93,15 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       // Collect all shooters across all matches
       // Track: which matches they're IN (as participant) and which squad (if any)
       // Use (firstName, lastName, email) triplet as key for unique identification
-      const shooterMap = new Map() // key → { firstName, lastName, email, name, matches: { matchId: squadNumber|null } }
-      const makeShooterKey = (firstName, lastName, email) => `${firstName}|||${lastName}|||${email}`
+      // Note: shooters with missing email get a unique error key to prevent false matches
+      const shooterMap = new Map() // key → { firstName, lastName, email, hasEmailError, name, matches: { matchId: squadNumber|null } }
+      const makeShooterKey = (firstName, lastName, email) => {
+        // If email is missing, create a unique error key to prevent false matches
+        if (!email) {
+          return `${firstName}|||${lastName}|||ERROR_NO_EMAIL_${Math.random()}`
+        }
+        return `${firstName}|||${lastName}|||${email}`
+      }
 
       // First: add all match-level participants (squadNumber = null means unsquadded)
       for (const match of matches) {
@@ -106,6 +115,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
               firstName: participant.firstName,
               lastName: participant.lastName,
               email: participant.email,
+              hasEmailError: participant.hasEmailError,
               name: participant.name,
               matches: {}
             })
@@ -125,6 +135,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
                 firstName: shooter.firstName,
                 lastName: shooter.lastName,
                 email: shooter.email,
+                hasEmailError: shooter.hasEmailError,
                 name: shooter.name,
                 matches: {}
               })
@@ -142,6 +153,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
           firstName: c.shooter?.first_name || '',
           lastName: c.shooter?.last_name || '',
           email: c.shooter?.email || '',
+          hasEmailError: !c.shooter?.email, // Flag for missing email
         }))
         .filter(p => p.firstName || p.lastName) // filter out completely empty entries
 
@@ -167,6 +179,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
             firstName: cupP.firstName,
             lastName: cupP.lastName,
             email: cupP.email,
+            hasEmailError: cupP.hasEmailError,
             name: `${cupP.firstName} ${cupP.lastName}`.trim()
           })
         }
@@ -186,6 +199,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
             firstName: shooter.firstName,
             lastName: shooter.lastName,
             email: shooter.email,
+            hasEmailError: shooter.hasEmailError,
             name: shooter.name
           })
         }

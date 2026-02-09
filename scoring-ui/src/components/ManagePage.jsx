@@ -429,7 +429,11 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                 <div key={i} className="bg-white rounded-xl border border-red-200 p-3 flex items-center justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-gray-800 text-sm">{s.name}</div>
-                    {s.email && <div className="text-xs text-gray-500 mt-0.5 truncate">{s.email}</div>}
+                    {s.email ? (
+                      <div className="text-xs text-gray-500 mt-0.5 truncate">{s.email}</div>
+                    ) : (
+                      <div className="text-xs text-red-600 mt-0.5 font-medium">🚨 Sähköposti puuttuu</div>
+                    )}
                     <div className="text-xs text-red-500 mt-0.5">Osakilpailuissa mutta ei squadissa</div>
                   </div>
                   <ActionButton
@@ -454,7 +458,11 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-gray-800 text-sm">{s.name}</div>
-                      {s.email && <div className="text-xs text-gray-500 truncate">{s.email}</div>}
+                      {s.email ? (
+                        <div className="text-xs text-gray-500 truncate">{s.email}</div>
+                      ) : (
+                        <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
+                      )}
                     </div>
                     <ActionButton
                       label={`Korjaa → S${s.suggestedSquad}`}
@@ -492,7 +500,11 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                     <div key={i} className="bg-white rounded-xl border border-red-200 p-3 flex items-center justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-gray-800 text-sm">{s.name}</div>
-                        {s.email && <div className="text-xs text-gray-500 mt-0.5 truncate">{s.email}</div>}
+                        {s.email ? (
+                          <div className="text-xs text-gray-500 mt-0.5 truncate">{s.email}</div>
+                        ) : (
+                          <div className="text-xs text-red-600 mt-0.5 font-medium">🚨 Sähköposti puuttuu</div>
+                        )}
                         <div className="text-xs text-red-500 mt-0.5">Ilmoittautunut cupiin, ei osakilpailuissa</div>
                       </div>
                       <ActionButton
@@ -515,7 +527,11 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                     <div key={i} className="bg-white rounded-xl border border-purple-200 p-3 flex items-center justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-gray-800 text-sm">{s.name}</div>
-                        {s.email && <div className="text-xs text-gray-500 mt-0.5 truncate">{s.email}</div>}
+                        {s.email ? (
+                          <div className="text-xs text-gray-500 mt-0.5 truncate">{s.email}</div>
+                        ) : (
+                          <div className="text-xs text-red-600 mt-0.5 font-medium">🚨 Sähköposti puuttuu</div>
+                        )}
                         <div className="text-xs text-purple-500 mt-0.5">Osakilpailuissa mutta ei cupissa</div>
                       </div>
                       <ActionButton
@@ -591,7 +607,11 @@ function SquadPickerSheet({ shooter, squads, onSelect, onClose }) {
           <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
           <h3 className="font-semibold text-gray-800">Valitse squad</h3>
           <p className="text-sm text-gray-800 mt-0.5">{shooter.name}</p>
-          {shooter.email && <p className="text-xs text-gray-500 truncate">{shooter.email}</p>}
+          {shooter.email ? (
+            <p className="text-xs text-gray-500 truncate">{shooter.email}</p>
+          ) : (
+            <p className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</p>
+          )}
         </div>
         <div className="px-4 pb-4 space-y-2 max-h-[50vh] overflow-y-auto">
           {squads.map(sq => (
@@ -680,7 +700,11 @@ function SquadCard({ group, matchLabels }) {
                     <span className="text-green-500 text-sm shrink-0">✓</span>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm text-gray-800 truncate">{s.name}</div>
-                      {s.email && <div className="text-xs text-gray-500 truncate">{s.email}</div>}
+                      {s.email ? (
+                        <div className="text-xs text-gray-500 truncate">{s.email}</div>
+                      ) : (
+                        <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -691,7 +715,11 @@ function SquadCard({ group, matchLabels }) {
                     <span className="text-amber-500 text-sm shrink-0">⚠</span>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm text-gray-800 truncate">{s.name}</div>
-                      {s.email && <div className="text-xs text-gray-500 truncate">{s.email}</div>}
+                      {s.email ? (
+                        <div className="text-xs text-gray-500 truncate">{s.email}</div>
+                      ) : (
+                        <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-1 mt-1 ml-6">
