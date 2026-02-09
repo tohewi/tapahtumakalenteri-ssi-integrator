@@ -32,6 +32,8 @@ All features must use the shared components from `scoring-ui/src/components/shar
 - Each feature page renders **one** `<AppHeader>` at the top.
 - `LoginScreen` must always receive `hideHeader` when an `AppHeader` is already rendered above it.
 - Never render two headers on the same page.
+- **Second-level pages** (login pages, registration, or similar pages that are one level deep from the home page) must include a "Home"/"Alkuun" link in the top-right of the header that navigates back to the home page (`#/`).
+- The "Home"/"Alkuun" link should use the i18n translation (`fi.home`) and style: `text-blue-200 text-sm active:text-white`.
 
 ## Authentication & Login
 
