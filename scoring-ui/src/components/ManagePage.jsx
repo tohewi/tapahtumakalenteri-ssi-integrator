@@ -250,7 +250,7 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
   const squadsRef = useRef(null)
 
   // Action state
-  const [actionLoading, setActionLoading] = useState(null) // shooterName being acted on
+  const [actionLoading, setActionLoading] = useState(null) // { shooterName, action } being acted on
   const [actionError, setActionError] = useState(null)
   const [squadPicker, setSquadPicker] = useState(null) // { shooterName, type: 'assign'|'assignCupOnly' }
 
@@ -327,8 +327,8 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
   const scrollTo = (ref) => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   // ── Action handlers ──
-  const runAction = async (actionFn, shooterName) => {
-    setActionLoading(shooterName)
+  const runAction = async (actionFn, shooterName, action) => {
+    setActionLoading({ shooterName, action })
     setActionError(null)
     try {
       await actionFn()
@@ -341,23 +341,23 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
 
   const handleAssignSquad = (shooter, squadNumber) => {
     setSquadPicker(null)
-    runAction(() => api.manageAssignSquad(cupId, shooter.name, squadNumber, shooter.email), shooter.name)
+    runAction(() => api.manageAssignSquad(cupId, shooter.name, squadNumber, shooter.email), shooter.name, 'assign')
   }
 
   const handleFixSquad = (shooter, targetSquad) => {
-    runAction(() => api.manageFixSquad(cupId, shooter.name, targetSquad, shooter.email), shooter.name)
+    runAction(() => api.manageFixSquad(cupId, shooter.name, targetSquad, shooter.email), shooter.name, 'fix')
   }
 
   const handleAddToCup = (shooter) => {
-    runAction(() => api.manageAddToCup(cupId, shooter.name, shooter.email), shooter.name)
+    runAction(() => api.manageAddToCup(cupId, shooter.name, shooter.email), shooter.name, 'addToCup')
   }
 
   const handleApprovePending = (shooter) => {
-    runAction(() => api.manageApprovePending(cupId, shooter.name, shooter.email), shooter.name)
+    runAction(() => api.manageApprovePending(cupId, shooter.name, shooter.email), shooter.name, 'approve')
   }
 
   const handleRemovePending = (shooter) => {
-    runAction(() => api.manageRemovePending(cupId, shooter.name, shooter.email), shooter.name)
+    runAction(() => api.manageRemovePending(cupId, shooter.name, shooter.email), shooter.name, 'remove')
   }
 
   return (
@@ -456,7 +456,7 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                   </div>
                   <ActionButton
                     label="→ S?"
-                    loading={actionLoading === s.name}
+                    loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'assign'}
                     onClick={() => setSquadPicker({ shooter: s, type: 'assign' })}
                     color="blue"
                   />
@@ -484,7 +484,7 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                     </div>
                     <ActionButton
                       label={`Korjaa → S${s.suggestedSquad}`}
-                      loading={actionLoading === s.name}
+                      loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'fix'}
                       onClick={() => handleFixSquad(s, s.suggestedSquad)}
                       color="amber"
                     />
@@ -527,7 +527,7 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                       </div>
                       <ActionButton
                         label="→ S?"
-                        loading={actionLoading === s.name}
+                        loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'assign'}
                         onClick={() => setSquadPicker({ shooter: s, type: 'assignCupOnly' })}
                         color="blue"
                       />
@@ -554,7 +554,7 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                       </div>
                       <ActionButton
                         label="Lisää"
-                        loading={actionLoading === s.name}
+                        loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'addToCup'}
                         onClick={() => handleAddToCup(s)}
                         color="purple"
                       />
@@ -585,13 +585,13 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                     <div className="flex gap-2">
                       <ActionButton
                         label="Hyväksy"
-                        loading={actionLoading === s.name}
+                        loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'approve'}
                         onClick={() => handleApprovePending(s)}
                         color="blue"
                       />
                       <ActionButton
                         label="Poista"
-                        loading={actionLoading === s.name}
+                        loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'remove'}
                         onClick={() => handleRemovePending(s)}
                         color="red"
                       />
