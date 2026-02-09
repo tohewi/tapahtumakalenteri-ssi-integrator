@@ -338,17 +338,17 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
     setActionLoading(null)
   }
 
-  const handleAssignSquad = (shooterName, squadNumber) => {
+  const handleAssignSquad = (shooter, squadNumber) => {
     setSquadPicker(null)
-    runAction(() => api.manageAssignSquad(cupId, shooterName, squadNumber), shooterName)
+    runAction(() => api.manageAssignSquad(cupId, shooter.name, squadNumber, shooter.email), shooter.name)
   }
 
-  const handleFixSquad = (shooterName, targetSquad) => {
-    runAction(() => api.manageFixSquad(cupId, shooterName, targetSquad), shooterName)
+  const handleFixSquad = (shooter, targetSquad) => {
+    runAction(() => api.manageFixSquad(cupId, shooter.name, targetSquad, shooter.email), shooter.name)
   }
 
-  const handleAddToCup = (shooterName) => {
-    runAction(() => api.manageAddToCup(cupId, shooterName), shooterName)
+  const handleAddToCup = (shooter) => {
+    runAction(() => api.manageAddToCup(cupId, shooter.name, shooter.email), shooter.name)
   }
 
   return (
@@ -435,7 +435,7 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                   <ActionButton
                     label="→ S?"
                     loading={actionLoading === s.name}
-                    onClick={() => setSquadPicker({ shooterName: s.name, type: 'assign' })}
+                    onClick={() => setSquadPicker({ shooter: s, type: 'assign' })}
                     color="blue"
                   />
                 </div>
@@ -459,7 +459,7 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                     <ActionButton
                       label={`Korjaa → S${s.suggestedSquad}`}
                       loading={actionLoading === s.name}
-                      onClick={() => handleFixSquad(s.name, s.suggestedSquad)}
+                      onClick={() => handleFixSquad(s, s.suggestedSquad)}
                       color="amber"
                     />
                   </div>
@@ -498,7 +498,7 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                       <ActionButton
                         label="→ S?"
                         loading={actionLoading === s.name}
-                        onClick={() => setSquadPicker({ shooterName: s.name, type: 'assignCupOnly' })}
+                        onClick={() => setSquadPicker({ shooter: s, type: 'assignCupOnly' })}
                         color="blue"
                       />
                     </div>
@@ -521,7 +521,7 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                       <ActionButton
                         label="Lisää"
                         loading={actionLoading === s.name}
-                        onClick={() => handleAddToCup(s.name)}
+                        onClick={() => handleAddToCup(s)}
                         color="purple"
                       />
                     </div>
@@ -544,9 +544,9 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
       {/* ── Bottom Sheet: Squad Picker ── */}
       {squadPicker && (
         <SquadPickerSheet
-          shooterName={squadPicker.shooterName}
+          shooter={squadPicker.shooter}
           squads={squadOptions}
-          onSelect={(sqNum) => handleAssignSquad(squadPicker.shooterName, sqNum)}
+          onSelect={(sqNum) => handleAssignSquad(squadPicker.shooter, sqNum)}
           onClose={() => setSquadPicker(null)}
         />
       )}
@@ -579,7 +579,7 @@ function ActionButton({ label, loading, onClick, color = 'blue' }) {
 }
 
 // ── Bottom sheet squad picker (mobile-friendly) ──
-function SquadPickerSheet({ shooterName, squads, onSelect, onClose }) {
+function SquadPickerSheet({ shooter, squads, onSelect, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40" />
@@ -590,7 +590,8 @@ function SquadPickerSheet({ shooterName, squads, onSelect, onClose }) {
         <div className="px-4 pt-4 pb-2">
           <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
           <h3 className="font-semibold text-gray-800">Valitse squad</h3>
-          <p className="text-sm text-gray-500 mt-0.5">{shooterName}</p>
+          <p className="text-sm text-gray-800 mt-0.5">{shooter.name}</p>
+          {shooter.email && <p className="text-xs text-gray-500 truncate">{shooter.email}</p>}
         </div>
         <div className="px-4 pb-4 space-y-2 max-h-[50vh] overflow-y-auto">
           {squads.map(sq => (

@@ -184,10 +184,10 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
   // ============================================================
   // POST /api/manage/cup/:id/assign-squad
   // Assign an unsquadded shooter to a squad in all component matches.
-  // Body: { shooterName, squadNumber }
+  // Body: { shooterName, squadNumber, email }
   // ============================================================
   router.post('/cup/:id/assign-squad', requireAuth('manage'), async (req, res) => {
-    const { shooterName, squadNumber } = req.body
+    const { shooterName, squadNumber, email } = req.body
     if (!shooterName || !squadNumber) {
       return res.status(400).json({ error: 'shooterName and squadNumber required' })
     }
@@ -224,9 +224,9 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
 
       const results = []
       for (const matchId of matchIds) {
-        // 2. Add shooter to match by name
-        if (!IS_PROD) console.log(`[manage] Adding "${shooterName}" to match ${matchId}`)
-        const addResult = await ssiSearchAndAddParticipant(91, matchId, null, cookies, { firstName, lastName })
+        // 2. Add shooter to match by name and email (email preferred for disambiguation)
+        if (!IS_PROD) console.log(`[manage] Adding "${shooterName}" (${email || 'no email'}) to match ${matchId}`)
+        const addResult = await ssiSearchAndAddParticipant(91, matchId, email, cookies, { firstName, lastName })
         if (!IS_PROD) console.log(`[manage] Add result: ${addResult.message}`)
 
         // 3. Find participant ID in the match
@@ -252,10 +252,10 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
   // ============================================================
   // POST /api/manage/cup/:id/fix-squad
   // Fix inconsistent squad assignment across matches.
-  // Body: { shooterName, targetSquad }
+  // Body: { shooterName, targetSquad, email }
   // ============================================================
   router.post('/cup/:id/fix-squad', requireAuth('manage'), async (req, res) => {
-    const { shooterName, targetSquad } = req.body
+    const { shooterName, targetSquad, email } = req.body
     if (!shooterName || !targetSquad) {
       return res.status(400).json({ error: 'shooterName and targetSquad required' })
     }
@@ -294,10 +294,10 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
         // 2. Find participant in match
         let participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies)
 
-        // 3. If not found, add them first
+        // 3. If not found, add them first using email for disambiguation
         if (!participantId) {
-          if (!IS_PROD) console.log(`[manage] "${shooterName}" not in match ${matchId}, adding...`)
-          await ssiSearchAndAddParticipant(91, matchId, null, cookies, { firstName, lastName })
+          if (!IS_PROD) console.log(`[manage] "${shooterName}" (${email || 'no email'}) not in match ${matchId}, adding...`)
+          await ssiSearchAndAddParticipant(91, matchId, email, cookies, { firstName, lastName })
           participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies)
         }
 
@@ -322,10 +322,10 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
   // ============================================================
   // POST /api/manage/cup/:id/add-to-cup
   // Add a match-only shooter to the CUP and approve.
-  // Body: { shooterName }
+  // Body: { shooterName, email }
   // ============================================================
   router.post('/cup/:id/add-to-cup', requireAuth('manage'), async (req, res) => {
-    const { shooterName } = req.body
+    const { shooterName, email } = req.body
     if (!shooterName) {
       return res.status(400).json({ error: 'shooterName required' })
     }
@@ -339,9 +339,9 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       const firstName = nameParts[0] || ''
       const lastName = nameParts.slice(1).join(' ') || ''
 
-      // 1. Search-and-add to CUP (CT=136)
-      if (!IS_PROD) console.log(`[manage] Adding "${shooterName}" to cup ${cupId}`)
-      const addResult = await ssiSearchAndAddParticipant(136, cupId, null, cookies, { firstName, lastName })
+      // 1. Search-and-add to CUP (CT=136) using email for disambiguation
+      if (!IS_PROD) console.log(`[manage] Adding "${shooterName}" (${email || 'no email'}) to cup ${cupId}`)
+      const addResult = await ssiSearchAndAddParticipant(136, cupId, email, cookies, { firstName, lastName })
       if (!IS_PROD) console.log(`[manage] Cup add result: ${addResult.message}`)
 
       if (!addResult.success) {
