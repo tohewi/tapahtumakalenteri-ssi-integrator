@@ -15,7 +15,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
           event(content_type: 136, id: $id) {
             id name starts status
             ... on NordicSerieNode {
-              competitors { id status shooter { first_name last_name email } }
+              competitors { id status email shooter { first_name last_name email } }
               component_matches {
                 number included
                 match {
@@ -146,15 +146,36 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       }
 
       // CUP-level participants (approved) - store as keys for comparison
-      // Note: CUP competitors have nested shooter object, match competitors have fields directly
+      // Note: CUP competitors can have email at competitor level OR nested in shooter object
       const cupParticipants = (cup.competitors || [])
         .filter(c => c.status === 'a')
-        .map(c => ({
-          firstName: c.shooter?.first_name || '',
-          lastName: c.shooter?.last_name || '',
-          email: c.shooter?.email || '',
-          hasEmailError: !c.shooter?.email, // Flag for missing email
-        }))
+        .map(c => {
+          // Try email from competitor level first, then from shooter
+          const email = c.email || c.shooter?.email || ''
+          const firstName = c.shooter?.first_name || ''
+          const lastName = c.shooter?.last_name || ''
+
+          // Debug logging
+          if (!IS_PROD) {
+            console.log(`[manage] CUP competitor raw:`, {
+              competitorEmail: c.email,
+              shooterEmail: c.shooter?.email,
+              resolvedEmail: email,
+              firstName,
+              lastName,
+              emailType: typeof email,
+              emailLength: email?.length,
+              hasEmail: !!email
+            })
+          }
+
+          return {
+            firstName,
+            lastName,
+            email,
+            hasEmailError: !email, // Flag for missing email
+          }
+        })
         .filter(p => p.firstName || p.lastName) // filter out completely empty entries
 
       if (!IS_PROD) {
