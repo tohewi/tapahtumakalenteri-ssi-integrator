@@ -1,8 +1,8 @@
 # SRA Training Staff Management — Design Document
 
-**Version**: 0.1.0 (Draft — Review #1)
-**Date**: 2026-02-09
-**Status**: Design — awaiting review
+**Version**: 0.3.0 (Final Draft)
+**Date**: 2026-02-10
+**Status**: Design — All review decisions incorporated, ready for sign-off
 **Requirements**: [sra-training-staffing-requirements.md](../requirements/sra-training-staffing-requirements.md)
 
 ---
@@ -105,6 +105,22 @@ organization:
   range: "Temppelivuori"
   timezone: "Europe/Helsinki"
 
+# Admin allowlist — only these SSI users can sign up as staff (Q1: config file allowlist)
+# Each entry: SSI email address
+adminAllowlist:
+  - "admin1@example.com"
+  - "admin2@example.com"
+  # Add all eligible vetäjät SSI emails here
+
+# SSI event discovery (R3: search matches by name, R5: Cup/League→Match→Squad)
+eventDiscovery:
+  searchStrings:
+    - "oldies"
+    - "newbie"
+  matchContentType: 91       # NordicMatch
+  cupContentType: 136        # NordicSerie (Cup/League)
+  staffSquadName: "Squad 5"  # or match by position (5th squad)
+
 trainingTypes:
   oldies:
     label:
@@ -151,9 +167,14 @@ registration:
   cancellationDeadlineHours: 24  # same as registration close
 
 staffAllocation:
-  excessStaffAction: "move_to_shooter_squad"  # or "remove", "waitlist"
-  roleAssignmentMode: "volunteer_then_random"  # or "volunteer_only", "random"
-  allowDualRoles: false  # can one person hold both special roles?
+  excessStaffAction: "move_to_shooter_squad_and_notify"  # Q3: auto-move AND notify
+  roleAssignmentMode: "volunteer_then_random"  # Q4: binding — volunteer preference is guaranteed if available
+  rolePreferenceBinding: true                  # Q4: role preference is binding (not advisory)
+  allowDualRoles: false                        # Q7: one person cannot hold both special roles
+
+finalization:
+  mode: "automated"                            # Q5: fully automated on registration close
+  triggerOnRegistrationClose: true             # System auto-triggers 24h before event
 
 notifications:
   channels: ["email"]  # future: ["email", "in_app"]
@@ -161,9 +182,9 @@ notifications:
     staffConfirmed:
       fi: "Olet vahvistettu vetäjäksi tapahtumaan {eventName}. Roolisi: {role}."
       en: "You are confirmed as staff for {eventName}. Your role: {role}."
-    staffNotSelected:
-      fi: "Valitettavasti et mahtunut vetäjäksi tapahtumaan {eventName}. Sinut on siirretty ampujaksi squadiin {squad}."
-      en: "Unfortunately you were not selected as staff for {eventName}. You have been moved to shooter squad {squad}."
+    staffMovedToShooterSquad:
+      fi: "Et mahtunut vetäjäksi tapahtumaan {eventName}. Sinut on siirretty ampujaksi squadiin {squad}."
+      en: "You were not selected as staff for {eventName}. You have been moved to shooter squad {squad}."
     roleAssigned:
       fi: "Sinulle on osoitettu rooli: {role} tapahtumassa {eventName}."
       en: "You have been assigned the role: {role} for {eventName}."
@@ -277,37 +298,40 @@ Algorithm:
 | 20       | 4           | 4             | 5              | 4           |
 | 25       | 4 (capped)  | 4             | 6.25           | 4           |
 
-### 4.2 Staff Allocation (on registration close)
+### 4.2 Staff Allocation (automated on registration close — Q5)
+
+Finalization triggers automatically 24h before the event when registration closes. No manual admin action required.
 
 ```
-1. Determine activeSquadCount from shooterCount
+1. Determine activeSquadCount from shooterCount (via squad optimizer)
 2. staffPositions = activeSquadCount
 3. Sort staffSignups by signupTime (FIFO)
 4. First `staffPositions` signups → status = "confirmed"
 5. Remaining signups → status = "overflow"
-6. For overflow staff:
-   - If excessStaffAction == "move_to_shooter_squad":
-       Assign to shooter squads (round-robin or least-full)
-   - If excessStaffAction == "waitlist":
-       Keep on waitlist
+6. For overflow staff (Q3: auto-move AND notify):
+   a. Automatically move to shooter squads (round-robin, least-full first)
+   b. Update SSI squad assignment via participant edit form
+   c. Send "staffMovedToShooterSquad" notification with assigned squad
 7. Assign special roles (see 4.3)
-8. Send notifications
+8. Send "staffConfirmed" + "roleAssigned" notifications to confirmed staff
 ```
 
 ### 4.3 Role Assignment
 
+Role preference is **binding** (Q4): if a confirmed staff member volunteered for a role, they are guaranteed it (first-come-first-served if multiple volunteers). Dual roles are **not allowed** (Q7).
+
 ```
-Mode: "volunteer_then_random" (configurable)
+Mode: "volunteer_then_random"
 
 1. For each required role (leadInstructor, equipmentManager):
    a. Find confirmed staff with rolePreference matching this role
-   b. If exactly one volunteer → assign
-   c. If multiple volunteers → assign first by signupTime
+   b. If exactly one volunteer → assign (binding guarantee)
+   c. If multiple volunteers → assign first by signupTime (binding, FIFO)
    d. If no volunteer → randomly assign from confirmed staff without a role
-2. If allowDualRoles == false:
-   - A person assigned to one role is excluded from random assignment for other roles
+2. A person assigned to one role is excluded from assignment for other roles (no dual roles)
 3. If a required role cannot be filled (no confirmed staff left):
    - Send "missingRole" notification to admin
+   - Event proceeds without that role filled
 ```
 
 ### 4.4 Cancellation and Queue Promotion
@@ -454,32 +478,71 @@ movedToShooterSquad: 'Moved to shooter squad {squad}',
 
 ---
 
-## 7. SSI Integration
+## 7. SSI Integration (Day 1 — Q8)
+
+SSI integration is required from day 1 to leverage existing event, squad, and participant infrastructure.
 
 ### 7.1 Role Mapping
 
 | Staffing Role | SSI Role | Notes |
 |---------------|----------|-------|
-| Lead Instructor (vastuuvetäjä) | Match director | Existing SSI role — needs verification |
-| Equipment Manager (kalustovastaava) | Quarter master | Existing SSI role — needs verification |
-| Staff (vetäjä) | (regular member in Squad 5) | No special SSI role |
+| Lead Instructor (vastuuvetäjä) | Match director | Existing SSI role — needs form scraping to verify assignment mechanism |
+| Equipment Manager (kalustovastaava) | Quarter master | Existing SSI role — needs form scraping to verify assignment mechanism |
+| Staff (vetäjä) | (regular member in Squad 5) | No special SSI role needed |
 
-### 7.2 SSI Operations Required
+### 7.2 Existing SSI Functions (reusable)
 
-| Operation | SSI Interface | Existing Support |
-|-----------|--------------|------------------|
-| Get event details | GraphQL | Yes (existing queries) |
-| Get squad members | GraphQL | Yes (existing queries) |
-| Get shooter count per squad | GraphQL | Yes |
-| Move competitor between squads | Web Forms | Needs implementation |
-| Assign role to competitor | Web Forms | Needs investigation |
-| Get user admin status | GraphQL | Needs investigation |
+The codebase already has these functions in `scoring-proxy/lib/ssi-core/client.js`:
 
-### 7.3 Open Questions for SSI
+| Function | Purpose | Staffing Use |
+|----------|---------|-------------|
+| `ssiGraphQL()` | Execute GraphQL queries | Query events, squads, competitors |
+| `ssiLogin()` | Web session login (cookies) | Required for all form POSTs |
+| `ssiGetEventStaff()` | Scrape `/event/{ct}/{id}/staff/` | Read current event staff and their roles |
+| `ssiFetchPage()` | Fetch any authenticated SSI page | Scrape admin forms for new operations |
 
-1. **Can we programmatically assign "Match director" / "Quarter master" roles?** — Need to check SSI admin forms
-2. **How to verify admin status?** — Check if SSI has a permissions/role API, or if we maintain our own admin list in config
-3. **Can we move a competitor from Squad 5 to Squad 1-4 via API?** — Need to check squad management forms
+### 7.3 SSI Operations Required
+
+| Operation | SSI Interface | Status | Implementation |
+|-----------|--------------|--------|----------------|
+| Get event details | GraphQL `event()` query | ✅ Existing | Reuse `ssiGraphQL()` |
+| Get squad members + counts | GraphQL `event()` → `squads` → `competitors` | ✅ Existing | Reuse `ssiGraphQL()` |
+| Get event staff + roles | Web scraping `/event/{ct}/{id}/staff/` | ✅ Existing | Reuse `ssiGetEventStaff()` |
+| Add participant to event | Web form `/event/{ct}/{id}/participant-search-and-add/` | ✅ Documented | See `ssi-admin-operations.md` |
+| Move participant between squads | Web form `/event/participant/93/{id}/edit/` | ✅ Documented | POST with `squad` field |
+| Assign SSI role to staff member | Web form (staff page) | ❓ Needs investigation | Scrape staff edit form |
+| Verify admin eligibility | Config allowlist (email match) | ✅ Decided (Q1) | Compare login email against `adminAllowlist` |
+| Get current user email | GraphQL `me` query | ✅ Existing | Reuse `Get-SSIMe` / `ssiGraphQL()` |
+
+### 7.4 Admin Eligibility (Q1 Decision)
+
+Admin status is determined by the **config file allowlist**, not SSI roles:
+
+```
+1. User logs in → system gets their SSI email via `me` GraphQL query
+2. Check email against `adminAllowlist` in sra-training-config.yml
+3. If match → user can sign up as staff (Squad 5 visible + enabled)
+4. If no match → Squad 5 visible but disabled with "admin only" label (Q2)
+```
+
+This approach is simpler and more reliable than parsing SSI group membership, which would require additional web scraping of SSI's group management pages.
+
+### 7.5 SSI Content Types (reference)
+
+| Entity | Content Type | Used For |
+|--------|-------------|----------|
+| Cup (NordicSerie) | 136 | Training event container |
+| Match (NordicMatch) | 91 | Individual training session |
+| Participant | 93 | Competitor/staff member edit |
+| Squad | 92 | Squad management |
+
+### 7.6 SSI Investigation Still Needed
+
+These items require hands-on SSI form scraping during implementation:
+
+1. **Staff role assignment form** — Scrape `/event/{ct}/{id}/staff/` to find the form for assigning "Match director" / "Quarter master" roles to individual staff members. The `ssiGetEventStaff()` function already reads this page; we need to find the edit/assignment form.
+2. **Squad move for SRA events** — Verify that `/event/participant/93/{id}/edit/` works for SRA training events the same way as Kupittaa Cup events. The form fields and squad IDs may differ.
+3. **Automated scheduling** — Determine how to trigger finalization 24h before event. Options: Node.js `setTimeout`/`setInterval`, external cron (Render cron job), or a lightweight scheduler library.
 
 ---
 
@@ -531,52 +594,163 @@ scoring-ui/
 
 ---
 
-## 10. Open Design Questions
+## 10. Design Decisions (Review #1)
 
-These questions should be resolved before detailed design:
+| # | Question | Decision | Impact on Design |
+|---|----------|----------|------------------|
+| Q1 | Admin eligibility | **Config file allowlist** — `adminAllowlist` in YAML | Added `adminAllowlist` to config; auth checks email against list |
+| Q2 | Squad 5 visibility | **Visible with "admin only" label** | UI shows Squad 5 to all users, disabled for non-admins |
+| Q3 | Overflow staff handling | **Auto-move AND notify** | Overflow auto-moved to shooter squads + email notification |
+| Q4 | Role preference | **Binding** — guaranteed if available | Volunteer preference is first-come-first-served guarantee |
+| Q5 | Finalization trigger | **Fully automated** — triggers on registration close | Need scheduled job or timer infrastructure |
+| Q6 | Newbie vs Oldies rules | **Same rules for now** | Single config section, both types share same thresholds |
+| Q7 | Dual roles | **No** — one person cannot hold both | Role assigner excludes already-assigned staff |
+| Q8 | SSI integration timing | **SSI from day 1** — investigate groups/admin handling | All phases include SSI integration; no standalone mode |
 
-| # | Question | Options | Impact |
-|---|----------|---------|--------|
-| Q1 | How to determine admin eligibility for staff signup? | a) SSI role/permissions b) Config file allowlist c) Both | Auth flow, config schema | Config file allowlist is the default.
-| Q2 | Should Squad 5 be visible to non-admin users? | a) Hidden b) Visible but disabled c) Visible with "admin only" label | UI design |visible with admin only label is the default.
-| Q3 | Should overflow staff auto-confirm or require acceptance when moved to shooter squads? | a) Auto-move b) Notify and require confirmation | Notification flow | auto-mode and notify.
-| Q4 | Should role preference be binding or advisory? | a) Binding (guaranteed if available) b) Advisory (considered but not guaranteed) | Role assignment algorithm |binding.
-| Q5 | How should the 24h pre-event window work? | a) Fully automated b) Admin triggers finalization c) Scheduled job | Infrastructure needs |Target is fully automated.
-| Q6 | Should Newbie trainings have different staffing rules than Oldies? | a) Same rules b) Different config per type | Config schema |same for now.
-| Q7 | Can the same person hold both special roles? | a) Yes b) No (default in config) | Role assignment logic |no.
-| Q8 | Do we need SSI integration in Phase 1 or can we start standalone? | a) SSI from day 1 b) Standalone first, SSI later | Implementation scope |ssi from day one as we need to look into ssi groups etc. how to handle admin roles.
+## 11. Design Decisions (Review #2)
+
+| # | Question | Decision | Impact on Design |
+|---|----------|----------|------------------|
+| R1 | Automated finalization scheduling | **Render Cron Job** — separate cron service on Render | Add cron job to `render.yaml`; cron calls staffing finalization API endpoint |
+| R2 | Staffing UI placement | **Same app** — add `#/staffing` route to scoring-ui | No new build/deploy; shared auth, i18n, and component library |
+| R3 | Finding SRA training events | **Search SSI Matches by name** — "oldies", "newbie" as search strings | Query `events(search: "oldies")` and `events(search: "newbie")` via GraphQL |
+| R4 | Email integration | **Reuse existing Resend module** | Add staffing templates to `scoring-proxy/lib/email.js` |
+| R5 | SSI event structure | **Cup/League → Match → Squad** | SRA trainings are organized as a Cup/League containing Matches with Squads (1-4 for shooters, 5 for staff) |
 
 ---
 
-## 11. Implementation Phases
+## 12. Automated Finalization (R1: Render Cron Job)
 
-### Phase 1: Core Staffing (MVP)
+A Render Cron Job runs periodically and calls the staffing finalization API. This survives server restarts and requires no in-memory state.
 
-- Configuration loader (YAML)
-- Staff signup/cancel API
-- Squad optimizer algorithm
-- Staff allocation engine (FIFO queue)
-- Basic role assignment
-- Staffing status API
-- Frontend: StaffingPage, StaffSignupPanel, StaffStatusBoard
-- i18n strings (fi/en)
-- In-memory persistence
+### 12.1 Render Cron Job Configuration
 
-### Phase 2: Notifications & SSI Integration
+Add to `render.yaml`:
 
-- Email notifications via existing Resend integration
-- SSI role assignment (Match director, Quarter master)
-- SSI squad movement (overflow → shooter squads)
-- Admin eligibility check via SSI
+```yaml
+  - type: cron
+    name: sra-staffing-cron
+    runtime: node
+    plan: starter
+    schedule: "0 * * * *"  # every hour
+    repo: https://github.com/tohewi/tapahtumakalenteri-ssi-integrator
+    branch: main
+    buildCommand: cd scoring-proxy && npm ci
+    startCommand: node lib/staffing/cron.js
+    envVars:
+      - key: STAFFING_API_URL
+        value: https://ssi-scoring.onrender.com
+      - key: STAFFING_CRON_SECRET
+        fromSecret: STAFFING_CRON_SECRET
+```
+
+### 12.2 Cron Script (`scoring-proxy/lib/staffing/cron.js`)
+
+```
+1. Fetch all training events with status "open"
+2. For each event where registrationClose <= now:
+   a. Call POST /api/staffing/events/:eventId/finalize
+3. Log results
+```
+
+The `/finalize` endpoint is idempotent — calling it multiple times on an already-finalized event is a no-op.
+
+### 12.3 Security
+
+The cron job authenticates via a shared secret (`STAFFING_CRON_SECRET`) passed as a header. The `/finalize` endpoint checks this secret before processing.
+
+---
+
+## 13. SSI Event Discovery (R3: Search by Name)
+
+### 13.1 Search Configuration
+
+```yaml
+# In config/sra-training-config.yml
+eventDiscovery:
+  searchStrings:
+    - "oldies"
+    - "newbie"
+  contentType: 91          # Match (NordicMatch)
+  cupContentType: 136      # Cup/League (NordicSerie)
+```
+
+### 13.2 Discovery Flow
+
+```
+1. Query SSI: events(search: "oldies") + events(search: "newbie")
+2. Filter results to upcoming events (starts > now)
+3. For each match, get squad details via GraphQL
+4. Identify Squad 5 (staff squad) by name or position
+5. Count shooters in Squads 1-4
+6. Present events in StaffingPage with current signup status
+```
+
+### 13.3 SSI Event Hierarchy (R5)
+
+```
+SRA Training Cup/League (CT=136)
+  ├── Match: "Oldies 15.03.2026" (CT=91)
+  │   ├── Squad 1 (shooters)
+  │   ├── Squad 2 (shooters)
+  │   ├── Squad 3 (shooters)
+  │   ├── Squad 4 (shooters)
+  │   └── Squad 5 (staff / vetäjät)
+  │
+  └── Match: "Newbie 22.03.2026" (CT=91)
+      ├── Squad 1 (shooters)
+      ├── ...
+      └── Squad 5 (staff / vetäjät)
+```
+
+The staffing system operates at the **Match level** — each Match has its own staff signup queue, squad optimization, and role assignments.
+
+---
+
+## 14. Implementation Phases
+
+All phases include SSI integration from day 1 (Q8).
+
+### Phase 1: Core Staffing + SSI Integration (MVP)
+
+**Backend (`scoring-proxy`):**
+- Configuration loader (`lib/staffing/config-loader.js`) — YAML with `adminAllowlist`
+- SSI event discovery — search matches by "oldies"/"newbie" (reuse `ssiGraphQL()`)
+- Admin eligibility check — email vs `adminAllowlist` (reuse `me` query)
+- Staff signup/cancel API (`routes/staffing.js`)
+- Squad optimizer (`lib/staffing/squad-optimizer.js`)
+- Staff allocation engine (`lib/staffing/engine.js`) — FIFO queue
+- Role assignment (`lib/staffing/role-assigner.js`) — volunteer-first, binding, no dual roles
+- SSI squad movement for overflow staff (reuse participant edit form)
+- Email notifications — staffing templates in existing `lib/email.js` (reuse Resend)
+- In-memory + JSON file persistence
+- Render Cron Job for automated finalization
+
+**Frontend (`scoring-ui`):**
+- `#/staffing` route in `main.jsx`
+- StaffingPage, StaffSignupPanel, StaffStatusBoard components
+- `staffing-api.js` — API client
+- i18n strings (fi/en) added to existing `i18n.js`
+- Feature card on HomePage
+
+**Config:**
+- `config/sra-training-config.yml`
+- Cron job entry in `render.yaml`
+
+### Phase 2: SSI Roles & Admin Tools
+
+- SSI role assignment (Match director, Quarter master) — form investigation + implementation
+- Queue promotion on cancellation with notifications
+- Admin role override UI (RoleAssignmentPanel)
+- SquadOptimizationView (visual squad/staff display)
 
 ### Phase 3: Statistics & Polish
 
-- Staff service history tracking
-- Statistics dashboard
-- Database persistence
-- Queue promotion notifications
-- Admin role override UI
+- Staff service history tracking (database persistence)
+- Statistics dashboard (times served, roles held, cancellation rate)
+- Render Postgres migration
+- Statistics-based features (priority queue, preferred roles)
 
 ---
 
-*This is Review #1 draft. Please review the overall architecture, data model, configuration schema, and module boundaries. Key areas for feedback: open questions (Section 10), algorithm correctness (Section 4), and SSI integration approach (Section 7).*
+*All design decisions from Review #1 (Q1-Q8) and Review #2 (R1-R5) are incorporated. This document is ready for final sign-off before detailed implementation begins.*
