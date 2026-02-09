@@ -162,9 +162,8 @@ Use different credentials for preview environments:
 
 ## Credits
 
-- **Issue:** [#issue_number] - "When setting up PR instance in Render, also environment settings must be set"
+- **Issue:** "When setting up PR instance in Render, also environment settings must be set"
 - **Design:** Secure GitHub Secrets + automated Render API configuration
-- **Implementation:** PR #[pr_number]
 - **Date:** 2026-02-09
 
 ---

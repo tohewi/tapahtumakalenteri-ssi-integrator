@@ -276,8 +276,6 @@ When testing in a preview environment:
 - [ ] No console errors in browser DevTools
 - [ ] API endpoints respond correctly
 
-## Environment Variables for Preview
-
 ## Environment Variables
 
 Preview environments need all the same environment variables as production to function correctly. These are securely stored as GitHub Secrets and automatically applied when preview services are created.

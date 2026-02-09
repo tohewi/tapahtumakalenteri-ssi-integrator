@@ -144,7 +144,7 @@ The `pr-preview.yml` workflow is updated to:
 
 3. **Verify Secrets:**
    - All secrets should be visible in the secrets list (values are hidden)
-   - Total of 7 secrets: RENDER_API_KEY, RENDER_OWNER_ID, RENDER_DEPLOY_HOOK, PREVIEW_EMAIL_FROM, PREVIEW_RESEND_API_KEY, PREVIEW_SSI_ADMIN_EMAIL, PREVIEW_SSI_ADMIN_PASSWORD, PREVIEW_SSI_ADMIN_API_KEY
+   - Total of 8 secrets: RENDER_API_KEY, RENDER_OWNER_ID, RENDER_DEPLOY_HOOK, PREVIEW_EMAIL_FROM, PREVIEW_RESEND_API_KEY, PREVIEW_SSI_ADMIN_EMAIL, PREVIEW_SSI_ADMIN_PASSWORD, PREVIEW_SSI_ADMIN_API_KEY
 
 ## Environment Strategy Options
 
