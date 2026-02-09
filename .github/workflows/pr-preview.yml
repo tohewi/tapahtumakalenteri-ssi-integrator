@@ -24,7 +24,7 @@ name: PR Preview Environment
 # Documentation: docs/PR-PREVIEW-DEPLOYMENTS.md
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, closed]
     branches: [main]
 
@@ -36,10 +36,6 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        if: github.event.action != 'closed'
-
       - name: Generate preview service name
         id: preview-name
         run: |
