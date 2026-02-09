@@ -104,15 +104,18 @@ The Render MCP server provides tools to interact with Render services programmat
 ### Example Usage
 
 ```javascript
+// Note: These are MCP server tool calls, not direct JavaScript functions
+// The actual syntax depends on your MCP client implementation
+
 // List workspaces
-await render-list_workspaces()
+render.list_workspaces()
 
 // List all services in the workspace
-await render-list_services()
+render.list_services()
 
 // Get details about a specific service
-await render-get_service({ serviceId: 'srv-d62r8p0gjchc73bv7fvg' })
+render.get_service({ serviceId: 'srv-d62r8p0gjchc73bv7fvg' })
 
 // List recent deployments
-await render-list_deploys({ serviceId: 'srv-d62r8p0gjchc73bv7fvg' })
+render.list_deploys({ serviceId: 'srv-d62r8p0gjchc73bv7fvg' })
 ```
