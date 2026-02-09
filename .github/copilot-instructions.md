@@ -74,23 +74,37 @@ The service `ssi-scoring` auto-deploys from `main` when code is merged.
 2. Make changes, commit, push the feature branch
 3. Open a PR targeting `main`
 4. CI runs tests, audit, and build
-5. After merge to `main`, Render auto-deploys
+5. Preview environment is automatically created for the PR
+6. After merge to `main`, Render auto-deploys to production
+7. Preview environment is automatically deleted
 
 ### Render Preview Environments
 
-Preview environments are configured for PR-based testing:
+Preview environments are **automatically created** for all pull requests via GitHub Actions (`.github/workflows/pr-preview.yml`):
 
-- **Generation:** Manual — created via Render Dashboard or API
-- **Expiry:** 3 days of inactivity
-- **Plan:** Starter instances for cost control
+- **Generation:** Automatic — created by GitHub Actions when PR is opened
+- **Deployment:** Automatic — redeploys on every commit to PR branch
+- **Cleanup:** Automatic — deleted when PR is closed or merged
+- **Expiry:** Services persist until PR closes (no time-based expiry)
+- **Plan:** Starter instances (same as production)
+- **Naming:** `ssi-scoring-pr-{NUMBER}` (e.g., `ssi-scoring-pr-42`)
+- **URL:** `https://ssi-scoring-pr-{NUMBER}.onrender.com`
 
-**To create a preview:**
-1. Push feature branch to GitHub
-2. Open a PR targeting `main`
-3. Go to Render Dashboard → `ssi-scoring` service → Preview Environments tab
-4. Click "New Preview Environment" and select the PR/branch
-5. Render creates a disposable instance and provides a URL
-6. Preview is destroyed when PR is merged/closed or after 3 days
+**How it works:**
+1. Open a PR targeting `main`
+2. GitHub Actions workflow automatically creates a Render service
+3. Preview URL is posted as a PR comment by github-actions bot
+4. Push new commits → Preview automatically redeploys
+5. Close/merge PR → Preview service is automatically deleted
+
+**Requirements:**
+- GitHub secrets: `RENDER_API_KEY` and `RENDER_OWNER_ID`
+- See `docs/PR-PREVIEW-DEPLOYMENTS.md` for complete documentation
+
+**Troubleshooting:**
+- Check workflow logs in GitHub Actions tab if preview creation fails
+- Verify secrets are configured in repository settings
+- Preview services may take 30-60 seconds to wake up after inactivity
 
 ### Render MCP Tools
 
@@ -127,8 +141,10 @@ Use these to check deploy status, view logs, monitor service performance, and ma
 - **Production branch:** `main` (auto-deploys to Render)
 - **Remote name:** `tapahtumakalenteri-ssi-integrator`
 - **Feature branches:** Create from `main`, open PR targeting `main`
-- **Preview environments:** Manually created via Render Dashboard for PR testing
-- CI runs on all PRs to `main` (tests, audit, build)
+- **Preview environments:** Automatically created by GitHub Actions for every PR
+- **CI/CD:** Two workflows run on PRs:
+  - `ci-deploy.yml` - Tests, audit, build (required to pass)
+  - `pr-preview.yml` - Creates/updates/deletes preview environments
 
 ## Key Files for Common Tasks
 
