@@ -54,7 +54,7 @@ This directory contains the CI/CD workflows for the tapahtumakalenteri-ssi-integ
   - Generate in: Render Dashboard → Account Settings → API Keys
   - Needs permissions: Create, update, delete services
 - `RENDER_OWNER_ID` - Your Render workspace ID (format: `tea-XXXXXXXXXXXXX`)
-  - Find by running: `curl -H "Authorization: Bearer YOUR_API_KEY" https://api.render.com/v1/services | jq '.[0].ownerId'`
+  - Find by running: `curl --request GET --url 'https://api.render.com/v1/owners?limit=20' --header 'authorization: Bearer YOUR_API_KEY' | jq '.[0].owner.id'`
   - For this repository: `tea-d62r4ucoud1c73d50qg0`
 
 **Preview Service Configuration:**
@@ -90,11 +90,15 @@ This directory contains the CI/CD workflows for the tapahtumakalenteri-ssi-integ
    - Name: `RENDER_OWNER_ID`
    - Value: Your Render workspace ID (format: `tea-XXXXXXXXXXXXX`)
    - **To find this ID:**
-     - Go to Render Dashboard → Select any existing service
-     - In the browser URL bar, you'll see: `https://dashboard.render.com/web/srv-XXXXX`
-     - Click on the service, then view the service in the Render API by appending `/api` to see the `ownerId` field
-     - **OR** Look at the existing service in this repository (e.g., `tapahtumakalenteri-ssi-integrator`)
-     - **OR** Use the Render API with your API key:
+     - **Method 1 (Recommended):** Use the Render API `/v1/owners` endpoint:
+       ```bash
+       # In Bash or PowerShell:
+       curl --request GET --url 'https://api.render.com/v1/owners?limit=20' --header 'accept: application/json' --header 'authorization: Bearer YOUR_API_KEY' | jq '.[0].owner.id'
+       
+       # In Windows CMD:
+       curl --request GET --url "https://api.render.com/v1/owners?limit=20" --header "accept: application/json" --header "authorization: Bearer YOUR_API_KEY" | jq ".[0].owner.id"
+       ```
+     - **Method 2 (Alternative):** Query existing services:
        ```bash
        curl -H "Authorization: Bearer YOUR_API_KEY" https://api.render.com/v1/services | jq '.[0].ownerId'
        ```
