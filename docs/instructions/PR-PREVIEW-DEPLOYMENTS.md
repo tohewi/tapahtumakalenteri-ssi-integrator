@@ -59,7 +59,7 @@ The workflow requires these secrets to be configured in repository settings:
 | Secret | Description | How to obtain |
 |--------|-------------|---------------|
 | `RENDER_API_KEY` | Render API authentication token | Generate in Render Dashboard → Account Settings → API Keys |
-| `RENDER_OWNER_ID` | Your Render workspace/team ID | Find in Render Dashboard or via API |
+| `RENDER_OWNER_ID` | Your Render workspace ID (format: `tea-XXXXXXXXXXXXX`) | Run: `curl -H "Authorization: Bearer YOUR_API_KEY" https://api.render.com/v1/services \| jq '.[0].ownerId'` |
 
 ### Preview Service Configuration
 

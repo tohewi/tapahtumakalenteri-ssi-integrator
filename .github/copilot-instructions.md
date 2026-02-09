@@ -98,7 +98,9 @@ Preview environments are **automatically created** for all pull requests via Git
 5. Close/merge PR → Preview service is automatically deleted
 
 **Requirements:**
-- GitHub secrets: `RENDER_API_KEY` and `RENDER_OWNER_ID`
+- GitHub secrets:
+  - `RENDER_API_KEY` - API token from Render Dashboard → Account Settings → API Keys
+  - `RENDER_OWNER_ID` - Workspace ID (`tea-d62r4ucoud1c73d50qg0` for this repo)
 - See `docs/PR-PREVIEW-DEPLOYMENTS.md` for complete documentation
 
 **Troubleshooting:**
