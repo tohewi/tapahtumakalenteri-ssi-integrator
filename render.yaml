@@ -1,5 +1,5 @@
 projects:
-  - name: My project
+  - name: SSI Scoring
     environments:
       - name: production
         previews:
