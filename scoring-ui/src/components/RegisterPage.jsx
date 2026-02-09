@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import * as regApi from '../register-api'
 import { formatDate, BackButton, CupList } from './shared'
+import fi from '../i18n'
 
 // Steps: captcha → cups → squads → email → submitting → result
 const STEPS = ['captcha', 'cups', 'squads', 'email', 'submitting', 'result']
@@ -174,8 +175,15 @@ export default function RegisterPage() {
           <BackButton label={progressLabels[stepIdx - 1]} onClick={handleBack} />
         )}
         <div className="px-4 py-3">
-          <h1 className="text-xl font-bold">Kupittaa Cup — Ilmoittautuminen</h1>
-          <p className="text-blue-200 text-sm mt-0.5">TurRes reservilaisammunta</p>
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <h1 className="text-xl font-bold">Kupittaa Cup — Ilmoittautuminen</h1>
+              <p className="text-blue-200 text-sm mt-0.5">TurRes reservilaisammunta</p>
+            </div>
+            <a href="#/" className="text-blue-200 text-sm active:text-white">
+              {fi.home}
+            </a>
+          </div>
         </div>
       </div>
 
