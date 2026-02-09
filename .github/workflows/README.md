@@ -56,6 +56,17 @@ This directory contains the CI/CD workflows for the tapahtumakalenteri-ssi-integ
 - `RENDER_OWNER_ID` - Your Render workspace ID (format: `tea-XXXXXXXXXXXXX`)
   - Find by running: `curl --request GET --url 'https://api.render.com/v1/owners?limit=20' --header 'authorization: Bearer YOUR_API_KEY' | jq '.[0].owner.id'`
   - For this repository: `tea-d62r4ucoud1c73d50qg0`
+- `PREVIEW_EMAIL_FROM` - Email sender address for preview environments
+  - Example: `no-reply@ssi.towi.me` or `[TEST] SSI Scoring <no-reply@ssi.towi.me>`
+- `PREVIEW_RESEND_API_KEY` - Resend API key for sending emails in preview environments
+  - Generate in: Resend Dashboard → API Keys
+  - Note: Can use same key as production
+- `PREVIEW_SSI_ADMIN_EMAIL` - SSI admin email for preview environments
+  - Can use same as production or separate test account
+- `PREVIEW_SSI_ADMIN_PASSWORD` - SSI admin password for preview environments
+  - Corresponding password for the admin email
+- `PREVIEW_SSI_ADMIN_API_KEY` - SSI GraphQL API key for preview environments
+  - Obtained from SSI platform settings
 
 **Preview Service Configuration:**
 - **Runtime:** Node.js
@@ -64,7 +75,14 @@ This directory contains the CI/CD workflows for the tapahtumakalenteri-ssi-integ
 - **Build Command:** `cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install`
 - **Start Command:** `cd scoring-proxy && node server.js`
 - **Auto-deploy:** Yes (on every commit to PR branch)
-- **Environment Variables:** `NODE_ENV=production` (PORT is automatically set by Render to 10000)
+- **Environment Variables:** 
+  - `NODE_ENV=production`
+  - `EMAIL_FROM` (from `PREVIEW_EMAIL_FROM` secret)
+  - `RESEND_API_KEY` (from `PREVIEW_RESEND_API_KEY` secret)
+  - `SSI_ADMIN_EMAIL` (from `PREVIEW_SSI_ADMIN_EMAIL` secret)
+  - `SSI_ADMIN_PASSWORD` (from `PREVIEW_SSI_ADMIN_PASSWORD` secret)
+  - `SSI_ADMIN_API_KEY` (from `PREVIEW_SSI_ADMIN_API_KEY` secret)
+  - Note: `PORT` is automatically set by Render to 10000
 
 **Preview URLs:**
 - Format: `https://ssi-scoring-pr-{NUMBER}.onrender.com`
@@ -105,11 +123,57 @@ This directory contains the CI/CD workflows for the tapahtumakalenteri-ssi-integ
      - The workspace ID for this repository is: `tea-d62r4ucoud1c73d50qg0`
    - Save
 
-4. **Add RENDER_DEPLOY_HOOK (if not already set):**
+4. **Add PREVIEW_EMAIL_FROM:**
+   - Click "New repository secret"
+   - Name: `PREVIEW_EMAIL_FROM`
+   - Value: Email sender address (e.g., `no-reply@ssi.towi.me` or `[TEST] SSI Scoring <no-reply@ssi.towi.me>`)
+   - Save
+
+5. **Add PREVIEW_RESEND_API_KEY:**
+   - Click "New repository secret"
+   - Name: `PREVIEW_RESEND_API_KEY`
+   - Value: Your Resend API key (starts with `re_`)
+   - Note: Can use same key as production
+   - Save
+
+6. **Add PREVIEW_SSI_ADMIN_EMAIL:**
+   - Click "New repository secret"
+   - Name: `PREVIEW_SSI_ADMIN_EMAIL`
+   - Value: SSI admin email address
+   - Note: Can use same as production or separate test account
+   - Save
+
+7. **Add PREVIEW_SSI_ADMIN_PASSWORD:**
+   - Click "New repository secret"
+   - Name: `PREVIEW_SSI_ADMIN_PASSWORD`
+   - Value: SSI admin password
+   - Note: Corresponding password for the admin email
+   - Save
+
+8. **Add PREVIEW_SSI_ADMIN_API_KEY:**
+   - Click "New repository secret"
+   - Name: `PREVIEW_SSI_ADMIN_API_KEY`
+   - Value: SSI GraphQL API key
+   - Note: Obtained from SSI platform settings
+   - Save
+
+9. **Add RENDER_DEPLOY_HOOK (if not already set):**
    - Click "New repository secret"
    - Name: `RENDER_DEPLOY_HOOK`
    - Value: Deploy hook URL from Render Dashboard → Service → Settings → Deploy Hook
    - Save
+
+**Total Secrets Required:** 8 secrets
+- `RENDER_API_KEY` (for Render API access)
+- `RENDER_OWNER_ID` (for Render workspace identification)
+- `RENDER_DEPLOY_HOOK` (for production deployments)
+- `PREVIEW_EMAIL_FROM` (email sender for previews)
+- `PREVIEW_RESEND_API_KEY` (email API key for previews)
+- `PREVIEW_SSI_ADMIN_EMAIL` (SSI admin email for previews)
+- `PREVIEW_SSI_ADMIN_PASSWORD` (SSI admin password for previews)
+- `PREVIEW_SSI_ADMIN_API_KEY` (SSI API key for previews)
+
+For detailed information about environment variable strategies (shared vs separate credentials), see [PR Preview Environment Variables](../../docs/PR-PREVIEW-ENV-VARS.md).
 
 ## Workflow Permissions
 

@@ -13,6 +13,11 @@ name: PR Preview Environment
 # - RENDER_OWNER_ID: Render workspace ID (format: tea-XXXXXXXXXXXXX)
 #   Find by running: curl --request GET --url 'https://api.render.com/v1/owners?limit=20' --header 'authorization: Bearer YOUR_API_KEY' | jq '.[0].owner.id'
 #   For this repo: tea-d62r4ucoud1c73d50qg0
+# - PREVIEW_EMAIL_FROM: Email sender address for preview environments
+# - PREVIEW_RESEND_API_KEY: Resend API key for sending emails
+# - PREVIEW_SSI_ADMIN_EMAIL: SSI admin email for preview environments
+# - PREVIEW_SSI_ADMIN_PASSWORD: SSI admin password for preview environments
+# - PREVIEW_SSI_ADMIN_API_KEY: SSI GraphQL API key for preview environments
 #
 # Preview services are created with the same configuration as production:
 # - Runtime: Node.js
@@ -131,6 +136,26 @@ jobs:
               {
                 "key": "NODE_ENV",
                 "value": "production"
+              },
+              {
+                "key": "EMAIL_FROM",
+                "value": "${{ secrets.PREVIEW_EMAIL_FROM }}"
+              },
+              {
+                "key": "RESEND_API_KEY",
+                "value": "${{ secrets.PREVIEW_RESEND_API_KEY }}"
+              },
+              {
+                "key": "SSI_ADMIN_EMAIL",
+                "value": "${{ secrets.PREVIEW_SSI_ADMIN_EMAIL }}"
+              },
+              {
+                "key": "SSI_ADMIN_PASSWORD",
+                "value": "${{ secrets.PREVIEW_SSI_ADMIN_PASSWORD }}"
+              },
+              {
+                "key": "SSI_ADMIN_API_KEY",
+                "value": "${{ secrets.PREVIEW_SSI_ADMIN_API_KEY }}"
               }
             ]
           }
