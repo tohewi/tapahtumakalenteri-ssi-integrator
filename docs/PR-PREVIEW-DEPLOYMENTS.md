@@ -30,7 +30,29 @@ Example: PR #42 → `ssi-scoring-pr-42`
 
 ### Preview URLs
 
-Format: `https://ssi-scoring-pr-{NUMBER}.onrender.com`
+3. **Update render.yaml (optional):**
+   ```yaml
+   projects:
+     - name: SSI Scoring
+       environments:
+         - name: production
+           previews:
+             generation: manual
+             expireAfterDays: 7
+           services:
+             - type: web
+               name: ssi-scoring
+               runtime: node
+               buildCommand: cd scoring-ui && npm install && npm run build && cd ../scoring-proxy && npm install
+               startCommand: cd scoring-proxy && node server.js
+               previews:
+                 plan: starter
+               envVars:
+                 - key: NODE_ENV
+                   value: production
+                 - key: PORT
+                   value: 3001
+   ```
 
 Example: `https://ssi-scoring-pr-42.onrender.com`
 
