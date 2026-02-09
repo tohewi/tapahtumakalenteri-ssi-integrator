@@ -18,7 +18,7 @@ name: PR Preview Environment
 # - Runtime: Node.js
 # - Plan: Starter
 # - Region: Frankfurt
-# - Build: cd scoring-ui && npm install && npm run build && cd ../scoring-proxy && npm install
+# - Build: cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install
 # - Start: cd scoring-proxy && node server.js
 #
 # Documentation: docs/PR-PREVIEW-DEPLOYMENTS.md
@@ -68,9 +68,12 @@ jobs:
             SERVICE_COUNT=$(echo "$BODY" | jq '. | length')
             if [ "$SERVICE_COUNT" -gt 0 ]; then
               SERVICE_ID=$(echo "$BODY" | jq -r '.[0].service.id')
+              BUILD_CMD=$(echo "$BODY" | jq -r '.[0].service.serviceDetails.envSpecificDetails.buildCommand')
               echo "exists=true" >> $GITHUB_OUTPUT
               echo "service_id=${SERVICE_ID}" >> $GITHUB_OUTPUT
+              echo "build_command=${BUILD_CMD}" >> $GITHUB_OUTPUT
               echo "Service exists with ID: ${SERVICE_ID}"
+              echo "Current build command: ${BUILD_CMD}"
             else
               echo "exists=false" >> $GITHUB_OUTPUT
               echo "Service does not exist"
@@ -80,9 +83,32 @@ jobs:
             echo "Service does not exist or API error (HTTP ${HTTP_CODE})"
           fi
 
+      - name: Delete service if build command is outdated
+        id: delete-if-outdated
+        if: github.event.action != 'closed' && steps.check-service.outputs.exists == 'true' && (contains(steps.check-service.outputs.build_command, 'npm ci') || !contains(steps.check-service.outputs.build_command, '--include=dev'))
+        run: |
+          SERVICE_ID="${{ steps.check-service.outputs.service_id }}"
+          SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
+          
+          echo "⚠️  Service has outdated build command, deleting and will recreate..."
+          
+          DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services/${SERVICE_ID}")
+          
+          DELETE_HTTP_CODE=$(echo "$DELETE_RESPONSE" | tail -n1)
+          
+          if [ "$DELETE_HTTP_CODE" = "204" ]; then
+            echo "✅ Outdated service deleted successfully"
+            echo "deleted=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️  Failed to delete service (HTTP ${DELETE_HTTP_CODE})"
+            echo "deleted=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create preview service
         id: create-service
-        if: github.event.action != 'closed' && steps.check-service.outputs.exists != 'true'
+        if: github.event.action != 'closed' && (steps.check-service.outputs.exists != 'true' || steps.delete-if-outdated.outputs.deleted == 'true')
         run: |
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
           BRANCH_NAME="${{ github.head_ref }}"
@@ -101,7 +127,7 @@ jobs:
               "plan": "starter",
               "region": "frankfurt",
               "envSpecificDetails": {
-                "buildCommand": "cd scoring-ui && npm install && npm run build && cd ../scoring-proxy && npm install",
+                "buildCommand": "cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install",
                 "startCommand": "cd scoring-proxy && node server.js"
               }
             },
@@ -146,7 +172,7 @@ jobs:
 
       - name: Trigger deploy for existing service
         id: deploy-service
-        if: github.event.action != 'closed' && steps.check-service.outputs.exists == 'true'
+        if: github.event.action != 'closed' && steps.check-service.outputs.exists == 'true' && steps.delete-if-outdated.outputs.deleted != 'true'
         run: |
           SERVICE_ID="${{ steps.check-service.outputs.service_id }}"
 
