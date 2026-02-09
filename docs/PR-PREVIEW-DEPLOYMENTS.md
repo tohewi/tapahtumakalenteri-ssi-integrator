@@ -46,7 +46,7 @@ Render's native preview environment feature automatically creates temporary depl
 3. **Update render.yaml (optional):**
    ```yaml
    projects:
-     - name: My project
+     - name: SSI Scoring
        environments:
          - name: production
            previews:
