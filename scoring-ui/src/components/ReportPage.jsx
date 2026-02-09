@@ -3,14 +3,17 @@ import * as api from '../api'
 import { encryptData, decryptData } from '../crypto'
 import LoginScreen from './LoginScreen'
 import { AppHeader, ErrorBanner, Spinner, formatDateShort } from './shared'
+import fi from '../i18n'
 
 const LS_CREDS = 'ssi_credentials'
+const LS_REPORT_STATE = 'ssi_report_state'
 
 export default function ReportPage() {
   const [authed, setAuthed] = useState(false)
   const [view, setView] = useState('login') // login | search | report
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
 
   // Search
   const [searchText, setSearchText] = useState('')
@@ -29,31 +32,97 @@ export default function ReportPage() {
   // Report data
   const [reportRows, setReportRows] = useState([])
 
-  // Auto-login on mount
+  // --- Save navigation state on changes ---
   useEffect(() => {
-    const tryAutoLogin = async () => {
+    if (!authed || view === 'login') return
+    localStorage.setItem(LS_REPORT_STATE, JSON.stringify({
+      view,
+      searchText: view === 'search' || view === 'report' ? searchText : '',
+    }))
+  }, [authed, view, searchText])
+
+  // --- Helper to handle session expiry ---
+  const handleSessionExpired = useCallback(() => {
+    setSessionExpiredMessage('Session expired. Please login again.')
+    // Navigation state is already saved in localStorage
+    // It will be restored after successful re-login
+    setAuthed(false)
+    setView('login')
+  }, [])
+
+  // --- Helper to handle scope mismatch ---
+  const handleScopeMismatch = useCallback(() => {
+    setSessionExpiredMessage('Please login to access this feature.')
+    setAuthed(false)
+    setView('login')
+  }, [])
+
+  // --- Wrapper to catch SessionExpiredError and ScopeMismatchError ---
+  const withSessionCheck = useCallback(async (fn) => {
+    try {
+      return await fn()
+    } catch (err) {
+      if (err instanceof api.SessionExpiredError) {
+        handleSessionExpired()
+        throw err
+      }
+      if (err instanceof api.ScopeMismatchError) {
+        handleScopeMismatch()
+        throw err
+      }
+      throw err
+    }
+  }, [handleSessionExpired, handleScopeMismatch])
+
+  // Load saved credentials for pre-fill (no auto-login)
+  useEffect(() => {
+    const loadSavedCreds = async () => {
       const raw = localStorage.getItem(LS_CREDS)
       if (!raw) return
       const creds = await decryptData(raw)
-      if (!creds) return
-      try {
-        await api.login(creds.email, creds.password, creds.apiKey)
-        setAuthed(true)
-        setView('search')
-      } catch { /* show login */ }
+      // Just load for potential pre-fill, don't auto-login
     }
-    tryAutoLogin()
+    loadSavedCreds()
   }, [])
 
   // Login handler
   const handleLogin = async (email, password, apiKey, rememberMe) => {
-    await api.login(email, password, apiKey)
+    setSessionExpiredMessage(null)
+    await api.login(email, password, apiKey, 'reporting')
     if (rememberMe) {
       const encrypted = await encryptData({ email, password, apiKey })
       localStorage.setItem(LS_CREDS, encrypted)
     }
     setAuthed(true)
-    setView('search')
+    
+    // Restore previous state if available
+    const savedState = localStorage.getItem(LS_REPORT_STATE)
+    if (savedState) {
+      try {
+        const state = JSON.parse(savedState)
+        if (state.searchText) {
+          setSearchText(state.searchText)
+        }
+        setView(state.view || 'search')
+      } catch {
+        setView('search')
+      }
+    } else {
+      setView('search')
+    }
+  }
+
+  // Logout handler
+  const handleLogout = async () => {
+    try { await api.logout() } catch { /* ignore */ }
+    setAuthed(false)
+    setView('login')
+    setSearchText('')
+    setAllResults([])
+    setSearched(false)
+    setSelected(new Set())
+    setReportRows([])
+    setError(null)
   }
 
   // Search — fetches all results, filtering is client-side
@@ -64,19 +133,23 @@ export default function ReportPage() {
     setError(null)
     setSearched(false)
     try {
-      const data = await api.searchMatches(searchText)
-      setAllResults(data)
-      setSearched(true)
-      setSelected(new Set())
-      setFilterType('all')
-      setFilterSport('all')
-      setFilterDateFrom('')
-      setFilterDateTo('')
+      await withSessionCheck(async () => {
+        const data = await api.searchMatches(searchText)
+        setAllResults(data)
+        setSearched(true)
+        setSelected(new Set())
+        setFilterType('all')
+        setFilterSport('all')
+        setFilterDateFrom('')
+        setFilterDateTo('')
+      })
     } catch (err) {
-      setError(err.message)
+      if (!(err instanceof api.SessionExpiredError)) {
+        setError(err.message)
+      }
     }
     setLoading(false)
-  }, [searchText])
+  }, [searchText, withSessionCheck]) // withSessionCheck is stable, but included for clarity
 
   // Collect unique sport values from results for the filter dropdown
   const sportOptions = [...new Set(
@@ -165,15 +238,19 @@ export default function ReportPage() {
     setLoading(true)
     setError(null)
     try {
-      const matchesForReport = [...selected].map(id => ({
-        id,
-        contentType: matchContentTypeMap.get(id) || 91,
-      }))
-      const rows = await api.getReportData(matchesForReport)
-      setReportRows(rows)
-      setView('report')
+      await withSessionCheck(async () => {
+        const matchesForReport = [...selected].map(id => ({
+          id,
+          contentType: matchContentTypeMap.get(id) || 91,
+        }))
+        const rows = await api.getReportData(matchesForReport)
+        setReportRows(rows)
+        setView('report')
+      })
     } catch (err) {
-      setError(err.message)
+      if (!(err instanceof api.SessionExpiredError)) {
+        setError(err.message)
+      }
     }
     setLoading(false)
   }
@@ -200,7 +277,17 @@ export default function ReportPage() {
   if (!authed) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <AppHeader title="SSI Report" subtitle="Login with SSI credentials" />
+        <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white px-4 py-5">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <h1 className="text-xl font-bold">SSI Report</h1>
+              <p className="text-blue-200 text-sm mt-1">Login with SSI credentials</p>
+            </div>
+            <a href="#/" className="text-blue-200 text-sm active:text-white">
+              {fi.home}
+            </a>
+          </div>
+        </div>
         <LoginScreen onLogin={handleLogin} hideHeader />
       </div>
     )
@@ -208,12 +295,30 @@ export default function ReportPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <AppHeader
-        title="SSI Report"
-        subtitle={view === 'report' ? `${reportRows.length} rows` : undefined}
-        backLabel={view === 'report' ? 'Search' : undefined}
-        onBack={view === 'report' ? () => setView('search') : undefined}
-      />
+      <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white px-4 py-5">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <h1 className="text-xl font-bold">SSI Report</h1>
+            <p className="text-blue-200 text-sm mt-1">
+              {view === 'report' ? `${reportRows.length} rows` : 'Search competitions for report'}
+            </p>
+          </div>
+          <button onClick={handleLogout} className="text-blue-200 text-sm active:text-white">
+            {fi.logout}
+          </button>
+        </div>
+        {view === 'report' && (
+          <button
+            onClick={() => setView('search')}
+            className="flex items-center gap-1 mt-2 text-blue-200 text-sm active:text-white"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Search
+          </button>
+        )}
+      </div>
 
       <ErrorBanner error={error} onClose={() => setError(null)} />
       {loading && <Spinner />}

@@ -81,6 +81,38 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
+
+  // --- Helper to handle session expiry ---
+  const handleSessionExpired = useCallback(() => {
+    setSessionExpiredMessage('Session expired. Please login again.')
+    // Navigation state is already saved in localStorage via useEffect
+    // It will be restored after successful re-login via restoreNavState()
+    setView('login')
+  }, [])
+
+  // --- Helper to handle scope mismatch ---
+  const handleScopeMismatch = useCallback(() => {
+    setSessionExpiredMessage('Please login to access this feature.')
+    setView('login')
+  }, [])
+
+  // --- Wrapper to catch SessionExpiredError and ScopeMismatchError ---
+  const withSessionCheck = useCallback(async (fn) => {
+    try {
+      return await fn()
+    } catch (err) {
+      if (err instanceof api.SessionExpiredError) {
+        handleSessionExpired()
+        throw err // Re-throw so caller knows it failed
+      }
+      if (err instanceof api.ScopeMismatchError) {
+        handleScopeMismatch()
+        throw err
+      }
+      throw err
+    }
+  }, [handleSessionExpired, handleScopeMismatch])
 
   // --- Save navigation state on changes ---
   useEffect(() => {
@@ -95,32 +127,28 @@ function App() {
     })
   }, [view, selectedCup, selectedMatch, selectedSquad, selectedShooterId, activeSeries])
 
-  // --- On mount: try auto-login with saved credentials, else show login screen ---
+  // --- On mount: load saved credentials for pre-fill (no auto-login) ---
   useEffect(() => {
-    const tryAutoLogin = async () => {
+    const loadSavedCreds = async () => {
       const raw = localStorage.getItem(LS_KEYS.CREDS)
-      if (!raw) return // no saved creds → stay on login
+      if (!raw) return
       const creds = await decryptData(raw)
-      if (!creds) { lsRemove(LS_KEYS.CREDS); return }
-      setSavedCreds(creds) // pre-fill in case auto-login fails
-      // Attempt auto-login
-      setView('restoring')
-      try {
-        await api.login(creds.email, creds.password, creds.apiKey)
-        await restoreNavState()
-      } catch {
-        // Auto-login failed (expired creds, network error, etc.) → show login
-        setView('login')
+      if (creds) {
+        setSavedCreds(creds) // pre-fill form only
+      } else {
+        lsRemove(LS_KEYS.CREDS) // corrupted data
       }
     }
-    tryAutoLogin()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    loadSavedCreds()
+  }, [])
 
   // --- Login ---
 
   const handleLogin = async (email, password, apiKey, rememberMe) => {
+    // Clear session expired message
+    setSessionExpiredMessage(null)
     // This throws on failure — LoginScreen catches and shows the error
-    await api.login(email, password, apiKey)
+    await api.login(email, password, apiKey, 'scoring')
     // Save encrypted credentials if "Remember me" is checked
     if (rememberMe) {
       const encrypted = await encryptData({ email, password, apiKey })
@@ -210,13 +238,17 @@ function App() {
     setLoading(true)
     setError(null)
     try {
-      const cupData = await api.getCup(cup.id)
-      setSelectedCup(cupData)
-      lsSet(LS_KEYS.CUP, { id: cupData.id, name: cupData.name })
-      setMatches((cupData.matches || []).map(api.transformMatchListItem))
-      setView('match')
+      await withSessionCheck(async () => {
+        const cupData = await api.getCup(cup.id)
+        setSelectedCup(cupData)
+        lsSet(LS_KEYS.CUP, { id: cupData.id, name: cupData.name })
+        setMatches((cupData.matches || []).map(api.transformMatchListItem))
+        setView('match')
+      })
     } catch (err) {
-      setError(err.message)
+      if (!(err instanceof api.SessionExpiredError) && !(err instanceof api.ScopeMismatchError)) {
+        setError(err.message)
+      }
     } finally {
       setLoading(false)
     }
@@ -228,12 +260,16 @@ function App() {
     setLoading(true)
     setError(null)
     try {
-      const fullMatch = await api.getMatch(match.id)
-      const transformed = api.transformMatch(fullMatch)
-      setSelectedMatch(transformed)
-      setView('squad')
+      await withSessionCheck(async () => {
+        const fullMatch = await api.getMatch(match.id)
+        const transformed = api.transformMatch(fullMatch)
+        setSelectedMatch(transformed)
+        setView('squad')
+      })
     } catch (err) {
-      setError(err.message)
+      if (!(err instanceof api.SessionExpiredError) && !(err instanceof api.ScopeMismatchError)) {
+        setError(err.message)
+      }
     } finally {
       setLoading(false)
     }
@@ -354,11 +390,15 @@ function App() {
     setSaving(true)
     setError(null)
     try {
-      const shooterScores = allScores[selectedShooterId]
-      const result = await api.submitScore(selectedShooterId, shooterScores)
-      console.log('Score saved:', result)
+      await withSessionCheck(async () => {
+        const shooterScores = allScores[selectedShooterId]
+        const result = await api.submitScore(selectedShooterId, shooterScores)
+        console.log('Score saved:', result)
+      })
     } catch (err) {
-      setError(err.message)
+      if (!(err instanceof api.SessionExpiredError) && !(err instanceof api.ScopeMismatchError)) {
+        setError(err.message)
+      }
       setSaving(false)
       return
     }
@@ -370,29 +410,27 @@ function App() {
   }
 
   // ============================================================
-  // VIEW: Restoring session (auto-login in progress)
-  // ============================================================
-  if (view === 'restoring') {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-          <p className="text-gray-500 text-sm">{fi.restoringSession}</p>
-        </div>
-      </div>
-    )
-  }
-
-  // ============================================================
   // VIEW: Login
   // ============================================================
   if (view === 'login') {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white px-4 py-3">
-          <h1 className="text-xl font-bold">{fi.appTitle}</h1>
-          <p className="text-blue-200 text-sm mt-0.5">{fi.loginSubtitle}</p>
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <h1 className="text-xl font-bold">{fi.appTitle}</h1>
+              <p className="text-blue-200 text-sm mt-0.5">{fi.loginSubtitle}</p>
+            </div>
+            <a href="#/" className="text-blue-200 text-sm active:text-white">
+              {fi.home}
+            </a>
+          </div>
         </div>
+        {sessionExpiredMessage && (
+          <div className="mx-4 mt-4 bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-center">
+            <p className="text-yellow-800 text-sm font-medium">{sessionExpiredMessage}</p>
+          </div>
+        )}
         <LoginScreen onLogin={handleLogin} initialEmail={savedCreds?.email} initialPassword={savedCreds?.password} initialApiKey={savedCreds?.apiKey} hideHeader />
       </div>
     )

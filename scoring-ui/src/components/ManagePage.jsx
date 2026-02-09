@@ -4,14 +4,17 @@ import * as regApi from '../register-api'
 import { encryptData, decryptData } from '../crypto'
 import LoginScreen from './LoginScreen'
 import { AppHeader, ErrorBanner, Spinner, CupList } from './shared'
+import fi from '../i18n'
 
 const LS_CREDS = 'ssi_credentials'
+const LS_MANAGE_STATE = 'ssi_manage_state'
 
 export default function ManagePage() {
   const [authed, setAuthed] = useState(false)
   const [view, setView] = useState('login') // login | cups | overview
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
 
   // Cup selection
   const [cups, setCups] = useState([])
@@ -20,31 +23,100 @@ export default function ManagePage() {
   // Management data
   const [data, setData] = useState(null)
 
-  // Auto-login on mount
+  // --- Save navigation state on changes ---
   useEffect(() => {
-    const tryAutoLogin = async () => {
+    if (!authed || view === 'login') return
+    localStorage.setItem(LS_MANAGE_STATE, JSON.stringify({
+      view,
+      cupId: selectedCup?.id,
+      cupName: selectedCup?.name,
+    }))
+  }, [authed, view, selectedCup])
+
+  // --- Helper to handle session expiry ---
+  const handleSessionExpired = useCallback(() => {
+    setSessionExpiredMessage('Session expired. Please login again.')
+    // Navigation state is already saved in localStorage
+    // It will be restored after successful re-login
+    setAuthed(false)
+    setView('login')
+  }, [])
+
+  // --- Helper to handle scope mismatch ---
+  const handleScopeMismatch = useCallback(() => {
+    setSessionExpiredMessage('Please login to access this feature.')
+    setAuthed(false)
+    setView('login')
+  }, [])
+
+  // --- Wrapper to catch SessionExpiredError and ScopeMismatchError ---
+  const withSessionCheck = useCallback(async (fn) => {
+    try {
+      return await fn()
+    } catch (err) {
+      if (err instanceof api.SessionExpiredError) {
+        handleSessionExpired()
+        throw err
+      }
+      if (err instanceof api.ScopeMismatchError) {
+        handleScopeMismatch()
+        throw err
+      }
+      throw err
+    }
+  }, [handleSessionExpired, handleScopeMismatch])
+
+  // Load saved credentials for pre-fill (no auto-login)
+  useEffect(() => {
+    const loadSavedCreds = async () => {
       const raw = localStorage.getItem(LS_CREDS)
       if (!raw) return
       const creds = await decryptData(raw)
-      if (!creds) return
-      try {
-        await api.login(creds.email, creds.password, creds.apiKey)
-        setAuthed(true)
-        setView('cups')
-      } catch { /* show login */ }
+      // Just load for potential pre-fill, don't auto-login
+      // (LoginScreen handles the pre-fill via props if needed)
     }
-    tryAutoLogin()
+    loadSavedCreds()
   }, [])
 
   // Login handler
   const handleLogin = async (email, password, apiKey, rememberMe) => {
-    await api.login(email, password, apiKey)
+    setSessionExpiredMessage(null)
+    await api.login(email, password, apiKey, 'manage')
     if (rememberMe) {
       const encrypted = await encryptData({ email, password, apiKey })
       localStorage.setItem(LS_CREDS, encrypted)
     }
     setAuthed(true)
-    setView('cups')
+    
+    // Restore previous state if available
+    const savedState = localStorage.getItem(LS_MANAGE_STATE)
+    if (savedState) {
+      try {
+        const state = JSON.parse(savedState)
+        if (state.cupId && state.view === 'overview') {
+          // Try to restore to the overview page
+          setSelectedCup({ id: state.cupId, name: state.cupName })
+          setView('overview')
+          // The data will be loaded by the useEffect that watches selectedCup
+        } else {
+          setView('cups')
+        }
+      } catch {
+        setView('cups')
+      }
+    } else {
+      setView('cups')
+    }
+  }
+
+  // Logout handler
+  const handleLogout = async () => {
+    try { await api.logout() } catch { /* ignore */ }
+    setAuthed(false)
+    setView('login')
+    setSelectedCup(null)
+    setData(null)
+    setError(null)
   }
 
   // Load cups from registration API (same data as Register page)
@@ -69,22 +141,42 @@ export default function ManagePage() {
     setLoading(true)
     setError(null)
     try {
-      const resp = await fetch(`/api/manage/cup/${cup.id}`, { credentials: 'include' })
-      if (!resp.ok) throw new Error('Failed to load management data')
-      const d = await resp.json()
-      setData(d)
-      setView('overview')
+      await withSessionCheck(async () => {
+        const resp = await fetch(`/api/manage/cup/${cup.id}`, { credentials: 'include' })
+        if (resp.status === 401) {
+          const data = await resp.json()
+          if (data.sessionExpired) {
+            throw new api.SessionExpiredError(data.error)
+          }
+        }
+        if (!resp.ok) throw new Error('Failed to load management data')
+        const d = await resp.json()
+        setData(d)
+        setView('overview')
+      })
     } catch (err) {
-      setError(err.message)
+      if (!(err instanceof api.SessionExpiredError)) {
+        setError(err.message)
+      }
     }
     setLoading(false)
-  }, [])
+  }, [withSessionCheck]) // withSessionCheck is stable, but included for clarity
 
   // Login screen
   if (!authed) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <AppHeader title="Kupittaa Cup — Hallinta" subtitle="Kirjaudu SSI-tunnuksilla" />
+        <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white px-4 py-5">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <h1 className="text-xl font-bold">Kupittaa Cup — Hallinta</h1>
+              <p className="text-blue-200 text-sm mt-1">Kirjaudu SSI-tunnuksilla</p>
+            </div>
+            <a href="#/" className="text-blue-200 text-sm active:text-white">
+              {fi.home}
+            </a>
+          </div>
+        </div>
         <LoginScreen onLogin={handleLogin} hideHeader />
       </div>
     )
@@ -92,12 +184,30 @@ export default function ManagePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <AppHeader
-        title="Kupittaa Cup — Hallinta"
-        subtitle={view === 'overview' && selectedCup ? selectedCup.name : undefined}
-        backLabel={view === 'overview' ? 'Cupit' : undefined}
-        onBack={view === 'overview' ? () => setView('cups') : undefined}
-      />
+      <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white px-4 py-5">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <h1 className="text-xl font-bold">Kupittaa Cup — Hallinta</h1>
+            <p className="text-blue-200 text-sm mt-1">
+              {view === 'overview' && selectedCup ? selectedCup.name : 'Valitse cup hallintaa varten'}
+            </p>
+          </div>
+          <button onClick={handleLogout} className="text-blue-200 text-sm active:text-white">
+            {fi.logout}
+          </button>
+        </div>
+        {view === 'overview' && (
+          <button
+            onClick={() => setView('cups')}
+            className="flex items-center gap-1 mt-2 text-blue-200 text-sm active:text-white"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Cupit
+          </button>
+        )}
+      </div>
 
       <ErrorBanner error={error} />
       {loading && <Spinner />}
