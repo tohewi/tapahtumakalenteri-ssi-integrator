@@ -71,6 +71,7 @@ Preview services are configured with:
 - **Build:** `cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install`
 - **Start:** `cd scoring-proxy && node server.js`
 - **Auto-deploy:** Yes (on every commit to PR branch)
+- **Environment Variables:** `NODE_ENV=production` (PORT is set by Render to 10000)
 
 ### Environment Variables
 

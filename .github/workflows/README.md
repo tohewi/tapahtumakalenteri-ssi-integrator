@@ -64,7 +64,7 @@ This directory contains the CI/CD workflows for the tapahtumakalenteri-ssi-integ
 - **Build Command:** `cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install`
 - **Start Command:** `cd scoring-proxy && node server.js`
 - **Auto-deploy:** Yes (on every commit to PR branch)
-- **Environment Variables:** `NODE_ENV=production`, `PORT=3001`
+- **Environment Variables:** `NODE_ENV=production` (PORT is automatically set by Render to 10000)
 
 **Preview URLs:**
 - Format: `https://ssi-scoring-pr-{NUMBER}.onrender.com`

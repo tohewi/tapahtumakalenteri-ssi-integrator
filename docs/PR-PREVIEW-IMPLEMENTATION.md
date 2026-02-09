@@ -106,7 +106,7 @@ Preview services mirror production configuration:
 - **Start:** `cd scoring-proxy && node server.js`
 - **Environment Variables:**
   - `NODE_ENV=production`
-  - `PORT=3001`
+  - `PORT` - Automatically set by Render to 10000
 - **Auto-deploy:** Enabled
 
 ### Naming Convention
