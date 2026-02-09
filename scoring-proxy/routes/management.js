@@ -98,6 +98,9 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       for (const match of matches) {
         for (const participant of match.allParticipants) {
           const key = makeShooterKey(participant.firstName, participant.lastName, participant.email)
+          if (!IS_PROD && participant.email) {
+            console.log(`[manage] Match participant: ${participant.firstName} ${participant.lastName} (${participant.email}) -> key: ${key}`)
+          }
           if (!shooterMap.has(key)) {
             shooterMap.set(key, {
               firstName: participant.firstName,
@@ -132,41 +135,82 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       }
 
       // CUP-level participants (approved) - store as keys for comparison
-      const cupParticipantKeys = (cup.competitors || [])
+      // Note: CUP competitors have nested shooter object, match competitors have fields directly
+      const cupParticipants = (cup.competitors || [])
         .filter(c => c.status === 'a')
-        .map(c => {
-          const firstName = c.shooter?.first_name || ''
-          const lastName = c.shooter?.last_name || ''
-          const email = c.shooter?.email || ''
-          return makeShooterKey(firstName, lastName, email)
-        })
-        .filter(key => key !== '||||||') // filter out empty entries
+        .map(c => ({
+          firstName: c.shooter?.first_name || '',
+          lastName: c.shooter?.last_name || '',
+          email: c.shooter?.email || '',
+        }))
+        .filter(p => p.firstName || p.lastName) // filter out completely empty entries
 
-      // Build cupOnly list (CUP participants not in any match)
-      const cupParticipantSet = new Set(cupParticipantKeys)
-      const matchParticipantKeys = new Set(shooterMap.keys())
-      const cupOnlyKeys = cupParticipantKeys.filter(key => !matchParticipantKeys.has(key))
-      const cupOnly = cupOnlyKeys.map(key => {
-        const [firstName, lastName, email] = key.split('|||')
-        return {
-          firstName,
-          lastName,
-          email,
-          name: `${firstName} ${lastName}`.trim()
+      if (!IS_PROD) {
+        console.log(`[manage] CUP participants: ${cupParticipants.length}, Match participants: ${shooterMap.size}`)
+      }
+
+      // Find CUP participants not in any match
+      // Match by (firstName, lastName, email) if all present, otherwise by (firstName, lastName)
+      const cupOnly = []
+      for (const cupP of cupParticipants) {
+        const cupKey = makeShooterKey(cupP.firstName, cupP.lastName, cupP.email)
+        const cupNameKey = makeShooterKey(cupP.firstName, cupP.lastName, '')
+
+        let found = false
+        // First try exact match with email
+        if (cupP.email && shooterMap.has(cupKey)) {
+          found = true
         }
-      })
+        // If not found and email is present, try matching by name only
+        if (!found) {
+          for (const [key, shooter] of shooterMap) {
+            if (shooter.firstName === cupP.firstName && shooter.lastName === cupP.lastName) {
+              found = true
+              // If CUP has email but match doesn't, update the match entry with the email
+              if (cupP.email && !shooter.email) {
+                if (!IS_PROD) {
+                  console.log(`[manage] Updating match shooter with email from CUP: ${cupP.firstName} ${cupP.lastName} -> ${cupP.email}`)
+                }
+                shooter.email = cupP.email
+              }
+              break
+            }
+          }
+        }
+
+        if (!found) {
+          cupOnly.push({
+            firstName: cupP.firstName,
+            lastName: cupP.lastName,
+            email: cupP.email,
+            name: `${cupP.firstName} ${cupP.lastName}`.trim()
+          })
+        }
+      }
 
       // Find match participants not in CUP
-      const matchOnlyKeys = [...matchParticipantKeys].filter(key => !cupParticipantSet.has(key))
-      const matchOnly = matchOnlyKeys.map(key => {
-        const shooter = shooterMap.get(key)
-        return {
-          firstName: shooter.firstName,
-          lastName: shooter.lastName,
-          email: shooter.email,
-          name: shooter.name
+      // Match by (firstName, lastName, email) if all present, otherwise by (firstName, lastName)
+      const matchOnly = []
+      for (const [key, shooter] of shooterMap) {
+        let found = false
+        // Try to find in CUP participants
+        for (const cupP of cupParticipants) {
+          // Match by name (email might be missing in either place)
+          if (cupP.firstName === shooter.firstName && cupP.lastName === shooter.lastName) {
+            found = true
+            break
+          }
         }
-      })
+
+        if (!found) {
+          matchOnly.push({
+            firstName: shooter.firstName,
+            lastName: shooter.lastName,
+            email: shooter.email,
+            name: shooter.name
+          })
+        }
+      }
 
       res.json({
         cup: { id: cup.id, name: cup.name, starts: cup.starts },
