@@ -98,9 +98,7 @@ Preview environments are **automatically created** for all pull requests via Git
 5. Close/merge PR → Preview service is automatically deleted
 
 **Requirements:**
-- GitHub secrets:
-  - `RENDER_API_KEY` - API token from Render Dashboard → Account Settings → API Keys
-  - `RENDER_OWNER_ID` - Workspace ID (`tea-d62r4ucoud1c73d50qg0` for this repo)
+- GitHub secrets: `RENDER_API_KEY` and `RENDER_OWNER_ID`
 - See `docs/PR-PREVIEW-DEPLOYMENTS.md` for complete documentation
 
 **Troubleshooting:**
@@ -157,32 +155,6 @@ Use these to check deploy status, view logs, monitor service performance, and ma
 | Modify SSI integration | `scoring-proxy/lib/ssi-client.js` |
 | Update home navigation | `scoring-ui/src/components/HomePage.jsx` |
 | Change deploy config | `render.yaml` |
-
-## Development Guidelines
-
-### Modularity and Merge Conflict Prevention
-
-**IMPORTANT:** When modifying shared files, follow the established process to minimize merge conflicts:
-
-- **Read First:** `docs/SHARED-COMPONENT-PROCESS.md` - Quick reference for the 5-step process
-- **Full Guidelines:** `docs/DEVELOPMENT-MODULARITY-GUIDELINES.md` - Comprehensive modularity guidelines
-
-**Critical Shared Files (High Conflict Risk):**
-- `scoring-proxy/lib/ssi-core/client.js` (1,060 lines) - Used by all backend routes
-- `scoring-ui/src/App.jsx` (711 lines) - Central state management
-- `scoring-ui/src/components/ManagePage.jsx` (809 lines) - Admin features
-- `scoring-proxy/routes/management.js` (693 lines) - Admin endpoints
-- `scoring-ui/src/api.js` (247 lines) - All API client methods
-
-**Quick Rules:**
-1. Check for conflicting PRs: `gh pr list --search "path:file.js"`
-2. Open draft PR early to signal your work
-3. **Add code at END of sections** (don't insert in middle)
-4. Don't modify existing function signatures
-5. Sync with main daily
-6. Merge promptly after approval
-
-See `.github/agents/modularity-guidelines.md` for agent-specific instructions.
 
 ## Important Constraints
 

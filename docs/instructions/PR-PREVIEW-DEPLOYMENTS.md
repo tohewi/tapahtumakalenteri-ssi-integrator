@@ -30,29 +30,7 @@ Example: PR #42 → `ssi-scoring-pr-42`
 
 ### Preview URLs
 
-3. **Update render.yaml (optional):**
-   ```yaml
-   projects:
-     - name: SSI Scoring
-       environments:
-         - name: production
-           previews:
-             generation: manual
-             expireAfterDays: 7
-           services:
-             - type: web
-               name: ssi-scoring
-               runtime: node
-               buildCommand: cd scoring-ui && npm install && npm run build && cd ../scoring-proxy && npm install
-               startCommand: cd scoring-proxy && node server.js
-               previews:
-                 plan: starter
-               envVars:
-                 - key: NODE_ENV
-                   value: production
-                 - key: PORT
-                   value: 3001
-   ```
+Format: `https://ssi-scoring-pr-{NUMBER}.onrender.com`
 
 Example: `https://ssi-scoring-pr-42.onrender.com`
 
@@ -81,7 +59,7 @@ The workflow requires these secrets to be configured in repository settings:
 | Secret | Description | How to obtain |
 |--------|-------------|---------------|
 | `RENDER_API_KEY` | Render API authentication token | Generate in Render Dashboard → Account Settings → API Keys |
-| `RENDER_OWNER_ID` | Your Render workspace ID (format: `tea-XXXXXXXXXXXXX`) | Run: `curl --request GET --url 'https://api.render.com/v1/owners?limit=20' --header 'authorization: Bearer YOUR_API_KEY' \| jq '.[0].owner.id'` |
+| `RENDER_OWNER_ID` | Your Render workspace/team ID | Find in Render Dashboard or via API |
 
 ### Preview Service Configuration
 
@@ -90,10 +68,9 @@ Preview services are configured with:
 - **Runtime:** Node.js
 - **Plan:** Starter (same as production)
 - **Region:** Frankfurt (same as production)
-- **Build:** `cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install`
+- **Build:** `cd scoring-ui && npm ci && npm run build && cd ../scoring-proxy && npm ci`
 - **Start:** `cd scoring-proxy && node server.js`
 - **Auto-deploy:** Yes (on every commit to PR branch)
-- **Environment Variables:** `NODE_ENV=production` (PORT is set by Render to 10000)
 
 ### Environment Variables
 
