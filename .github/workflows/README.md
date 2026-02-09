@@ -61,7 +61,7 @@ This directory contains the CI/CD workflows for the tapahtumakalenteri-ssi-integ
 - **Runtime:** Node.js
 - **Plan:** Starter (same as production)
 - **Region:** Frankfurt (same as production)
-- **Build Command:** `cd scoring-ui && npm ci && npm run build && cd ../scoring-proxy && npm ci`
+- **Build Command:** `cd scoring-ui && npm install && npm run build && cd ../scoring-proxy && npm install`
 - **Start Command:** `cd scoring-proxy && node server.js`
 - **Auto-deploy:** Yes (on every commit to PR branch)
 - **Environment Variables:** `NODE_ENV=production`, `PORT=3001`
