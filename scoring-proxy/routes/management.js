@@ -294,14 +294,20 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       if (!IS_PROD) console.log(`[manage] Cup add result: ${addResult.message}`)
 
       if (!addResult.success) {
-        return res.json({ success: false, message: addResult.message })
+        console.error(`[manage] Failed to add "${shooterName}" to cup: ${addResult.message}`)
+        return res.status(400).json({ error: `Failed to add competitor: ${addResult.message}` })
       }
 
       // 2. Find and approve CUP participant
       const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies)
       if (!IS_PROD) console.log(`[manage] Cup approve result: ${approveResult.message}`)
 
-      res.json({ success: approveResult.success, message: approveResult.message })
+      if (!approveResult.success) {
+        console.error(`[manage] Failed to approve "${shooterName}" in cup: ${approveResult.message}`)
+        return res.status(400).json({ error: `Failed to approve competitor: ${approveResult.message}` })
+      }
+
+      res.json({ success: true, message: approveResult.message })
     } catch (err) {
       console.error('[manage] add-to-cup error:', err.message)
       res.status(500).json({ error: err.message })
