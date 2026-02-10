@@ -161,18 +161,19 @@ flowchart TB
 
 **Purpose:** Approve a pending shooter in a CUP (competition event).
 
-**Location:** `scoring-proxy/lib/ssi-core/client.js:603`
+**Location:** `scoring-proxy/lib/ssi-core/client.js:621`
 
 **Signature:**
 ```javascript
-async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookies, email = null)
+async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookies, email = null, participantId = null)
 ```
 
 **Parameters:**
 - `cupId` (string): SSI CUP event ID
 - `shooterName` (string): Full name of shooter to approve
 - `cookies` (object): SSI session cookies for authentication
-- `email` (string, optional): Shooter's email for logging and disambiguation
+- `email` (string, optional): Shooter's email for logging
+- `participantId` (string, optional): **GraphQL participant ID for email-based identification** (recommended)
 
 **Returns:**
 ```javascript
@@ -180,6 +181,24 @@ async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookies, emai
 ```
 
 **Algorithm:**
+
+**When `participantId` provided (recommended path):**
+1. **Use GraphQL-Verified ID**
+   - Directly use the participant ID from GraphQL (where emails are available)
+   - Fetch CUP participants page to check current status
+   - Skip name-based HTML scraping entirely
+   - **No ambiguity possible** - exact ID match
+
+2. **Check Current Status**
+   - Extract status from toggle-status button for the specific participant ID
+   - If already "Approved", return success immediately
+
+3. **Toggle Status Once**
+   - GET `/event/participant/137/{participantId}/toggle-status/?next={partUrl}`
+   - Status cycle: **Pending → Approved** (one toggle from Pending)
+   - Verify new status is "Approved"
+
+**When `participantId` NOT provided (legacy fallback):**
 1. **Scrape CUP Participants Page**
    - GET `/event/136/{cupId}/participants/`
    - Parse HTML to find participant links
@@ -190,32 +209,32 @@ async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookies, emai
    - Search words must all appear in name (case-insensitive)
    - **Multiple Match Detection**: If more than one match found, log warning with all matching names
    - **Email for Disambiguation**: If email provided, it's logged for debugging (but cannot be verified from HTML)
-   - Uses first match as selection
+   - Uses first match as selection ⚠️ **Can select wrong shooter if multiple similar names**
 
-3. **Check Current Status**
-   - Extract status from toggle-status button
-   - If already "Approved", return success immediately
-
-4. **Toggle Status Once**
-   - GET `/event/participant/137/{participantId}/toggle-status/?next={partUrl}`
-   - Status cycle: **Pending → Approved** (one toggle from Pending)
-   - Verify new status is "Approved"
+3. **Check Current Status & Toggle** (same as ID-based path)
 
 **State Transition:**
 - `status='p'` → `status='a'` (one toggle)
 
 **Usage:**
 ```javascript
-// In POST /api/manage/cup/:id/approve-pending
-const result = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies, email)
+// RECOMMENDED: With participant ID from GraphQL (email-based identification)
+const result = await ssiFindAndApproveCupParticipant(
+  cupId,
+  shooterName,
+  cookies,
+  email,
+  cupParticipantId // From GraphQL: cupPending[].id
+)
 // result: { success: true, message: 'Approved' }
 
-// Email parameter helps with disambiguation
+// LEGACY: Without participant ID (name-based matching - may be ambiguous)
 const result = await ssiFindAndApproveCupParticipant(
-  '12345', 
-  'Jari Virtanen', 
-  cookies, 
-  'jari.virtanen@example.com'
+  '12345',
+  'Jari Virtanen',
+  cookies,
+  'jari.virtanen@example.com',
+  null // Falls back to name-based HTML scraping
 )
 ```
 
@@ -224,11 +243,11 @@ const result = await ssiFindAndApproveCupParticipant(
 - Unexpected status after toggle → `{ success: false, message: 'Toggle resulted in "X", expected "Approved"' }`
 
 **Important Notes:**
+- **⚠️ Always pass `participantId` when available** to avoid ambiguity with similar names
 - Uses web scraping because CUP participant edit form (content type 137) does NOT support status changes
 - Only toggle-status URL works for CUP participants
-- Email parameter added for logging and verification (but email not in HTML, so used for debugging only)
-- **Ambiguity Detection**: Warns if multiple name matches found (e.g., "Jari Virtanen" and "Ari Virtanen")
-- When multiple matches found, uses first match and logs warning with all matching names
+- When `participantId` provided: exact ID match (no ambiguity)
+- When `participantId` NOT provided: name-based matching warns if multiple matches found (e.g., "Jari Virtanen" and "Ari Virtanen") and selects first match
 
 ---
 
@@ -236,18 +255,19 @@ const result = await ssiFindAndApproveCupParticipant(
 
 **Purpose:** Remove/delete a pending shooter from a CUP (competition event).
 
-**Location:** `scoring-proxy/lib/ssi-core/client.js:508`
+**Location:** `scoring-proxy/lib/ssi-core/client.js:509`
 
 **Signature:**
 ```javascript
-async function ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies, email = null)
+async function ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies, email = null, participantId = null)
 ```
 
 **Parameters:**
 - `cupId` (string): SSI CUP event ID
 - `shooterName` (string): Full name of shooter to delete
 - `cookies` (object): SSI session cookies for authentication
-- `email` (string, optional): Shooter's email for logging and disambiguation
+- `email` (string, optional): Shooter's email for logging
+- `participantId` (string, optional): **GraphQL participant ID for email-based identification** (recommended)
 
 **Returns:**
 ```javascript
@@ -255,45 +275,62 @@ async function ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies, email
 ```
 
 **Algorithm:**
-1. **Scrape CUP Participants Page**
-   - GET `/event/136/{cupId}/participants/`
-   - Parse HTML to find participant links
 
-2. **Find Shooter by Name**
-   - Extract participant ID from link: `/event/participant/137/{id}/`
-   - Collect ALL matches using word-based search
-   - **Multiple Match Detection**: If more than one match found, log warning
-   - **Email for Disambiguation**: If email provided, it's logged for debugging
-   - Uses first match as selection
+**When `participantId` provided (recommended path):**
+1. **Use GraphQL-Verified ID**
+   - Directly use the participant ID from GraphQL (where emails are available)
+   - Fetch CUP participants page to check current status
+   - Skip name-based HTML scraping entirely
+   - **No ambiguity possible** - exact ID match
 
-3. **Check Current Status**
+2. **Check Current Status**
+   - Extract status from toggle-status button for the specific participant ID
    - If already "Deleted", return success immediately
 
-4. **Toggle Status 3 Times**
+3. **Toggle Status 3 Times**
    - Toggle cycle: **Pending → Approved → Approved(no results) → Deleted**
    - Each toggle: GET `/event/participant/137/{participantId}/toggle-status/`
    - Verify status after each toggle
    - Early exit if "Deleted" status reached before 3 toggles
 
-5. **Verify Final Status**
+4. **Verify Final Status**
    - Fetch page again to confirm final status
    - Expect "Deleted" status
+
+**When `participantId` NOT provided (legacy fallback):**
+1. **Scrape CUP Participants Page & Find by Name**
+   - GET `/event/136/{cupId}/participants/`
+   - Parse HTML to find participant links
+   - Extract participant ID from link: `/event/participant/137/{id}/`
+   - Collect ALL matches using word-based search
+   - **Multiple Match Detection**: If more than one match found, log warning
+   - **Email for Disambiguation**: If email provided, it's logged for debugging
+   - Uses first match as selection ⚠️ **Can select wrong shooter if multiple similar names**
+
+2. **Check Current Status & Toggle** (same as ID-based path)
 
 **State Transition:**
 - `status='p'` → `status='a'` → (intermediate) → `status='d'` (three toggles)
 
 **Usage:**
 ```javascript
-// In POST /api/manage/cup/:id/remove-pending
-const result = await ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies, email)
+// RECOMMENDED: With participant ID from GraphQL (email-based identification)
+const result = await ssiFindAndDeleteCupParticipant(
+  cupId,
+  shooterName,
+  cookies,
+  email,
+  cupParticipantId // From GraphQL: cupPending[].id
+)
 // result: { success: true, message: 'Deleted' }
 
-// With email for disambiguation
+// LEGACY: Without participant ID (name-based matching - may be ambiguous)
 const result = await ssiFindAndDeleteCupParticipant(
   '12345',
   'Ari Virtanen',
   cookies,
-  'ari.virtanen@example.com'
+  'ari.virtanen@example.com',
+  null // Falls back to name-based HTML scraping
 )
 ```
 
@@ -302,11 +339,12 @@ const result = await ssiFindAndDeleteCupParticipant(
 - Unexpected final status → `{ success: false, message: 'Toggle resulted in "X", expected "Deleted"' }`
 
 **Important Notes:**
+- **⚠️ Always pass `participantId` when available** to avoid ambiguity with similar names
 - Requires 3 toggles to reach Deleted state from Pending
 - Function tracks status after each toggle for safety
 - Can be used on any status, not just Pending
-- **Ambiguity Detection**: Warns if multiple name matches found
-- Email parameter helps with debugging when multiple people have similar names
+- When `participantId` provided: exact ID match (no ambiguity)
+- When `participantId` NOT provided: name-based matching warns if multiple matches found
 
 ---
 
