@@ -100,6 +100,7 @@ export default function ManagePage() {
     try { await api.logout() } catch { /* ignore */ }
     setAuthed(false)
     setView('login')
+    setCups([])
     setSelectedCup(null)
     setData(null)
     setError(null)
