@@ -120,32 +120,52 @@ export async function getSummaryReport(matches) {
 // Management actions
 // ============================================================
 
-export async function manageAssignSquad(cupId, shooterName, shooterEmail, squadNumber) {
+export async function manageAssignSquad(cupId, shooterName, squadNumber, email = null) {
   const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/assign-squad`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ shooterName, shooterEmail, squadNumber }),
+    body: JSON.stringify({ shooterName, squadNumber, email }),
   })
   return handleResponse(resp)
 }
 
-export async function manageFixSquad(cupId, shooterName, shooterEmail, targetSquad) {
+export async function manageFixSquad(cupId, shooterName, targetSquad, email = null) {
   const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/fix-squad`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ shooterName, shooterEmail, targetSquad }),
+    body: JSON.stringify({ shooterName, targetSquad, email }),
   })
   return handleResponse(resp)
 }
 
-export async function manageAddToCup(cupId, shooterName, shooterEmail) {
+export async function manageAddToCup(cupId, shooterName, email = null) {
   const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/add-to-cup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ shooterName, shooterEmail }),
+    body: JSON.stringify({ shooterName, email }),
+  })
+  return handleResponse(resp)
+}
+
+export async function manageApprovePending(cupId, shooterName, email = null) {
+  const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/approve-pending`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ shooterName, email }),
+  })
+  return handleResponse(resp)
+}
+
+export async function manageRemovePending(cupId, shooterName, email = null) {
+  const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/remove-pending`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ shooterName, email }),
   })
   return handleResponse(resp)
 }
