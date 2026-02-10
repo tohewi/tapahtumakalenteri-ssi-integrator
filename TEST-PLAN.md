@@ -229,7 +229,43 @@ This test plan validates the fix for the ambiguous name matching bug where click
 - Match-only pending shooters must also be deletable
 - Backend now deletes from both CUP and Matches in a single operation
 
-### Scenario 8: Partial Deletion Failure Handling
+### Scenario 8: Remove Pending CUP Shooter who is Approved in Matches
+
+**Setup:**
+1. Shooter "Approved Ampuja" (atamprsturku@gmail.com) is:
+   - Pending in CUP (status='p')
+   - **Approved** in Match 1 (status='a')
+   - **Approved** in Match 2 (status='a')
+2. This is the most common real-world scenario: shooters register for matches first (get approved), then register for CUP later (pending approval)
+
+**Test Steps:**
+1. Navigate to ManagePage for the CUP
+2. Verify "Odottaa hyväksyntää" section shows "Approved Ampuja" with:
+   - Email displayed: atamprsturku@gmail.com
+   - Text showing "• Cupissa (pending)"
+   - Text showing "• Osakilpailuissa: 1. Match Name, 2. Match Name" (even though approved)
+   - "Hyväksy" button visible (because inCup=true)
+   - "Poista" button visible
+3. Click "Poista" for "Approved Ampuja"
+4. Wait for action to complete
+5. Refresh page
+
+**Expected Result:**
+- ✅ "Approved Ampuja" is removed from CUP (status='d')
+- ✅ "Approved Ampuja" is removed from Match 1 (status='d')
+- ✅ "Approved Ampuja" is removed from Match 2 (status='d')
+- ✅ "Approved Ampuja" no longer appears in "Odottaa hyväksyntää" section
+- ✅ "Approved Ampuja" no longer appears in any match lists
+- ✅ Success message shown: "Removed from all locations"
+- ✅ Server logs show deletion from CUP and all matches
+
+**Why This Matters:**
+- **BUG FIX (commit 0ec24c1):** Previously, only matches where shooter was pending were included in deletion
+- Now correctly includes ALL match participations (both pending and approved)
+- Prevents inconsistent state where shooter is deleted from CUP but remains in matches
+- This was the bug reported for user atamprsturku@gmail.com
+
+### Scenario 9: Partial Deletion Failure Handling
 
 **Setup:**
 1. Shooter "Ongelma Ampuja" is pending in CUP and 2 matches
@@ -275,7 +311,8 @@ This test plan validates the fix for the ambiguous name matching bug where click
 - [ ] Scenario 5: Missing email handling
 - [ ] Scenario 6: Match-only pending UI (no Hyväksy button) - **CRITICAL**
 - [ ] Scenario 7: Remove from both Cup and Matches - **CRITICAL**
-- [ ] Scenario 8: Partial deletion failure handling
+- [ ] Scenario 8: Remove CUP pending who is approved in matches - **CRITICAL** (Bug fix 0ec24c1)
+- [ ] Scenario 9: Partial deletion failure handling
 - [ ] Regression 1: Squadding workflow unchanged
 - [ ] Regression 2: CupOnly and MatchOnly sections
 
