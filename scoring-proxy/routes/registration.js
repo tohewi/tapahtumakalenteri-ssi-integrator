@@ -352,7 +352,7 @@ export function createRegistrationRouter({ captchaChallenges, CAPTCHA_TTL, captc
       sendProgress({ type: 'progress', step: 'approve', current: 0, total: totalMatches, message: 'Cup-hyväksyntä...' })
 
       if (!IS_PROD) console.log(`[register] Approving CUP participant...`)
-      const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, admin.cookies)
+      const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, admin.cookies, email)
       if (!IS_PROD) console.log(`[register] Approve result: ${approveResult.message}`)
       if (!approveResult.success) {
         sendProgress({ type: 'result', success: false, message: `Ilmoittautuminen onnistui mutta hyväksyntä epäonnistui: ${approveResult.message}` })
@@ -375,7 +375,7 @@ export function createRegistrationRouter({ captchaChallenges, CAPTCHA_TTL, captc
         if (!IS_PROD) console.log(`[register] Match ${matchId} add result: ${matchAddResult.message}`)
 
         // 5b. Find competitor in the match
-        const participantId = await ssiFindCompetitorInMatch(matchId, shooterName, admin.cookies)
+        const participantId = await ssiFindCompetitorInMatch(matchId, shooterName, admin.cookies, email)
         if (!participantId) {
           if (!IS_PROD) console.log(`[register] Competitor not found in match ${matchId}`)
           squadResults.push({ matchId, matchName: cm.match.name, success: false, message: 'Competitor not found in match' })

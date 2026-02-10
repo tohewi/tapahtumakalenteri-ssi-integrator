@@ -505,12 +505,13 @@ export async function ssiSearchAndAddParticipant(eventContentType, eventId, emai
 //    Toggle cycle: Pending → Approved → Approved(no results) → Deleted → Pending
 // ============================================================
 
-export async function ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies) {
+export async function ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies, email = null) {
   const debug = process.env.NODE_ENV !== 'production'
 
   // 1. Scrape CUP participants page
   const partUrl = `${SSI_BASE_URL}/event/136/${cupId}/participants/`
-  if (debug) console.log(`[cup-delete] GET ${partUrl} (looking for "${shooterName}")`)
+  const searchDesc = email ? `"${shooterName}" (${email})` : `"${shooterName}"`
+  if (debug) console.log(`[cup-delete] GET ${partUrl} (looking for ${searchDesc})`)
   const resp = await fetch(partUrl, {
     headers: { 'Cookie': formatCookies(cookies) },
     redirect: 'follow',
@@ -524,14 +525,30 @@ export async function ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies
   if (debug) console.log(`[cup-delete] Search words: ${JSON.stringify(searchWords)}`)
 
   let participantId = null
+  const matches = []
   for (const m of html.matchAll(pattern)) {
     const name = m[2].trim().toLowerCase()
     if (searchWords.length > 0 && searchWords.every(w => name.includes(w))) {
-      participantId = m[1]
-      if (debug) console.log(`[cup-delete] Found: ${m[2].trim()} → participant ${participantId}`)
-      break
+      matches.push({ id: m[1], name: m[2].trim() })
     }
   }
+
+  if (matches.length === 0) {
+    if (debug) console.log(`[cup-delete] "${shooterName}" not found in CUP ${cupId} participants`)
+    return { success: false, message: 'Participant not found in CUP' }
+  }
+
+  if (matches.length > 1) {
+    console.warn(`[cup-delete] WARNING: Multiple name matches found for "${shooterName}" in CUP ${cupId}:`, matches.map(m => m.name))
+    if (email) {
+      console.warn(`[cup-delete] Email provided for disambiguation: ${email} (but cannot verify from HTML)`)
+    } else {
+      console.warn(`[cup-delete] No email provided for disambiguation - using first match`)
+    }
+  }
+
+  participantId = matches[0].id
+  if (debug) console.log(`[cup-delete] Found: ${matches[0].name} → participant ${participantId}`)
 
   if (!participantId) {
     if (debug) console.log(`[cup-delete] "${shooterName}" not found in CUP ${cupId} participants`)
@@ -600,12 +617,13 @@ export async function ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies
 //          Toggle cycle: Pending → Approved → Approved(no results) → Deleted → Pending
 // ============================================================
 
-export async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookies) {
+export async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookies, email = null) {
   const debug = process.env.NODE_ENV !== 'production'
 
   // 1. Scrape CUP participants page
   const partUrl = `${SSI_BASE_URL}/event/136/${cupId}/participants/`
-  if (debug) console.log(`[cup-approve] GET ${partUrl} (looking for "${shooterName}")`)
+  const searchDesc = email ? `"${shooterName}" (${email})` : `"${shooterName}"`
+  if (debug) console.log(`[cup-approve] GET ${partUrl} (looking for ${searchDesc})`)
   const resp = await fetch(partUrl, {
     headers: { 'Cookie': formatCookies(cookies) },
     redirect: 'follow',
@@ -619,14 +637,30 @@ export async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookie
   if (debug) console.log(`[cup-approve] Search words: ${JSON.stringify(searchWords)}`)
 
   let participantId = null
+  const matches = []
   for (const m of html.matchAll(pattern)) {
     const name = m[2].trim().toLowerCase()
     if (searchWords.length > 0 && searchWords.every(w => name.includes(w))) {
-      participantId = m[1]
-      if (debug) console.log(`[cup-approve] Found: ${m[2].trim()} → participant ${participantId}`)
-      break
+      matches.push({ id: m[1], name: m[2].trim() })
     }
   }
+
+  if (matches.length === 0) {
+    if (debug) console.log(`[cup-approve] "${shooterName}" not found in CUP ${cupId} participants`)
+    return { success: false, message: 'Participant not found in CUP' }
+  }
+
+  if (matches.length > 1) {
+    console.warn(`[cup-approve] WARNING: Multiple name matches found for "${shooterName}" in CUP ${cupId}:`, matches.map(m => m.name))
+    if (email) {
+      console.warn(`[cup-approve] Email provided for disambiguation: ${email} (but cannot verify from HTML)`)
+    } else {
+      console.warn(`[cup-approve] No email provided for disambiguation - using first match`)
+    }
+  }
+
+  participantId = matches[0].id
+  if (debug) console.log(`[cup-approve] Found: ${matches[0].name} → participant ${participantId}`)
 
   if (!participantId) {
     if (debug) console.log(`[cup-approve] "${shooterName}" not found in CUP ${cupId} participants`)
@@ -1231,11 +1265,12 @@ export async function ssiRegisterToTrainerSquad(eventContentType, eventId, email
 // Returns the participant ID if found, or null
 // ============================================================
 
-export async function ssiFindCompetitorInMatch(matchId, shooterName, cookies) {
+export async function ssiFindCompetitorInMatch(matchId, shooterName, cookies, email = null) {
   const debug = process.env.NODE_ENV !== 'production'
   const url = `${SSI_BASE_URL}/event/91/${matchId}/participants/`
 
-  if (debug) console.log(`[find-competitor] GET ${url} (looking for "${shooterName}")`)
+  const searchDesc = email ? `"${shooterName}" (${email})` : `"${shooterName}"`
+  if (debug) console.log(`[find-competitor] GET ${url} (looking for ${searchDesc})`)
   const resp = await fetch(url, {
     headers: { 'Cookie': formatCookies(cookies) },
     redirect: 'follow',
@@ -1252,19 +1287,34 @@ export async function ssiFindCompetitorInMatch(matchId, shooterName, cookies) {
   const searchWords = shooterName.toLowerCase().split(/\s+/).filter(w => w.length > 1 || /\d/.test(w))
   if (debug) console.log(`[find-competitor] Search words: ${JSON.stringify(searchWords)}`)
 
+  const matches = []
   for (const m of html.matchAll(pattern)) {
     const compId = m[1]
     const name = m[2].trim()
     const nameLower = name.toLowerCase()
     // Match if all search words appear in the name
     if (searchWords.length > 0 && searchWords.every(w => nameLower.includes(w))) {
-      if (debug) console.log(`[find-competitor] Found: ${name} → participant ${compId}`)
-      return compId
+      matches.push({ id: compId, name })
     }
   }
 
-  if (debug) console.log(`[find-competitor] "${shooterName}" not found in match ${matchId}`)
-  return null
+  if (matches.length === 0) {
+    if (debug) console.log(`[find-competitor] "${shooterName}" not found in match ${matchId}`)
+    return null
+  }
+
+  if (matches.length > 1) {
+    console.warn(`[find-competitor] WARNING: Multiple name matches found for "${shooterName}" in match ${matchId}:`, matches.map(m => m.name))
+    if (email) {
+      console.warn(`[find-competitor] Email provided for disambiguation: ${email} (but cannot verify from HTML)`)
+    } else {
+      console.warn(`[find-competitor] No email provided for disambiguation - using first match`)
+    }
+  }
+
+  const compId = matches[0].id
+  if (debug) console.log(`[find-competitor] Found: ${matches[0].name} → participant ${compId}`)
+  return compId
 }
 
 // ============================================================
