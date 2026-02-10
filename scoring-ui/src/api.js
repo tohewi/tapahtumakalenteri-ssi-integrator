@@ -160,12 +160,12 @@ export async function manageApprovePending(cupId, shooterName, email = null, cup
   return handleResponse(resp)
 }
 
-export async function manageRemovePending(cupId, shooterName, email = null, cupParticipantId = null) {
+export async function manageRemovePending(cupId, shooterName, email = null, cupParticipantId = null, matchParticipants = []) {
   const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/remove-pending`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ shooterName, email, cupParticipantId }),
+    body: JSON.stringify({ shooterName, email, cupParticipantId, matchParticipants }),
   })
   return handleResponse(resp)
 }

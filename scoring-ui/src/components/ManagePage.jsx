@@ -349,7 +349,7 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
   }
 
   const handleRemovePending = (shooter) => {
-    runAction(() => api.manageRemovePending(cupId, shooter.name, shooter.email, shooter.cupParticipantId), shooter.name, 'remove')
+    runAction(() => api.manageRemovePending(cupId, shooter.name, shooter.email, shooter.cupParticipantId, shooter.inMatches), shooter.name, 'remove')
   }
 
   return (
@@ -574,26 +574,22 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                         <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
                       )}
                     </div>
-                    {s.inCup ? (
-                      <div className="flex gap-2">
+                    <div className="flex gap-2">
+                      {s.inCup && (
                         <ActionButton
                           label="Hyväksy"
                           loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'approve'}
                           onClick={() => handleApprovePending(s)}
                           color="blue"
                         />
-                        <ActionButton
-                          label="Poista"
-                          loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'remove'}
-                          onClick={() => handleRemovePending(s)}
-                          color="red"
-                        />
-                      </div>
-                    ) : (
-                      <div className="text-xs text-gray-500 italic">
-                        (Vain osakilpailuissa)
-                      </div>
-                    )}
+                      )}
+                      <ActionButton
+                        label="Poista"
+                        loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'remove'}
+                        onClick={() => handleRemovePending(s)}
+                        color="red"
+                      />
+                    </div>
                   </div>
                   <div className="text-xs text-gray-600 space-y-0.5">
                     {s.inCup && <div>• Cupissa (pending)</div>}
