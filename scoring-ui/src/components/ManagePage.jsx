@@ -345,11 +345,11 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
   }
 
   const handleApprovePending = (shooter) => {
-    runAction(() => api.manageApprovePending(cupId, shooter.name, shooter.email), shooter.name, 'approve')
+    runAction(() => api.manageApprovePending(cupId, shooter.name, shooter.email, shooter.cupParticipantId), shooter.name, 'approve')
   }
 
   const handleRemovePending = (shooter) => {
-    runAction(() => api.manageRemovePending(cupId, shooter.name, shooter.email), shooter.name, 'remove')
+    runAction(() => api.manageRemovePending(cupId, shooter.name, shooter.email, shooter.cupParticipantId, shooter.inMatches), shooter.name, 'remove')
   }
 
   return (
@@ -575,12 +575,14 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                       )}
                     </div>
                     <div className="flex gap-2">
-                      <ActionButton
-                        label="Hyväksy"
-                        loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'approve'}
-                        onClick={() => handleApprovePending(s)}
-                        color="blue"
-                      />
+                      {s.inCup && (
+                        <ActionButton
+                          label="Hyväksy"
+                          loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'approve'}
+                          onClick={() => handleApprovePending(s)}
+                          color="blue"
+                        />
+                      )}
                       <ActionButton
                         label="Poista"
                         loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'remove'}

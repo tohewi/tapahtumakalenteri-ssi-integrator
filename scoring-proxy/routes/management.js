@@ -1,5 +1,5 @@
 import express from 'express'
-import { ssiSearchAndAddParticipant, ssiFindCompetitorInMatch, ssiSetParticipantSquad, ssiFindAndApproveCupParticipant, ssiFindAndDeleteCupParticipant } from '../lib/ssi-client.js'
+import { ssiSearchAndAddParticipant, ssiFindCompetitorInMatch, ssiSetParticipantSquad, ssiFindAndApproveCupParticipant, ssiFindAndDeleteCupParticipant, ssiDeleteMatchParticipant } from '../lib/ssi-client.js'
 
 const router = express.Router()
 
@@ -294,6 +294,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
             hasEmailError: p.hasEmailError,
             name: p.name,
             inCup: true,
+            cupParticipantId: p.id, // Include CUP participant ID for email-based identification
             inMatches: []
           })
         }
@@ -317,8 +318,37 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
           pendingMap.get(key).inMatches.push({
             matchId: match.id,
             matchName: match.name,
-            componentNumber: match.componentNumber
+            componentNumber: match.componentNumber,
+            participantId: p.id // Include participant ID for deletion
           })
+        }
+      }
+
+      // IMPORTANT: Also check if CUP pending shooters are approved in matches
+      // This handles the case where shooter is pending in CUP but already approved in matches
+      // When clicking "poista", we need to delete from all matches regardless of their status
+      for (const [key, pending] of pendingMap.entries()) {
+        if (pending.inCup) {
+          // This shooter is pending in CUP - check all matches for their participation
+          for (const match of matches) {
+            // Check if they're in allParticipants (approved, but not yet in inMatches)
+            for (const p of match.allParticipants) {
+              const matchKey = makeShooterKey(p.firstName, p.lastName, p.email)
+              if (matchKey === key) {
+                // Found the same shooter in this match - add if not already tracked
+                const alreadyTracked = pending.inMatches.some(m => m.matchId === match.id)
+                if (!alreadyTracked) {
+                  pending.inMatches.push({
+                    matchId: match.id,
+                    matchName: match.name,
+                    componentNumber: match.componentNumber,
+                    participantId: p.id // Include participant ID for deletion
+                  })
+                }
+                break
+              }
+            }
+          }
         }
       }
 
@@ -387,7 +417,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
         if (!IS_PROD) console.log(`[manage] Add result: ${addResult.message}`)
 
         // 3. Find participant ID in the match
-        const participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies)
+        const participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies, email)
         if (!participantId) {
           results.push({ matchId, success: false, message: 'Could not find participant after adding' })
           continue
@@ -449,13 +479,13 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       const results = []
       for (const matchId of matchIds) {
         // 2. Find participant in match
-        let participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies)
+        let participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies, email)
 
         // 3. If not found, add them first using email for disambiguation
         if (!participantId) {
           if (!IS_PROD) console.log(`[manage] "${shooterName}" (${email || 'no email'}) not in match ${matchId}, adding...`)
           await ssiSearchAndAddParticipant(91, matchId, email, cookies, { firstName, lastName })
-          participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies)
+          participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies, email)
         }
 
         if (!participantId) {
@@ -507,7 +537,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       }
 
       // 2. Find and approve CUP participant
-      const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies)
+      const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies, email)
       if (!IS_PROD) console.log(`[manage] Cup approve result: ${approveResult.message}`)
 
       if (!approveResult.success) {
@@ -525,10 +555,12 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
   // ============================================================
   // POST /api/manage/cup/:id/approve-pending
   // Approve a pending shooter in CUP (and optionally in matches)
-  // Body: { shooterName, email }
+  // Body: { shooterName, email, cupParticipantId }
+  // Note: This endpoint only approves in CUP. Shooters pending only in matches
+  //       should be approved at the match level, not CUP level.
   // ============================================================
   router.post('/cup/:id/approve-pending', requireAuth('manage'), async (req, res) => {
-    const { shooterName, email } = req.body
+    const { shooterName, email, cupParticipantId } = req.body
     if (!shooterName) {
       return res.status(400).json({ error: 'shooterName required' })
     }
@@ -539,9 +571,16 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
     try {
       const cupId = req.params.id
 
-      // Approve CUP participant
-      if (!IS_PROD) console.log(`[manage] Approving pending shooter "${shooterName}" in cup ${cupId}`)
-      const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies)
+      // Check if shooter is actually in the CUP
+      if (!cupParticipantId) {
+        const errorMsg = `Cannot approve "${shooterName}" in CUP: shooter is not pending in CUP (only in matches)`
+        console.warn(`[manage] ${errorMsg}`)
+        return res.status(400).json({ error: errorMsg })
+      }
+
+      // Approve CUP participant (with ID-based identification)
+      if (!IS_PROD) console.log(`[manage] Approving pending shooter "${shooterName}" (${email || 'no email'}) ID=${cupParticipantId} in cup ${cupId}`)
+      const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies, email, cupParticipantId)
       if (!IS_PROD) console.log(`[manage] Cup approve result: ${approveResult.message}`)
 
       if (!approveResult.success) {
@@ -558,11 +597,13 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
 
   // ============================================================
   // POST /api/manage/cup/:id/remove-pending
-  // Remove/delete a pending shooter from CUP
-  // Body: { shooterName, email }
+  // Remove/delete a pending shooter from both CUP and all Matches
+  // Body: { shooterName, email, cupParticipantId, matchParticipants: [{matchId, participantId, matchName}] }
+  // Deletes shooter from CUP (if present) and from all matches (if present).
+  // This ensures shooters are removed from both Cup and Matches when they click "Poista".
   // ============================================================
   router.post('/cup/:id/remove-pending', requireAuth('manage'), async (req, res) => {
-    const { shooterName, email } = req.body
+    const { shooterName, email, cupParticipantId, matchParticipants = [] } = req.body
     if (!shooterName) {
       return res.status(400).json({ error: 'shooterName required' })
     }
@@ -572,18 +613,76 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
 
     try {
       const cupId = req.params.id
+      const results = []
 
-      // Delete CUP participant
-      if (!IS_PROD) console.log(`[manage] Removing pending shooter "${shooterName}" from cup ${cupId}`)
-      const deleteResult = await ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies)
-      if (!IS_PROD) console.log(`[manage] Cup delete result: ${deleteResult.message}`)
+      // Delete from CUP if present
+      if (cupParticipantId) {
+        if (!IS_PROD) console.log(`[manage] Removing pending shooter "${shooterName}" (${email || 'no email'}) ID=${cupParticipantId} from cup ${cupId}`)
+        const deleteResult = await ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies, email, cupParticipantId)
+        if (!IS_PROD) console.log(`[manage] Cup delete result: ${deleteResult.message}`)
 
-      if (!deleteResult.success) {
-        console.error(`[manage] Failed to remove "${shooterName}" from cup: ${deleteResult.message}`)
-        return res.status(400).json({ error: `Failed to remove competitor: ${deleteResult.message}` })
+        if (!deleteResult.success) {
+          console.error(`[manage] Failed to remove "${shooterName}" from cup: ${deleteResult.message}`)
+          results.push({ location: 'CUP', success: false, error: deleteResult.message })
+        } else {
+          results.push({ location: 'CUP', success: true })
+        }
+      } else {
+        if (!IS_PROD) console.log(`[manage] Skipping CUP delete for "${shooterName}" (not in CUP)`)
       }
 
-      res.json({ success: true, message: deleteResult.message })
+      // Delete from all matches if present
+      if (matchParticipants && matchParticipants.length > 0) {
+        if (!IS_PROD) console.log(`[manage] Removing "${shooterName}" from ${matchParticipants.length} match(es)`)
+
+        for (const mp of matchParticipants) {
+          if (!mp.participantId) {
+            console.warn(`[manage] Missing participantId for match ${mp.matchId}, skipping`)
+            continue
+          }
+
+          try {
+            const matchDeleteResult = await ssiDeleteMatchParticipant(mp.matchId, mp.participantId, shooterName, cookies)
+            if (!IS_PROD) console.log(`[manage] Match ${mp.matchName} delete result: ${matchDeleteResult.message}`)
+
+            if (!matchDeleteResult.success) {
+              console.error(`[manage] Failed to remove "${shooterName}" from match ${mp.matchName}: ${matchDeleteResult.message}`)
+              results.push({ location: `Match: ${mp.matchName}`, success: false, error: matchDeleteResult.message })
+            } else {
+              results.push({ location: `Match: ${mp.matchName}`, success: true })
+            }
+          } catch (err) {
+            console.error(`[manage] Error removing from match ${mp.matchName}:`, err.message)
+            results.push({ location: `Match: ${mp.matchName}`, success: false, error: err.message })
+          }
+        }
+      } else {
+        if (!IS_PROD) console.log(`[manage] Skipping match deletions for "${shooterName}" (not in any matches)`)
+      }
+
+      // Check if any deletion succeeded
+      const anySuccess = results.some(r => r.success)
+      const anyFailure = results.some(r => !r.success)
+
+      if (!anySuccess) {
+        // All deletions failed
+        const errors = results.filter(r => !r.success).map(r => `${r.location}: ${r.error}`).join('; ')
+        return res.status(400).json({ error: `Failed to remove shooter: ${errors}` })
+      }
+
+      if (anyFailure) {
+        // Some succeeded, some failed
+        const failures = results.filter(r => !r.success).map(r => `${r.location}: ${r.error}`).join('; ')
+        return res.json({
+          success: true,
+          partial: true,
+          message: `Partially removed (some failures: ${failures})`,
+          results
+        })
+      }
+
+      // All succeeded
+      res.json({ success: true, message: 'Removed from all locations', results })
     } catch (err) {
       console.error('[manage] remove-pending error:', err.message)
       res.status(500).json({ error: err.message })
