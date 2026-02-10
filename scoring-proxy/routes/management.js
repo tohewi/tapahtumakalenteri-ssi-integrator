@@ -324,6 +324,34 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
         }
       }
 
+      // IMPORTANT: Also check if CUP pending shooters are approved in matches
+      // This handles the case where shooter is pending in CUP but already approved in matches
+      // When clicking "poista", we need to delete from all matches regardless of their status
+      for (const [key, pending] of pendingMap.entries()) {
+        if (pending.inCup) {
+          // This shooter is pending in CUP - check all matches for their participation
+          for (const match of matches) {
+            // Check if they're in allParticipants (approved, but not yet in inMatches)
+            for (const p of match.allParticipants) {
+              const matchKey = makeShooterKey(p.firstName, p.lastName, p.email)
+              if (matchKey === key) {
+                // Found the same shooter in this match - add if not already tracked
+                const alreadyTracked = pending.inMatches.some(m => m.matchId === match.id)
+                if (!alreadyTracked) {
+                  pending.inMatches.push({
+                    matchId: match.id,
+                    matchName: match.name,
+                    componentNumber: match.componentNumber,
+                    participantId: p.id // Include participant ID for deletion
+                  })
+                }
+                break
+              }
+            }
+          }
+        }
+      }
+
       const pendingShooters = [...pendingMap.values()]
 
       res.json({
