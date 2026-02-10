@@ -13,6 +13,7 @@ import { createScoringRouter } from './routes/scoring.js'
 import { createRegistrationRouter } from './routes/registration.js'
 import { createReportsRouter } from './routes/reports.js'
 import { createManagementRouter } from './routes/management.js'
+import { createStaffingRouter } from './routes/staffing.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -379,6 +380,16 @@ const reportsRouter = createReportsRouter({
   IS_PROD,
 })
 app.use('/api/report', reportsRouter)
+
+// Staffing routes
+const staffingRouter = createStaffingRouter({
+  requireAuth,
+  graphqlWithRefresh,
+  adminGraphQL,
+  getAdminSession,
+  IS_PROD,
+})
+app.use('/api/staffing', staffingRouter)
 
 // ============================================================
 // SPA fallback — serve index.html for non-API routes (production)
