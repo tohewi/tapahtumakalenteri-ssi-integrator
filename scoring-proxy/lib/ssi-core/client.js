@@ -693,6 +693,55 @@ export async function ssiGetMatchGroupId(eventContentType, eventId, cookies) {
 }
 
 // ============================================================
+// Staffing: scrape staff page to get members + event official roles
+// Returns [{ name, officials: ['MD'|'QM'|...], role: 'admin'|'staff'|'assistant' }]
+// ============================================================
+
+export async function ssiGetMatchOfficials(eventContentType, eventId, cookies) {
+  const debug = process.env.NODE_ENV !== 'production'
+  const url = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/staff/`
+
+  if (debug) console.log(`[mgmt-read] GET ${url}`)
+  const resp = await fetch(url, {
+    headers: { 'Cookie': formatCookies(cookies) },
+    redirect: 'follow',
+  })
+  if (!resp.ok) throw new Error(`Staff page HTTP ${resp.status}`)
+  const html = await resp.text()
+
+  // Parse table rows — SSI staff table has 6 columns:
+  // [0] checkbox  [1] buttons  [2] Name  [3] Contact  [4] Event|Org officials  [5] Role
+  const members = []
+  const rows = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)]
+  for (const row of rows) {
+    const tds = [...row[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)]
+    if (tds.length < 5) continue
+
+    // Name is in TD[2] (3rd column)
+    const name = tds[2][1].replace(/<[^>]+>/g, '').trim()
+    if (!name || name === 'Name') continue
+
+    // Role is in the last TD
+    const roleTd = tds[tds.length - 1][1].replace(/<[^>]+>/g, '').trim()
+    const role = roleTd === 'admin' || roleTd === 'staff' || roleTd === 'assistant' ? roleTd : null
+    if (!role) continue
+
+    // Event officials in TD[4] (5th column) — may contain "Match Director", "Quarter Master", etc.
+    const officialText = tds.length >= 6 ? tds[tds.length - 2][1].replace(/<[^>]+>/g, '').trim() : ''
+    const officials = []
+    if (officialText.includes('Match Director') || officialText === 'MD') officials.push('MD')
+    if (officialText.includes('Quarter Master') || officialText === 'QM') officials.push('QM')
+    if (officialText.includes('Range Officer') || officialText === 'RO') officials.push('RO')
+    if (officialText.includes('Stats Officer') || officialText === 'SO') officials.push('SO')
+
+    members.push({ name, officials, role })
+  }
+
+  if (debug) console.log(`[mgmt-read] Found ${members.length} staff: ${members.map(m => `${m.name}(${m.officials.join(',')||'-'})`).join(', ')}`)
+  return members
+}
+
+// ============================================================
 // Staffing: add user to match management group with role
 // 1. POST search by email → find add-user-with-role link (gets SSI user ID)
 // 2. POST add-user-with-role with role + officials
