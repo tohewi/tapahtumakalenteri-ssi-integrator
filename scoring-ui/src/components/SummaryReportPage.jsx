@@ -1,14 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import * as api from '../api'
-import { encryptData, decryptData } from '../crypto'
+import { useRememberMe } from '../hooks/useRememberMe'
 import LoginScreen from './LoginScreen'
 import { AppHeader, ErrorBanner, Spinner, formatDateShort } from './shared'
 import fi from '../i18n'
 
-const LS_CREDS = 'ssi_credentials'
 const LS_SUMMARY_STATE = 'ssi_summary_state'
 
 export default function SummaryReportPage() {
+  const { savedCreds, handleRememberMe } = useRememberMe('ssi_credentials_summary')
+  
   const [authed, setAuthed] = useState(false)
   const [view, setView] = useState('login') // login | search | report
   const [loading, setLoading] = useState(false)
@@ -75,25 +76,11 @@ export default function SummaryReportPage() {
     }
   }, [handleSessionExpired, handleScopeMismatch])
 
-  // Load saved credentials for pre-fill (no auto-login)
-  useEffect(() => {
-    const loadSavedCreds = async () => {
-      const raw = localStorage.getItem(LS_CREDS)
-      if (!raw) return
-      const creds = await decryptData(raw)
-      // Just load for potential pre-fill, don't auto-login
-    }
-    loadSavedCreds()
-  }, [])
-
   // Login handler
   const handleLogin = async (email, password, apiKey, rememberMe) => {
     setSessionExpiredMessage(null)
     await api.login(email, password, apiKey, 'reporting')
-    if (rememberMe) {
-      const encrypted = await encryptData({ email, password, apiKey })
-      localStorage.setItem(LS_CREDS, encrypted)
-    }
+    await handleRememberMe(email, password, apiKey, rememberMe)
     setAuthed(true)
     
     // Restore previous state if available
@@ -295,7 +282,13 @@ export default function SummaryReportPage() {
             </a>
           </div>
         </div>
-        <LoginScreen onLogin={handleLogin} hideHeader />
+        <LoginScreen 
+          onLogin={handleLogin} 
+          initialEmail={savedCreds?.email}
+          initialPassword={savedCreds?.password}
+          initialApiKey={savedCreds?.apiKey}
+          hideHeader 
+        />
       </div>
     )
   }
