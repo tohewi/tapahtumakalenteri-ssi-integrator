@@ -184,7 +184,67 @@ This test plan validates the fix for the ambiguous name matching bug where click
 **Why This Matters:**
 - CUP-level approve/remove endpoints only work on CUP participants
 - Match-only pending shooters would cause "Participant not found in CUP" errors
-- UI now prevents this by hiding the buttons for match-only shooters
+- UI previously hid approve/remove buttons for match-only shooters
+
+### Scenario 7: Remove Pending Shooter from Both Cup and Matches
+
+**Setup:**
+1. Shooter "Testi Ampuja" (testi.ampuja@example.com) is pending in:
+   - CUP (status='p')
+   - Match 1 (status='p')
+   - Match 2 (status='p')
+2. Another shooter "Toinen Ampuja" is pending only in Match 3 (not in CUP)
+
+**Test Steps:**
+1. Navigate to ManagePage for the CUP
+2. Verify "Odottaa hyväksyntää" section shows "Testi Ampuja" with:
+   - Email displayed: testi.ampuja@example.com
+   - Text showing "• Cupissa (pending)"
+   - Text showing "• Osakilpailuissa: 1. Match Name, 2. Match Name"
+   - "Hyväksy" button visible (because inCup=true)
+   - "Poista" button visible
+3. Click "Poista" for "Testi Ampuja"
+4. Wait for action to complete
+5. Refresh page
+6. Check "Toinen Ampuja" (match-only pending):
+   - NO "Hyväksy" button (because inCup=false)
+   - "Poista" button IS visible
+7. Click "Poista" for "Toinen Ampuja"
+8. Wait for action to complete
+9. Refresh page
+
+**Expected Result:**
+- ✅ "Testi Ampuja" is removed from CUP (status='d')
+- ✅ "Testi Ampuja" is removed from Match 1 (status='d')
+- ✅ "Testi Ampuja" is removed from Match 2 (status='d')
+- ✅ "Testi Ampuja" no longer appears in "Odottaa hyväksyntää" section
+- ✅ "Toinen Ampuja" is removed from Match 3 (status='d')
+- ✅ "Toinen Ampuja" no longer appears in "Odottaa hyväksyntää" section
+- ✅ Success message shown: "Removed from all locations"
+- ✅ Server logs show deletion from CUP and all matches
+
+**Why This Matters:**
+- When shooters are pending and Cup starts, they need to be removed from everything
+- Users expect "Poista" to delete the shooter completely from the event
+- Match-only pending shooters must also be deletable
+- Backend now deletes from both CUP and Matches in a single operation
+
+### Scenario 8: Partial Deletion Failure Handling
+
+**Setup:**
+1. Shooter "Ongelma Ampuja" is pending in CUP and 2 matches
+2. Simulate a scenario where one match deletion might fail (e.g., network timeout)
+
+**Test Steps:**
+1. Click "Poista" for "Ongelma Ampuja"
+2. If deletion partially succeeds (Cup succeeds, one match fails):
+
+**Expected Result:**
+- ✅ Success response with partial=true flag
+- ✅ UI shows warning message about partial deletion
+- ✅ Response includes results array showing which locations succeeded/failed
+- ✅ Server logs show detailed error for failed location
+- ✅ Shooter is removed from locations where deletion succeeded
 
 ---
 
@@ -213,7 +273,9 @@ This test plan validates the fix for the ambiguous name matching bug where click
 - [ ] Scenario 3: Remove with similar names
 - [ ] Scenario 4: Legacy fallback without cupParticipantId
 - [ ] Scenario 5: Missing email handling
-- [ ] Scenario 6: Match-only pending (no CUP buttons) - **CRITICAL**
+- [ ] Scenario 6: Match-only pending UI (no Hyväksy button) - **CRITICAL**
+- [ ] Scenario 7: Remove from both Cup and Matches - **CRITICAL**
+- [ ] Scenario 8: Partial deletion failure handling
 - [ ] Regression 1: Squadding workflow unchanged
 - [ ] Regression 2: CupOnly and MatchOnly sections
 

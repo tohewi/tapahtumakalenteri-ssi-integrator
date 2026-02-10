@@ -46,22 +46,32 @@ The shooter identification system **MUST** use the following strict requirements
 
 - **Rationale:** Incorrect operations (approving/deleting wrong shooter) cause data integrity issues and are "extremely annoying" to fix.
 - **Implementation:**
-  - Backend: Return HTTP 400 with descriptive error if `participantId` missing
+  - Backend: Return HTTP 400 with descriptive error if `participantId` missing (for approve operations)
   - Frontend: Display error alert to user
   - Logs: Warn about ambiguity attempts
-- **Error Messages:**
-  - `"Cannot approve in CUP: shooter is not pending in CUP (only in matches)"`
-  - `"Cannot remove from CUP: shooter is not pending in CUP (only in matches)"`
+- **Note:** Deletion operations no longer require CUP participant ID - they work on both CUP and Match participants
 
 #### 4. UI Visibility Requirements
 
 **Requirement:** UI MUST clearly indicate when operations cannot be performed, preventing user errors.
 
 - **Implementation:**
-  - Hide approve/remove buttons for match-only pending shooters
-  - Show `"(Vain osakilpailuissa)"` label instead
+  - Show "Hyväksy" (Approve) button ONLY for shooters pending in CUP
+  - Show "Poista" (Remove) button for ALL pending shooters (both CUP and match-only)
   - Display email addresses for all shooters
   - Show `"🚨 Sähköposti puuttuu"` for missing emails
+
+#### 5. Comprehensive Deletion
+
+**Requirement:** When removing a pending shooter, the system MUST delete them from BOTH CUP and all Matches in a single operation.
+
+- **Rationale:** Shooters are normally pending when cup & matches are full. When the Cup starts, they need to be removed completely because they can't participate.
+- **Implementation:**
+  - `/remove-pending` endpoint accepts `matchParticipants` array with match IDs and participant IDs
+  - Backend deletes from CUP (if present) using `ssiFindAndDeleteCupParticipant`
+  - Backend deletes from each match (if present) using `ssiDeleteMatchParticipant`
+  - Partial success handling: If some deletions succeed and others fail, return success with warnings
+  - Frontend passes both `cupParticipantId` and `inMatches` array to removal endpoint
 
 ### Design Principles
 
@@ -646,6 +656,127 @@ for (const matchId of matchIds) {
 
 ---
 
+### 6. ssiSetMatchParticipantStatus
+
+**Purpose:** Set the status of a match participant by editing the participant form.
+
+**Location:** `scoring-proxy/lib/ssi-core/client.js:853`
+
+**Signature:**
+```javascript
+async function ssiSetMatchParticipantStatus(participantId, status, cookies)
+```
+
+**Parameters:**
+- `participantId` (string): SSI participant ID (content type 93)
+- `status` (string): Status code ('a'=Approved, 'p'=Pending, 'd'=Deleted)
+- `cookies` (object): SSI session cookies
+
+**Returns:**
+```javascript
+{ success: boolean, message?: string }
+```
+
+**Algorithm:**
+1. **GET Edit Form**
+   - URL: `/event/participant/93/{participantId}/edit/`
+   - Extract form HTML
+
+2. **Extract All Form Fields**
+   - Use shared helper `_extractFormFields()` to preserve all form data
+   - Prevents loss of hidden fields and selections
+
+3. **Override Status**
+   - Set `status` field to specified status code
+
+4. **POST Edit Form**
+   - URL: `/event/participant/93/{participantId}/edit/`
+   - Content-Type: `application/x-www-form-urlencoded`
+   - Handle redirect (302/301) or form validation errors
+
+**State Transition:**
+- Can transition to any status: 'a' (Approved), 'p' (Pending), 'd' (Deleted)
+- Most commonly used for deletion: setting status='d'
+
+**Usage:**
+```javascript
+// Delete a match participant
+const result = await ssiSetMatchParticipantStatus(participantId, 'd', cookies)
+// result: { success: true }
+
+// Approve a match participant
+const result = await ssiSetMatchParticipantStatus(participantId, 'a', cookies)
+```
+
+**Error Cases:**
+- Edit form errors → `{ success: false, message: 'Error text from form' }`
+- HTTP error → Throws error: `Participant status edit failed HTTP {status}`
+
+**Important Notes:**
+- Only works for Match participants (content type 93), not CUP participants (content type 137)
+- More flexible than `ssiSetParticipantSquad` as it can change status without modifying squad
+- Edit form preserves all existing fields
+- Redirects (302) indicate success
+
+---
+
+### 7. ssiDeleteMatchParticipant
+
+**Purpose:** Delete a shooter from a match (wrapper for status change to 'd').
+
+**Location:** `scoring-proxy/lib/ssi-core/client.js:914`
+
+**Signature:**
+```javascript
+async function ssiDeleteMatchParticipant(matchId, participantId, shooterName, cookies)
+```
+
+**Parameters:**
+- `matchId` (string): SSI Match event ID (for logging)
+- `participantId` (string): SSI participant ID (content type 93)
+- `shooterName` (string): Shooter's name (for logging)
+- `cookies` (object): SSI session cookies
+
+**Returns:**
+```javascript
+{ success: boolean, message: string }
+```
+
+**Algorithm:**
+1. **Call ssiSetMatchParticipantStatus**
+   - Pass `status='d'` to mark as deleted
+   - Log the operation
+
+2. **Return Result**
+   - On success: `{ success: true, message: 'Deleted from match' }`
+   - On failure: `{ success: false, message: errorText }`
+
+**State Transition:**
+- Any status → `status='d'` (Deleted)
+
+**Usage:**
+```javascript
+// Delete from match (called by /remove-pending endpoint)
+const result = await ssiDeleteMatchParticipant(
+  matchId,
+  participantId,
+  "John Doe",
+  cookies
+)
+// result: { success: true, message: 'Deleted from match' }
+```
+
+**Error Cases:**
+- Same as `ssiSetMatchParticipantStatus`
+
+**Important Notes:**
+- Wrapper function for easier API - specifically for deletion
+- Used by `/remove-pending` endpoint to delete from multiple matches
+- Only works for Match participants (content type 93)
+- Deletion is immediate - no toggle cycling needed (unlike CUP deletion)
+
+---
+
 ## Shooter Identification System
 
 The system uses **email-based identification** as the primary key for tracking shooters across different contexts (CUP vs Match, different SSI identities).
@@ -975,14 +1106,27 @@ const participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cooki
 await ssiSetParticipantSquad(participantId, squadNumber, cookies)
 ```
 
-**Removing a Shooter:**
+**Removing a Pending Shooter:**
 ```javascript
-// Delete from CUP (toggles 3x)
-await ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies)
+// Remove from BOTH CUP and all Matches (recommended - single operation)
+// This is what the /remove-pending endpoint does
 
-// Delete from Match (toggle via edit form)
-const participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies)
-// (no dedicated delete function for Match participants - use toggle-status URL directly)
+// 1. Delete from CUP if present (toggles 3x: p→a→a→d)
+if (cupParticipantId) {
+  await ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies, email, cupParticipantId)
+}
+
+// 2. Delete from all matches if present
+for (const match of matchParticipants) {
+  await ssiDeleteMatchParticipant(match.matchId, match.participantId, shooterName, cookies)
+}
+
+// Alternative: Individual deletions
+// Delete from CUP only
+await ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies, email, cupParticipantId)
+
+// Delete from specific Match only
+await ssiDeleteMatchParticipant(matchId, participantId, shooterName, cookies)
 ```
 
 ---
