@@ -14,6 +14,7 @@ export default function ReportPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
+  const [savedCreds, setSavedCreds] = useState(null) // { email, password, apiKey } from remember-me
 
   // Search
   const [searchText, setSearchText] = useState('')
@@ -80,7 +81,11 @@ export default function ReportPage() {
       const raw = localStorage.getItem(LS_CREDS)
       if (!raw) return
       const creds = await decryptData(raw)
-      // Just load for potential pre-fill, don't auto-login
+      if (creds) {
+        setSavedCreds(creds) // pre-fill form only
+      } else {
+        localStorage.removeItem(LS_CREDS) // corrupted data
+      }
     }
     loadSavedCreds()
   }, [])
@@ -92,6 +97,8 @@ export default function ReportPage() {
     if (rememberMe) {
       const encrypted = await encryptData({ email, password, apiKey })
       localStorage.setItem(LS_CREDS, encrypted)
+    } else {
+      localStorage.removeItem(LS_CREDS)
     }
     setAuthed(true)
     
@@ -288,7 +295,13 @@ export default function ReportPage() {
             </a>
           </div>
         </div>
-        <LoginScreen onLogin={handleLogin} hideHeader />
+        <LoginScreen 
+          onLogin={handleLogin} 
+          initialEmail={savedCreds?.email}
+          initialPassword={savedCreds?.password}
+          initialApiKey={savedCreds?.apiKey}
+          hideHeader 
+        />
       </div>
     )
   }
