@@ -13,6 +13,7 @@ import {
   signup,
   resign,
   upsertEvent,
+  syncStaffFromSSI,
 } from '../lib/staffing/engine.js'
 import { loadConfig, isAdminEmail } from '../lib/staffing/config-loader.js'
 import {
@@ -20,6 +21,7 @@ import {
   ssiGetMatchGroupId,
   ssiAddToMatchManagement,
   ssiRemoveFromMatchManagement,
+  ssiGetMatchOfficials,
 } from '../lib/ssi-client.js'
 
 // Map staffing roles to SSI management group role + event official codes
@@ -57,8 +59,9 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
 
       // Search SSI for training events
       const searchStrings = config.eventDiscovery.searchStrings
-      const allMatches = []
+      const contentType = config.eventDiscovery.matchContentType
       const seenIds = new Set()
+      const ssiSyncQueue = [] // events needing staff page scrape
 
       for (const searchStr of searchStrings) {
         const data = await graphqlWithRefresh(session, `
@@ -72,13 +75,13 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
                 number
                 comment
                 ... on NordicSquadNode {
-                  competitors { id status }
+                  competitors { id status shooter { email first_name last_name } }
                 }
                 ... on IpscSquadNode {
-                  competitors { id status }
+                  competitors { id status shooter { email first_name last_name } }
                 }
                 ... on GenericSquadNode {
-                  competitors { id status }
+                  competitors { id status shooter { email first_name last_name } }
                 }
               }
             }
@@ -125,9 +128,59 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
               shooterCount,
             })
 
-            allMatches.push(getEventStatus(evt.id))
+            // Extract trainer squad members (with emails from GraphQL)
+            const staffSquad = (evt.squads || []).find(s =>
+              s.number === staffSquadNum || (s.comment || '').includes('Trainer')
+            )
+            const squadMembers = (staffSquad?.competitors || [])
+              .filter(c => c.status === 'a' && c.shooter?.email)
+              .map(c => ({
+                email: c.shooter.email,
+                userName: `${c.shooter.first_name || ''} ${c.shooter.last_name || ''}`.trim(),
+              }))
+
+            // Queue SSI staff page scrape for this event
+            if (squadMembers.length > 0 && session.ssiCookies) {
+              ssiSyncQueue.push({ eventId: evt.id, squadMembers })
+            }
           }
         }
+      }
+
+      // Sync staff from SSI: scrape staff pages for official roles, cross-reference
+      // with trainer squad members (who have emails from GraphQL), and populate engine
+      if (ssiSyncQueue.length > 0 && contentType && session.ssiCookies) {
+        await Promise.all(ssiSyncQueue.map(async ({ eventId, squadMembers }) => {
+          try {
+            const officials = await ssiGetMatchOfficials(contentType, eventId, session.ssiCookies)
+
+            // Build name → officials lookup from staff page
+            const officialsByName = new Map()
+            for (const m of officials) {
+              officialsByName.set(m.name.toLowerCase(), m.officials)
+            }
+
+            // Map squad members to roles by cross-referencing name → officials
+            const staffList = squadMembers.map(member => {
+              const offs = officialsByName.get(member.userName.toLowerCase()) || []
+              let role = 'staff'
+              if (offs.includes('MD')) role = 'leadInstructor'
+              else if (offs.includes('QM')) role = 'equipmentManager'
+              return { email: member.email, userName: member.userName, role }
+            })
+
+            syncStaffFromSSI(eventId, staffList)
+          } catch (err) {
+            console.error(`[staffing] SSI sync failed for event ${eventId}: ${err.message}`)
+          }
+        }))
+      }
+
+      // Build response with synced state
+      const allMatches = []
+      for (const eid of seenIds) {
+        const status = getEventStatus(eid)
+        if (status) allMatches.push(status)
       }
 
       // Also include future events from local state not in SSI results

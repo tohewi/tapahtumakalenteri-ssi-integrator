@@ -218,6 +218,48 @@ export function resign(eventId, email) {
 }
 
 // ============================================================
+// Sync staff from SSI — populate roles from SSI management data
+// ============================================================
+
+/**
+ * Sync staff roles from SSI data into engine state.
+ * Called on event load to reflect current SSI management group + trainer squad.
+ *
+ * @param {string} eventId
+ * @param {Array<{email: string, userName: string, role: string}>} staffList
+ *   role: "leadInstructor" | "equipmentManager" | "staff"
+ */
+export function syncStaffFromSSI(eventId, staffList) {
+  const event = events.get(String(eventId))
+  if (!event) return
+
+  let changed = false
+
+  for (const member of staffList) {
+    if (!member.email) continue
+
+    // Skip if already registered in any role
+    if (getUserRole(event, member.email)) continue
+
+    // Check max trainers
+    if (totalTrainers(event) >= event.maxTrainers) break
+
+    if (member.role === 'leadInstructor' && !event.leadInstructor) {
+      event.leadInstructor = { email: member.email, userName: member.userName, signupTime: null }
+      changed = true
+    } else if (member.role === 'equipmentManager' && !event.equipmentManager) {
+      event.equipmentManager = { email: member.email, userName: member.userName, signupTime: null }
+      changed = true
+    } else if (member.role === 'staff') {
+      event.staff.push({ email: member.email, userName: member.userName, signupTime: null })
+      changed = true
+    }
+  }
+
+  if (changed) saveState()
+}
+
+// ============================================================
 // Event status for API responses
 // ============================================================
 
