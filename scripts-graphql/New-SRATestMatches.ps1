@@ -63,17 +63,12 @@ Import-Module -Name (Join-Path -Path $PSScriptRoot -ChildPath "lib\SSI-GraphQL.p
 Import-Module -Name (Join-Path -Path $PSScriptRoot -ChildPath "lib\SSI-WebSquad.psm1") -Force -ErrorAction Stop
 
 #region Load Configuration
-# Load Kupittaa config for defaults (groupId, organizerId)
-$kupittaaConfigPath = Join-Path -Path $PSScriptRoot -ChildPath "..\config\kupittaa-cup-config.yml"
-if (Test-Path $kupittaaConfigPath) {
-    $kupittaaConfig = Get-Content -Path $kupittaaConfigPath -Raw -Encoding UTF8 | ConvertFrom-Yaml
-    if (-not $GroupId) { $GroupId = $kupittaaConfig.management.groupId }
-    if (-not $OrganizerId) { $OrganizerId = $kupittaaConfig.management.organizerId }
-}
-
+# GroupId is optional — when omitted, use "xxx" which means "itself" (self-managed) in SSI
 if (-not $GroupId) {
-    Write-Error "GroupId is required. Provide -GroupId parameter or ensure kupittaa-cup-config.yml exists."
-    exit 1
+    $GroupId = "xxx"
+    Write-Host "No group specified — match will be managed by self (group=xxx)" -ForegroundColor Gray
+} else {
+    Write-Host "Using group: $GroupId" -ForegroundColor Gray
 }
 #endregion
 

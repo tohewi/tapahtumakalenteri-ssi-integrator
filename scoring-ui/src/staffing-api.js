@@ -30,31 +30,19 @@ export function fetchStaffingEvent(eventId) {
   return fetchJson(`${API_BASE}/events/${eventId}`)
 }
 
-/** Sign up as staff for an event */
-export function staffSignup(eventId, rolePreference = null) {
+/** Register for a specific role in an event */
+export function staffSignup(eventId, role) {
   return fetchJson(`${API_BASE}/events/${eventId}/signup`, {
     method: 'POST',
-    body: JSON.stringify({ rolePreference }),
+    body: JSON.stringify({ role }),
   })
 }
 
-/** Cancel staff signup */
-export function staffCancelSignup(eventId) {
+/** Resign from own role in an event */
+export function staffResign(eventId) {
   return fetchJson(`${API_BASE}/events/${eventId}/signup`, {
     method: 'DELETE',
   })
-}
-
-/** Finalize staffing (admin) */
-export function staffFinalize(eventId) {
-  return fetchJson(`${API_BASE}/events/${eventId}/finalize`, {
-    method: 'POST',
-  })
-}
-
-/** Get event status */
-export function fetchStaffingStatus(eventId) {
-  return fetchJson(`${API_BASE}/events/${eventId}/status`)
 }
 
 /** Get staffing config (roles, training types) */

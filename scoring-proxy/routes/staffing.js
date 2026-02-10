@@ -1,23 +1,35 @@
 /**
  * Staffing API Route — endpoints for SRA training staff management.
  *
- * See docs/design/sra-staffing-design.md Section 5
+ * Direct role registration model:
+ * POST /events/:id/signup  { role: "leadInstructor"|"equipmentManager"|"staff" }
+ * DELETE /events/:id/signup  (resign from own role)
  */
 
 import { Router } from 'express'
 import {
   getAllEvents,
-  getEvent,
   getEventStatus,
   signup,
-  cancelSignup,
-  finalizeEvent,
+  resign,
   upsertEvent,
-  getEventsDueForFinalization,
 } from '../lib/staffing/engine.js'
 import { loadConfig, isAdminEmail } from '../lib/staffing/config-loader.js'
+import {
+  ssiRegisterToTrainerSquad,
+  ssiGetMatchGroupId,
+  ssiAddToMatchManagement,
+  ssiRemoveFromMatchManagement,
+} from '../lib/ssi-client.js'
 
-const CRON_SECRET = process.env.STAFFING_CRON_SECRET || null
+// Map staffing roles to SSI management group role + event official codes
+// role: 1=admin, 2=staff, 7=assistant
+// officials: MD=Match Director, QM=Quarter Master
+const SSI_ROLE_MAP = {
+  staff:            { role: '1', officials: [] },
+  leadInstructor:   { role: '1', officials: ['MD'] },
+  equipmentManager: { role: '1', officials: ['QM'] },
+}
 
 /**
  * Create the staffing router.
@@ -25,23 +37,20 @@ const CRON_SECRET = process.env.STAFFING_CRON_SECRET || null
  * @param {object} deps
  * @param {Function} deps.requireAuth — auth middleware
  * @param {Function} deps.graphqlWithRefresh — GraphQL helper with auto-refresh
- * @param {Function} deps.adminGraphQL — admin GraphQL helper
- * @param {Function} deps.getAdminSession — get admin SSI session (cookies + jwt)
- * @param {boolean} deps.IS_PROD
  * @returns {Router}
  */
-export function createStaffingRouter({ requireAuth, graphqlWithRefresh, adminGraphQL, getAdminSession, IS_PROD }) {
+export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdminSession }) {
   const router = Router()
 
   // ============================================================
   // GET /events — list training events with staffing status
   // ============================================================
-  router.get('/events', requireAuth(), async (req, res) => {
+  router.get('/events', requireAuth('staffing'), async (req, res) => {
     try {
       const config = loadConfig()
       const session = req.ssiSession
 
-      // Get user email for admin check
+      // Get current user info (email is primary identifier in SSI)
       const meData = await graphqlWithRefresh(session, '{ me { email } }')
       const userEmail = meData.me?.email
       const isAdmin = userEmail ? isAdminEmail(userEmail) : false
@@ -49,6 +58,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, adminGra
       // Search SSI for training events
       const searchStrings = config.eventDiscovery.searchStrings
       const allMatches = []
+      const seenIds = new Set()
 
       for (const searchStr of searchStrings) {
         const data = await graphqlWithRefresh(session, `
@@ -57,13 +67,11 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, adminGra
               id
               name
               starts
-              ends
               squads {
                 id
                 number
                 comment
                 ... on NordicSquadNode {
-                  max_competitors
                   competitors { id status }
                 }
                 ... on IpscSquadNode {
@@ -80,10 +88,13 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, adminGra
         if (data.events) {
           const now = new Date()
           for (const evt of data.events) {
+            if (seenIds.has(evt.id)) continue
+            seenIds.add(evt.id)
+
             // Only show future events
             if (new Date(evt.starts) <= now) continue
 
-            // Determine training type from name using searchPatterns
+            // Determine training type from name
             const nameLower = evt.name.toLowerCase()
             let trainingType = null
             for (const [key, typeCfg] of Object.entries(config.trainingTypes)) {
@@ -95,29 +106,23 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, adminGra
             }
             if (!trainingType) continue
 
-            // Calculate shooter count (exclude staff squad by number or comment)
+            // Calculate shooter count (exclude staff squad)
             const staffSquadNum = config.trainingTypes[trainingType]?.staffSquad || 5
             const staffSquadName = config.eventDiscovery.staffSquadName
-            const shooterSquads = (evt.squads || [])
+            const shooterCount = (evt.squads || [])
               .filter(s => {
                 const squadLabel = s.comment || `Squad ${s.number}`
                 return s.number !== staffSquadNum && squadLabel !== staffSquadName
               })
-              .map(s => ({
-                squadNumber: s.number,
-                squadId: s.id,
-                currentCount: (s.competitors || []).filter(c => c.status === 'a').length,
-              }))
-            const shooterCount = shooterSquads.reduce((sum, s) => sum + s.currentCount, 0)
+              .reduce((sum, s) => sum + (s.competitors || []).filter(c => c.status === 'a').length, 0)
 
             // Upsert event in staffing engine
-            const event = upsertEvent({
+            upsertEvent({
               eventId: evt.id,
               eventName: evt.name,
               trainingType,
               eventDate: evt.starts,
               shooterCount,
-              shooterSquads,
             })
 
             allMatches.push(getEventStatus(evt.id))
@@ -125,20 +130,19 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, adminGra
         }
       }
 
-      // Also include future events from local state that weren't in SSI results
+      // Also include future events from local state not in SSI results
       const now = new Date()
-      const localEvents = getAllEvents()
-      for (const le of localEvents) {
+      for (const le of getAllEvents()) {
         if (new Date(le.eventDate) <= now) continue
-        if (!allMatches.find(m => m.eventId === le.eventId)) {
+        if (!seenIds.has(le.eventId)) {
           allMatches.push(getEventStatus(le.eventId))
         }
       }
 
-      // Sort by event date
+      // Sort by event date ascending
       allMatches.sort((a, b) => new Date(a.eventDate) - new Date(b.eventDate))
 
-      res.json({ events: allMatches, isAdmin })
+      res.json({ events: allMatches, isAdmin, userEmail })
     } catch (err) {
       console.error('[staffing] GET /events error:', err.message)
       res.status(500).json({ error: err.message })
@@ -146,148 +150,107 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, adminGra
   })
 
   // ============================================================
-  // GET /events/:eventId — get event staffing details
+  // POST /events/:eventId/signup — register for a role
+  // Body: { role: "leadInstructor" | "equipmentManager" | "staff" }
   // ============================================================
-  router.get('/events/:eventId', requireAuth(), async (req, res) => {
+  router.post('/events/:eventId/signup', requireAuth('staffing'), async (req, res) => {
     try {
       const session = req.ssiSession
-      const meData = await graphqlWithRefresh(session, '{ me { email } }')
-      const userEmail = meData.me?.email
-      const isAdmin = userEmail ? isAdminEmail(userEmail) : false
+      const { role } = req.body || {}
 
-      const status = getEventStatus(req.params.eventId)
-      if (!status) return res.status(404).json({ error: 'Event not found' })
+      if (!role) return res.status(400).json({ error: 'role is required' })
 
-      res.json({ ...status, isAdmin })
-    } catch (err) {
-      console.error('[staffing] GET /events/:id error:', err.message)
-      res.status(500).json({ error: err.message })
-    }
-  })
-
-  // ============================================================
-  // POST /events/:eventId/signup — sign up as staff
-  // ============================================================
-  router.post('/events/:eventId/signup', requireAuth(), async (req, res) => {
-    try {
-      const session = req.ssiSession
-      const { rolePreference } = req.body || {}
-
-      // Get user info from SSI
-      const meData = await graphqlWithRefresh(session, '{ me { id email first_name last_name } }')
+      // Get user info from SSI (email is primary identifier)
+      const meData = await graphqlWithRefresh(session, '{ me { email first_name last_name } }')
       const me = meData.me
-      if (!me) return res.status(401).json({ error: 'Could not get user info' })
+      if (!me?.email) return res.status(401).json({ error: 'Could not get user info' })
 
       const user = {
-        userId: String(me.id),
-        userName: `${me.first_name} ${me.last_name}`.trim(),
         email: me.email,
+        userName: `${me.first_name} ${me.last_name}`.trim(),
       }
 
-      const result = signup(req.params.eventId, user, rolePreference || null)
+      const result = signup(req.params.eventId, user, role)
+
+      // SSI integration (non-blocking — don't fail the staffing signup)
+      const config = loadConfig()
+      const staffSquadName = config.eventDiscovery.staffSquadName
+      const contentType = config.eventDiscovery.matchContentType
+      const cookies = session.ssiCookies
+      const eventId = req.params.eventId
+
+      if (contentType && cookies) {
+        // 1. Add to SSI Trainer Squad
+        if (staffSquadName) {
+          ssiRegisterToTrainerSquad(contentType, eventId, me.email, staffSquadName, cookies)
+            .then(r => console.log(`[staffing] SSI trainer squad: ${me.email} → ${r.message}`))
+            .catch(e => console.error(`[staffing] SSI trainer squad failed for ${me.email}: ${e.message}`))
+        }
+
+        // 2. Add to SSI management group with role-appropriate officials
+        const ssiRole = SSI_ROLE_MAP[role]
+        if (ssiRole) {
+          ssiGetMatchGroupId(contentType, eventId, cookies)
+            .then(groupId => ssiAddToMatchManagement(groupId, contentType, eventId, me.email, ssiRole.role, ssiRole.officials, cookies))
+            .then(r => console.log(`[staffing] SSI management: ${me.email} (${role}) → ${r.message}`))
+            .catch(e => console.error(`[staffing] SSI management add failed for ${me.email}: ${e.message}`))
+        }
+      }
+
       res.json(result)
     } catch (err) {
       console.error('[staffing] POST /signup error:', err.message)
       const status = err.message.includes('Not authorized') ? 403
         : err.message.includes('not found') ? 404
-        : err.message.includes('closed') ? 409
+        : err.message.includes('full') || err.message.includes('taken') || err.message.includes('Already') ? 409
         : 500
       res.status(status).json({ error: err.message })
     }
   })
 
   // ============================================================
-  // DELETE /events/:eventId/signup — cancel staff signup
+  // DELETE /events/:eventId/signup — resign from own role
   // ============================================================
-  router.delete('/events/:eventId/signup', requireAuth(), async (req, res) => {
+  router.delete('/events/:eventId/signup', requireAuth('staffing'), async (req, res) => {
     try {
       const session = req.ssiSession
-      const meData = await graphqlWithRefresh(session, '{ me { id } }')
-      const userId = String(meData.me?.id)
-      if (!userId) return res.status(401).json({ error: 'Could not get user info' })
+      const meData = await graphqlWithRefresh(session, '{ me { email } }')
+      const userEmail = meData.me?.email
+      if (!userEmail) return res.status(401).json({ error: 'Could not get user info' })
 
-      const result = cancelSignup(req.params.eventId, userId)
+      const result = resign(req.params.eventId, userEmail)
+
+      // SSI integration: remove from management group (non-blocking)
+      const config = loadConfig()
+      const contentType = config.eventDiscovery.matchContentType
+      const cookies = session.ssiCookies
+      const eventId = req.params.eventId
+
+      if (contentType && cookies) {
+        ssiGetMatchGroupId(contentType, eventId, cookies)
+          .then(groupId => ssiRemoveFromMatchManagement(groupId, contentType, eventId, userEmail, cookies))
+          .then(r => console.log(`[staffing] SSI management remove: ${userEmail} → ${r.message}`))
+          .catch(e => console.error(`[staffing] SSI management remove failed for ${userEmail}: ${e.message}`))
+      }
+
       res.json(result)
     } catch (err) {
       console.error('[staffing] DELETE /signup error:', err.message)
-      const status = err.message.includes('not found') ? 404 : 500
+      const status = err.message.includes('not found') || err.message.includes('Not registered') ? 404 : 500
       res.status(status).json({ error: err.message })
     }
   })
 
   // ============================================================
-  // POST /events/:eventId/finalize — finalize staffing (admin)
+  // GET /config — get staffing configuration
   // ============================================================
-  router.post('/events/:eventId/finalize', requireAuth(), async (req, res) => {
-    try {
-      const session = req.ssiSession
-      const meData = await graphqlWithRefresh(session, '{ me { email } }')
-      const userEmail = meData.me?.email
-      if (!userEmail || !isAdminEmail(userEmail)) {
-        return res.status(403).json({ error: 'Admin access required' })
-      }
-
-      const result = await finalizeEvent(req.params.eventId)
-      res.json(result)
-    } catch (err) {
-      console.error('[staffing] POST /finalize error:', err.message)
-      res.status(500).json({ error: err.message })
-    }
-  })
-
-  // ============================================================
-  // GET /events/:eventId/status — get current staff list
-  // ============================================================
-  router.get('/events/:eventId/status', requireAuth(), async (req, res) => {
-    try {
-      const status = getEventStatus(req.params.eventId)
-      if (!status) return res.status(404).json({ error: 'Event not found' })
-      res.json(status)
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
-
-  // ============================================================
-  // GET /config — get staffing configuration (roles, training types)
-  // ============================================================
-  router.get('/config', requireAuth(), (req, res) => {
+  router.get('/config', requireAuth('staffing'), (req, res) => {
     try {
       const config = loadConfig()
       res.json({
         trainingTypes: config.trainingTypes,
         roles: config.roles,
-        registration: config.registration,
       })
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
-
-  // ============================================================
-  // POST /finalize-due — cron endpoint, finalize all due events
-  // Authenticated via X-Cron-Secret header
-  // ============================================================
-  router.post('/finalize-due', async (req, res) => {
-    const secret = req.headers['x-cron-secret']
-    if (!CRON_SECRET || secret !== CRON_SECRET) {
-      return res.status(403).json({ error: 'Invalid cron secret' })
-    }
-
-    try {
-      const dueEvents = getEventsDueForFinalization()
-      const results = []
-
-      for (const event of dueEvents) {
-        try {
-          const result = await finalizeEvent(event.eventId)
-          results.push({ eventId: event.eventId, eventName: event.eventName, ...result })
-        } catch (err) {
-          results.push({ eventId: event.eventId, error: err.message })
-        }
-      }
-
-      res.json({ processed: results.length, results })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }

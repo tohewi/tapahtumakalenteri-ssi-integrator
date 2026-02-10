@@ -499,235 +499,58 @@ export async function ssiSearchAndAddParticipant(eventContentType, eventId, emai
 }
 
 // ============================================================
-// Admin: find and delete a CUP participant (web scraping)
-// 1. If participantId provided: use it directly (email-based match from GraphQL)
-// 2. Otherwise: Scrape /event/136/{cupId}/participants/ to find participant by name
-// 3. Use toggle-status to cycle Pending → Deleted (3 toggles)
-//    Toggle cycle: Pending → Approved → Approved(no results) → Deleted → Pending
-// ============================================================
-
-export async function ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies, email = null, participantId = null) {
-  const debug = process.env.NODE_ENV !== 'production'
-
-  const partUrl = `${SSI_BASE_URL}/event/136/${cupId}/participants/`
-
-  // If participantId provided, use it directly (email-verified from GraphQL)
-  if (participantId) {
-    const searchDesc = email ? `"${shooterName}" (${email})` : `"${shooterName}"`
-    if (debug) console.log(`[cup-delete] Using GraphQL participant ID ${participantId} for ${searchDesc}`)
-
-    // Fetch the page to check current status
-    const resp = await fetch(partUrl, {
-      headers: { 'Cookie': formatCookies(cookies) },
-      redirect: 'follow',
-    })
-    if (!resp.ok) throw new Error(`CUP participants page HTTP ${resp.status}`)
-    const html = await resp.text()
-
-    // Check current status
-    const statusMatch = html.match(new RegExp(`/event/participant/137/${participantId}/toggle-status/[^<]*<abbr[^>]*title="([^"]*)"`, 'i'))
-    const currentStatus = statusMatch ? statusMatch[1] : 'unknown'
-    if (debug) console.log(`[cup-delete] Current status: "${currentStatus}"`)
-
-    if (currentStatus === 'Deleted') {
-      if (debug) console.log(`[cup-delete] Already deleted`)
-      return { success: true, message: 'Already deleted' }
-    }
-  } else {
-    // Legacy path: scrape HTML to find participant by name
-    const searchDesc = email ? `"${shooterName}" (${email})` : `"${shooterName}"`
-    if (debug) console.log(`[cup-delete] GET ${partUrl} (looking for ${searchDesc})`)
-    const resp = await fetch(partUrl, {
-      headers: { 'Cookie': formatCookies(cookies) },
-      redirect: 'follow',
-    })
-    if (!resp.ok) throw new Error(`CUP participants page HTTP ${resp.status}`)
-    const html = await resp.text()
-
-    // Find participant link: <a href="/event/participant/137/{id}/" ...>Name</a>
-    const pattern = /<a[^>]*href="\/event\/participant\/137\/(\d+)\/"[^>]*>([^<]*)<\/a>/gi
-    const searchWords = shooterName.toLowerCase().split(/\s+/).filter(w => w.length > 1 || /\d/.test(w))
-    if (debug) console.log(`[cup-delete] Search words: ${JSON.stringify(searchWords)}`)
-
-    const matches = []
-    for (const m of html.matchAll(pattern)) {
-      const name = m[2].trim().toLowerCase()
-      if (searchWords.length > 0 && searchWords.every(w => name.includes(w))) {
-        matches.push({ id: m[1], name: m[2].trim() })
-      }
-    }
-
-    if (matches.length === 0) {
-      if (debug) console.log(`[cup-delete] "${shooterName}" not found in CUP ${cupId} participants`)
-      return { success: false, message: 'Participant not found in CUP' }
-    }
-
-    if (matches.length > 1) {
-      console.warn(`[cup-delete] WARNING: Multiple name matches found for "${shooterName}" in CUP ${cupId}:`, matches.map(m => m.name))
-      if (email) {
-        console.warn(`[cup-delete] Email provided for disambiguation: ${email} (but cannot verify from HTML)`)
-      } else {
-        console.warn(`[cup-delete] No email provided for disambiguation - using first match`)
-      }
-    }
-
-    participantId = matches[0].id
-    if (debug) console.log(`[cup-delete] Found: ${matches[0].name} → participant ${participantId}`)
-
-    if (!participantId) {
-      if (debug) console.log(`[cup-delete] "${shooterName}" not found in CUP ${cupId} participants`)
-      return { success: false, message: 'Participant not found in CUP' }
-    }
-
-    // Check current status
-    const statusMatch = html.match(new RegExp(`/event/participant/137/${participantId}/toggle-status/[^<]*<abbr[^>]*title="([^"]*)"`, 'i'))
-    const currentStatus = statusMatch ? statusMatch[1] : 'unknown'
-    if (debug) console.log(`[cup-delete] Current status: "${currentStatus}"`)
-
-    if (currentStatus === 'Deleted') {
-      if (debug) console.log(`[cup-delete] Already deleted`)
-      return { success: true, message: 'Already deleted' }
-    }
-  }
-
-  // 3. Toggle status 3 times: Pending → Approved → Approved(no results) → Deleted
-  //    We need to toggle 3 times from Pending to reach Deleted.
-  const toggleUrl = `${SSI_BASE_URL}/event/participant/137/${participantId}/toggle-status/?next=${partUrl}`
-
-  for (let i = 0; i < 3; i++) {
-    if (debug) console.log(`[cup-delete] Toggle ${i + 1}/3: ${toggleUrl}`)
-    const toggleResp = await fetch(toggleUrl, {
-      headers: { 'Cookie': formatCookies(cookies) },
-      redirect: 'follow',
-    })
-    if (!toggleResp.ok) throw new Error(`Toggle-status HTTP ${toggleResp.status}`)
-
-    // Check status after each toggle
-    const verifyHtml = await toggleResp.text()
-    const newStatusMatch = verifyHtml.match(new RegExp(`/event/participant/137/${participantId}/toggle-status/[^<]*<abbr[^>]*title="([^"]*)"`, 'i'))
-    const newStatus = newStatusMatch ? newStatusMatch[1] : 'unknown'
-    if (debug) console.log(`[cup-delete] Status after toggle ${i + 1}: "${newStatus}"`)
-
-    // If we reached Deleted early, we're done
-    if (newStatus === 'Deleted') {
-      return { success: true, message: 'Deleted' }
-    }
-  }
-
-  // 4. Verify final status
-  const finalResp = await fetch(partUrl, {
-    headers: { 'Cookie': formatCookies(cookies) },
-    redirect: 'follow',
-  })
-  const finalHtml = await finalResp.text()
-  const finalStatusMatch = finalHtml.match(new RegExp(`/event/participant/137/${participantId}/toggle-status/[^<]*<abbr[^>]*title="([^"]*)"`, 'i'))
-  const finalStatus = finalStatusMatch ? finalStatusMatch[1] : 'unknown'
-  if (debug) console.log(`[cup-delete] Final status: "${finalStatus}"`)
-
-  if (finalStatus === 'Deleted') {
-    return { success: true, message: 'Deleted' }
-  }
-
-  // If not deleted after 3 toggles, something unexpected happened
-  if (debug) console.log(`[cup-delete] Unexpected status after 3 toggles: "${finalStatus}"`)
-  return { success: false, message: `Toggle resulted in "${finalStatus}", expected "Deleted"` }
-}
-
-// ============================================================
 // Admin: find and approve a CUP participant (web scraping)
-// 1. If participantId provided: use it directly (email-based match from GraphQL)
-// 2. Otherwise: Scrape /event/136/{cupId}/participants/ to find participant by name
-// 3. Use toggle-status to cycle Pending → Approved
+// 1. Scrape /event/136/{cupId}/participants/ to find participant by name
+// 2. Use toggle-status to cycle Pending → Approved
 //    NOTE: CUP participant edit form (ct=137) does NOT support status changes.
 //          Only the toggle-status URL works for CUP participants.
 //          Toggle cycle: Pending → Approved → Approved(no results) → Deleted → Pending
 // ============================================================
 
-export async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookies, email = null, participantId = null) {
+export async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookies) {
   const debug = process.env.NODE_ENV !== 'production'
 
+  // 1. Scrape CUP participants page
   const partUrl = `${SSI_BASE_URL}/event/136/${cupId}/participants/`
+  if (debug) console.log(`[cup-approve] GET ${partUrl} (looking for "${shooterName}")`)
+  const resp = await fetch(partUrl, {
+    headers: { 'Cookie': formatCookies(cookies) },
+    redirect: 'follow',
+  })
+  if (!resp.ok) throw new Error(`CUP participants page HTTP ${resp.status}`)
+  const html = await resp.text()
 
-  // If participantId provided, use it directly (email-verified from GraphQL)
-  if (participantId) {
-    const searchDesc = email ? `"${shooterName}" (${email})` : `"${shooterName}"`
-    if (debug) console.log(`[cup-approve] Using GraphQL participant ID ${participantId} for ${searchDesc}`)
+  // Find participant link: <a href="/event/participant/137/{id}/" ...>Name</a>
+  const pattern = /<a[^>]*href="\/event\/participant\/137\/(\d+)\/"[^>]*>([^<]*)<\/a>/gi
+  const searchWords = shooterName.toLowerCase().split(/\s+/).filter(w => w.length > 1 || /\d/.test(w))
+  if (debug) console.log(`[cup-approve] Search words: ${JSON.stringify(searchWords)}`)
 
-    // Fetch the page to check current status
-    const resp = await fetch(partUrl, {
-      headers: { 'Cookie': formatCookies(cookies) },
-      redirect: 'follow',
-    })
-    if (!resp.ok) throw new Error(`CUP participants page HTTP ${resp.status}`)
-    const html = await resp.text()
-
-    // Check current status
-    const statusMatch = html.match(new RegExp(`/event/participant/137/${participantId}/toggle-status/[^<]*<abbr[^>]*title="([^"]*)"`, 'i'))
-    const currentStatus = statusMatch ? statusMatch[1] : 'unknown'
-    if (debug) console.log(`[cup-approve] Current status: "${currentStatus}"`)
-
-    if (currentStatus === 'Approved') {
-      if (debug) console.log(`[cup-approve] Already approved`)
-      return { success: true, message: 'Already approved' }
-    }
-  } else {
-    // Legacy path: scrape HTML to find participant by name
-    const searchDesc = email ? `"${shooterName}" (${email})` : `"${shooterName}"`
-    if (debug) console.log(`[cup-approve] GET ${partUrl} (looking for ${searchDesc})`)
-    const resp = await fetch(partUrl, {
-      headers: { 'Cookie': formatCookies(cookies) },
-      redirect: 'follow',
-    })
-    if (!resp.ok) throw new Error(`CUP participants page HTTP ${resp.status}`)
-    const html = await resp.text()
-
-    // Find participant link: <a href="/event/participant/137/{id}/" ...>Name</a>
-    const pattern = /<a[^>]*href="\/event\/participant\/137\/(\d+)\/"[^>]*>([^<]*)<\/a>/gi
-    const searchWords = shooterName.toLowerCase().split(/\s+/).filter(w => w.length > 1 || /\d/.test(w))
-    if (debug) console.log(`[cup-approve] Search words: ${JSON.stringify(searchWords)}`)
-
-    const matches = []
-    for (const m of html.matchAll(pattern)) {
-      const name = m[2].trim().toLowerCase()
-      if (searchWords.length > 0 && searchWords.every(w => name.includes(w))) {
-        matches.push({ id: m[1], name: m[2].trim() })
-      }
-    }
-
-    if (matches.length === 0) {
-      if (debug) console.log(`[cup-approve] "${shooterName}" not found in CUP ${cupId} participants`)
-      return { success: false, message: 'Participant not found in CUP' }
-    }
-
-    if (matches.length > 1) {
-      console.warn(`[cup-approve] WARNING: Multiple name matches found for "${shooterName}" in CUP ${cupId}:`, matches.map(m => m.name))
-      if (email) {
-        console.warn(`[cup-approve] Email provided for disambiguation: ${email} (but cannot verify from HTML)`)
-      } else {
-        console.warn(`[cup-approve] No email provided for disambiguation - using first match`)
-      }
-    }
-
-    participantId = matches[0].id
-    if (debug) console.log(`[cup-approve] Found: ${matches[0].name} → participant ${participantId}`)
-
-    if (!participantId) {
-      if (debug) console.log(`[cup-approve] "${shooterName}" not found in CUP ${cupId} participants`)
-      return { success: false, message: 'Participant not found in CUP' }
-    }
-
-    // Check current status
-    const statusMatch = html.match(new RegExp(`/event/participant/137/${participantId}/toggle-status/[^<]*<abbr[^>]*title="([^"]*)"`, 'i'))
-    const currentStatus = statusMatch ? statusMatch[1] : 'unknown'
-    if (debug) console.log(`[cup-approve] Current status: "${currentStatus}"`)
-
-    if (currentStatus === 'Approved') {
-      if (debug) console.log(`[cup-approve] Already approved`)
-      return { success: true, message: 'Already approved' }
+  let participantId = null
+  for (const m of html.matchAll(pattern)) {
+    const name = m[2].trim().toLowerCase()
+    if (searchWords.length > 0 && searchWords.every(w => name.includes(w))) {
+      participantId = m[1]
+      if (debug) console.log(`[cup-approve] Found: ${m[2].trim()} → participant ${participantId}`)
+      break
     }
   }
 
-  // Toggle status: Pending → Approved (one toggle from Pending)
+  if (!participantId) {
+    if (debug) console.log(`[cup-approve] "${shooterName}" not found in CUP ${cupId} participants`)
+    return { success: false, message: 'Participant not found in CUP' }
+  }
+
+  // 2. Check current status
+  const statusMatch = html.match(new RegExp(`/event/participant/137/${participantId}/toggle-status/[^<]*<abbr[^>]*title="([^"]*)"`, 'i'))
+  const currentStatus = statusMatch ? statusMatch[1] : 'unknown'
+  if (debug) console.log(`[cup-approve] Current status: "${currentStatus}"`)
+
+  if (currentStatus === 'Approved') {
+    if (debug) console.log(`[cup-approve] Already approved`)
+    return { success: true, message: 'Already approved' }
+  }
+
+  // 3. Toggle status: Pending → Approved (one toggle from Pending)
   //    Toggle cycle: Pending → Approved → Approved(no results) → Deleted → Pending
   //    We only need to toggle once from Pending to reach Approved.
   const toggleUrl = `${SSI_BASE_URL}/event/participant/137/${participantId}/toggle-status/?next=${partUrl}`
@@ -844,87 +667,344 @@ export async function ssiSetParticipantSquad(participantId, squadNumber, cookies
 }
 
 // ============================================================
-// Admin: set match participant status (web scraping)
-// GET  /event/participant/93/{participantId}/edit/  → extract all fields
-// POST /event/participant/93/{participantId}/edit/  → submit with status override
-// Used to delete match participants by setting status='d'
+// Staffing: extract match management group ID from staff page
+// GET /event/{ct}/{eventId}/staff/ → find /groups/{groupId}/ links
 // ============================================================
 
-export async function ssiSetMatchParticipantStatus(participantId, status, cookies) {
+export async function ssiGetMatchGroupId(eventContentType, eventId, cookies) {
   const debug = process.env.NODE_ENV !== 'production'
-  const url = `${SSI_BASE_URL}/event/participant/93/${participantId}/edit/`
+  const url = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/staff/`
 
-  // 1. GET the edit form
-  if (debug) console.log(`[match-status] GET ${url}`)
+  if (debug) console.log(`[mgmt-group] GET ${url}`)
   const resp = await fetch(url, {
     headers: { 'Cookie': formatCookies(cookies) },
     redirect: 'follow',
   })
-  if (!resp.ok) throw new Error(`Participant edit page HTTP ${resp.status}`)
+  if (!resp.ok) throw new Error(`Staff page HTTP ${resp.status}`)
   const html = await resp.text()
 
-  // 2. Extract the form content
-  const formMatch = html.match(/<form[^>]*method="post"[^>]*>([\s\S]*?)<\/form>/i)
-  if (!formMatch) throw new Error('No edit form found on participant page')
+  // Extract group ID from links like /groups/26083/role/search/
+  const groupMatch = html.match(/\/groups\/(\d+)\//)
+  if (!groupMatch) throw new Error('Could not find management group ID on staff page')
 
-  // 3. Extract all form fields using shared helper
-  const formData = _extractFormFields(formMatch[1])
+  const groupId = groupMatch[1]
+  if (debug) console.log(`[mgmt-group] Found group ID: ${groupId}`)
+  return groupId
+}
 
-  // 4. Override status
-  formData.set('status', status)
+// ============================================================
+// Staffing: add user to match management group with role
+// 1. POST search by email → find add-user-with-role link (gets SSI user ID)
+// 2. POST add-user-with-role with role + officials
+//
+// role values: 1=admin, 2=staff, 7=assistant
+// officials values: MD=Match Director, QM=Quarter Master, etc.
+// ============================================================
 
-  if (debug) console.log(`[match-status] POST status=${status} fields: ${[...formData.keys()].join(', ')}`)
+export async function ssiAddToMatchManagement(groupId, eventContentType, eventId, email, role, officials, cookies) {
+  const debug = process.env.NODE_ENV !== 'production'
+  const nextUrl = `/event/${eventContentType}/${eventId}/staff/`
+  const searchUrl = `${SSI_BASE_URL}/groups/${groupId}/role/search/?next=${nextUrl}`
 
-  // 5. POST the edit form
-  const editResp = await fetch(url, {
+  // Step 1: Search by email
+  const searchData = new URLSearchParams()
+  searchData.append('last_name', '')
+  searchData.append('first_name', '')
+  searchData.append('email', email)
+  searchData.append('submit', 'Search')
+
+  if (debug) console.log(`[mgmt-add] POST search email=${email} to ${searchUrl}`)
+  const searchResp = await fetch(searchUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Cookie': formatCookies(cookies),
-      'Referer': url,
+      'Referer': searchUrl,
+      'Origin': SSI_BASE_URL,
+    },
+    body: searchData.toString(),
+    redirect: 'follow',
+  })
+  if (!searchResp.ok) throw new Error(`Management search failed HTTP ${searchResp.status}`)
+  const searchHtml = await searchResp.text()
+
+  if (searchHtml.includes('no results') || searchHtml.includes('gave no results')) {
+    return { success: false, message: 'User not found in SSI by email' }
+  }
+
+  // Step 2: Find add-user-with-role link → extract SSI user ID
+  const addLink = searchHtml.match(/\/groups\/\d+\/add-user-with-role\/(\d+)\//)
+  if (!addLink) {
+    return { success: false, message: 'No add-user link found (user may already be in group)' }
+  }
+  const ssiUserId = addLink[1]
+  if (debug) console.log(`[mgmt-add] Found SSI user ID: ${ssiUserId}`)
+
+  // Step 3: POST add-user-with-role with role + officials
+  const addUrl = `${SSI_BASE_URL}/groups/${groupId}/add-user-with-role/${ssiUserId}/?next=${nextUrl}`
+  const formData = new URLSearchParams()
+  formData.append('role', role)
+  if (officials && officials.length > 0) {
+    for (const off of officials) {
+      formData.append('officials', off)
+    }
+  }
+
+  if (debug) console.log(`[mgmt-add] POST ${addUrl} role=${role} officials=${officials || 'none'}`)
+  const addResp = await fetch(addUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': formatCookies(cookies),
+      'Referer': addUrl,
       'Origin': SSI_BASE_URL,
     },
     body: formData.toString(),
     redirect: 'manual',
   })
 
-  if (debug) console.log(`[match-status] Response: ${editResp.status}`)
+  if (debug) console.log(`[mgmt-add] Response: ${addResp.status}`)
 
-  if (editResp.status === 302 || editResp.status === 301) {
-    return { success: true }
+  // 302 redirect = success
+  if (addResp.status === 302 || addResp.status === 301) {
+    return { success: true, message: `Added to management (role=${role}, officials=${officials || 'none'})` }
   }
-  if (editResp.status === 200) {
-    const respHtml = await editResp.text()
-    if (respHtml.includes('errorlist') || respHtml.includes('is-invalid')) {
-      const errorMatch = respHtml.match(/<(?:ul|div)[^>]*(?:errorlist|invalid-feedback)[^>]*>([\s\S]*?)<\/(?:ul|div)>/)
-      const errorText = errorMatch ? errorMatch[1].replace(/<[^>]+>/g, '').trim() : 'Edit error'
-      if (debug) console.log(`[match-status] Error: ${errorText}`)
-      return { success: false, message: errorText }
+  if (addResp.status === 200) {
+    const html = await addResp.text()
+    if (html.includes('errorlist') || html.includes('is-invalid')) {
+      const errMatch = html.match(/<(?:ul|div)[^>]*(?:errorlist|invalid-feedback)[^>]*>([\s\S]*?)<\/(?:ul|div)>/)
+      return { success: false, message: errMatch ? errMatch[1].replace(/<[^>]+>/g, '').trim() : 'Form error' }
     }
-    return { success: true }
+    return { success: true, message: 'Added to management' }
   }
-  throw new Error(`Participant status edit failed HTTP ${editResp.status}`)
+  throw new Error(`Add to management failed HTTP ${addResp.status}`)
 }
 
 // ============================================================
-// Admin: delete a match participant (wrapper for status change)
-// Sets status='d' for the participant
+// Staffing: remove user from match management group
+// 1. POST search by email → get SSI user ID
+// 2. GET remove-invitation-role/{userId}/
 // ============================================================
 
-export async function ssiDeleteMatchParticipant(matchId, participantId, shooterName, cookies) {
+export async function ssiRemoveFromMatchManagement(groupId, eventContentType, eventId, email, cookies) {
   const debug = process.env.NODE_ENV !== 'production'
+  const nextUrl = `/event/${eventContentType}/${eventId}/staff/`
 
-  if (debug) console.log(`[match-delete] Deleting "${shooterName}" (ID ${participantId}) from match ${matchId}`)
+  // Step 1: Get SSI user ID via participant-search-and-add (works for all users)
+  // The role/search page doesn't show add/invite links for users already in the group.
+  const searchUrl = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/participant-search-and-add/`
+  const searchData = new URLSearchParams()
+  searchData.append('last_name', '')
+  searchData.append('first_name', '')
+  searchData.append('email', email)
+  searchData.append('submit', 'Search')
 
-  const result = await ssiSetMatchParticipantStatus(participantId, 'd', cookies)
+  if (debug) console.log(`[mgmt-remove] POST search email=${email} to ${searchUrl}`)
+  const searchResp = await fetch(searchUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': formatCookies(cookies),
+      'Referer': searchUrl,
+      'Origin': SSI_BASE_URL,
+    },
+    body: searchData.toString(),
+    redirect: 'follow',
+  })
+  if (!searchResp.ok) throw new Error(`Participant search failed HTTP ${searchResp.status}`)
+  const searchHtml = await searchResp.text()
 
-  if (result.success) {
-    if (debug) console.log(`[match-delete] Successfully deleted "${shooterName}" from match ${matchId}`)
-    return { success: true, message: 'Deleted from match' }
-  } else {
-    if (debug) console.log(`[match-delete] Failed to delete "${shooterName}": ${result.message}`)
-    return result
+  // Extract SSI user ID from register-participant or search-and-add links
+  const userIdMatch = searchHtml.match(/(?:register-participant|participant-search-and-add)\/(\d+)\//)
+  if (!userIdMatch) {
+    return { success: false, message: 'User not found in SSI by email' }
   }
+  const ssiUserId = userIdMatch[1]
+  if (debug) console.log(`[mgmt-remove] Found SSI user ID: ${ssiUserId}`)
+
+  // Step 2: GET remove-invitation-role
+  const removeUrl = `${SSI_BASE_URL}/groups/${groupId}/remove-invitation-role/${ssiUserId}/?next=${nextUrl}`
+  if (debug) console.log(`[mgmt-remove] GET ${removeUrl}`)
+  const removeResp = await fetch(removeUrl, {
+    headers: { 'Cookie': formatCookies(cookies) },
+    redirect: 'follow',
+  })
+
+  if (debug) console.log(`[mgmt-remove] Response: ${removeResp.status}`)
+
+  if (removeResp.ok) {
+    return { success: true, message: 'Removed from management group' }
+  }
+  throw new Error(`Remove from management failed HTTP ${removeResp.status}`)
+}
+
+// ============================================================
+// Staffing: register user to trainer squad in one step
+// 1. POST search-and-add by email → find register link
+// 2. GET register link → confirmation form with squad select
+// 3. Override squad + status → POST confirmation
+// ============================================================
+
+export async function ssiRegisterToTrainerSquad(eventContentType, eventId, email, trainerSquadName, cookies) {
+  const debug = process.env.NODE_ENV !== 'production'
+  const pageUrl = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/participant-search-and-add/`
+
+  // Step 1: Search by email
+  const searchData = new URLSearchParams()
+  searchData.append('last_name', '')
+  searchData.append('first_name', '')
+  searchData.append('email', email)
+  searchData.append('submit', 'Search')
+
+  if (debug) console.log(`[trainer-squad] POST search email=${email} to ${pageUrl}`)
+  const searchResp = await fetch(pageUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': formatCookies(cookies),
+      'Referer': pageUrl,
+      'Origin': SSI_BASE_URL,
+    },
+    body: searchData.toString(),
+    redirect: 'manual',
+  })
+
+  if (searchResp.status === 302) {
+    return { success: true, message: 'Already registered (redirect)' }
+  }
+  if (searchResp.status !== 200) {
+    throw new Error(`Trainer squad search failed HTTP ${searchResp.status}`)
+  }
+
+  const searchHtml = await searchResp.text()
+
+  if (searchHtml.includes('no results') || searchHtml.includes('gave no results')) {
+    return { success: false, message: 'User not found in SSI by email' }
+  }
+
+  // Step 2: Find register link
+  const registerLinks = [
+    ...searchHtml.matchAll(/href="([^"]*participant-search-and-add\/\d+\/register\/[^"]*)"/gi),
+    ...searchHtml.matchAll(/href="([^"]*register-participant\/\d+\/[^"]*)"/gi),
+  ]
+  if (registerLinks.length === 0) {
+    // Maybe already registered
+    if (searchHtml.includes('already registered') || searchHtml.includes('jo ilmoittautunut')) {
+      return { success: true, message: 'Already registered' }
+    }
+    return { success: false, message: 'No register link found for user' }
+  }
+
+  const registerUrl = registerLinks[0][1]
+  const fullRegUrl = registerUrl.startsWith('http') ? registerUrl : `${SSI_BASE_URL}${registerUrl}`
+  if (debug) console.log(`[trainer-squad] GET register link: ${fullRegUrl}`)
+
+  const regResp = await fetch(fullRegUrl, {
+    headers: { 'Cookie': formatCookies(cookies), 'Referer': pageUrl },
+    redirect: 'follow',
+  })
+  if (!regResp.ok) throw new Error(`Register page HTTP ${regResp.status}`)
+  const regHtml = await regResp.text()
+
+  // Step 3: Find and fill confirmation form
+  const formMatch = regHtml.match(/<form[^>]*method="post"[^>]*>([\s\S]*?)<\/form>/i)
+  if (!formMatch) {
+    if (regHtml.includes('already registered') || regHtml.includes('jo ilmoittautunut')) {
+      return { success: true, message: 'Already registered' }
+    }
+    return { success: false, message: 'No confirmation form found' }
+  }
+
+  const formData = _extractFormFields(formMatch[1])
+
+  // Find trainer squad value by matching label
+  const squadSelect = formMatch[1].match(/<select[^>]*name="squad"[^>]*>([\s\S]*?)<\/select>/i)
+  let squadValue = null
+  if (squadSelect) {
+    const opts = [...squadSelect[1].matchAll(/<option\s+value="([^"]*)"[^>]*>([^<]*)<\/option>/gi)]
+    for (const opt of opts) {
+      const label = opt[2].trim()
+      if (label.toLowerCase().includes(trainerSquadName.toLowerCase().replace(/\./g, '').trim())) {
+        squadValue = opt[1]
+        if (debug) console.log(`[trainer-squad] Matched squad: "${label}" → value ${squadValue}`)
+        break
+      }
+    }
+    // Fallback: match by squad number in label (e.g. "Squad 5" matches "5")
+    if (!squadValue) {
+      const numMatch = trainerSquadName.match(/\d+/)
+      if (numMatch) {
+        for (const opt of opts) {
+          if (opt[2].trim().match(new RegExp(`\\b${numMatch[0]}\\b`)) && opt[1]) {
+            squadValue = opt[1]
+            if (debug) console.log(`[trainer-squad] Fallback matched squad: "${opt[2].trim()}" → value ${squadValue}`)
+            break
+          }
+        }
+      }
+    }
+  }
+
+  if (!squadValue) {
+    if (debug) console.log(`[trainer-squad] WARNING: Could not find squad "${trainerSquadName}" in form`)
+    return { success: false, message: `Trainer squad "${trainerSquadName}" not found in event` }
+  }
+
+  // Override squad and status
+  formData.set('squad', squadValue)
+  formData.set('status', 'a') // Approved
+  formData.set('has_accepted_event_data_policy', 'on')
+
+  // Submit button
+  const submitMatch = formMatch[1].match(/<input[^>]*type="submit"[^>]*name=["']([^"']*)["'][^>]*value="([^"]*)"/i)
+  if (submitMatch) formData.set(submitMatch[1], submitMatch[2])
+
+  // SSI anti-bot: form_loaded_at timestamp check — must wait 5+ seconds
+  if (debug) console.log('[trainer-squad] Waiting 5s (SSI anti-bot)...')
+  await new Promise(r => setTimeout(r, 5000))
+
+  // Extract form action
+  const actionMatch = regHtml.match(/<form[^>]*action="([^"]*)"[^>]*method="post"/i)
+    || regHtml.match(/<form[^>]*method="post"[^>]*action="([^"]*)"/i)
+  let formAction = actionMatch?.[1] || ''
+  if (!formAction || formAction === '#') formAction = fullRegUrl
+  const fullAction = formAction.startsWith('http') ? formAction : `${SSI_BASE_URL}${formAction}`
+
+  if (debug) console.log(`[trainer-squad] POST confirm to: ${fullAction}, squad=${squadValue}, status=a`)
+
+  const confirmResp = await fetch(fullAction, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': formatCookies(cookies),
+      'Referer': fullRegUrl,
+      'Origin': SSI_BASE_URL,
+    },
+    body: formData.toString(),
+    redirect: 'manual',
+  })
+
+  if (debug) console.log(`[trainer-squad] Confirm response: ${confirmResp.status}`)
+
+  if (confirmResp.status === 302 || confirmResp.status === 301) {
+    return { success: true, message: 'Registered to trainer squad' }
+  }
+  if (confirmResp.status === 200) {
+    const confirmHtml = await confirmResp.text()
+    if (confirmHtml.includes('already registered') || confirmHtml.includes('Shooter already registered')) {
+      return { success: true, message: 'Already registered' }
+    }
+    if (confirmHtml.includes('too quickly')) {
+      return { success: false, message: 'SSI anti-bot: submitted too quickly' }
+    }
+    if (confirmHtml.includes('errorlist') || confirmHtml.includes('is-invalid')) {
+      const errMatch = confirmHtml.match(/<(?:ul|div)[^>]*(?:errorlist|invalid-feedback)[^>]*>([\s\S]*?)<\/(?:ul|div)>/)
+      const errText = errMatch ? errMatch[1].replace(/<[^>]+>/g, '').trim() : 'Form error'
+      return { success: false, message: errText }
+    }
+    return { success: true, message: 'Registered to trainer squad (confirmed)' }
+  }
+  throw new Error(`Trainer squad registration failed HTTP ${confirmResp.status}`)
 }
 
 // ============================================================
@@ -933,12 +1013,11 @@ export async function ssiDeleteMatchParticipant(matchId, participantId, shooterN
 // Returns the participant ID if found, or null
 // ============================================================
 
-export async function ssiFindCompetitorInMatch(matchId, shooterName, cookies, email = null) {
+export async function ssiFindCompetitorInMatch(matchId, shooterName, cookies) {
   const debug = process.env.NODE_ENV !== 'production'
   const url = `${SSI_BASE_URL}/event/91/${matchId}/participants/`
 
-  const searchDesc = email ? `"${shooterName}" (${email})` : `"${shooterName}"`
-  if (debug) console.log(`[find-competitor] GET ${url} (looking for ${searchDesc})`)
+  if (debug) console.log(`[find-competitor] GET ${url} (looking for "${shooterName}")`)
   const resp = await fetch(url, {
     headers: { 'Cookie': formatCookies(cookies) },
     redirect: 'follow',
@@ -955,34 +1034,19 @@ export async function ssiFindCompetitorInMatch(matchId, shooterName, cookies, em
   const searchWords = shooterName.toLowerCase().split(/\s+/).filter(w => w.length > 1 || /\d/.test(w))
   if (debug) console.log(`[find-competitor] Search words: ${JSON.stringify(searchWords)}`)
 
-  const matches = []
   for (const m of html.matchAll(pattern)) {
     const compId = m[1]
     const name = m[2].trim()
     const nameLower = name.toLowerCase()
     // Match if all search words appear in the name
     if (searchWords.length > 0 && searchWords.every(w => nameLower.includes(w))) {
-      matches.push({ id: compId, name })
+      if (debug) console.log(`[find-competitor] Found: ${name} → participant ${compId}`)
+      return compId
     }
   }
 
-  if (matches.length === 0) {
-    if (debug) console.log(`[find-competitor] "${shooterName}" not found in match ${matchId}`)
-    return null
-  }
-
-  if (matches.length > 1) {
-    console.warn(`[find-competitor] WARNING: Multiple name matches found for "${shooterName}" in match ${matchId}:`, matches.map(m => m.name))
-    if (email) {
-      console.warn(`[find-competitor] Email provided for disambiguation: ${email} (but cannot verify from HTML)`)
-    } else {
-      console.warn(`[find-competitor] No email provided for disambiguation - using first match`)
-    }
-  }
-
-  const compId = matches[0].id
-  if (debug) console.log(`[find-competitor] Found: ${matches[0].name} → participant ${compId}`)
-  return compId
+  if (debug) console.log(`[find-competitor] "${shooterName}" not found in match ${matchId}`)
+  return null
 }
 
 // ============================================================

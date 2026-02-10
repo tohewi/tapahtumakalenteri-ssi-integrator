@@ -1,16 +1,66 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import * as api from '../api'
+import { encryptData, decryptData } from '../crypto'
+import LoginScreen from './LoginScreen'
 import { AppHeader } from './shared'
 import t from '../i18n'
-import { fetchStaffingEvents } from '../staffing-api'
-import StaffSignupPanel from './StaffSignupPanel'
-import StaffStatusBoard from './StaffStatusBoard'
+import { fetchStaffingEvents, staffSignup, staffResign } from '../staffing-api'
+
+const LS_CREDS = 'ssi_credentials'
 
 export default function StaffingPage() {
+  const [authed, setAuthed] = useState(false)
   const [events, setEvents] = useState([])
   const [isAdmin, setIsAdmin] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [userEmail, setUserEmail] = useState(null)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [selectedEventId, setSelectedEventId] = useState(null)
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
+
+  // Saved credentials for pre-fill
+  const [savedEmail, setSavedEmail] = useState('')
+  const [savedPassword, setSavedPassword] = useState('')
+  const [savedApiKey, setSavedApiKey] = useState('')
+
+  // Load saved credentials for pre-fill
+  useEffect(() => {
+    const loadSavedCreds = async () => {
+      const raw = localStorage.getItem(LS_CREDS)
+      if (!raw) return
+      const creds = await decryptData(raw)
+      if (creds) {
+        setSavedEmail(creds.email || '')
+        setSavedPassword(creds.password || '')
+        setSavedApiKey(creds.apiKey || '')
+      }
+    }
+    loadSavedCreds()
+  }, [])
+
+  // Session expiry handler
+  const handleSessionExpired = useCallback(() => {
+    setSessionExpiredMessage('Session expired. Please login again.')
+    setAuthed(false)
+  }, [])
+
+  // Login handler — scope: 'staffing', instructor list checked server-side
+  const handleLogin = async (email, password, apiKey, rememberMe) => {
+    setSessionExpiredMessage(null)
+    await api.login(email, password, apiKey, 'staffing')
+    if (rememberMe) {
+      const encrypted = await encryptData({ email, password, apiKey })
+      localStorage.setItem(LS_CREDS, encrypted)
+    }
+    setAuthed(true)
+  }
+
+  // Logout handler
+  const handleLogout = async () => {
+    try { await api.logout() } catch { /* ignore */ }
+    setAuthed(false)
+    setEvents([])
+    setError(null)
+  }
 
   async function loadEvents() {
     try {
@@ -19,9 +69,10 @@ export default function StaffingPage() {
       const data = await fetchStaffingEvents()
       setEvents(data.events || [])
       setIsAdmin(data.isAdmin || false)
+      setUserEmail(data.userEmail || null)
     } catch (err) {
-      if (err.sessionExpired) {
-        window.location.hash = '#/'
+      if (err.sessionExpired || err.status === 403) {
+        handleSessionExpired()
         return
       }
       setError(err.message)
@@ -30,43 +81,57 @@ export default function StaffingPage() {
     }
   }
 
-  useEffect(() => { loadEvents() }, [])
+  // Load events when authenticated
+  useEffect(() => {
+    if (authed) loadEvents()
+  }, [authed]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const selectedEvent = events.find(e => e.eventId === selectedEventId)
-
-  if (selectedEvent) {
+  // Login screen
+  if (!authed) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <AppHeader
-          title={selectedEvent.eventName}
-          subtitle={selectedEvent.trainingTypeLabel?.fi || selectedEvent.trainingType}
-          onBack={() => setSelectedEventId(null)}
-        />
-        <div className="p-4 space-y-4">
-          <StaffSignupPanel
-            event={selectedEvent}
-            isAdmin={isAdmin}
-            onUpdate={loadEvents}
-          />
-          <StaffStatusBoard
-            event={selectedEvent}
-            isAdmin={isAdmin}
-            onUpdate={loadEvents}
-          />
+        <div className="bg-gradient-to-r from-slate-700 to-slate-900 text-white px-4 py-5">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <h1 className="text-xl font-bold">{t.staffingTitle}</h1>
+              <p className="text-slate-300 text-sm mt-1">Temppelivuori SRA</p>
+            </div>
+            <a href="#/" className="text-slate-300 text-sm active:text-white">
+              {t.home}
+            </a>
+          </div>
         </div>
+        {sessionExpiredMessage && (
+          <div className="mx-4 mt-4 bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-center">
+            <p className="text-yellow-700 text-sm">{sessionExpiredMessage}</p>
+          </div>
+        )}
+        <LoginScreen
+          onLogin={handleLogin}
+          initialEmail={savedEmail}
+          initialPassword={savedPassword}
+          initialApiKey={savedApiKey}
+          hideHeader
+        />
       </div>
     )
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <AppHeader
-        title={t.staffingTitle}
-        subtitle="Temppelivuori SRA"
-        onBack={() => { window.location.hash = '#/' }}
-      />
+      <div className="bg-gradient-to-r from-slate-700 to-slate-900 text-white px-4 py-5">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <h1 className="text-xl font-bold">{t.staffingTitle}</h1>
+            <p className="text-slate-300 text-sm mt-1">Temppelivuori SRA</p>
+          </div>
+          <button onClick={handleLogout} className="text-slate-300 text-sm active:text-white">
+            {t.logout}
+          </button>
+        </div>
+      </div>
 
-      <div className="p-4 space-y-3">
+      <div className="p-4 space-y-4">
         {loading && (
           <div className="text-center py-8 text-gray-500">{t.loading}</div>
         )}
@@ -86,7 +151,8 @@ export default function StaffingPage() {
             key={evt.eventId}
             event={evt}
             isAdmin={isAdmin}
-            onSelect={() => setSelectedEventId(evt.eventId)}
+            userEmail={userEmail}
+            onUpdate={loadEvents}
           />
         ))}
       </div>
@@ -94,47 +160,195 @@ export default function StaffingPage() {
   )
 }
 
-function EventCard({ event, isAdmin, onSelect }) {
+function EventCard({ event, isAdmin, userEmail, onUpdate }) {
+  const [busy, setBusy] = useState(null) // role being registered/resigned, or null
+  const [error, setError] = useState(null)
+
   const date = new Date(event.eventDate)
   const dateStr = date.toLocaleDateString('fi-FI', {
     weekday: 'short', day: 'numeric', month: 'numeric', year: 'numeric'
   })
-  const signupCount = event.staffSignups?.length || 0
 
-  const statusColors = {
-    open: { bg: 'bg-green-50', border: 'border-green-200', badge: 'bg-green-100 text-green-700' },
-    closed: { bg: 'bg-yellow-50', border: 'border-yellow-200', badge: 'bg-yellow-100 text-yellow-700' },
-    finalized: { bg: 'bg-blue-50', border: 'border-blue-200', badge: 'bg-blue-100 text-blue-700' },
+  // What role does the current user hold in this event?
+  const myRole = getUserRole(event, userEmail)
+
+  async function handleRegister(role) {
+    try {
+      setBusy(role)
+      setError(null)
+      await staffSignup(event.eventId, role)
+      onUpdate()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(null)
+    }
   }
-  const colors = statusColors[event.status] || statusColors.open
 
-  const statusLabel = event.status === 'open' ? t.staffSignup
-    : event.status === 'finalized' ? t.eventFinalized
-    : t.registrationClosed
+  async function handleResign() {
+    if (!confirm(t.resignConfirm)) return
+    try {
+      setBusy('resign')
+      setError(null)
+      await staffResign(event.eventId)
+      onUpdate()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const staffCount = event.staff?.length || 0
+  // Max vetäjät slots = maxTrainers - special role slots taken
+  const specialsTaken = (event.leadInstructor ? 1 : 0) + (event.equipmentManager ? 1 : 0)
+  const maxVetajat = event.maxTrainers - 2 // 2 reserved for special roles
+  const vetajatSlots = Math.max(0, event.maxTrainers - specialsTaken - staffCount)
 
   return (
-    <button
-      onClick={onSelect}
-      className={`w-full text-left flex items-center gap-4 p-4 rounded-xl border ${colors.border} ${colors.bg} active:opacity-80 transition-opacity`}
-    >
-      <div className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0 bg-white border border-orange-200 text-orange-600">
-        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="font-semibold text-gray-800">{event.eventName}</div>
-        <div className="text-sm text-gray-500 mt-0.5">{dateStr}</div>
-        <div className="flex items-center gap-2 mt-1">
-          <span className={`text-xs px-2 py-0.5 rounded-full ${colors.badge}`}>{statusLabel}</span>
-          <span className="text-xs text-gray-400">
-            {t.shooterCount}: {event.shooterCount} · {t.staffList}: {signupCount}/{event.staffPositions}
-          </span>
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+      {/* Event header */}
+      <div className="px-4 py-3 bg-gradient-to-r from-slate-700 to-slate-800 text-white">
+        <div className="font-semibold text-sm">{event.eventName}</div>
+        <div className="flex items-center gap-3 text-xs text-slate-300 mt-0.5">
+          <span>{dateStr}</span>
+          <span>·</span>
+          <span>{t.shooterCount}: {event.shooterCount}</span>
+          {event.isFull && (
+            <span className="bg-red-500 text-white px-1.5 py-0.5 rounded text-[10px] font-bold">{t.registrationFull}</span>
+          )}
         </div>
       </div>
-      <svg className="w-5 h-5 text-gray-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-      </svg>
-    </button>
+
+      {error && (
+        <div className="px-4 py-2 bg-red-50 text-red-600 text-xs">{error}</div>
+      )}
+
+      <div className="divide-y divide-gray-100">
+        {/* Vastuuvetäjä row */}
+        <RoleRow
+          label={t.leadInstructor}
+          person={event.leadInstructor}
+          roleKey="leadInstructor"
+          isMe={event.leadInstructor?.email === userEmail}
+          canRegister={isAdmin && !myRole && !event.isFull && !event.leadInstructor}
+          canResign={event.leadInstructor?.email === userEmail}
+          busy={busy}
+          onRegister={() => handleRegister('leadInstructor')}
+          onResign={handleResign}
+        />
+
+        {/* Kalustovastaava row */}
+        <RoleRow
+          label={t.equipmentManager}
+          person={event.equipmentManager}
+          roleKey="equipmentManager"
+          isMe={event.equipmentManager?.email === userEmail}
+          canRegister={isAdmin && !myRole && !event.isFull && !event.equipmentManager}
+          canResign={event.equipmentManager?.email === userEmail}
+          busy={busy}
+          onRegister={() => handleRegister('equipmentManager')}
+          onResign={handleResign}
+        />
+
+        {/* Vetäjät section */}
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-gray-700">
+              {t.instructors}
+            </span>
+            <span className="text-xs text-gray-400">
+              {event.currentTrainers}/{event.maxTrainers}
+            </span>
+          </div>
+
+          {/* Staff list */}
+          {staffCount > 0 && (
+            <div className="space-y-1 mb-2">
+              {event.staff.map(s => (
+                <div key={s.email} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-700">
+                    {s.userName}
+                    {s.email === userEmail && (
+                      <span className="text-blue-500 text-xs ml-1">{t.you}</span>
+                    )}
+                  </span>
+                  {s.email === userEmail && (
+                    <button
+                      onClick={handleResign}
+                      disabled={!!busy}
+                      className="text-xs text-red-500 hover:text-red-700 active:text-red-800 disabled:opacity-50 font-medium"
+                    >
+                      {busy === 'resign' ? '...' : t.resign}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Register as vetäjä button */}
+          {isAdmin && !myRole && !event.isFull && (
+            <button
+              onClick={() => handleRegister('staff')}
+              disabled={!!busy}
+              className="w-full text-sm bg-green-500 text-white font-medium py-2 rounded-lg active:bg-green-600 disabled:opacity-50 transition-colors"
+            >
+              {busy === 'staff' ? '...' : t.register}
+            </button>
+          )}
+
+          {!isAdmin && (
+            <div className="text-xs text-gray-400 italic">{t.adminOnly}</div>
+          )}
+        </div>
+      </div>
+    </div>
   )
+}
+
+function RoleRow({ label, person, roleKey, isMe, canRegister, canResign, busy, onRegister, onResign }) {
+  return (
+    <div className="px-4 py-2.5 flex items-center justify-between">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide w-28 shrink-0">{label}</span>
+        {person ? (
+          <span className="text-sm text-gray-800 truncate">
+            {person.userName}
+            {isMe && <span className="text-blue-500 text-xs ml-1">{t.you}</span>}
+          </span>
+        ) : (
+          <span className="text-sm text-gray-300">—</span>
+        )}
+      </div>
+      <div className="shrink-0 ml-2">
+        {canRegister && (
+          <button
+            onClick={onRegister}
+            disabled={!!busy}
+            className="text-xs bg-blue-500 text-white px-3 py-1 rounded-full active:bg-blue-600 disabled:opacity-50 font-medium"
+          >
+            {busy === roleKey ? '...' : t.register}
+          </button>
+        )}
+        {canResign && (
+          <button
+            onClick={onResign}
+            disabled={!!busy}
+            className="text-xs text-red-500 hover:text-red-700 active:text-red-800 disabled:opacity-50 font-medium"
+          >
+            {busy === 'resign' ? '...' : t.resign}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function getUserRole(event, email) {
+  if (!email) return null
+  if (event.leadInstructor?.email === email) return 'leadInstructor'
+  if (event.equipmentManager?.email === email) return 'equipmentManager'
+  if (event.staff?.some(s => s.email === email)) return 'staff'
+  return null
 }
