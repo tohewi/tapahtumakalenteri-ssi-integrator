@@ -15,6 +15,7 @@ This directory contains comprehensive documentation for the tapahtumakalenteri-s
 - **[Session Handling](session-handling.md)** - Inactivity timeout, feature isolation, explicit auth, state restoration
 - **[Session Lifecycle](session-lifecycle.md)** - State charts and flow analysis for session management
 - **[Registration Flow](registration-flow.md)** - Backend sequence diagrams and SSI state machine
+- **[Shooter State Management](SHOOTER-STATE-MANAGEMENT.md)** - State diagrams, functions, and shooter identification system
 - **[SSI Admin Operations](ssi-admin-operations.md)** - Web scraping endpoints and form field reference
 - **[Requirements](requirements.md)** - Full requirements traceability matrix
 
