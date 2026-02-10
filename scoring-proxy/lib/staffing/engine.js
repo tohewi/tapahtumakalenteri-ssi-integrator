@@ -1,19 +1,19 @@
 /**
  * Staffing Engine — core business logic for SRA training staff management.
  *
- * Manages training events, staff signups, FIFO queue, allocation,
- * and persistence to JSON file.
+ * Direct role registration model:
+ * - Three roles: leadInstructor (vastuuvetäjä), equipmentManager (kalustovastaava), staff (vetäjä)
+ * - All roles count toward maxTrainers per training type
+ * - One role per person per event (mutually exclusive)
+ * - Registration closes when maxTrainers reached
  *
- * See docs/design/sra-staffing-design.md Sections 3-4
+ * See docs/design/sra-staffing-design.md
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { loadConfig, isAdminEmail, getTrainingType } from './config-loader.js'
-import { calculateStaffPositions, distributeOverflowToSquads } from './squad-optimizer.js'
-import { assignRoles, reassignRole } from './role-assigner.js'
-import { notifyConfirmedStaff, notifyOverflowStaff, notifyMissingRoles } from './notifier.js'
+import { loadConfig, isAdminEmail } from './config-loader.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = path.resolve(__dirname, '..', '..', 'data')
@@ -61,47 +61,36 @@ loadState()
  *
  * @param {object} params
  * @param {string} params.eventId — SSI match ID
- * @param {string} params.eventName — match name (e.g. "Oldies 15.03.2026")
+ * @param {string} params.eventName — match name
  * @param {string} params.trainingType — "oldies" or "newbie"
  * @param {string} params.eventDate — ISO date
- * @param {number} params.shooterCount — current shooter count in Squads 1-4
- * @param {Array<{ squadNumber: number, currentCount: number }>} params.shooterSquads — squad details
+ * @param {number} params.shooterCount — current shooter count in shooter squads
  * @returns {object} The training event
  */
-export function upsertEvent({ eventId, eventName, trainingType, eventDate, shooterCount, shooterSquads }) {
+export function upsertEvent({ eventId, eventName, trainingType, eventDate, shooterCount }) {
   const config = loadConfig()
   const ttConfig = config.trainingTypes[trainingType]
   if (!ttConfig) throw new Error(`Unknown training type: ${trainingType}`)
 
-  const closesBeforeHours = config.registration.closesBeforeEventHours
-  const registrationClose = new Date(new Date(eventDate).getTime() - closesBeforeHours * 60 * 60 * 1000).toISOString()
-
   let event = events.get(String(eventId))
   if (event) {
-    // Update mutable fields
+    // Update mutable fields from SSI
     event.eventName = eventName
     event.shooterCount = shooterCount
-    event.shooterSquads = shooterSquads || event.shooterSquads
-    // Recalculate positions
-    const { activeSquadCount, staffPositions } = calculateStaffPositions(shooterCount, ttConfig)
-    event.activeSquadCount = activeSquadCount
-    event.staffPositions = staffPositions
+    event.maxTrainers = ttConfig.maxTrainers || 10
   } else {
-    const { activeSquadCount, staffPositions } = calculateStaffPositions(shooterCount, ttConfig)
     event = {
       eventId: String(eventId),
       eventName,
       trainingType,
       eventDate,
-      registrationClose,
-      status: 'open',
       shooterCount,
-      shooterSquads: shooterSquads || [],
-      activeSquadCount,
-      staffPositions,
-      staffSignups: [],
-      roleAssignments: [],
-      notifications: [],
+      maxTrainers: ttConfig.maxTrainers || 10,
+      // Role slots: userId/userName or null
+      leadInstructor: null,
+      equipmentManager: null,
+      // Staff list (vetäjät): array of { userId, userName, email, signupTime }
+      staff: [],
     }
     events.set(String(eventId), event)
   }
@@ -128,233 +117,114 @@ export function getEvent(eventId) {
 }
 
 // ============================================================
-// Staff signup
+// Staff signup — direct role registration
 // ============================================================
 
+const VALID_ROLES = ['leadInstructor', 'equipmentManager', 'staff']
+
 /**
- * Sign up as staff for an event.
+ * Count total trainers (all roles) for an event.
+ */
+function totalTrainers(event) {
+  let count = event.staff.length
+  if (event.leadInstructor) count++
+  if (event.equipmentManager) count++
+  return count
+}
+
+/**
+ * Find which role a user holds in an event, or null.
+ * Users are identified by email (primary key in SSI).
+ */
+function getUserRole(event, email) {
+  if (event.leadInstructor?.email === email) return 'leadInstructor'
+  if (event.equipmentManager?.email === email) return 'equipmentManager'
+  if (event.staff.some(s => s.email === email)) return 'staff'
+  return null
+}
+
+/**
+ * Register for a specific role in an event.
  *
  * @param {string} eventId
- * @param {object} user — { userId, userName, email }
- * @param {string|null} rolePreference — "leadInstructor", "equipmentManager", or null
- * @returns {{ queuePosition: number, status: string, rolePreference: string|null }}
+ * @param {object} user — { email, userName }
+ * @param {string} role — "leadInstructor", "equipmentManager", or "staff"
+ * @returns {{ role: string, userName: string }}
  */
-export function signup(eventId, user, rolePreference = null) {
+export function signup(eventId, user, role) {
   const event = events.get(String(eventId))
   if (!event) throw new Error('Event not found')
-  if (event.status !== 'open') throw new Error('Registration is closed for this event')
+
+  if (!VALID_ROLES.includes(role)) {
+    throw new Error(`Invalid role: ${role}`)
+  }
 
   // Check admin eligibility
   if (!isAdminEmail(user.email)) {
     throw new Error('Not authorized to sign up as staff')
   }
 
-  // Check for duplicate signup
-  const existing = event.staffSignups.find(s => s.userId === user.userId)
-  if (existing) {
-    // Update role preference if changed
-    existing.rolePreference = rolePreference
-    saveState()
-    return {
-      queuePosition: existing.queuePosition,
-      status: existing.status,
-      rolePreference: existing.rolePreference,
-    }
+  // Check if already registered in any role (email is primary key)
+  const existingRole = getUserRole(event, user.email)
+  if (existingRole) {
+    throw new Error(`Already registered as ${existingRole}`)
   }
 
-  const signup = {
-    userId: user.userId,
-    userName: user.userName,
-    email: user.email,
-    signupTime: new Date().toISOString(),
-    queuePosition: event.staffSignups.length + 1,
-    status: 'queued',
-    rolePreference,
-    assignedRole: null,
+  // Check max trainers
+  if (totalTrainers(event) >= event.maxTrainers) {
+    throw new Error('Registration is full')
   }
 
-  event.staffSignups.push(signup)
+  const now = new Date().toISOString()
+
+  if (role === 'leadInstructor') {
+    if (event.leadInstructor) throw new Error('Lead instructor slot already taken')
+    event.leadInstructor = { email: user.email, userName: user.userName, signupTime: now }
+  } else if (role === 'equipmentManager') {
+    if (event.equipmentManager) throw new Error('Equipment manager slot already taken')
+    event.equipmentManager = { email: user.email, userName: user.userName, signupTime: now }
+  } else {
+    event.staff.push({ email: user.email, userName: user.userName, signupTime: now })
+  }
+
   saveState()
-
-  return {
-    queuePosition: signup.queuePosition,
-    status: signup.status,
-    rolePreference: signup.rolePreference,
-  }
+  return { role, userName: user.userName }
 }
 
 /**
- * Cancel staff signup.
+ * Resign from own role in an event.
  *
  * @param {string} eventId
- * @param {string} userId
- * @returns {{ cancelled: boolean, promoted: object|null }}
+ * @param {string} email — user's email (primary identifier)
+ * @returns {{ resigned: boolean, previousRole: string }}
  */
-export function cancelSignup(eventId, userId) {
+export function resign(eventId, email) {
   const event = events.get(String(eventId))
   if (!event) throw new Error('Event not found')
 
-  const signupIndex = event.staffSignups.findIndex(s => s.userId === userId)
-  if (signupIndex === -1) throw new Error('Signup not found')
+  const currentRole = getUserRole(event, email)
+  if (!currentRole) throw new Error('Not registered for this event')
 
-  const signup = event.staffSignups[signupIndex]
-  const wasConfirmed = signup.status === 'confirmed'
-  const hadRole = signup.assignedRole
-
-  signup.status = 'cancelled'
-  signup.assignedRole = null
-
-  let promoted = null
-
-  // If they were confirmed and event is finalized, promote from overflow
-  if (wasConfirmed && event.status === 'finalized') {
-    const overflow = event.staffSignups
-      .filter(s => s.status === 'overflow')
-      .sort((a, b) => a.queuePosition - b.queuePosition)
-
-    if (overflow.length > 0) {
-      const next = overflow[0]
-      next.status = 'confirmed'
-      promoted = { userId: next.userId, userName: next.userName }
-
-      // Re-assign the vacated role if needed
-      if (hadRole) {
-        const assignedIds = new Set(
-          event.staffSignups
-            .filter(s => s.status === 'confirmed' && s.assignedRole)
-            .map(s => s.userId)
-        )
-        const confirmedStaff = event.staffSignups.filter(s => s.status === 'confirmed')
-        const replacement = reassignRole(hadRole, confirmedStaff, assignedIds)
-        if (replacement) {
-          const ra = event.roleAssignments.find(r => r.roleKey === hadRole)
-          if (ra) {
-            ra.userId = replacement.userId
-            ra.userName = replacement.userName
-            ra.assignmentMethod = replacement.method
-            ra.assignedAt = new Date().toISOString()
-          }
-        }
-      }
-    }
+  if (currentRole === 'leadInstructor') {
+    event.leadInstructor = null
+  } else if (currentRole === 'equipmentManager') {
+    event.equipmentManager = null
+  } else {
+    event.staff = event.staff.filter(s => s.email !== email)
   }
 
   saveState()
-  return { cancelled: true, promoted }
+  return { resigned: true, previousRole: currentRole }
 }
 
 // ============================================================
-// Finalization
+// Event status for API responses
 // ============================================================
-
-/**
- * Finalize staffing for an event — allocate positions, assign roles, notify.
- * Idempotent: calling on already-finalized event is a no-op.
- *
- * @param {string} eventId
- * @returns {Promise<{ finalized: boolean, staffPositions: number, confirmed: number, overflow: number, warnings: string[] }>}
- */
-export async function finalizeEvent(eventId) {
-  const event = events.get(String(eventId))
-  if (!event) throw new Error('Event not found')
-
-  // Idempotent
-  if (event.status === 'finalized') {
-    return {
-      finalized: false,
-      message: 'Event already finalized',
-      staffPositions: event.staffPositions,
-      confirmed: event.staffSignups.filter(s => s.status === 'confirmed').length,
-      overflow: event.staffSignups.filter(s => s.status === 'overflow').length,
-      warnings: [],
-    }
-  }
-
-  event.status = 'closed'
-  const config = loadConfig()
-  const ttConfig = config.trainingTypes[event.trainingType]
-
-  // Recalculate staff positions from current shooter count
-  const { activeSquadCount, staffPositions } = calculateStaffPositions(event.shooterCount, ttConfig)
-  event.activeSquadCount = activeSquadCount
-  event.staffPositions = staffPositions
-
-  // Sort signups by signupTime (FIFO)
-  const activeSignups = event.staffSignups
-    .filter(s => s.status === 'queued' || s.status === 'confirmed')
-    .sort((a, b) => new Date(a.signupTime) - new Date(b.signupTime))
-
-  // Allocate: first N are confirmed, rest are overflow
-  activeSignups.forEach((s, i) => {
-    s.status = i < staffPositions ? 'confirmed' : 'overflow'
-  })
-
-  const confirmedStaff = activeSignups.filter(s => s.status === 'confirmed')
-  const overflowStaff = activeSignups.filter(s => s.status === 'overflow')
-
-  // Assign special roles
-  const { assignments, warnings } = assignRoles(confirmedStaff)
-  event.roleAssignments = assignments.map(a => ({
-    roleKey: a.roleKey,
-    userId: a.userId,
-    userName: a.userName,
-    assignmentMethod: a.method,
-    assignedAt: a.userId ? new Date().toISOString() : null,
-  }))
-
-  // Distribute overflow to shooter squads (Q3: auto-move + notify)
-  if (overflowStaff.length > 0 && event.shooterSquads.length > 0) {
-    const squadAssignments = distributeOverflowToSquads(overflowStaff.length, event.shooterSquads)
-    overflowStaff.forEach((s, i) => {
-      s.assignedSquad = squadAssignments[i]?.squadNumber || null
-    })
-  }
-
-  event.status = 'finalized'
-  saveState()
-
-  // Send notifications (async, non-blocking for the API response)
-  try {
-    await notifyConfirmedStaff(confirmedStaff, event.eventName)
-
-    if (overflowStaff.length > 0) {
-      await notifyOverflowStaff(
-        overflowStaff.map(s => ({
-          email: s.email,
-          userId: s.userId,
-          userName: s.userName,
-          assignedSquad: s.assignedSquad,
-        })),
-        event.eventName
-      )
-    }
-
-    // Notify about unfilled roles
-    const missingRoles = assignments.filter(a => !a.userId).map(a => a.roleKey)
-    if (missingRoles.length > 0) {
-      const adminEmail = config.adminAllowlist[0]
-      if (adminEmail) {
-        await notifyMissingRoles(missingRoles, adminEmail, event.eventName)
-      }
-    }
-  } catch (err) {
-    console.error('[staffing] Notification error:', err.message)
-    warnings.push(`Notification error: ${err.message}`)
-  }
-
-  return {
-    finalized: true,
-    staffPositions,
-    confirmed: confirmedStaff.length,
-    overflow: overflowStaff.length,
-    warnings,
-  }
-}
 
 /**
  * Get event status summary for the API.
  * @param {string} eventId
- * @returns {object}
+ * @returns {object | null}
  */
 export function getEventStatus(eventId) {
   const event = events.get(String(eventId))
@@ -362,47 +232,28 @@ export function getEventStatus(eventId) {
 
   const config = loadConfig()
   const ttConfig = config.trainingTypes[event.trainingType]
+  const current = totalTrainers(event)
+  const isFull = current >= event.maxTrainers
 
   return {
     eventId: event.eventId,
     eventName: event.eventName,
     trainingType: event.trainingType,
     eventDate: event.eventDate,
-    registrationClose: event.registrationClose,
-    status: event.status,
     shooterCount: event.shooterCount,
-    activeSquadCount: event.activeSquadCount,
-    staffPositions: event.staffPositions,
-    staffSignups: event.staffSignups
-      .filter(s => s.status !== 'cancelled')
-      .map(s => ({
-        userName: s.userName,
-        queuePosition: s.queuePosition,
-        status: s.status,
-        rolePreference: s.rolePreference,
-        assignedRole: s.assignedRole,
-        assignedSquad: s.assignedSquad || null,
-      })),
-    roleAssignments: Object.fromEntries(
-      (event.roleAssignments || []).map(ra => [
-        ra.roleKey,
-        { userId: ra.userId, userName: ra.userName, method: ra.assignmentMethod },
-      ])
-    ),
+    maxTrainers: event.maxTrainers,
+    currentTrainers: current,
+    isFull,
+    leadInstructor: event.leadInstructor
+      ? { email: event.leadInstructor.email, userName: event.leadInstructor.userName }
+      : null,
+    equipmentManager: event.equipmentManager
+      ? { email: event.equipmentManager.email, userName: event.equipmentManager.userName }
+      : null,
+    staff: event.staff.map(s => ({
+      email: s.email,
+      userName: s.userName,
+    })),
     trainingTypeLabel: ttConfig?.label || null,
   }
-}
-
-/**
- * Get all events that are past registration close but not yet finalized.
- * Used by the cron job.
- * @returns {Array<object>}
- */
-export function getEventsDueForFinalization() {
-  const now = new Date()
-  return [...events.values()].filter(e => {
-    if (e.status !== 'open') return false
-    const closeDate = new Date(e.registrationClose)
-    return closeDate <= now
-  })
 }

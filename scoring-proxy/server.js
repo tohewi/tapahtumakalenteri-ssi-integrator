@@ -385,9 +385,7 @@ app.use('/api/report', reportsRouter)
 const staffingRouter = createStaffingRouter({
   requireAuth,
   graphqlWithRefresh,
-  adminGraphQL,
   getAdminSession,
-  IS_PROD,
 })
 app.use('/api/staffing', staffingRouter)
 

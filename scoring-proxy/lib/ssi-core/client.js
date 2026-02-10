@@ -667,6 +667,347 @@ export async function ssiSetParticipantSquad(participantId, squadNumber, cookies
 }
 
 // ============================================================
+// Staffing: extract match management group ID from staff page
+// GET /event/{ct}/{eventId}/staff/ → find /groups/{groupId}/ links
+// ============================================================
+
+export async function ssiGetMatchGroupId(eventContentType, eventId, cookies) {
+  const debug = process.env.NODE_ENV !== 'production'
+  const url = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/staff/`
+
+  if (debug) console.log(`[mgmt-group] GET ${url}`)
+  const resp = await fetch(url, {
+    headers: { 'Cookie': formatCookies(cookies) },
+    redirect: 'follow',
+  })
+  if (!resp.ok) throw new Error(`Staff page HTTP ${resp.status}`)
+  const html = await resp.text()
+
+  // Extract group ID from links like /groups/26083/role/search/
+  const groupMatch = html.match(/\/groups\/(\d+)\//)
+  if (!groupMatch) throw new Error('Could not find management group ID on staff page')
+
+  const groupId = groupMatch[1]
+  if (debug) console.log(`[mgmt-group] Found group ID: ${groupId}`)
+  return groupId
+}
+
+// ============================================================
+// Staffing: add user to match management group with role
+// 1. POST search by email → find add-user-with-role link (gets SSI user ID)
+// 2. POST add-user-with-role with role + officials
+//
+// role values: 1=admin, 2=staff, 7=assistant
+// officials values: MD=Match Director, QM=Quarter Master, etc.
+// ============================================================
+
+export async function ssiAddToMatchManagement(groupId, eventContentType, eventId, email, role, officials, cookies) {
+  const debug = process.env.NODE_ENV !== 'production'
+  const nextUrl = `/event/${eventContentType}/${eventId}/staff/`
+  const searchUrl = `${SSI_BASE_URL}/groups/${groupId}/role/search/?next=${nextUrl}`
+
+  // Step 1: Search by email
+  const searchData = new URLSearchParams()
+  searchData.append('last_name', '')
+  searchData.append('first_name', '')
+  searchData.append('email', email)
+  searchData.append('submit', 'Search')
+
+  if (debug) console.log(`[mgmt-add] POST search email=${email} to ${searchUrl}`)
+  const searchResp = await fetch(searchUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': formatCookies(cookies),
+      'Referer': searchUrl,
+      'Origin': SSI_BASE_URL,
+    },
+    body: searchData.toString(),
+    redirect: 'follow',
+  })
+  if (!searchResp.ok) throw new Error(`Management search failed HTTP ${searchResp.status}`)
+  const searchHtml = await searchResp.text()
+
+  if (searchHtml.includes('no results') || searchHtml.includes('gave no results')) {
+    return { success: false, message: 'User not found in SSI by email' }
+  }
+
+  // Step 2: Find add-user-with-role link → extract SSI user ID
+  const addLink = searchHtml.match(/\/groups\/\d+\/add-user-with-role\/(\d+)\//)
+  if (!addLink) {
+    return { success: false, message: 'No add-user link found (user may already be in group)' }
+  }
+  const ssiUserId = addLink[1]
+  if (debug) console.log(`[mgmt-add] Found SSI user ID: ${ssiUserId}`)
+
+  // Step 3: POST add-user-with-role with role + officials
+  const addUrl = `${SSI_BASE_URL}/groups/${groupId}/add-user-with-role/${ssiUserId}/?next=${nextUrl}`
+  const formData = new URLSearchParams()
+  formData.append('role', role)
+  if (officials && officials.length > 0) {
+    for (const off of officials) {
+      formData.append('officials', off)
+    }
+  }
+
+  if (debug) console.log(`[mgmt-add] POST ${addUrl} role=${role} officials=${officials || 'none'}`)
+  const addResp = await fetch(addUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': formatCookies(cookies),
+      'Referer': addUrl,
+      'Origin': SSI_BASE_URL,
+    },
+    body: formData.toString(),
+    redirect: 'manual',
+  })
+
+  if (debug) console.log(`[mgmt-add] Response: ${addResp.status}`)
+
+  // 302 redirect = success
+  if (addResp.status === 302 || addResp.status === 301) {
+    return { success: true, message: `Added to management (role=${role}, officials=${officials || 'none'})` }
+  }
+  if (addResp.status === 200) {
+    const html = await addResp.text()
+    if (html.includes('errorlist') || html.includes('is-invalid')) {
+      const errMatch = html.match(/<(?:ul|div)[^>]*(?:errorlist|invalid-feedback)[^>]*>([\s\S]*?)<\/(?:ul|div)>/)
+      return { success: false, message: errMatch ? errMatch[1].replace(/<[^>]+>/g, '').trim() : 'Form error' }
+    }
+    return { success: true, message: 'Added to management' }
+  }
+  throw new Error(`Add to management failed HTTP ${addResp.status}`)
+}
+
+// ============================================================
+// Staffing: remove user from match management group
+// 1. POST search by email → get SSI user ID
+// 2. GET remove-invitation-role/{userId}/
+// ============================================================
+
+export async function ssiRemoveFromMatchManagement(groupId, eventContentType, eventId, email, cookies) {
+  const debug = process.env.NODE_ENV !== 'production'
+  const nextUrl = `/event/${eventContentType}/${eventId}/staff/`
+
+  // Step 1: Get SSI user ID via participant-search-and-add (works for all users)
+  // The role/search page doesn't show add/invite links for users already in the group.
+  const searchUrl = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/participant-search-and-add/`
+  const searchData = new URLSearchParams()
+  searchData.append('last_name', '')
+  searchData.append('first_name', '')
+  searchData.append('email', email)
+  searchData.append('submit', 'Search')
+
+  if (debug) console.log(`[mgmt-remove] POST search email=${email} to ${searchUrl}`)
+  const searchResp = await fetch(searchUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': formatCookies(cookies),
+      'Referer': searchUrl,
+      'Origin': SSI_BASE_URL,
+    },
+    body: searchData.toString(),
+    redirect: 'follow',
+  })
+  if (!searchResp.ok) throw new Error(`Participant search failed HTTP ${searchResp.status}`)
+  const searchHtml = await searchResp.text()
+
+  // Extract SSI user ID from register-participant or search-and-add links
+  const userIdMatch = searchHtml.match(/(?:register-participant|participant-search-and-add)\/(\d+)\//)
+  if (!userIdMatch) {
+    return { success: false, message: 'User not found in SSI by email' }
+  }
+  const ssiUserId = userIdMatch[1]
+  if (debug) console.log(`[mgmt-remove] Found SSI user ID: ${ssiUserId}`)
+
+  // Step 2: GET remove-invitation-role
+  const removeUrl = `${SSI_BASE_URL}/groups/${groupId}/remove-invitation-role/${ssiUserId}/?next=${nextUrl}`
+  if (debug) console.log(`[mgmt-remove] GET ${removeUrl}`)
+  const removeResp = await fetch(removeUrl, {
+    headers: { 'Cookie': formatCookies(cookies) },
+    redirect: 'follow',
+  })
+
+  if (debug) console.log(`[mgmt-remove] Response: ${removeResp.status}`)
+
+  if (removeResp.ok) {
+    return { success: true, message: 'Removed from management group' }
+  }
+  throw new Error(`Remove from management failed HTTP ${removeResp.status}`)
+}
+
+// ============================================================
+// Staffing: register user to trainer squad in one step
+// 1. POST search-and-add by email → find register link
+// 2. GET register link → confirmation form with squad select
+// 3. Override squad + status → POST confirmation
+// ============================================================
+
+export async function ssiRegisterToTrainerSquad(eventContentType, eventId, email, trainerSquadName, cookies) {
+  const debug = process.env.NODE_ENV !== 'production'
+  const pageUrl = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/participant-search-and-add/`
+
+  // Step 1: Search by email
+  const searchData = new URLSearchParams()
+  searchData.append('last_name', '')
+  searchData.append('first_name', '')
+  searchData.append('email', email)
+  searchData.append('submit', 'Search')
+
+  if (debug) console.log(`[trainer-squad] POST search email=${email} to ${pageUrl}`)
+  const searchResp = await fetch(pageUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': formatCookies(cookies),
+      'Referer': pageUrl,
+      'Origin': SSI_BASE_URL,
+    },
+    body: searchData.toString(),
+    redirect: 'manual',
+  })
+
+  if (searchResp.status === 302) {
+    return { success: true, message: 'Already registered (redirect)' }
+  }
+  if (searchResp.status !== 200) {
+    throw new Error(`Trainer squad search failed HTTP ${searchResp.status}`)
+  }
+
+  const searchHtml = await searchResp.text()
+
+  if (searchHtml.includes('no results') || searchHtml.includes('gave no results')) {
+    return { success: false, message: 'User not found in SSI by email' }
+  }
+
+  // Step 2: Find register link
+  const registerLinks = [
+    ...searchHtml.matchAll(/href="([^"]*participant-search-and-add\/\d+\/register\/[^"]*)"/gi),
+    ...searchHtml.matchAll(/href="([^"]*register-participant\/\d+\/[^"]*)"/gi),
+  ]
+  if (registerLinks.length === 0) {
+    // Maybe already registered
+    if (searchHtml.includes('already registered') || searchHtml.includes('jo ilmoittautunut')) {
+      return { success: true, message: 'Already registered' }
+    }
+    return { success: false, message: 'No register link found for user' }
+  }
+
+  const registerUrl = registerLinks[0][1]
+  const fullRegUrl = registerUrl.startsWith('http') ? registerUrl : `${SSI_BASE_URL}${registerUrl}`
+  if (debug) console.log(`[trainer-squad] GET register link: ${fullRegUrl}`)
+
+  const regResp = await fetch(fullRegUrl, {
+    headers: { 'Cookie': formatCookies(cookies), 'Referer': pageUrl },
+    redirect: 'follow',
+  })
+  if (!regResp.ok) throw new Error(`Register page HTTP ${regResp.status}`)
+  const regHtml = await regResp.text()
+
+  // Step 3: Find and fill confirmation form
+  const formMatch = regHtml.match(/<form[^>]*method="post"[^>]*>([\s\S]*?)<\/form>/i)
+  if (!formMatch) {
+    if (regHtml.includes('already registered') || regHtml.includes('jo ilmoittautunut')) {
+      return { success: true, message: 'Already registered' }
+    }
+    return { success: false, message: 'No confirmation form found' }
+  }
+
+  const formData = _extractFormFields(formMatch[1])
+
+  // Find trainer squad value by matching label
+  const squadSelect = formMatch[1].match(/<select[^>]*name="squad"[^>]*>([\s\S]*?)<\/select>/i)
+  let squadValue = null
+  if (squadSelect) {
+    const opts = [...squadSelect[1].matchAll(/<option\s+value="([^"]*)"[^>]*>([^<]*)<\/option>/gi)]
+    for (const opt of opts) {
+      const label = opt[2].trim()
+      if (label.toLowerCase().includes(trainerSquadName.toLowerCase().replace(/\./g, '').trim())) {
+        squadValue = opt[1]
+        if (debug) console.log(`[trainer-squad] Matched squad: "${label}" → value ${squadValue}`)
+        break
+      }
+    }
+    // Fallback: match by squad number in label (e.g. "Squad 5" matches "5")
+    if (!squadValue) {
+      const numMatch = trainerSquadName.match(/\d+/)
+      if (numMatch) {
+        for (const opt of opts) {
+          if (opt[2].trim().match(new RegExp(`\\b${numMatch[0]}\\b`)) && opt[1]) {
+            squadValue = opt[1]
+            if (debug) console.log(`[trainer-squad] Fallback matched squad: "${opt[2].trim()}" → value ${squadValue}`)
+            break
+          }
+        }
+      }
+    }
+  }
+
+  if (!squadValue) {
+    if (debug) console.log(`[trainer-squad] WARNING: Could not find squad "${trainerSquadName}" in form`)
+    return { success: false, message: `Trainer squad "${trainerSquadName}" not found in event` }
+  }
+
+  // Override squad and status
+  formData.set('squad', squadValue)
+  formData.set('status', 'a') // Approved
+  formData.set('has_accepted_event_data_policy', 'on')
+
+  // Submit button
+  const submitMatch = formMatch[1].match(/<input[^>]*type="submit"[^>]*name=["']([^"']*)["'][^>]*value="([^"]*)"/i)
+  if (submitMatch) formData.set(submitMatch[1], submitMatch[2])
+
+  // SSI anti-bot: form_loaded_at timestamp check — must wait 5+ seconds
+  if (debug) console.log('[trainer-squad] Waiting 5s (SSI anti-bot)...')
+  await new Promise(r => setTimeout(r, 5000))
+
+  // Extract form action
+  const actionMatch = regHtml.match(/<form[^>]*action="([^"]*)"[^>]*method="post"/i)
+    || regHtml.match(/<form[^>]*method="post"[^>]*action="([^"]*)"/i)
+  let formAction = actionMatch?.[1] || ''
+  if (!formAction || formAction === '#') formAction = fullRegUrl
+  const fullAction = formAction.startsWith('http') ? formAction : `${SSI_BASE_URL}${formAction}`
+
+  if (debug) console.log(`[trainer-squad] POST confirm to: ${fullAction}, squad=${squadValue}, status=a`)
+
+  const confirmResp = await fetch(fullAction, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': formatCookies(cookies),
+      'Referer': fullRegUrl,
+      'Origin': SSI_BASE_URL,
+    },
+    body: formData.toString(),
+    redirect: 'manual',
+  })
+
+  if (debug) console.log(`[trainer-squad] Confirm response: ${confirmResp.status}`)
+
+  if (confirmResp.status === 302 || confirmResp.status === 301) {
+    return { success: true, message: 'Registered to trainer squad' }
+  }
+  if (confirmResp.status === 200) {
+    const confirmHtml = await confirmResp.text()
+    if (confirmHtml.includes('already registered') || confirmHtml.includes('Shooter already registered')) {
+      return { success: true, message: 'Already registered' }
+    }
+    if (confirmHtml.includes('too quickly')) {
+      return { success: false, message: 'SSI anti-bot: submitted too quickly' }
+    }
+    if (confirmHtml.includes('errorlist') || confirmHtml.includes('is-invalid')) {
+      const errMatch = confirmHtml.match(/<(?:ul|div)[^>]*(?:errorlist|invalid-feedback)[^>]*>([\s\S]*?)<\/(?:ul|div)>/)
+      const errText = errMatch ? errMatch[1].replace(/<[^>]+>/g, '').trim() : 'Form error'
+      return { success: false, message: errText }
+    }
+    return { success: true, message: 'Registered to trainer squad (confirmed)' }
+  }
+  throw new Error(`Trainer squad registration failed HTTP ${confirmResp.status}`)
+}
+
+// ============================================================
 // Admin: find competitor ID in a match by scraping participants page
 // GET /event/91/{matchId}/participants/
 // Returns the participant ID if found, or null

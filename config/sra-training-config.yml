@@ -12,14 +12,13 @@ adminAllowlist:
   - "turreskuko1@foo.bar"
   - "tohewi@live.com"
   - "tohewi@gmail.com"
+  - "tapiosantavuori@protonmail.com"
+  - "jarkkoahola@icloud.com"
 # SSI event discovery (R3: search matches by name)
 eventDiscovery:
   searchStrings:
-    - "oldies"
-    - "newbie"
-    - "TR-SRAO"
-    - "TR-SRAN"
-  matchContentType: 91
+    - "TEST TR-"
+  matchContentType: 22
   cupContentType: 136
   staffSquadName: "Squad 5"
 
@@ -34,6 +33,7 @@ trainingTypes:
     shooterSquads: [1, 2, 3, 4]
     staffSquad: 5
     minShootersPerSquad: 5
+    maxTrainers: 6
   newbie:
     searchPatterns: ["newbie", "sran"]
     label:
@@ -43,6 +43,7 @@ trainingTypes:
     shooterSquads: [1, 2, 3, 4]
     staffSquad: 5
     minShootersPerSquad: 5
+    maxTrainers: 8
 
 # Roles
 roles:
