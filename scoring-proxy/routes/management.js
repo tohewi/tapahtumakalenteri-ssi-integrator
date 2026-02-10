@@ -387,7 +387,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
         if (!IS_PROD) console.log(`[manage] Add result: ${addResult.message}`)
 
         // 3. Find participant ID in the match
-        const participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies)
+        const participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies, email)
         if (!participantId) {
           results.push({ matchId, success: false, message: 'Could not find participant after adding' })
           continue
@@ -449,13 +449,13 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       const results = []
       for (const matchId of matchIds) {
         // 2. Find participant in match
-        let participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies)
+        let participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies, email)
 
         // 3. If not found, add them first using email for disambiguation
         if (!participantId) {
           if (!IS_PROD) console.log(`[manage] "${shooterName}" (${email || 'no email'}) not in match ${matchId}, adding...`)
           await ssiSearchAndAddParticipant(91, matchId, email, cookies, { firstName, lastName })
-          participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies)
+          participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies, email)
         }
 
         if (!participantId) {
@@ -507,7 +507,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       }
 
       // 2. Find and approve CUP participant
-      const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies)
+      const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies, email)
       if (!IS_PROD) console.log(`[manage] Cup approve result: ${approveResult.message}`)
 
       if (!approveResult.success) {
@@ -540,8 +540,8 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       const cupId = req.params.id
 
       // Approve CUP participant
-      if (!IS_PROD) console.log(`[manage] Approving pending shooter "${shooterName}" in cup ${cupId}`)
-      const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies)
+      if (!IS_PROD) console.log(`[manage] Approving pending shooter "${shooterName}" (${email || 'no email'}) in cup ${cupId}`)
+      const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies, email)
       if (!IS_PROD) console.log(`[manage] Cup approve result: ${approveResult.message}`)
 
       if (!approveResult.success) {
@@ -574,8 +574,8 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       const cupId = req.params.id
 
       // Delete CUP participant
-      if (!IS_PROD) console.log(`[manage] Removing pending shooter "${shooterName}" from cup ${cupId}`)
-      const deleteResult = await ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies)
+      if (!IS_PROD) console.log(`[manage] Removing pending shooter "${shooterName}" (${email || 'no email'}) from cup ${cupId}`)
+      const deleteResult = await ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies, email)
       if (!IS_PROD) console.log(`[manage] Cup delete result: ${deleteResult.message}`)
 
       if (!deleteResult.success) {
