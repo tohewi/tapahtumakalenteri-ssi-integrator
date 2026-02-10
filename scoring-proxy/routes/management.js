@@ -15,13 +15,13 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
           event(content_type: 136, id: $id) {
             id name starts status
             ... on NordicSerieNode {
-              competitors { id status shooter { first_name last_name } }
+              competitors { id status email shooter { first_name last_name email } }
               component_matches {
                 number included
                 match {
                   id name
                   competitors {
-                    id status
+                    id status email
                     first_name last_name
                   }
                   squads {
@@ -29,7 +29,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
                     ... on NordicSquadNode {
                       max_competitors
                       competitors {
-                        id status
+                        id status email
                         first_name last_name
                       }
                     }
@@ -59,13 +59,25 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
           max: sq.max_competitors || 0,
           shooters: (sq.competitors || [])
             .filter(c => c.status === 'a')
-            .map(c => ({ id: c.id, name: `${c.first_name} ${c.last_name}`.trim() })),
+            .map(c => ({ 
+              id: c.id, 
+              name: `${c.first_name} ${c.last_name}`.trim(),
+              email: c.email || null,
+              firstName: c.first_name,
+              lastName: c.last_name
+            })),
         }))
 
         // All approved match-level participants (includes both squadded and unsquadded)
         const allParticipants = (m.competitors || [])
           .filter(c => c.status === 'a')
-          .map(c => ({ id: c.id, name: `${c.first_name} ${c.last_name}`.trim() }))
+          .map(c => ({ 
+            id: c.id, 
+            name: `${c.first_name} ${c.last_name}`.trim(),
+            email: c.email || null,
+            firstName: c.first_name,
+            lastName: c.last_name
+          }))
 
         return {
           id: m.id,
@@ -78,16 +90,33 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
 
       // Collect all shooters across all matches
       // Track: which matches they're IN (as participant) and which squad (if any)
-      const shooterMap = new Map() // name → { name, matches: { matchId: squadNumber|null } }
+      // Use email as primary key; if email is missing, use a unique key with name
+      const shooterMap = new Map() // email → { email, firstName, lastName, name, matches: { matchId: squadNumber|null } }
+
+      // Helper to get unique key for a shooter (email is primary, fallback to generated unique key)
+      const getShooterKey = (participant) => {
+        if (participant.email && participant.email.trim()) {
+          return participant.email.trim().toLowerCase()
+        }
+        // Generate unique key for missing email to prevent false matches
+        return `NO_EMAIL_${participant.firstName}_${participant.lastName}_${Math.random().toString(36).substr(2, 9)}`
+      }
 
       // First: add all match-level participants (squadNumber = null means unsquadded)
       for (const match of matches) {
         for (const participant of match.allParticipants) {
-          if (!shooterMap.has(participant.name)) {
-            shooterMap.set(participant.name, { name: participant.name, matches: {} })
+          const key = getShooterKey(participant)
+          if (!shooterMap.has(key)) {
+            shooterMap.set(key, { 
+              email: participant.email || null,
+              firstName: participant.firstName,
+              lastName: participant.lastName,
+              name: participant.name, 
+              matches: {} 
+            })
           }
           // Mark as in-match but unsquadded (null)
-          shooterMap.get(participant.name).matches[match.id] = null
+          shooterMap.get(key).matches[match.id] = null
         }
       }
 
@@ -95,27 +124,61 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       for (const match of matches) {
         for (const squad of match.squads) {
           for (const shooter of squad.shooters) {
-            if (!shooterMap.has(shooter.name)) {
-              shooterMap.set(shooter.name, { name: shooter.name, matches: {} })
+            const key = getShooterKey(shooter)
+            if (!shooterMap.has(key)) {
+              shooterMap.set(key, { 
+                email: shooter.email || null,
+                firstName: shooter.firstName,
+                lastName: shooter.lastName,
+                name: shooter.name, 
+                matches: {} 
+              })
             }
-            shooterMap.get(shooter.name).matches[match.id] = squad.number
+            shooterMap.get(key).matches[match.id] = squad.number
           }
         }
       }
 
-      // CUP-level participants (approved)
-      const cupParticipants = (cup.competitors || [])
-        .filter(c => c.status === 'a')
-        .map(c => `${c.shooter?.first_name || ''} ${c.shooter?.last_name || ''}`.trim())
-        .filter(n => n.length > 0)
+      // CUP-level participants (approved) - now using email-based map
+      const cupParticipantsMap = new Map() // email → { email, firstName, lastName, name }
+      for (const c of (cup.competitors || [])) {
+        if (c.status === 'a') {
+          const firstName = c.shooter?.first_name || ''
+          const lastName = c.shooter?.last_name || ''
+          const name = `${firstName} ${lastName}`.trim()
+          if (name.length === 0) continue
+          
+          // Email can be at competitor level OR shooter level (check both)
+          const email = c.email || c.shooter?.email || null
+          
+          if (email && email.trim()) {
+            const key = email.trim().toLowerCase()
+            cupParticipantsMap.set(key, { email, firstName, lastName, name })
+          } else {
+            // If no email, create unique key to avoid false matches
+            const uniqueKey = `NO_EMAIL_CUP_${firstName}_${lastName}_${Math.random().toString(36).substr(2, 9)}`
+            cupParticipantsMap.set(uniqueKey, { email: null, firstName, lastName, name })
+          }
+        }
+      }
 
       // Find CUP participants not in ANY match (not even as unsquadded participant)
-      const matchParticipantNames = new Set(shooterMap.keys())
-      const cupOnly = cupParticipants.filter(n => !matchParticipantNames.has(n))
+      const matchParticipantKeys = new Set(shooterMap.keys())
+      const cupOnly = []
+      for (const [cupKey, cupData] of cupParticipantsMap.entries()) {
+        if (!matchParticipantKeys.has(cupKey)) {
+          cupOnly.push(cupData)
+        }
+      }
 
       // Find match participants not in CUP
-      const cupParticipantSet = new Set(cupParticipants)
-      const matchOnly = [...matchParticipantNames].filter(n => !cupParticipantSet.has(n))
+      const cupParticipantKeys = new Set(cupParticipantsMap.keys())
+      const matchOnly = []
+      for (const [matchKey, matchData] of shooterMap.entries()) {
+        if (!cupParticipantKeys.has(matchKey)) {
+          matchOnly.push(matchData)
+        }
+      }
 
       res.json({
         cup: { id: cup.id, name: cup.name, starts: cup.starts },
@@ -133,10 +196,10 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
   // ============================================================
   // POST /api/manage/cup/:id/assign-squad
   // Assign an unsquadded shooter to a squad in all component matches.
-  // Body: { shooterName, squadNumber }
+  // Body: { shooterName, shooterEmail, squadNumber }
   // ============================================================
   router.post('/cup/:id/assign-squad', requireAuth('manage'), async (req, res) => {
-    const { shooterName, squadNumber } = req.body
+    const { shooterName, shooterEmail, squadNumber } = req.body
     if (!shooterName || !squadNumber) {
       return res.status(400).json({ error: 'shooterName and squadNumber required' })
     }
@@ -166,20 +229,20 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
         .filter(cm => cm.included && cm.match)
         .map(cm => cm.match.id)
 
-      // Split name into first/last
+      // Split name into first/last for SSI search
       const nameParts = shooterName.trim().split(/\s+/)
       const firstName = nameParts[0] || ''
       const lastName = nameParts.slice(1).join(' ') || ''
 
       const results = []
       for (const matchId of matchIds) {
-        // 2. Add shooter to match by name
-        if (!IS_PROD) console.log(`[manage] Adding "${shooterName}" to match ${matchId}`)
-        const addResult = await ssiSearchAndAddParticipant(91, matchId, null, cookies, { firstName, lastName })
+        // 2. Add shooter to match (prefer email if available)
+        if (!IS_PROD) console.log(`[manage] Adding "${shooterName}" <${shooterEmail || 'no email'}> to match ${matchId}`)
+        const addResult = await ssiSearchAndAddParticipant(91, matchId, shooterEmail, cookies, { firstName, lastName })
         if (!IS_PROD) console.log(`[manage] Add result: ${addResult.message}`)
 
         // 3. Find participant ID in the match
-        const participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies)
+        const participantId = await ssiFindCompetitorInMatch(matchId, shooterName, shooterEmail, cookies)
         if (!participantId) {
           results.push({ matchId, success: false, message: 'Could not find participant after adding' })
           continue
@@ -201,10 +264,10 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
   // ============================================================
   // POST /api/manage/cup/:id/fix-squad
   // Fix inconsistent squad assignment across matches.
-  // Body: { shooterName, targetSquad }
+  // Body: { shooterName, shooterEmail, targetSquad }
   // ============================================================
   router.post('/cup/:id/fix-squad', requireAuth('manage'), async (req, res) => {
-    const { shooterName, targetSquad } = req.body
+    const { shooterName, shooterEmail, targetSquad } = req.body
     if (!shooterName || !targetSquad) {
       return res.status(400).json({ error: 'shooterName and targetSquad required' })
     }
@@ -241,13 +304,13 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       const results = []
       for (const matchId of matchIds) {
         // 2. Find participant in match
-        let participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies)
+        let participantId = await ssiFindCompetitorInMatch(matchId, shooterName, shooterEmail, cookies)
 
-        // 3. If not found, add them first
+        // 3. If not found, add them first (prefer email if available)
         if (!participantId) {
-          if (!IS_PROD) console.log(`[manage] "${shooterName}" not in match ${matchId}, adding...`)
-          await ssiSearchAndAddParticipant(91, matchId, null, cookies, { firstName, lastName })
-          participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies)
+          if (!IS_PROD) console.log(`[manage] "${shooterName}" <${shooterEmail || 'no email'}> not in match ${matchId}, adding...`)
+          await ssiSearchAndAddParticipant(91, matchId, shooterEmail, cookies, { firstName, lastName })
+          participantId = await ssiFindCompetitorInMatch(matchId, shooterName, shooterEmail, cookies)
         }
 
         if (!participantId) {
@@ -271,10 +334,10 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
   // ============================================================
   // POST /api/manage/cup/:id/add-to-cup
   // Add a match-only shooter to the CUP and approve.
-  // Body: { shooterName }
+  // Body: { shooterName, shooterEmail }
   // ============================================================
   router.post('/cup/:id/add-to-cup', requireAuth('manage'), async (req, res) => {
-    const { shooterName } = req.body
+    const { shooterName, shooterEmail } = req.body
     if (!shooterName) {
       return res.status(400).json({ error: 'shooterName required' })
     }
@@ -288,9 +351,9 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       const firstName = nameParts[0] || ''
       const lastName = nameParts.slice(1).join(' ') || ''
 
-      // 1. Search-and-add to CUP (CT=136)
-      if (!IS_PROD) console.log(`[manage] Adding "${shooterName}" to cup ${cupId}`)
-      const addResult = await ssiSearchAndAddParticipant(136, cupId, null, cookies, { firstName, lastName })
+      // 1. Search-and-add to CUP (CT=136) - prefer email if available
+      if (!IS_PROD) console.log(`[manage] Adding "${shooterName}" <${shooterEmail || 'no email'}> to cup ${cupId}`)
+      const addResult = await ssiSearchAndAddParticipant(136, cupId, shooterEmail, cookies, { firstName, lastName })
       if (!IS_PROD) console.log(`[manage] Cup add result: ${addResult.message}`)
 
       if (!addResult.success) {
@@ -299,7 +362,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
       }
 
       // 2. Find and approve CUP participant
-      const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies)
+      const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, shooterEmail, cookies)
       if (!IS_PROD) console.log(`[manage] Cup approve result: ${approveResult.message}`)
 
       if (!approveResult.success) {
