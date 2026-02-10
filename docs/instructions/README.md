@@ -15,6 +15,7 @@ This directory contains comprehensive documentation for the tapahtumakalenteri-s
 - **[Session Handling](../design/session-handling.md)** - Inactivity timeout, feature isolation, explicit auth, state restoration
 - **[Session Lifecycle](../design/session-lifecycle.md)** - State charts and flow analysis for session management
 - **[Registration Flow](../design/registration-flow.md)** - Backend sequence diagrams and SSI state machine
+- **[Shooter State Management](../SHOOTER-STATE-MANAGEMENT.md)** - State diagrams, functions, and shooter identification system
 - **[SSI Dual Approach: GraphQL + Web Scraping](../design/ssi-dual-approach-graphql-webscraping.md)** - How GraphQL and web scraping work together, email handling, authentication differences
 - **[SSI Admin Operations](../design/ssi-admin-operations.md)** - Web scraping endpoints and form field reference
 - **[SSI GraphQL Findings](../design/ssi-graphql-findings.md)** - Known GraphQL API limitations and workarounds
