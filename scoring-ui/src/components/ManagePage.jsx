@@ -230,7 +230,7 @@ export default function ManagePage() {
 // ============================================================
 
 function SquaddingOverview({ data, cupId, onRefresh }) {
-  const { matches, shooters, cupOnly, matchOnly } = data
+  const { matches, shooters, cupOnly, matchOnly, pendingShooters = [] } = data
   const matchIds = matches.map(m => m.id)
   const totalMatches = matches.length
 
@@ -238,10 +238,11 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
   const unsquaddedRef = useRef(null)
   const inconsistentRef = useRef(null)
   const notInCupRef = useRef(null)
+  const pendingRef = useRef(null)
   const squadsRef = useRef(null)
 
   // Action state
-  const [actionLoading, setActionLoading] = useState(null) // shooterName being acted on
+  const [actionLoading, setActionLoading] = useState(null) // { shooterName, action } being acted on
   const [actionError, setActionError] = useState(null)
   const [squadPicker, setSquadPicker] = useState(null) // { shooterName, type: 'assign'|'assignCupOnly' }
 
@@ -314,12 +315,12 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
     }
   })
 
-  const totalIssues = classified.unsquadded.length + classified.inconsistent.length + cupOnly.length + matchOnly.length
+  const totalIssues = classified.unsquadded.length + classified.inconsistent.length + cupOnly.length + matchOnly.length + pendingShooters.length
   const scrollTo = (ref) => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   // ── Action handlers ──
-  const runAction = async (actionFn, shooterName) => {
-    setActionLoading(shooterName)
+  const runAction = async (actionFn, shooterName, action) => {
+    setActionLoading({ shooterName, action })
     setActionError(null)
     try {
       await actionFn()
@@ -330,17 +331,25 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
     setActionLoading(null)
   }
 
-  const handleAssignSquad = (shooterName, squadNumber) => {
+  const handleAssignSquad = (shooter, squadNumber) => {
     setSquadPicker(null)
-    runAction(() => api.manageAssignSquad(cupId, shooterName, squadNumber), shooterName)
+    runAction(() => api.manageAssignSquad(cupId, shooter.name, squadNumber, shooter.email), shooter.name, 'assign')
   }
 
-  const handleFixSquad = (shooterName, targetSquad) => {
-    runAction(() => api.manageFixSquad(cupId, shooterName, targetSquad), shooterName)
+  const handleFixSquad = (shooter, targetSquad) => {
+    runAction(() => api.manageFixSquad(cupId, shooter.name, targetSquad, shooter.email), shooter.name, 'fix')
   }
 
-  const handleAddToCup = (shooterName) => {
-    runAction(() => api.manageAddToCup(cupId, shooterName), shooterName)
+  const handleAddToCup = (shooter) => {
+    runAction(() => api.manageAddToCup(cupId, shooter.name, shooter.email), shooter.name, 'addToCup')
+  }
+
+  const handleApprovePending = (shooter) => {
+    runAction(() => api.manageApprovePending(cupId, shooter.name, shooter.email), shooter.name, 'approve')
+  }
+
+  const handleRemovePending = (shooter) => {
+    runAction(() => api.manageRemovePending(cupId, shooter.name, shooter.email), shooter.name, 'remove')
   }
 
   return (
@@ -374,6 +383,15 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
             >
               <span className="text-lg font-bold text-purple-700">{cupOnly.length + matchOnly.length}</span>
               <span className="text-[10px] font-medium text-purple-600 leading-tight">Cup ≠</span>
+            </button>
+          )}
+          {pendingShooters.length > 0 && (
+            <button
+              onClick={() => scrollTo(pendingRef)}
+              className="flex-1 flex flex-col items-center py-2 px-1 rounded-lg bg-blue-50 active:bg-blue-100 transition-colors"
+            >
+              <span className="text-lg font-bold text-blue-700">{pendingShooters.length}</span>
+              <span className="text-[10px] font-medium text-blue-600 leading-tight">Odottaa</span>
             </button>
           )}
           <button
@@ -419,14 +437,19 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
             <div className="space-y-2">
               {classified.unsquadded.map((s, i) => (
                 <div key={i} className="bg-white rounded-xl border border-red-200 p-3 flex items-center justify-between">
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <div className="font-medium text-gray-800 text-sm">{s.name}</div>
+                    {s.email ? (
+                      <div className="text-xs text-gray-500 mt-0.5 truncate">{s.email}</div>
+                    ) : (
+                      <div className="text-xs text-red-600 mt-0.5 font-medium">🚨 Sähköposti puuttuu</div>
+                    )}
                     <div className="text-xs text-red-500 mt-0.5">Osakilpailuissa mutta ei squadissa</div>
                   </div>
                   <ActionButton
                     label="→ S?"
-                    loading={actionLoading === s.name}
-                    onClick={() => setSquadPicker({ shooterName: s.name, type: 'assign' })}
+                    loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'assign'}
+                    onClick={() => setSquadPicker({ shooter: s, type: 'assign' })}
                     color="blue"
                   />
                 </div>
@@ -443,11 +466,18 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
               {classified.inconsistent.map((s, i) => (
                 <div key={i} className="bg-white rounded-xl border border-amber-200 p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium text-gray-800 text-sm">{s.name}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-800 text-sm">{s.name}</div>
+                      {s.email ? (
+                        <div className="text-xs text-gray-500 truncate">{s.email}</div>
+                      ) : (
+                        <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
+                      )}
+                    </div>
                     <ActionButton
                       label={`Korjaa → S${s.suggestedSquad}`}
-                      loading={actionLoading === s.name}
-                      onClick={() => handleFixSquad(s.name, s.suggestedSquad)}
+                      loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'fix'}
+                      onClick={() => handleFixSquad(s, s.suggestedSquad)}
                       color="amber"
                     />
                   </div>
@@ -476,16 +506,21 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
               <>
                 <SectionHeader icon="📋" title="Cupissa mutta ei osakilpailuissa" count={cupOnly.length} color="red" />
                 <div className="space-y-2 mb-4">
-                  {cupOnly.map((name, i) => (
+                  {cupOnly.map((s, i) => (
                     <div key={i} className="bg-white rounded-xl border border-red-200 p-3 flex items-center justify-between">
-                      <div>
-                        <div className="font-medium text-gray-800 text-sm">{name}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-800 text-sm">{s.name}</div>
+                        {s.email ? (
+                          <div className="text-xs text-gray-500 mt-0.5 truncate">{s.email}</div>
+                        ) : (
+                          <div className="text-xs text-red-600 mt-0.5 font-medium">🚨 Sähköposti puuttuu</div>
+                        )}
                         <div className="text-xs text-red-500 mt-0.5">Ilmoittautunut cupiin, ei osakilpailuissa</div>
                       </div>
                       <ActionButton
                         label="→ S?"
-                        loading={actionLoading === name}
-                        onClick={() => setSquadPicker({ shooterName: name, type: 'assignCupOnly' })}
+                        loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'assign'}
+                        onClick={() => setSquadPicker({ shooter: s, type: 'assignCupOnly' })}
                         color="blue"
                       />
                     </div>
@@ -498,16 +533,21 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
               <>
                 <SectionHeader icon="+" title="Ei cupissa" count={matchOnly.length} color="purple" />
                 <div className="space-y-2">
-                  {matchOnly.map((name, i) => (
+                  {matchOnly.map((s, i) => (
                     <div key={i} className="bg-white rounded-xl border border-purple-200 p-3 flex items-center justify-between">
-                      <div>
-                        <div className="font-medium text-gray-800 text-sm">{name}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-800 text-sm">{s.name}</div>
+                        {s.email ? (
+                          <div className="text-xs text-gray-500 mt-0.5 truncate">{s.email}</div>
+                        ) : (
+                          <div className="text-xs text-red-600 mt-0.5 font-medium">🚨 Sähköposti puuttuu</div>
+                        )}
                         <div className="text-xs text-purple-500 mt-0.5">Osakilpailuissa mutta ei cupissa</div>
                       </div>
                       <ActionButton
                         label="Lisää"
-                        loading={actionLoading === name}
-                        onClick={() => handleAddToCup(name)}
+                        loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'addToCup'}
+                        onClick={() => handleAddToCup(s)}
                         color="purple"
                       />
                     </div>
@@ -515,6 +555,49 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* ── Section: Pending shooters ── */}
+        {pendingShooters.length > 0 && (
+          <div ref={pendingRef} className="scroll-mt-16">
+            <SectionHeader icon="⏳" title="Odottaa hyväksyntää" count={pendingShooters.length} color="blue" />
+            <div className="space-y-2">
+              {pendingShooters.map((s, i) => (
+                <div key={i} className="bg-white rounded-xl border border-blue-200 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-800 text-sm">{s.name}</div>
+                      {s.email ? (
+                        <div className="text-xs text-gray-500 truncate">{s.email}</div>
+                      ) : (
+                        <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <ActionButton
+                        label="Hyväksy"
+                        loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'approve'}
+                        onClick={() => handleApprovePending(s)}
+                        color="blue"
+                      />
+                      <ActionButton
+                        label="Poista"
+                        loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'remove'}
+                        onClick={() => handleRemovePending(s)}
+                        color="red"
+                      />
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-600 space-y-0.5">
+                    {s.inCup && <div>• Cupissa (pending)</div>}
+                    {s.inMatches.length > 0 && (
+                      <div>• Osakilpailuissa: {s.inMatches.map(m => `${m.componentNumber}. ${m.matchName}`).join(', ')}</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -530,9 +613,9 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
       {/* ── Bottom Sheet: Squad Picker ── */}
       {squadPicker && (
         <SquadPickerSheet
-          shooterName={squadPicker.shooterName}
+          shooter={squadPicker.shooter}
           squads={squadOptions}
-          onSelect={(sqNum) => handleAssignSquad(squadPicker.shooterName, sqNum)}
+          onSelect={(sqNum) => handleAssignSquad(squadPicker.shooter, sqNum)}
           onClose={() => setSquadPicker(null)}
         />
       )}
@@ -546,6 +629,7 @@ function ActionButton({ label, loading, onClick, color = 'blue' }) {
     blue: 'bg-blue-100 text-blue-700 active:bg-blue-200',
     amber: 'bg-amber-100 text-amber-700 active:bg-amber-200',
     purple: 'bg-purple-100 text-purple-700 active:bg-purple-200',
+    red: 'bg-red-100 text-red-700 active:bg-red-200',
   }
   if (loading) {
     return (
@@ -565,7 +649,7 @@ function ActionButton({ label, loading, onClick, color = 'blue' }) {
 }
 
 // ── Bottom sheet squad picker (mobile-friendly) ──
-function SquadPickerSheet({ shooterName, squads, onSelect, onClose }) {
+function SquadPickerSheet({ shooter, squads, onSelect, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40" />
@@ -576,7 +660,12 @@ function SquadPickerSheet({ shooterName, squads, onSelect, onClose }) {
         <div className="px-4 pt-4 pb-2">
           <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
           <h3 className="font-semibold text-gray-800">Valitse squad</h3>
-          <p className="text-sm text-gray-500 mt-0.5">{shooterName}</p>
+          <p className="text-sm text-gray-800 mt-0.5">{shooter.name}</p>
+          {shooter.email ? (
+            <p className="text-xs text-gray-500 truncate">{shooter.email}</p>
+          ) : (
+            <p className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</p>
+          )}
         </div>
         <div className="px-4 pb-4 space-y-2 max-h-[50vh] overflow-y-auto">
           {squads.map(sq => (
@@ -660,16 +749,32 @@ function SquadCard({ group, matchLabels }) {
           ) : (
             <div className="divide-y">
               {group.okShooters.map((s, i) => (
-                <div key={`ok-${i}`} className="px-4 py-2.5 flex items-center gap-2">
-                  <span className="text-green-500 text-sm shrink-0">✓</span>
-                  <span className="text-sm text-gray-800 flex-1 truncate">{s.name}</span>
+                <div key={`ok-${i}`} className="px-4 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-500 text-sm shrink-0">✓</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-gray-800 truncate">{s.name}</div>
+                      {s.email ? (
+                        <div className="text-xs text-gray-500 truncate">{s.email}</div>
+                      ) : (
+                        <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               ))}
               {group.issueShooters.map((s, i) => (
                 <div key={`issue-${i}`} className="px-4 py-2.5 bg-amber-50">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 mb-1">
                     <span className="text-amber-500 text-sm shrink-0">⚠</span>
-                    <span className="text-sm text-gray-800 flex-1 truncate">{s.name}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-gray-800 truncate">{s.name}</div>
+                      {s.email ? (
+                        <div className="text-xs text-gray-500 truncate">{s.email}</div>
+                      ) : (
+                        <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
+                      )}
+                    </div>
                   </div>
                   <div className="flex gap-1 mt-1 ml-6">
                     {s.assignments.map((sq, mi) => (
