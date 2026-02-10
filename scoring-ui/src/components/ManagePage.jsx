@@ -1,21 +1,21 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import * as api from '../api'
 import * as regApi from '../register-api'
-import { encryptData, decryptData } from '../crypto'
+import { useRememberMe } from '../hooks/useRememberMe'
 import LoginScreen from './LoginScreen'
 import { AppHeader, ErrorBanner, Spinner, CupList } from './shared'
 import fi from '../i18n'
 
-const LS_CREDS = 'ssi_credentials'
 const LS_MANAGE_STATE = 'ssi_manage_state'
 
 export default function ManagePage() {
+  const { savedCreds, handleRememberMe } = useRememberMe('ssi_credentials_manage')
+  
   const [authed, setAuthed] = useState(false)
   const [view, setView] = useState('login') // login | cups | overview
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
-  const [savedCreds, setSavedCreds] = useState(null) // { email, password, apiKey } from remember-me
 
   // Cup selection
   const [cups, setCups] = useState([])
@@ -67,31 +67,11 @@ export default function ManagePage() {
     }
   }, [handleSessionExpired, handleScopeMismatch])
 
-  // Load saved credentials for pre-fill (no auto-login)
-  useEffect(() => {
-    const loadSavedCreds = async () => {
-      const raw = localStorage.getItem(LS_CREDS)
-      if (!raw) return
-      const creds = await decryptData(raw)
-      if (creds) {
-        setSavedCreds(creds) // pre-fill form only
-      } else {
-        localStorage.removeItem(LS_CREDS) // corrupted data
-      }
-    }
-    loadSavedCreds()
-  }, [])
-
   // Login handler
   const handleLogin = async (email, password, apiKey, rememberMe) => {
     setSessionExpiredMessage(null)
     await api.login(email, password, apiKey, 'manage')
-    if (rememberMe) {
-      const encrypted = await encryptData({ email, password, apiKey })
-      localStorage.setItem(LS_CREDS, encrypted)
-    } else {
-      localStorage.removeItem(LS_CREDS)
-    }
+    await handleRememberMe(email, password, apiKey, rememberMe)
     setAuthed(true)
     
     // Restore previous state if available

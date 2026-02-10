@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { encryptData, decryptData } from './crypto'
+import { useRememberMe } from './hooks/useRememberMe'
 import MatchPicker from './components/MatchPicker'
 import SquadPicker from './components/SquadPicker'
 import ScoringForm from './components/ScoringForm'
@@ -51,7 +51,6 @@ function isSeriesScored(seriesScores) {
 
 // --- localStorage helpers ---
 const LS_KEYS = {
-  CREDS: 'ssi_credentials',
   CUP: 'ssi_last_cup',
   SCORES: 'ssi_scores',
   NAV: 'ssi_nav_state',
@@ -68,8 +67,9 @@ function lsRemove(key) {
 }
 
 function App() {
+  const { savedCreds, handleRememberMe } = useRememberMe('ssi_credentials_scoring')
+  
   const [view, setView] = useState('login') // 'login' | 'cup' | 'match' | 'squad' | 'series' | 'scoring'
-  const [savedCreds, setSavedCreds] = useState(null) // { email, password, apiKey } from remember-me
   const [selectedCup, setSelectedCup] = useState(null)
   const [matches, setMatches] = useState([])
   const [selectedMatch, setSelectedMatch] = useState(null)
@@ -127,21 +127,6 @@ function App() {
     })
   }, [view, selectedCup, selectedMatch, selectedSquad, selectedShooterId, activeSeries])
 
-  // --- On mount: load saved credentials for pre-fill (no auto-login) ---
-  useEffect(() => {
-    const loadSavedCreds = async () => {
-      const raw = localStorage.getItem(LS_KEYS.CREDS)
-      if (!raw) return
-      const creds = await decryptData(raw)
-      if (creds) {
-        setSavedCreds(creds) // pre-fill form only
-      } else {
-        lsRemove(LS_KEYS.CREDS) // corrupted data
-      }
-    }
-    loadSavedCreds()
-  }, [])
-
   // --- Login ---
 
   const handleLogin = async (email, password, apiKey, rememberMe) => {
@@ -150,12 +135,7 @@ function App() {
     // This throws on failure — LoginScreen catches and shows the error
     await api.login(email, password, apiKey, 'scoring')
     // Save encrypted credentials if "Remember me" is checked
-    if (rememberMe) {
-      const encrypted = await encryptData({ email, password, apiKey })
-      localStorage.setItem(LS_KEYS.CREDS, encrypted)
-    } else {
-      lsRemove(LS_KEYS.CREDS)
-    }
+    await handleRememberMe(email, password, apiKey, rememberMe)
     // Login succeeded — restore previous navigation state if available
     await restoreNavState()
   }
