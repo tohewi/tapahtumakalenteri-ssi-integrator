@@ -8,6 +8,10 @@ debug-*.html
 test-harness/debug-*.mjs
 test-harness/send-*.mjs
 
+# Generated schema/form dumps (regenerable)
+scripts-graphql/schema-output.json
+scripts-graphql/*.raw.html
+
 # PowerShell module cache
 *.psm1.cache
 
