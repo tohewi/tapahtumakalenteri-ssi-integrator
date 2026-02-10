@@ -120,32 +120,32 @@ export async function getSummaryReport(matches) {
 // Management actions
 // ============================================================
 
-export async function manageAssignSquad(cupId, shooterName, squadNumber) {
+export async function manageAssignSquad(cupId, shooterName, shooterEmail, squadNumber) {
   const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/assign-squad`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ shooterName, squadNumber }),
+    body: JSON.stringify({ shooterName, shooterEmail, squadNumber }),
   })
   return handleResponse(resp)
 }
 
-export async function manageFixSquad(cupId, shooterName, targetSquad) {
+export async function manageFixSquad(cupId, shooterName, shooterEmail, targetSquad) {
   const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/fix-squad`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ shooterName, targetSquad }),
+    body: JSON.stringify({ shooterName, shooterEmail, targetSquad }),
   })
   return handleResponse(resp)
 }
 
-export async function manageAddToCup(cupId, shooterName) {
+export async function manageAddToCup(cupId, shooterName, shooterEmail) {
   const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/add-to-cup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ shooterName }),
+    body: JSON.stringify({ shooterName, shooterEmail }),
   })
   return handleResponse(resp)
 }
