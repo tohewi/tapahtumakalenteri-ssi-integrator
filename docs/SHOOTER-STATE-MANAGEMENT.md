@@ -165,13 +165,14 @@ flowchart TB
 
 **Signature:**
 ```javascript
-async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookies)
+async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookies, email = null)
 ```
 
 **Parameters:**
 - `cupId` (string): SSI CUP event ID
 - `shooterName` (string): Full name of shooter to approve
 - `cookies` (object): SSI session cookies for authentication
+- `email` (string, optional): Shooter's email for logging and disambiguation
 
 **Returns:**
 ```javascript
@@ -185,8 +186,11 @@ async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookies)
 
 2. **Find Shooter by Name**
    - Extract participant ID from link: `/event/participant/137/{id}/`
-   - Match name using word-based search (handles variations in spacing)
+   - Collect ALL matches using word-based search (handles variations in spacing)
    - Search words must all appear in name (case-insensitive)
+   - **Multiple Match Detection**: If more than one match found, log warning with all matching names
+   - **Email for Disambiguation**: If email provided, it's logged for debugging (but cannot be verified from HTML)
+   - Uses first match as selection
 
 3. **Check Current Status**
    - Extract status from toggle-status button
@@ -203,8 +207,16 @@ async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookies)
 **Usage:**
 ```javascript
 // In POST /api/manage/cup/:id/approve-pending
-const result = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies)
+const result = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies, email)
 // result: { success: true, message: 'Approved' }
+
+// Email parameter helps with disambiguation
+const result = await ssiFindAndApproveCupParticipant(
+  '12345', 
+  'Jari Virtanen', 
+  cookies, 
+  'jari.virtanen@example.com'
+)
 ```
 
 **Error Cases:**
@@ -214,7 +226,9 @@ const result = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies
 **Important Notes:**
 - Uses web scraping because CUP participant edit form (content type 137) does NOT support status changes
 - Only toggle-status URL works for CUP participants
-- Email parameter added for logging and verification (not used for matching due to scraping limitations)
+- Email parameter added for logging and verification (but email not in HTML, so used for debugging only)
+- **Ambiguity Detection**: Warns if multiple name matches found (e.g., "Jari Virtanen" and "Ari Virtanen")
+- When multiple matches found, uses first match and logs warning with all matching names
 
 ---
 
@@ -226,13 +240,14 @@ const result = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies
 
 **Signature:**
 ```javascript
-async function ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies)
+async function ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies, email = null)
 ```
 
 **Parameters:**
 - `cupId` (string): SSI CUP event ID
 - `shooterName` (string): Full name of shooter to delete
 - `cookies` (object): SSI session cookies for authentication
+- `email` (string, optional): Shooter's email for logging and disambiguation
 
 **Returns:**
 ```javascript
@@ -246,7 +261,10 @@ async function ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies)
 
 2. **Find Shooter by Name**
    - Extract participant ID from link: `/event/participant/137/{id}/`
-   - Match name using word-based search
+   - Collect ALL matches using word-based search
+   - **Multiple Match Detection**: If more than one match found, log warning
+   - **Email for Disambiguation**: If email provided, it's logged for debugging
+   - Uses first match as selection
 
 3. **Check Current Status**
    - If already "Deleted", return success immediately
@@ -267,8 +285,16 @@ async function ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies)
 **Usage:**
 ```javascript
 // In POST /api/manage/cup/:id/remove-pending
-const result = await ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies)
+const result = await ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies, email)
 // result: { success: true, message: 'Deleted' }
+
+// With email for disambiguation
+const result = await ssiFindAndDeleteCupParticipant(
+  '12345',
+  'Ari Virtanen',
+  cookies,
+  'ari.virtanen@example.com'
+)
 ```
 
 **Error Cases:**
@@ -279,6 +305,8 @@ const result = await ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies)
 - Requires 3 toggles to reach Deleted state from Pending
 - Function tracks status after each toggle for safety
 - Can be used on any status, not just Pending
+- **Ambiguity Detection**: Warns if multiple name matches found
+- Email parameter helps with debugging when multiple people have similar names
 
 ---
 
@@ -450,13 +478,14 @@ const sqResult = await ssiSetParticipantSquad(participantId, squadNumber, cookie
 
 **Signature:**
 ```javascript
-async function ssiFindCompetitorInMatch(matchId, shooterName, cookies)
+async function ssiFindCompetitorInMatch(matchId, shooterName, cookies, email = null)
 ```
 
 **Parameters:**
 - `matchId` (string): SSI Match event ID
 - `shooterName` (string): Full name of shooter to find
 - `cookies` (object): SSI session cookies
+- `email` (string, optional): Shooter's email for logging and disambiguation
 
 **Returns:**
 - `string` - Participant ID if found
@@ -475,7 +504,9 @@ async function ssiFindCompetitorInMatch(matchId, shooterName, cookies)
    - Normalize search: split name into words
    - Keep single-char digits (e.g., "2" in "Tuloskone 2")
    - Filter words: length > 1 OR contains digit
-   - Match if ALL search words appear in participant name (case-insensitive)
+   - Collect ALL matches where all search words appear in participant name (case-insensitive)
+   - **Multiple Match Detection**: If more than one match found, log warning with all matching names
+   - **Email for Disambiguation**: If email provided, it's logged for debugging (but cannot verify from HTML)
 
 4. **Return Participant ID**
    - First matching participant ID is returned
@@ -487,14 +518,14 @@ async function ssiFindCompetitorInMatch(matchId, shooterName, cookies)
 **Usage:**
 ```javascript
 // Find participant ID before squad assignment
-const participantId = await ssiFindCompetitorInMatch(matchId, 'John Doe', cookies)
+const participantId = await ssiFindCompetitorInMatch(matchId, 'John Doe', cookies, 'john.doe@example.com')
 if (participantId) {
   await ssiSetParticipantSquad(participantId, squadNumber, cookies)
 }
 
 // In POST /api/manage/cup/:id/assign-squad
 for (const matchId of matchIds) {
-  const participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies)
+  const participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies, email)
   if (!participantId) {
     // Handle not found
   }
@@ -511,6 +542,8 @@ for (const matchId of matchIds) {
 - Matches against participant name in HTML, not GraphQL data
 - Single-character digits are preserved for distinguishing similar names
 - Returns only Match participant IDs (content type 93)
+- **Ambiguity Detection**: Warns when multiple matches found (e.g., "Jari Virtanen" and "Ari Virtanen")
+- Email parameter helps identify correct shooter when names are similar
 
 ---
 
@@ -559,6 +592,32 @@ function getShooterKey(firstName, lastName, email) {
    - Shooters without emails get unique error keys
    - Prevents false matches: two "John Doe" entries without emails are kept separate
    - UI displays "🚨 Sähköposti puuttuu" indicator
+
+### Email in State Management Functions
+
+**Current Implementation:**
+
+All three web-scraping state management functions now accept an optional `email` parameter:
+- `ssiFindAndApproveCupParticipant(cupId, shooterName, cookies, email = null)`
+- `ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies, email = null)`
+- `ssiFindCompetitorInMatch(matchId, shooterName, cookies, email = null)`
+
+**Purpose:**
+1. **Logging & Debugging**: Email is included in debug logs to identify which shooter was processed
+2. **Ambiguity Detection**: Functions warn when multiple name matches are found
+3. **Future-Proofing**: Ready for email-based verification if SSI adds email to HTML pages
+
+**Limitation:**
+- SSI participant HTML pages do NOT include email addresses in the participant lists
+- Email cannot be used for matching against scraped HTML (SSI limitation)
+- Functions still use name-based matching as the primary mechanism
+- Email parameter is used for logging, warnings, and future verification only
+
+**Example Warning:**
+```
+[cup-approve] WARNING: Multiple name matches found for "Jari Virtanen" in CUP 12345: ["Jari Virtanen", "Ari Virtanen"]
+[cup-approve] Email provided for disambiguation: jari.virtanen@example.com (but cannot verify from HTML)
+```
 
 ### GraphQL Email Fields
 
