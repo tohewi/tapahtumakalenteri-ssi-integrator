@@ -150,22 +150,22 @@ export async function manageAddToCup(cupId, shooterName, email = null) {
   return handleResponse(resp)
 }
 
-export async function manageApprovePending(cupId, shooterName, email = null) {
+export async function manageApprovePending(cupId, shooterName, email = null, cupParticipantId = null) {
   const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/approve-pending`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ shooterName, email }),
+    body: JSON.stringify({ shooterName, email, cupParticipantId }),
   })
   return handleResponse(resp)
 }
 
-export async function manageRemovePending(cupId, shooterName, email = null) {
+export async function manageRemovePending(cupId, shooterName, email = null, cupParticipantId = null) {
   const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/remove-pending`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ shooterName, email }),
+    body: JSON.stringify({ shooterName, email, cupParticipantId }),
   })
   return handleResponse(resp)
 }

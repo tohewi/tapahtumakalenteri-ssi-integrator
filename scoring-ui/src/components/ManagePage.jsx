@@ -345,11 +345,11 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
   }
 
   const handleApprovePending = (shooter) => {
-    runAction(() => api.manageApprovePending(cupId, shooter.name, shooter.email), shooter.name, 'approve')
+    runAction(() => api.manageApprovePending(cupId, shooter.name, shooter.email, shooter.cupParticipantId), shooter.name, 'approve')
   }
 
   const handleRemovePending = (shooter) => {
-    runAction(() => api.manageRemovePending(cupId, shooter.name, shooter.email), shooter.name, 'remove')
+    runAction(() => api.manageRemovePending(cupId, shooter.name, shooter.email, shooter.cupParticipantId), shooter.name, 'remove')
   }
 
   return (
