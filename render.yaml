@@ -18,3 +18,18 @@ services:
         value: production
       - key: PORT
         value: 3001
+
+  - type: cron
+    name: sra-staffing-cron
+    runtime: node
+    plan: starter
+    branch: main
+    repo: https://github.com/tohewi/tapahtumakalenteri-ssi-integrator
+    schedule: "0 * * * *"
+    buildCommand: cd scoring-proxy && npm ci
+    startCommand: cd scoring-proxy && node lib/staffing/cron.js
+    envVars:
+      - key: STAFFING_API_URL
+        value: https://ssi-scoring.onrender.com
+      - key: STAFFING_CRON_SECRET
+        fromSecret: STAFFING_CRON_SECRET
