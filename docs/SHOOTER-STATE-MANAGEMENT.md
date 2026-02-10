@@ -4,11 +4,72 @@ This document describes the state management system for shooters in the SSI Scor
 
 ## Table of Contents
 
+- [Design Requirements](#design-requirements)
 - [State Diagram](#state-diagram)
 - [Function Interaction Diagram](#function-interaction-diagram)
 - [State Management Functions](#state-management-functions)
 - [Shooter Identification System](#shooter-identification-system)
 - [Example Scenarios](#example-scenarios)
+
+---
+
+## Design Requirements
+
+### Critical Identification Requirements
+
+**⚠️ REQUIREMENT: Email-Based Exact Match Only**
+
+The shooter identification system **MUST** use the following strict requirements to prevent data corruption and incorrect operations:
+
+#### 1. Email is the Primary Identifier
+
+**Requirement:** Email address is the PRIMARY and REQUIRED identifier for all shooter operations.
+
+- **Rationale:** SSI supports wildcard/partial name searches which can return ambiguous results. For example, searching "Ari" may return both "Ari Virtanen" and "Jari Virtanen". Email-based identification eliminates this ambiguity.
+- **Implementation:** All GraphQL queries fetch email addresses. Backend uses `firstName|||lastName|||email` composite keys.
+- **Exception:** When email is missing, system generates unique error keys (e.g., `ERROR_NO_EMAIL_abc123`) to prevent false matches.
+
+#### 2. Exact Match Required
+
+**Requirement:** When using participant IDs from GraphQL, ONLY perform exact ID matches. Name-based fallback matching is PROHIBITED in production flows.
+
+- **Rationale:** SSI's wildcard name search can return unrelated participants with similar names, causing state changes on wrong individuals (e.g., approving "Ari" when searching for "Jari").
+- **Implementation:**
+  - State functions accept optional `participantId` parameter (5th parameter)
+  - When `participantId` provided: Use ID directly (no name search)
+  - When `participantId` NOT provided: Legacy fallback (logs warning)
+- **Enforcement:** Backend validates `cupParticipantId` exists before calling CUP state functions
+
+#### 3. Fail-Safe: Stop and Alert on Ambiguity
+
+**Requirement:** If exact match cannot be found via participant ID, the operation MUST fail with a clear error message. Never proceed with ambiguous or partial matches.
+
+- **Rationale:** Incorrect operations (approving/deleting wrong shooter) cause data integrity issues and are "extremely annoying" to fix.
+- **Implementation:**
+  - Backend: Return HTTP 400 with descriptive error if `participantId` missing
+  - Frontend: Display error alert to user
+  - Logs: Warn about ambiguity attempts
+- **Error Messages:**
+  - `"Cannot approve in CUP: shooter is not pending in CUP (only in matches)"`
+  - `"Cannot remove from CUP: shooter is not pending in CUP (only in matches)"`
+
+#### 4. UI Visibility Requirements
+
+**Requirement:** UI MUST clearly indicate when operations cannot be performed, preventing user errors.
+
+- **Implementation:**
+  - Hide approve/remove buttons for match-only pending shooters
+  - Show `"(Vain osakilpailuissa)"` label instead
+  - Display email addresses for all shooters
+  - Show `"🚨 Sähköposti puuttuu"` for missing emails
+
+### Design Principles
+
+1. **Email First, Name Second:** Always use email as primary key. Names are for display only.
+2. **Explicit over Implicit:** Require explicit participant IDs. No silent fallbacks to name-based matching.
+3. **Fail Loudly:** Alert users immediately when exact match fails. Never guess.
+4. **Prevent Ambiguity:** Unique keys for missing emails prevent false positives.
+5. **Defensive Programming:** Validate inputs, log warnings, return clear errors.
 
 ---
 
