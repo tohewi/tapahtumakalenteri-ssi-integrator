@@ -527,6 +527,8 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
   // POST /api/manage/cup/:id/approve-pending
   // Approve a pending shooter in CUP (and optionally in matches)
   // Body: { shooterName, email, cupParticipantId }
+  // Note: This endpoint only approves in CUP. Shooters pending only in matches
+  //       should be approved at the match level, not CUP level.
   // ============================================================
   router.post('/cup/:id/approve-pending', requireAuth('manage'), async (req, res) => {
     const { shooterName, email, cupParticipantId } = req.body
@@ -540,9 +542,15 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
     try {
       const cupId = req.params.id
 
-      // Approve CUP participant (with ID-based identification if available)
-      const idDesc = cupParticipantId ? ` ID=${cupParticipantId}` : ''
-      if (!IS_PROD) console.log(`[manage] Approving pending shooter "${shooterName}" (${email || 'no email'})${idDesc} in cup ${cupId}`)
+      // Check if shooter is actually in the CUP
+      if (!cupParticipantId) {
+        const errorMsg = `Cannot approve "${shooterName}" in CUP: shooter is not pending in CUP (only in matches)`
+        console.warn(`[manage] ${errorMsg}`)
+        return res.status(400).json({ error: errorMsg })
+      }
+
+      // Approve CUP participant (with ID-based identification)
+      if (!IS_PROD) console.log(`[manage] Approving pending shooter "${shooterName}" (${email || 'no email'}) ID=${cupParticipantId} in cup ${cupId}`)
       const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies, email, cupParticipantId)
       if (!IS_PROD) console.log(`[manage] Cup approve result: ${approveResult.message}`)
 
@@ -562,6 +570,8 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
   // POST /api/manage/cup/:id/remove-pending
   // Remove/delete a pending shooter from CUP
   // Body: { shooterName, email, cupParticipantId }
+  // Note: This endpoint only removes from CUP. Shooters pending only in matches
+  //       should be removed from the match level, not CUP level.
   // ============================================================
   router.post('/cup/:id/remove-pending', requireAuth('manage'), async (req, res) => {
     const { shooterName, email, cupParticipantId } = req.body
@@ -575,9 +585,15 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PRO
     try {
       const cupId = req.params.id
 
-      // Delete CUP participant (with ID-based identification if available)
-      const idDesc = cupParticipantId ? ` ID=${cupParticipantId}` : ''
-      if (!IS_PROD) console.log(`[manage] Removing pending shooter "${shooterName}" (${email || 'no email'})${idDesc} from cup ${cupId}`)
+      // Check if shooter is actually in the CUP
+      if (!cupParticipantId) {
+        const errorMsg = `Cannot remove "${shooterName}" from CUP: shooter is not pending in CUP (only in matches)`
+        console.warn(`[manage] ${errorMsg}`)
+        return res.status(400).json({ error: errorMsg })
+      }
+
+      // Delete CUP participant (with ID-based identification)
+      if (!IS_PROD) console.log(`[manage] Removing pending shooter "${shooterName}" (${email || 'no email'}) ID=${cupParticipantId} from cup ${cupId}`)
       const deleteResult = await ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies, email, cupParticipantId)
       if (!IS_PROD) console.log(`[manage] Cup delete result: ${deleteResult.message}`)
 
