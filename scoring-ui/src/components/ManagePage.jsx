@@ -574,20 +574,26 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                         <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
                       )}
                     </div>
-                    <div className="flex gap-2">
-                      <ActionButton
-                        label="Hyväksy"
-                        loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'approve'}
-                        onClick={() => handleApprovePending(s)}
-                        color="blue"
-                      />
-                      <ActionButton
-                        label="Poista"
-                        loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'remove'}
-                        onClick={() => handleRemovePending(s)}
-                        color="red"
-                      />
-                    </div>
+                    {s.inCup ? (
+                      <div className="flex gap-2">
+                        <ActionButton
+                          label="Hyväksy"
+                          loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'approve'}
+                          onClick={() => handleApprovePending(s)}
+                          color="blue"
+                        />
+                        <ActionButton
+                          label="Poista"
+                          loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'remove'}
+                          onClick={() => handleRemovePending(s)}
+                          color="red"
+                        />
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-500 italic">
+                        (Vain osakilpailuissa)
+                      </div>
+                    )}
                   </div>
                   <div className="text-xs text-gray-600 space-y-0.5">
                     {s.inCup && <div>• Cupissa (pending)</div>}

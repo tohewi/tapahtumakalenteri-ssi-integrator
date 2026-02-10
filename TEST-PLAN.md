@@ -158,6 +158,36 @@ This test plan validates the fix for the ambiguous name matching bug where click
 
 ---
 
+### Scenario 6: Match-Only Pending Shooter (No CUP Participant)
+
+**Setup:**
+1. Shooter "Ari Tammelin" is pending in one or more matches
+2. Shooter is NOT in the CUP at all (no CUP participant entry)
+3. Two different "Ari Tammelin" exist with different emails (identity conflict)
+
+**Test Steps:**
+1. Navigate to ManagePage for the CUP
+2. Verify "Odottaa hyväksyntää" section shows "Ari Tammelin" with:
+   - Email displayed
+   - Text showing "• Osakilpailuissa: 1. Match Name"
+   - NO text showing "• Cupissa (pending)"
+   - NO "Hyväksy" or "Poista" buttons
+   - Instead shows italic text: "(Vain osakilpailuissa)"
+3. Verify buttons are NOT clickable (they don't exist for match-only pending)
+
+**Expected Result:**
+- ✅ UI clearly indicates shooter is only in matches
+- ✅ NO approve/remove buttons shown (prevents error)
+- ✅ User sees "(Vain osakilpailuissa)" label
+- ✅ No backend errors logged
+
+**Why This Matters:**
+- CUP-level approve/remove endpoints only work on CUP participants
+- Match-only pending shooters would cause "Participant not found in CUP" errors
+- UI now prevents this by hiding the buttons for match-only shooters
+
+---
+
 ## Performance Tests
 
 ### Performance 1: Large Cup with Many Pending Shooters
@@ -183,6 +213,7 @@ This test plan validates the fix for the ambiguous name matching bug where click
 - [ ] Scenario 3: Remove with similar names
 - [ ] Scenario 4: Legacy fallback without cupParticipantId
 - [ ] Scenario 5: Missing email handling
+- [ ] Scenario 6: Match-only pending (no CUP buttons) - **CRITICAL**
 - [ ] Regression 1: Squadding workflow unchanged
 - [ ] Regression 2: CupOnly and MatchOnly sections
 
@@ -224,11 +255,12 @@ This test plan validates the fix for the ambiguous name matching bug where click
 
 The fix is considered successful when:
 
-1. ✅ All 5 test scenarios pass without errors
+1. ✅ All 6 test scenarios pass without errors
 2. ✅ No regression in existing functionality (2 regression tests pass)
 3. ✅ Server logs confirm ID-based identification is being used
 4. ✅ No "Multiple name matches" warnings in production logs for ID-based flows
-5. ✅ CI/CD pipeline passes all checks
+5. ✅ Match-only pending shooters show "(Vain osakilpailuissa)" instead of buttons
+6. ✅ CI/CD pipeline passes all checks
 
 ---
 
