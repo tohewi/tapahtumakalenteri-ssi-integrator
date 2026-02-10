@@ -16,23 +16,34 @@ export function useRememberMe(storageKey) {
   // Load saved credentials on mount
   useEffect(() => {
     const loadSavedCreds = async () => {
-      const raw = localStorage.getItem(storageKey)
-      if (!raw) return
-      const creds = await decryptData(raw)
-      if (creds) {
-        setSavedCreds(creds) // pre-fill form only
-      } else {
-        localStorage.removeItem(storageKey) // corrupted data
+      try {
+        const raw = localStorage.getItem(storageKey)
+        if (!raw) return
+        const creds = await decryptData(raw)
+        if (creds) {
+          setSavedCreds(creds) // pre-fill form only
+        } else {
+          localStorage.removeItem(storageKey) // corrupted data
+        }
+      } catch (err) {
+        // Decryption failed - remove corrupted data
+        localStorage.removeItem(storageKey)
       }
     }
     loadSavedCreds()
   }, [storageKey])
 
   // Handler to save or clear credentials based on rememberMe flag
+  // Note: Throws on encryption failure - caller should handle errors
   const handleRememberMe = async (email, password, apiKey, rememberMe) => {
     if (rememberMe) {
-      const encrypted = await encryptData({ email, password, apiKey })
-      localStorage.setItem(storageKey, encrypted)
+      try {
+        const encrypted = await encryptData({ email, password, apiKey })
+        localStorage.setItem(storageKey, encrypted)
+      } catch (err) {
+        // Encryption failed - log but don't block login
+        console.error('Failed to save credentials:', err)
+      }
     } else {
       localStorage.removeItem(storageKey)
     }
