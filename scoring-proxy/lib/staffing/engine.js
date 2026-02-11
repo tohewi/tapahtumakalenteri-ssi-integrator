@@ -289,6 +289,7 @@ export function getEventStatus(eventId) {
     maxTrainers: event.maxTrainers,
     currentTrainers: current,
     isFull,
+    contentType: event.contentType || null,
     leadInstructor: event.leadInstructor
       ? { email: event.leadInstructor.email, userName: event.leadInstructor.userName }
       : null,
