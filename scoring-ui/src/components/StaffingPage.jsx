@@ -47,6 +47,7 @@ export default function StaffingPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
+  const [filter, setFilter] = useState('all') // 'all' | 'missingRoles' | 'myEvents'
 
   // Saved credentials for pre-fill
   const [savedEmail, setSavedEmail] = useState('')
@@ -169,6 +170,29 @@ export default function StaffingPage() {
         </div>
       </div>
 
+      {/* Filter chips */}
+      {!loading && events.length > 0 && (
+        <div className="px-3 pt-3 pb-0 flex gap-2">
+          {['all', 'missingRoles', 'myEvents'].map(f => {
+            const labels = { all: t.filterAll, missingRoles: t.filterMissingRoles, myEvents: t.filterMyEvents }
+            const active = filter === f
+            return (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  active
+                    ? 'bg-slate-700 text-white'
+                    : 'bg-gray-100 text-gray-600 active:bg-gray-200'
+                }`}
+              >
+                {labels[f]}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       <div className="p-3 space-y-3">
         {loading && (
           <div className="text-center py-8">
@@ -187,7 +211,13 @@ export default function StaffingPage() {
           <div className="text-center py-8 text-gray-400">{t.noUpcomingEvents}</div>
         )}
 
-        {events.map(evt => (
+        {events
+          .filter(evt => {
+            if (filter === 'missingRoles') return !evt.leadInstructor || !evt.equipmentManager
+            if (filter === 'myEvents') return !!getUserRole(evt, userEmail)
+            return true
+          })
+          .map(evt => (
           <EventCard
             key={evt.eventId}
             event={evt}
@@ -265,7 +295,12 @@ function EventCard({ event, isAdmin, userEmail, onUpdate }) {
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
       {/* Event header */}
       <div className="px-4 py-3 bg-gradient-to-r from-slate-700 to-slate-800 text-white">
-        <div className="font-semibold text-sm">{event.eventName}</div>
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-sm">{event.eventName}</span>
+          {(!event.leadInstructor || !event.equipmentManager) && (
+            <span className="text-amber-400 text-sm" title={t.missingRolesWarning}>⚠</span>
+          )}
+        </div>
         <div className="flex items-center gap-3 text-xs text-slate-300 mt-0.5">
           <span>{dateStr}</span>
           <span>·</span>

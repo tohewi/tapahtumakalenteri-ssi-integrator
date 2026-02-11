@@ -114,6 +114,10 @@ export const fi = {
   registerAsStaff: 'Ilmoittaudu vetäjäksi',
   cancelRegistration: 'Peru ilmoittautuminen',
   yourRole: 'Roolisi',
+  filterAll: 'Kaikki',
+  filterMissingRoles: 'Roolit puuttuu',
+  filterMyEvents: 'Omat',
+  missingRolesWarning: 'Vastuuvetäjä tai kalustovastaava puuttuu',
 }
 
 // English UI strings
@@ -232,6 +236,10 @@ export const en = {
   registerAsStaff: 'Register as staff',
   cancelRegistration: 'Cancel registration',
   yourRole: 'Your role',
+  filterAll: 'All',
+  filterMissingRoles: 'Missing roles',
+  filterMyEvents: 'My events',
+  missingRolesWarning: 'Lead instructor or equipment manager missing',
 }
 
 // Detect browser language and return appropriate translations
