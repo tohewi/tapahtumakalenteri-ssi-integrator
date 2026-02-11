@@ -47,6 +47,17 @@ export function isAdminEmail(email) {
 }
 
 /**
+ * Check if an email is a service account (automation identity, not a real instructor).
+ * @param {string} email
+ * @returns {boolean}
+ */
+export function isServiceAccount(email) {
+  const config = loadConfig()
+  const list = config.serviceAccounts || []
+  return list.some(sa => sa.toLowerCase() === email.toLowerCase())
+}
+
+/**
  * Get training type config by key or by matching event name.
  * @param {string} nameOrKey — training type key ("oldies"/"newbie") or event name to match
  * @returns {{ key: string, config: object } | null}

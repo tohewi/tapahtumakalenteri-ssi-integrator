@@ -15,7 +15,7 @@ import {
   upsertEvent,
   syncStaffFromSSI,
 } from '../lib/staffing/engine.js'
-import { loadConfig, isAdminEmail } from '../lib/staffing/config-loader.js'
+import { loadConfig, isAdminEmail, isServiceAccount } from '../lib/staffing/config-loader.js'
 import {
   ssiRegisterToTrainerSquad,
   ssiGetMatchGroupId,
@@ -138,7 +138,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
               s.number === staffSquadNum || (s.comment || '').includes('Trainer')
             )
             const squadMembers = (staffSquad?.competitors || [])
-              .filter(c => c.status === 'a' && c.shooter?.email)
+              .filter(c => c.status === 'a' && c.shooter?.email && !isServiceAccount(c.shooter.email))
               .map(c => ({
                 email: c.shooter.email,
                 userName: `${c.shooter.first_name || ''} ${c.shooter.last_name || ''}`.trim(),
