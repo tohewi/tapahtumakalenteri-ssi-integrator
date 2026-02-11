@@ -225,32 +225,43 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
 
       const result = signup(req.params.eventId, user, role)
 
-      // SSI integration (non-blocking — don't fail the staffing signup)
+      // SSI integration (blocking to provide feedback)
       const config = loadConfig()
       const staffSquadName = config.eventDiscovery.staffSquadName
       const contentType = config.eventDiscovery.matchContentType
       const cookies = session.ssiCookies
       const eventId = req.params.eventId
+      const ssiResults = { trainerSquad: null, management: null }
 
       if (contentType && cookies) {
         // 1. Add to SSI Trainer Squad
         if (staffSquadName) {
-          ssiRegisterToTrainerSquad(contentType, eventId, me.email, staffSquadName, cookies)
-            .then(r => console.log(`[staffing] SSI trainer squad: ${me.email} → ${r.message}`))
-            .catch(e => console.error(`[staffing] SSI trainer squad failed for ${me.email}: ${e.message}`))
+          try {
+            const squadResult = await ssiRegisterToTrainerSquad(contentType, eventId, me.email, staffSquadName, cookies)
+            console.log(`[staffing] SSI trainer squad: ${me.email} → ${squadResult.message}`)
+            ssiResults.trainerSquad = { success: true, message: squadResult.message }
+          } catch (e) {
+            console.error(`[staffing] SSI trainer squad failed for ${me.email}: ${e.message}`)
+            ssiResults.trainerSquad = { success: false, message: e.message }
+          }
         }
 
         // 2. Add to SSI management group with role-appropriate officials
         const ssiRole = SSI_ROLE_MAP[role]
         if (ssiRole) {
-          ssiGetMatchGroupId(contentType, eventId, cookies)
-            .then(groupId => ssiAddToMatchManagement(groupId, contentType, eventId, me.email, ssiRole.role, ssiRole.officials, cookies))
-            .then(r => console.log(`[staffing] SSI management: ${me.email} (${role}) → ${r.message}`))
-            .catch(e => console.error(`[staffing] SSI management add failed for ${me.email}: ${e.message}`))
+          try {
+            const groupId = await ssiGetMatchGroupId(contentType, eventId, cookies)
+            const mgmtResult = await ssiAddToMatchManagement(groupId, contentType, eventId, me.email, ssiRole.role, ssiRole.officials, cookies)
+            console.log(`[staffing] SSI management: ${me.email} (${role}) → ${mgmtResult.message}`)
+            ssiResults.management = { success: true, message: mgmtResult.message, role: 'Admin' }
+          } catch (e) {
+            console.error(`[staffing] SSI management add failed for ${me.email}: ${e.message}`)
+            ssiResults.management = { success: false, message: e.message }
+          }
         }
       }
 
-      res.json(result)
+      res.json({ ...result, ssi: ssiResults })
     } catch (err) {
       console.error('[staffing] POST /signup error:', err.message)
       const status = err.message.includes('Not authorized') ? 403
