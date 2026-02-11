@@ -65,9 +65,10 @@ loadState()
  * @param {string} params.trainingType — "oldies" or "newbie"
  * @param {string} params.eventDate — ISO date
  * @param {number} params.shooterCount — current shooter count in shooter squads
+ * @param {number} params.contentType — SSI content type (22 for match, 136 for cup)
  * @returns {object} The training event
  */
-export function upsertEvent({ eventId, eventName, trainingType, eventDate, shooterCount }) {
+export function upsertEvent({ eventId, eventName, trainingType, eventDate, shooterCount, contentType }) {
   const config = loadConfig()
   const ttConfig = config.trainingTypes[trainingType]
   if (!ttConfig) throw new Error(`Unknown training type: ${trainingType}`)
@@ -78,6 +79,7 @@ export function upsertEvent({ eventId, eventName, trainingType, eventDate, shoot
     event.eventName = eventName
     event.shooterCount = shooterCount
     event.maxTrainers = ttConfig.maxTrainers || 10
+    if (contentType !== undefined) event.contentType = contentType
   } else {
     event = {
       eventId: String(eventId),
@@ -86,6 +88,7 @@ export function upsertEvent({ eventId, eventName, trainingType, eventDate, shoot
       eventDate,
       shooterCount,
       maxTrainers: ttConfig.maxTrainers || 10,
+      contentType: contentType || null,
       // Role slots: userId/userName or null
       leadInstructor: null,
       equipmentManager: null,
