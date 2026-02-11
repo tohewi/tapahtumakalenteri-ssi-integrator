@@ -337,7 +337,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
             ? config.trainingTypes[event.trainingType].staffSquad 
             : 5
           const squadData = await graphqlWithRefresh(adminSess, `
-            query GetEventSquads($contentType: Int!, $eventId: Int!) {
+            query GetEventSquads($contentType: Int!, $eventId: String!) {
               event(content_type: $contentType, id: $eventId) {
                 squads {
                   id
@@ -363,7 +363,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
                 }
               }
             }
-          `, { contentType: parseInt(contentType), eventId: parseInt(eventId) })
+          `, { contentType: parseInt(contentType), eventId: eventId })
 
           // Find user in trainer squad
           const staffSquad = (squadData.event?.squads || []).find(s => s.number === staffSquadNum)
