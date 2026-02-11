@@ -272,7 +272,12 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
                     event(content_type: $ct, id: $id) {
                       squads {
                         number
-                        ... on IpscSquadNode { competitors { id shooter { email } } }
+                        ... on NordicSquadNode    { competitors { id shooter { email } } }
+                        ... on IpscSquadNode      { competitors { id shooter { email } } }
+                        ... on PpcSquadNode       { competitors { id shooter { email } } }
+                        ... on CmpSquadNode       { competitors { id shooter { email } } }
+                        ... on PrecisionSquadNode { competitors { id shooter { email } } }
+                        ... on GenericSquadNode   { competitors { id shooter { email } } }
                       }
                     }
                   }
