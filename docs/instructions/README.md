@@ -11,12 +11,14 @@ This directory contains comprehensive documentation for the tapahtumakalenteri-s
 - **[Installation Guide](installation-guide.md)** - Deploy to Render with Resend email and GitHub CI
 
 ### Technical Documentation
-- **[Scoring Architecture](scoring-architecture.md)** - Proxy architecture, session management, scoring flow
-- **[Session Handling](session-handling.md)** - Inactivity timeout, feature isolation, explicit auth, state restoration
-- **[Session Lifecycle](session-lifecycle.md)** - State charts and flow analysis for session management
-- **[Registration Flow](registration-flow.md)** - Backend sequence diagrams and SSI state machine
-- **[SSI Admin Operations](ssi-admin-operations.md)** - Web scraping endpoints and form field reference
-- **[Requirements](requirements.md)** - Full requirements traceability matrix
+- **[Scoring Architecture](../design/scoring-architecture.md)** - Proxy architecture, session management, scoring flow
+- **[Session Handling](../design/session-handling.md)** - Inactivity timeout, feature isolation, explicit auth, state restoration
+- **[Session Lifecycle](../design/session-lifecycle.md)** - State charts and flow analysis for session management
+- **[Registration Flow](../design/registration-flow.md)** - Backend sequence diagrams and SSI state machine
+- **[SSI Dual Approach: GraphQL + Web Scraping](../design/ssi-dual-approach-graphql-webscraping.md)** - How GraphQL and web scraping work together, email handling, authentication differences
+- **[SSI Admin Operations](../design/ssi-admin-operations.md)** - Web scraping endpoints and form field reference
+- **[SSI GraphQL Findings](../design/ssi-graphql-findings.md)** - Known GraphQL API limitations and workarounds
+- **[Requirements](../requirements/requirements.md)** - Full requirements traceability matrix
 
 ### Architecture & Refactoring
 - **[Refactoring Plan](refactoring-plan.md)** - Comprehensive software architecture analysis and refactoring strategy
