@@ -41,6 +41,10 @@ export default function ManagePage() {
     // It will be restored after successful re-login
     setAuthed(false)
     setView('login')
+    setCups([])
+    setSelectedCup(null)
+    setData(null)
+    setError(null)
   }, [])
 
   // --- Helper to handle scope mismatch ---
@@ -48,6 +52,10 @@ export default function ManagePage() {
     setSessionExpiredMessage('Please login to access this feature.')
     setAuthed(false)
     setView('login')
+    setCups([])
+    setSelectedCup(null)
+    setData(null)
+    setError(null)
   }, [])
 
   // --- Wrapper to catch SessionExpiredError and ScopeMismatchError ---
@@ -100,6 +108,7 @@ export default function ManagePage() {
     try { await api.logout() } catch { /* ignore */ }
     setAuthed(false)
     setView('login')
+    setCups([])
     setSelectedCup(null)
     setData(null)
     setError(null)
