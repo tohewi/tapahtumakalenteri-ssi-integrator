@@ -919,9 +919,12 @@ export async function ssiRemoveFromMatchManagement(groupId, eventContentType, ev
         if (tdContents.length >= 3) {
           const contactField = tdContents[2].toLowerCase()
           const name = tdContents[1]
+          const emailLower = email.toLowerCase()
           
-          // Check if email appears in contact field
-          if (contactField.includes(email.toLowerCase())) {
+          // Check if email appears in contact field (exact match or surrounded by whitespace/punctuation)
+          // This prevents partial matches like 'john@example.com' matching 'john@example.com.au'
+          const emailPattern = new RegExp(`(?:^|\\s|[^a-z0-9])${emailLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:$|\\s|[^a-z0-9])`)
+          if (emailPattern.test(contactField)) {
             ssiUserId = userId
             foundInStaff = true
             if (debug) console.log(`[mgmt-remove] Found user in staff page: ${name} (ID: ${userId}, contact: ${contactField})`)
