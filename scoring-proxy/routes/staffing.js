@@ -22,6 +22,7 @@ import {
   ssiAddToMatchManagement,
   ssiRemoveFromMatchManagement,
   ssiGetMatchOfficials,
+  ssiDeleteMatchParticipant,
 } from '../lib/ssi-client.js'
 
 // Map staffing roles to SSI management group role + event official codes
@@ -292,48 +293,106 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
   router.delete('/events/:eventId/signup', requireAuth('staffing'), async (req, res) => {
     try {
       const session = req.ssiSession
-      const meData = await graphqlWithRefresh(session, '{ me { email } }')
+      const meData = await graphqlWithRefresh(session, '{ me { email first_name last_name } }')
       const userEmail = meData.me?.email
       if (!userEmail) return res.status(401).json({ error: 'Could not get user info' })
 
+      const userName = `${meData.me.first_name} ${meData.me.last_name}`.trim()
       const result = resign(req.params.eventId, userEmail)
 
-      // SSI integration: remove from management group (blocking to detect partial state)
+      // SSI integration: remove from management group AND trainer squad (Squad 5)
       // Uses admin cookies — user may have already lost match access
       const config = loadConfig()
       const adminSess = getAdminSession ? await getAdminSession() : null
       const cookies = adminSess?.cookies
       const eventId = req.params.eventId
-      let ssiWarning = null
+      const ssiResults = { management: null, trainerSquad: null }
 
       // Get event-specific content type from stored event data
       const event = getEventStatus(eventId)
       const contentType = event?.contentType || config.eventDiscovery.matchContentType
 
       if (contentType && cookies) {
+        // 1. Remove from management group
         try {
           const groupId = await ssiGetMatchGroupId(contentType, eventId, cookies)
           const removeResult = await ssiRemoveFromMatchManagement(groupId, contentType, eventId, userEmail, cookies)
           console.log(`[staffing] SSI management remove: ${userEmail} → ${removeResult.message}`)
-
-          // Check if fallback was used (indicates partial withdrawal state)
-          if (removeResult.usedFallback) {
-            ssiWarning = 'Partial withdrawal detected: You were removed from management but not from trainer squad. Full cleanup completed.'
-          }
+          ssiResults.management = { success: true, message: removeResult.message, usedFallback: removeResult.usedFallback }
         } catch (e) {
           console.error(`[staffing] SSI management remove failed for ${userEmail}: ${e.message}`)
-          // Only set warning for non-critical errors (user already removed is OK)
+          // Only set error for critical failures (user already removed is OK)
           if (!e.message.includes('not found') && !e.message.includes('may already be removed')) {
-            ssiWarning = `Warning: Could not remove from SSI management group: ${e.message}`
+            ssiResults.management = { success: false, message: e.message }
+          } else {
+            ssiResults.management = { success: true, message: 'Already removed or not found' }
           }
         }
+
+        // 2. Remove from trainer squad (Squad 5)
+        try {
+          // Fetch event squads to find user's participant ID in trainer squad
+          const staffSquadNum = event?.trainingType ? config.trainingTypes[event.trainingType]?.staffSquad : 5
+          const squadData = await graphqlWithRefresh(session, `
+            query GetEventSquads($eventId: Int!) {
+              event(id: $eventId) {
+                squads {
+                  id
+                  number
+                  ... on NordicSquadNode {
+                    competitors { id status shooter { email first_name last_name } }
+                  }
+                  ... on IpscSquadNode {
+                    competitors { id status shooter { email first_name last_name } }
+                  }
+                  ... on GenericSquadNode {
+                    competitors { id status shooter { email first_name last_name } }
+                  }
+                }
+              }
+            }
+          `, { eventId: parseInt(eventId) })
+
+          // Find user in trainer squad
+          const staffSquad = (squadData.event?.squads || []).find(s => s.number === staffSquadNum)
+          const userCompetitor = (staffSquad?.competitors || []).find(c => 
+            c.shooter?.email?.toLowerCase() === userEmail.toLowerCase()
+          )
+
+          if (userCompetitor) {
+            const participantId = userCompetitor.id
+            console.log(`[staffing] Found ${userEmail} in Squad ${staffSquadNum}: participant ID ${participantId}`)
+            
+            const deleteResult = await ssiDeleteMatchParticipant(eventId, participantId, userName, cookies)
+            console.log(`[staffing] SSI trainer squad remove: ${userEmail} → ${deleteResult.message}`)
+            ssiResults.trainerSquad = { success: true, message: deleteResult.message }
+          } else {
+            console.log(`[staffing] ${userEmail} not found in Squad ${staffSquadNum} (may already be removed)`)
+            ssiResults.trainerSquad = { success: true, message: 'Not found in trainer squad (may already be removed)' }
+          }
+        } catch (e) {
+          console.error(`[staffing] SSI trainer squad remove failed for ${userEmail}: ${e.message}`)
+          ssiResults.trainerSquad = { success: false, message: e.message }
+        }
+      }
+
+      // Build warning message if there were any SSI issues
+      let ssiWarning = null
+      if (ssiResults.management?.usedFallback) {
+        ssiWarning = 'Partial withdrawal detected during removal. Full cleanup completed.'
+      }
+      if (ssiResults.management?.success === false || ssiResults.trainerSquad?.success === false) {
+        const issues = []
+        if (ssiResults.management?.success === false) issues.push(`management: ${ssiResults.management.message}`)
+        if (ssiResults.trainerSquad?.success === false) issues.push(`trainer squad: ${ssiResults.trainerSquad.message}`)
+        ssiWarning = `Warning: SSI removal had issues: ${issues.join('; ')}`
       }
 
       // Return result with optional warning
       if (ssiWarning) {
-        res.json({ ...result, warning: ssiWarning })
+        res.json({ ...result, warning: ssiWarning, ssi: ssiResults })
       } else {
-        res.json(result)
+        res.json({ ...result, ssi: ssiResults })
       }
     } catch (err) {
       console.error('[staffing] DELETE /signup error:', err.message)
