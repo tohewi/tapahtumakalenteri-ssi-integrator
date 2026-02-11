@@ -332,7 +332,9 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
         // 2. Remove from trainer squad (Squad 5)
         try {
           // Fetch event squads to find user's participant ID in trainer squad
-          const staffSquadNum = event?.trainingType ? config.trainingTypes[event.trainingType]?.staffSquad : 5
+          const staffSquadNum = event?.trainingType && config.trainingTypes?.[event.trainingType]?.staffSquad 
+            ? config.trainingTypes[event.trainingType].staffSquad 
+            : 5
           const squadData = await graphqlWithRefresh(session, `
             query GetEventSquads($eventId: Int!) {
               event(id: $eventId) {
@@ -363,7 +365,9 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
             const participantId = userCompetitor.id
             console.log(`[staffing] Found ${userEmail} in Squad ${staffSquadNum}: participant ID ${participantId}`)
             
-            const deleteResult = await ssiDeleteMatchParticipant(eventId, participantId, userName, cookies)
+            // Validate userName is meaningful, fallback to email if needed
+            const displayName = userName && userName.trim() ? userName : userEmail
+            const deleteResult = await ssiDeleteMatchParticipant(eventId, participantId, displayName, cookies)
             console.log(`[staffing] SSI trainer squad remove: ${userEmail} → ${deleteResult.message}`)
             ssiResults.trainerSquad = { success: true, message: deleteResult.message }
           } else {
