@@ -70,6 +70,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
               id
               name
               starts
+              get_content_type_key
               squads {
                 id
                 number
@@ -126,6 +127,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
               trainingType,
               eventDate: evt.starts,
               shooterCount,
+              contentType: evt.get_content_type_key || null,
             })
 
             // Extract trainer squad members (with emails from GraphQL)
@@ -141,7 +143,11 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
 
             // Queue SSI staff page scrape for this event
             if (squadMembers.length > 0 && session.ssiCookies) {
-              ssiSyncQueue.push({ eventId: evt.id, squadMembers })
+              ssiSyncQueue.push({
+                eventId: evt.id,
+                squadMembers,
+                contentType: evt.get_content_type_key || contentType
+              })
             }
           }
         }
@@ -149,10 +155,10 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
 
       // Sync staff from SSI: scrape staff pages for official roles, cross-reference
       // with trainer squad members (who have emails from GraphQL), and populate engine
-      if (ssiSyncQueue.length > 0 && contentType && session.ssiCookies) {
-        await Promise.all(ssiSyncQueue.map(async ({ eventId, squadMembers }) => {
+      if (ssiSyncQueue.length > 0 && session.ssiCookies) {
+        await Promise.all(ssiSyncQueue.map(async ({ eventId, squadMembers, contentType: evtContentType }) => {
           try {
-            const officials = await ssiGetMatchOfficials(contentType, eventId, session.ssiCookies)
+            const officials = await ssiGetMatchOfficials(evtContentType, eventId, session.ssiCookies)
 
             // Build name → officials lookup from staff page
             const officialsByName = new Map()
@@ -228,10 +234,13 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
       // SSI integration (blocking to provide feedback)
       const config = loadConfig()
       const staffSquadName = config.eventDiscovery.staffSquadName
-      const contentType = config.eventDiscovery.matchContentType
       const cookies = session.ssiCookies
       const eventId = req.params.eventId
       const ssiResults = { trainerSquad: null, management: null }
+
+      // Get event-specific content type from stored event data
+      const event = getEventStatus(eventId)
+      const contentType = event?.contentType || config.eventDiscovery.matchContentType
 
       if (contentType && cookies) {
         // 1. Add to SSI Trainer Squad
@@ -286,17 +295,20 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
 
       // SSI integration: remove from management group (blocking to detect partial state)
       const config = loadConfig()
-      const contentType = config.eventDiscovery.matchContentType
       const cookies = session.ssiCookies
       const eventId = req.params.eventId
       let ssiWarning = null
+
+      // Get event-specific content type from stored event data
+      const event = getEventStatus(eventId)
+      const contentType = event?.contentType || config.eventDiscovery.matchContentType
 
       if (contentType && cookies) {
         try {
           const groupId = await ssiGetMatchGroupId(contentType, eventId, cookies)
           const removeResult = await ssiRemoveFromMatchManagement(groupId, contentType, eventId, userEmail, cookies)
           console.log(`[staffing] SSI management remove: ${userEmail} → ${removeResult.message}`)
-          
+
           // Check if fallback was used (indicates partial withdrawal state)
           if (removeResult.usedFallback) {
             ssiWarning = 'Partial withdrawal detected: You were removed from management but not from trainer squad. Full cleanup completed.'
