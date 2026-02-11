@@ -23,6 +23,8 @@ import {
   ssiRemoveFromMatchManagement,
   ssiGetMatchOfficials,
   ssiDeleteMatchParticipant,
+  ssiSetParticipantSquad,
+  ssiFetchPage,
 } from '../lib/ssi-client.js'
 
 // Map staffing roles to SSI management group role + event official codes
@@ -248,6 +250,11 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
       const event = getEventStatus(eventId)
       const contentType = event?.contentType || config.eventDiscovery.matchContentType
 
+      // Determine staff squad number from config
+      const staffSquadNum = event?.trainingType && config.trainingTypes?.[event.trainingType]?.staffSquad
+        ? config.trainingTypes[event.trainingType].staffSquad
+        : 5
+
       if (contentType && cookies) {
         // 1. Add to SSI Trainer Squad
         if (staffSquadName) {
@@ -255,6 +262,71 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
             const squadResult = await ssiRegisterToTrainerSquad(contentType, eventId, me.email, staffSquadName, cookies)
             console.log(`[staffing] SSI trainer squad: ${me.email} → ${squadResult.message}`)
             ssiResults.trainerSquad = { success: true, message: squadResult.message }
+
+            // Fallback: if "Already registered" but not in the trainer squad,
+            // find competitor ID via GraphQL and move them to the correct squad
+            if (squadResult.message?.includes('Already registered')) {
+              try {
+                const sqData = await graphqlWithRefresh(adminSess, `
+                  query GetSquads($ct: Int!, $id: String!) {
+                    event(content_type: $ct, id: $id) {
+                      squads {
+                        number
+                        ... on IpscSquadNode { competitors { id shooter { email } } }
+                      }
+                    }
+                  }
+                `, { ct: contentType, id: eventId })
+
+                // Find user's competitor entry across all squads
+                let competitorId = null
+                let currentSquad = null
+                for (const sq of sqData.event?.squads || []) {
+                  const comp = (sq.competitors || []).find(c => c.shooter?.email === me.email)
+                  if (comp) {
+                    competitorId = comp.id
+                    currentSquad = sq.number
+                    break
+                  }
+                }
+
+                if (competitorId && currentSquad !== staffSquadNum) {
+                  console.log(`[staffing] ${me.email} in Squad ${currentSquad}, moving to Squad ${staffSquadNum} (competitor ${competitorId})`)
+                  const moveResult = await ssiSetParticipantSquad(competitorId, staffSquadNum, cookies, 'a', 23)
+                  console.log(`[staffing] Squad move: ${moveResult.message || 'done'}`)
+                  ssiResults.trainerSquad = { success: true, message: `Moved to Squad ${staffSquadNum}` }
+                } else if (competitorId && currentSquad === staffSquadNum) {
+                  console.log(`[staffing] ${me.email} already in Squad ${staffSquadNum}`)
+                } else if (!competitorId) {
+                  // User is registered but not in any squad (unassigned).
+                  // Scrape participants page to find participant ID, then set squad.
+                  console.log(`[staffing] ${me.email} not in any squad, scraping participants page...`)
+                  const partHtml = await ssiFetchPage(`/event/${contentType}/${eventId}/participants/`, cookies)
+                  // Pattern: <a href="/event/participant/23/{participantId}/">Name</a>
+                  const partMatch = partHtml.match(/\/event\/participant\/\d+\/(\d+)\/[^"]*"[^>]*>[^<]*Tuloskone[^<]*/i)
+                    || partHtml.match(new RegExp(`/event/participant/\\d+/(\\d+)/[^"]*"[^>]*>[^<]*${me.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i'))
+
+                  // More robust: find all participant links, match by user name
+                  const userName = user.userName
+                  const allParts = [...partHtml.matchAll(/\/event\/participant\/(\d+)\/(\d+)\/[^"]*"[^>]*>([^<]*)</gi)]
+                  const userPart = allParts.find(m => m[3].trim().toLowerCase() === userName.toLowerCase())
+
+                  const participantId = userPart?.[2] || partMatch?.[1]
+                  const participantCT = userPart?.[1] || '23'
+
+                  if (participantId) {
+                    console.log(`[staffing] Found participant ${participantId} (ct=${participantCT}), setting squad to ${staffSquadNum}`)
+                    const moveResult = await ssiSetParticipantSquad(participantId, staffSquadNum, cookies, 'a', parseInt(participantCT))
+                    console.log(`[staffing] Squad set: ${moveResult.message || 'done'}`)
+                    ssiResults.trainerSquad = { success: true, message: `Assigned to Squad ${staffSquadNum}` }
+                  } else {
+                    console.warn(`[staffing] Could not find participant ID for ${me.email} on participants page`)
+                  }
+                }
+              } catch (fallbackErr) {
+                console.error(`[staffing] Squad fallback failed: ${fallbackErr.message}`)
+              }
+            }
           } catch (e) {
             console.error(`[staffing] SSI trainer squad failed for ${me.email}: ${e.message}`)
             ssiResults.trainerSquad = { success: false, message: e.message }
