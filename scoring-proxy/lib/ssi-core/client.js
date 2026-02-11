@@ -756,13 +756,14 @@ export async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookie
 
 // ============================================================
 // Admin: set participant squad + status via edit form (web scraping)
-// GET  /event/participant/93/{participantId}/edit/  → extract all fields
-// POST /event/participant/93/{participantId}/edit/  → submit with overrides
+// GET  /event/participant/{participantCT}/{participantId}/edit/  → extract all fields
+// POST /event/participant/{participantCT}/{participantId}/edit/  → submit with overrides
+// participantContentType: 93 for Nordic matches, 23 for IPSC/SRA matches
 // ============================================================
 
-export async function ssiSetParticipantSquad(participantId, squadNumber, cookies, statusOverride = 'a') {
+export async function ssiSetParticipantSquad(participantId, squadNumber, cookies, statusOverride = 'a', participantContentType = 93) {
   const debug = process.env.NODE_ENV !== 'production'
-  const url = `${SSI_BASE_URL}/event/participant/93/${participantId}/edit/`
+  const url = `${SSI_BASE_URL}/event/participant/${participantContentType}/${participantId}/edit/`
 
   // 1. GET the edit form
   if (debug) console.log(`[squad-edit] GET ${url}`)
@@ -845,14 +846,15 @@ export async function ssiSetParticipantSquad(participantId, squadNumber, cookies
 
 // ============================================================
 // Admin: set match participant status (web scraping)
-// GET  /event/participant/93/{participantId}/edit/  → extract all fields
-// POST /event/participant/93/{participantId}/edit/  → submit with status override
+// GET  /event/participant/{participantCT}/{participantId}/edit/  → extract all fields
+// POST /event/participant/{participantCT}/{participantId}/edit/  → submit with status override
 // Used to delete match participants by setting status='d'
+// participantContentType: 93 for Nordic matches, 23 for IPSC/SRA matches
 // ============================================================
 
-export async function ssiSetMatchParticipantStatus(participantId, status, cookies) {
+export async function ssiSetMatchParticipantStatus(participantId, status, cookies, participantContentType = 93) {
   const debug = process.env.NODE_ENV !== 'production'
-  const url = `${SSI_BASE_URL}/event/participant/93/${participantId}/edit/`
+  const url = `${SSI_BASE_URL}/event/participant/${participantContentType}/${participantId}/edit/`
 
   // 1. GET the edit form
   if (debug) console.log(`[match-status] GET ${url}`)
@@ -909,14 +911,15 @@ export async function ssiSetMatchParticipantStatus(participantId, status, cookie
 // ============================================================
 // Admin: delete a match participant (wrapper for status change)
 // Sets status='d' for the participant
+// participantContentType: 93 for Nordic matches, 23 for IPSC/SRA matches (CT 22)
 // ============================================================
 
-export async function ssiDeleteMatchParticipant(matchId, participantId, shooterName, cookies) {
+export async function ssiDeleteMatchParticipant(matchId, participantId, shooterName, cookies, participantContentType = 93) {
   const debug = process.env.NODE_ENV !== 'production'
 
-  if (debug) console.log(`[match-delete] Deleting "${shooterName}" (ID ${participantId}) from match ${matchId}`)
+  if (debug) console.log(`[match-delete] Deleting "${shooterName}" (ID ${participantId}) from match ${matchId}, participantCT=${participantContentType}`)
 
-  const result = await ssiSetMatchParticipantStatus(participantId, 'd', cookies)
+  const result = await ssiSetMatchParticipantStatus(participantId, 'd', cookies, participantContentType)
 
   if (result.success) {
     if (debug) console.log(`[match-delete] Successfully deleted "${shooterName}" from match ${matchId}`)

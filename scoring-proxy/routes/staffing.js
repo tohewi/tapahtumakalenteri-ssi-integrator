@@ -377,7 +377,13 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
             
             // Validate userName is meaningful, fallback to email if needed
             const displayName = userName && userName.trim() ? userName : userEmail
-            const deleteResult = await ssiDeleteMatchParticipant(eventId, participantId, displayName, cookies)
+            
+            // Determine participant content type based on event content type
+            // Nordic matches (CT 91) use participant CT 93
+            // IPSC/SRA matches (CT 22) use participant CT 23
+            const participantCT = parseInt(contentType) === 22 ? 23 : 93
+            
+            const deleteResult = await ssiDeleteMatchParticipant(eventId, participantId, displayName, cookies, participantCT)
             console.log(`[staffing] SSI trainer squad remove: ${userEmail} → ${deleteResult.message}`)
             ssiResults.trainerSquad = { success: true, message: deleteResult.message }
           } else {
