@@ -176,7 +176,30 @@ function EventCard({ event, isAdmin, userEmail, onUpdate }) {
     try {
       setBusy(role)
       setError(null)
-      await staffSignup(event.eventId, role)
+      const result = await staffSignup(event.eventId, role)
+      
+      // Show SSI integration status
+      if (result.ssi) {
+        const messages = []
+        if (result.ssi.trainerSquad) {
+          if (result.ssi.trainerSquad.success) {
+            messages.push(`✅ Added to Squad 5 (Trainer Squad)`)
+          } else {
+            messages.push(`⚠️ Squad 5: ${result.ssi.trainerSquad.message}`)
+          }
+        }
+        if (result.ssi.management) {
+          if (result.ssi.management.success) {
+            messages.push(`✅ Added to Match Management as ${result.ssi.management.role}`)
+          } else {
+            messages.push(`⚠️ Management: ${result.ssi.management.message}`)
+          }
+        }
+        if (messages.length > 0) {
+          alert(messages.join('\n'))
+        }
+      }
+      
       onUpdate()
     } catch (err) {
       setError(err.message)
