@@ -7,6 +7,37 @@ import t from '../i18n'
 import { fetchStaffingEvents, staffSignup, staffResign } from '../staffing-api'
 
 const LS_CREDS = 'ssi_credentials'
+const isDev = import.meta.env.DEV
+
+const ROLE_LABELS = {
+  leadInstructor: t.leadInstructor,
+  equipmentManager: t.equipmentManager,
+  staff: t.instructor,
+}
+
+// ── Inline banner notification (not a button, not floating) ──
+function InlineBanner({ message, type = 'success', onDismiss }) {
+  useEffect(() => {
+    const timer = setTimeout(onDismiss, 3000)
+    return () => clearTimeout(timer)
+  }, [onDismiss])
+
+  const styles = {
+    success: 'bg-green-50 text-green-700 border-green-200',
+    error: 'bg-red-50 text-red-700 border-red-200',
+  }
+  const icons = {
+    success: '✓',
+    error: '✗',
+  }
+
+  return (
+    <div className={`flex items-center gap-2 px-3 py-2 border-b text-xs ${styles[type] || styles.success}`}>
+      <span className="font-bold">{icons[type]}</span>
+      <span>{message}</span>
+    </div>
+  )
+}
 
 export default function StaffingPage() {
   const [authed, setAuthed] = useState(false)
@@ -21,6 +52,13 @@ export default function StaffingPage() {
   const [savedEmail, setSavedEmail] = useState('')
   const [savedPassword, setSavedPassword] = useState('')
   const [savedApiKey, setSavedApiKey] = useState('')
+
+  // Check existing session on mount (survives page reload)
+  useEffect(() => {
+    api.getAuthStatus().then(status => {
+      if (status.authenticated) setAuthed(true)
+    }).catch(() => {})
+  }, [])
 
   // Load saved credentials for pre-fill
   useEffect(() => {
@@ -131,14 +169,17 @@ export default function StaffingPage() {
         </div>
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="p-3 space-y-3">
         {loading && (
-          <div className="text-center py-8 text-gray-500">{t.loading}</div>
+          <div className="text-center py-8">
+            <span className="inline-block w-5 h-5 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+          </div>
         )}
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
-            {error}
+          <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+            <p className="text-red-700 text-sm">{error}</p>
+            <button onClick={() => setError(null)} className="text-red-500 text-xs underline mt-1">{t.dismiss}</button>
           </div>
         )}
 
@@ -160,101 +201,65 @@ export default function StaffingPage() {
   )
 }
 
+// ============================================================
+// Event Card — single CTA with bottom sheet role picker
+// ============================================================
+
 function EventCard({ event, isAdmin, userEmail, onUpdate }) {
-  const [busy, setBusy] = useState(null) // role being registered/resigned, or null
-  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [banner, setBanner] = useState(null) // { message, type }
+  const [showRolePicker, setShowRolePicker] = useState(false)
 
   const date = new Date(event.eventDate)
   const dateStr = date.toLocaleDateString('fi-FI', {
     weekday: 'short', day: 'numeric', month: 'numeric', year: 'numeric'
   })
 
-  // What role does the current user hold in this event?
   const myRole = getUserRole(event, userEmail)
+  const staffCount = event.staff?.length || 0
 
   async function handleRegister(role) {
+    setShowRolePicker(false)
     try {
-      setBusy(role)
-      setError(null)
+      setBusy(true)
+      setBanner(null)
       const result = await staffSignup(event.eventId, role)
-      
-      // Show SSI integration status
-      if (result.ssi) {
-        const messages = []
-        if (result.ssi.trainerSquad) {
-          if (result.ssi.trainerSquad.success) {
-            messages.push(`✅ Added to Squad 5 (Trainer Squad)`)
-          } else {
-            messages.push(`⚠️ Squad 5: ${result.ssi.trainerSquad.message}`)
-          }
-        }
-        if (result.ssi.management) {
-          if (result.ssi.management.success) {
-            messages.push(`✅ Added to Match Management as ${result.ssi.management.role}`)
-          } else {
-            messages.push(`⚠️ Management: ${result.ssi.management.message}`)
-          }
-        }
-        if (messages.length > 0) {
-          alert(messages.join('\n'))
-        }
+
+      if (isDev && result.ssi) {
+        console.log('[staffing] SSI signup result:', JSON.stringify(result.ssi, null, 2))
       }
-      
+
+      setBanner({ message: t.registered, type: 'success' })
       onUpdate()
     } catch (err) {
-      setError(err.message)
+      setBanner({ message: err.message, type: 'error' })
     } finally {
-      setBusy(null)
+      setBusy(false)
     }
   }
 
   async function handleResign() {
     if (!confirm(t.resignConfirm)) return
     try {
-      setBusy('resign')
-      setError(null)
+      setBusy(true)
+      setBanner(null)
       const result = await staffResign(event.eventId)
-      
-      // Show SSI removal status
-      if (result.ssi) {
-        const messages = []
-        if (result.ssi.management) {
-          if (result.ssi.management.success) {
-            messages.push(`✅ Removed from Match Management`)
-          } else {
-            messages.push(`⚠️ Management: ${result.ssi.management.message}`)
-          }
-        }
-        if (result.ssi.trainerSquad) {
-          if (result.ssi.trainerSquad.success) {
-            messages.push(`✅ Removed from Squad 5 (Trainer Squad)`)
-          } else {
-            messages.push(`⚠️ Squad 5: ${result.ssi.trainerSquad.message}`)
-          }
-        }
-        if (messages.length > 0) {
-          alert(messages.join('\n'))
-        }
+
+      if (isDev && result.ssi) {
+        console.log('[staffing] SSI resign result:', JSON.stringify(result.ssi, null, 2))
       }
-      
-      // Show warning if there were issues (in addition to the detailed messages)
-      if (result.warning && !result.ssi) {
-        alert(result.warning)
+      if (isDev && result.warning) {
+        console.warn('[staffing] SSI warning:', result.warning)
       }
-      
+
+      setBanner({ message: t.resigned, type: 'success' })
       onUpdate()
     } catch (err) {
-      setError(err.message)
+      setBanner({ message: err.message, type: 'error' })
     } finally {
-      setBusy(null)
+      setBusy(false)
     }
   }
-
-  const staffCount = event.staff?.length || 0
-  // Max vetäjät slots = maxTrainers - special role slots taken
-  const specialsTaken = (event.leadInstructor ? 1 : 0) + (event.equipmentManager ? 1 : 0)
-  const maxVetajat = event.maxTrainers - 2 // 2 reserved for special roles
-  const vetajatSlots = Math.max(0, event.maxTrainers - specialsTaken - staffCount)
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
@@ -265,132 +270,209 @@ function EventCard({ event, isAdmin, userEmail, onUpdate }) {
           <span>{dateStr}</span>
           <span>·</span>
           <span>{t.shooterCount}: {event.shooterCount}</span>
+          <span>·</span>
+          <span>{event.currentTrainers}/{event.maxTrainers}</span>
           {event.isFull && (
             <span className="bg-red-500 text-white px-1.5 py-0.5 rounded text-[10px] font-bold">{t.registrationFull}</span>
           )}
         </div>
       </div>
 
-      {error && (
-        <div className="px-4 py-2 bg-red-50 text-red-600 text-xs">{error}</div>
+      {/* Inline banner notification */}
+      {banner && (
+        <InlineBanner message={banner.message} type={banner.type} onDismiss={() => setBanner(null)} />
       )}
 
+      {/* Role display rows (read-only) */}
       <div className="divide-y divide-gray-100">
-        {/* Vastuuvetäjä row */}
-        <RoleRow
-          label={t.leadInstructor}
-          person={event.leadInstructor}
-          roleKey="leadInstructor"
-          isMe={event.leadInstructor?.email === userEmail}
-          canRegister={isAdmin && !myRole && !event.isFull && !event.leadInstructor}
-          canResign={event.leadInstructor?.email === userEmail}
-          busy={busy}
-          onRegister={() => handleRegister('leadInstructor')}
-          onResign={handleResign}
-        />
+        <RoleRow label={t.leadInstructor} person={event.leadInstructor} isMe={event.leadInstructor?.email === userEmail} />
+        <RoleRow label={t.equipmentManager} person={event.equipmentManager} isMe={event.equipmentManager?.email === userEmail} />
 
-        {/* Kalustovastaava row */}
-        <RoleRow
-          label={t.equipmentManager}
-          person={event.equipmentManager}
-          roleKey="equipmentManager"
-          isMe={event.equipmentManager?.email === userEmail}
-          canRegister={isAdmin && !myRole && !event.isFull && !event.equipmentManager}
-          canResign={event.equipmentManager?.email === userEmail}
-          busy={busy}
-          onRegister={() => handleRegister('equipmentManager')}
-          onResign={handleResign}
-        />
-
-        {/* Vetäjät section */}
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700">
-              {t.instructors}
-            </span>
-            <span className="text-xs text-gray-400">
-              {event.currentTrainers}/{event.maxTrainers}
-            </span>
+        {/* Vetäjät list */}
+        <div className="px-4 py-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t.instructors}</span>
+            <span className="text-xs text-gray-400">{staffCount} / {Math.max(0, event.maxTrainers - (event.leadInstructor ? 1 : 0) - (event.equipmentManager ? 1 : 0))}</span>
           </div>
-
-          {/* Staff list */}
           {staffCount > 0 && (
-            <div className="space-y-1 mb-2">
+            <div className="mt-1.5 space-y-0.5">
               {event.staff.map(s => (
-                <div key={s.email} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-700">
-                    {s.userName}
-                    {s.email === userEmail && (
-                      <span className="text-blue-500 text-xs ml-1">{t.you}</span>
-                    )}
-                  </span>
-                  {s.email === userEmail && (
-                    <button
-                      onClick={handleResign}
-                      disabled={!!busy}
-                      className="text-xs text-red-500 hover:text-red-700 active:text-red-800 disabled:opacity-50 font-medium"
-                    >
-                      {busy === 'resign' ? '...' : t.resign}
-                    </button>
-                  )}
+                <div key={s.email} className="text-sm text-gray-700">
+                  {s.userName}
+                  {s.email === userEmail && <span className="text-blue-500 text-xs ml-1">{t.you}</span>}
                 </div>
               ))}
             </div>
           )}
-
-          {/* Register as vetäjä button */}
-          {isAdmin && !myRole && !event.isFull && (
-            <button
-              onClick={() => handleRegister('staff')}
-              disabled={!!busy}
-              className="w-full text-sm bg-green-500 text-white font-medium py-2 rounded-lg active:bg-green-600 disabled:opacity-50 transition-colors"
-            >
-              {busy === 'staff' ? '...' : t.register}
-            </button>
-          )}
-
-          {!isAdmin && (
-            <div className="text-xs text-gray-400 italic">{t.adminOnly}</div>
-          )}
         </div>
       </div>
+
+      {/* ── Single CTA area ── */}
+      <div className="px-4 py-3 border-t border-gray-100">
+        {busy ? (
+          // Progress indicator
+          <div className="flex items-center justify-center gap-2 min-h-[44px] text-sm text-gray-500">
+            <span className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin" />
+            <span>{myRole ? t.resigning : t.registering}</span>
+          </div>
+        ) : myRole ? (
+          // User is registered → show current role + Peru button
+          <div className="flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-gray-500">{t.yourRole}</div>
+              <div className="text-sm font-medium text-gray-800">{ROLE_LABELS[myRole] || myRole}</div>
+            </div>
+            <button
+              onClick={handleResign}
+              className="flex items-center justify-center min-h-[44px] min-w-[120px] text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 active:bg-red-100 transition-colors"
+            >
+              {t.cancelRegistration}
+            </button>
+          </div>
+        ) : isAdmin && !event.isFull ? (
+          // User can register → single green CTA
+          <button
+            onClick={() => setShowRolePicker(true)}
+            className="w-full flex items-center justify-center min-h-[44px] text-sm bg-green-600 text-white font-medium rounded-xl active:bg-green-700 transition-colors"
+          >
+            {t.registerAsStaff}
+          </button>
+        ) : isAdmin && event.isFull ? (
+          <div className="text-center text-sm text-gray-400 py-1">{t.registrationFull}</div>
+        ) : (
+          <div className="text-center text-xs text-gray-400 italic py-1">{t.adminOnly}</div>
+        )}
+      </div>
+
+      {/* ── Bottom sheet: role picker ── */}
+      {showRolePicker && (
+        <RolePickerSheet
+          event={event}
+          onSelect={handleRegister}
+          onClose={() => setShowRolePicker(false)}
+        />
+      )}
     </div>
   )
 }
 
-function RoleRow({ label, person, roleKey, isMe, canRegister, canResign, busy, onRegister, onResign }) {
+// ── Role display row (read-only, no buttons) ──
+function RoleRow({ label, person, isMe }) {
   return (
-    <div className="px-4 py-2.5 flex items-center justify-between">
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide w-28 shrink-0">{label}</span>
-        {person ? (
-          <span className="text-sm text-gray-800 truncate">
-            {person.userName}
-            {isMe && <span className="text-blue-500 text-xs ml-1">{t.you}</span>}
-          </span>
-        ) : (
-          <span className="text-sm text-gray-300">—</span>
-        )}
-      </div>
-      <div className="shrink-0 ml-2">
-        {canRegister && (
+    <div className="px-4 py-2.5 flex items-center justify-between min-h-[44px]">
+      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide w-32 shrink-0">{label}</span>
+      {person ? (
+        <span className="text-sm text-gray-800 truncate text-right">
+          {person.userName}
+          {isMe && <span className="text-blue-500 text-xs ml-1">{t.you}</span>}
+        </span>
+      ) : (
+        <span className="text-sm text-gray-300">—</span>
+      )}
+    </div>
+  )
+}
+
+// ── Bottom sheet role picker (ManagePage-style) ──
+function RolePickerSheet({ event, onSelect, onClose }) {
+  const [selected, setSelected] = useState(null)
+
+  const roles = [
+    {
+      key: 'leadInstructor',
+      label: t.leadInstructor,
+      taken: !!event.leadInstructor,
+      takenBy: event.leadInstructor?.userName,
+    },
+    {
+      key: 'equipmentManager',
+      label: t.equipmentManager,
+      taken: !!event.equipmentManager,
+      takenBy: event.equipmentManager?.userName,
+    },
+    {
+      key: 'staff',
+      label: t.instructor,
+      taken: false,
+      count: event.staff?.length || 0,
+      max: Math.max(0, event.maxTrainers - (event.leadInstructor ? 1 : 0) - (event.equipmentManager ? 1 : 0)),
+    },
+  ]
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/40" />
+      <div
+        className="relative w-full max-w-md bg-white rounded-t-2xl shadow-xl"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Handle */}
+        <div className="px-4 pt-4 pb-2">
+          <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
+          <h3 className="font-semibold text-gray-800">{t.selectRole}</h3>
+          <p className="text-xs text-gray-500 mt-0.5">{event.eventName}</p>
+        </div>
+
+        {/* Role options */}
+        <div className="px-4 pb-3 space-y-2">
+          {roles.map(role => {
+            const disabled = role.taken
+            const isStaff = role.key === 'staff'
+            const isFull = isStaff && role.count >= role.max
+
+            return (
+              <button
+                key={role.key}
+                onClick={() => !disabled && !isFull && setSelected(role.key)}
+                disabled={disabled || isFull}
+                className={`w-full flex items-center p-3.5 rounded-xl border transition-colors ${
+                  selected === role.key
+                    ? 'border-green-500 bg-green-50'
+                    : disabled || isFull
+                    ? 'border-gray-100 bg-gray-50 opacity-60'
+                    : 'border-gray-200 active:bg-gray-50'
+                }`}
+              >
+                {/* Radio indicator */}
+                <div className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center mr-3 ${
+                  selected === role.key ? 'border-green-500' : 'border-gray-300'
+                }`}>
+                  {selected === role.key && <div className="w-2.5 h-2.5 rounded-full bg-green-500" />}
+                </div>
+
+                <div className="flex-1 text-left">
+                  <div className="text-sm font-medium text-gray-800">{role.label}</div>
+                  {disabled && (
+                    <div className="text-xs text-gray-400">{role.takenBy} — {t.taken}</div>
+                  )}
+                  {isStaff && !isFull && (
+                    <div className="text-xs text-gray-400">{role.count}/{role.max} {t.staffSlots}</div>
+                  )}
+                  {isStaff && isFull && (
+                    <div className="text-xs text-red-400">{t.registrationFull}</div>
+                  )}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Confirm + Cancel */}
+        <div className="px-4 pb-6 space-y-2">
           <button
-            onClick={onRegister}
-            disabled={!!busy}
-            className="text-xs bg-blue-500 text-white px-3 py-1 rounded-full active:bg-blue-600 disabled:opacity-50 font-medium"
+            onClick={() => selected && onSelect(selected)}
+            disabled={!selected}
+            className="w-full min-h-[48px] text-sm font-medium rounded-xl transition-colors bg-green-600 text-white active:bg-green-700 disabled:opacity-40 disabled:active:bg-green-600"
           >
-            {busy === roleKey ? '...' : t.register}
+            {t.confirm}
           </button>
-        )}
-        {canResign && (
           <button
-            onClick={onResign}
-            disabled={!!busy}
-            className="text-xs text-red-500 hover:text-red-700 active:text-red-800 disabled:opacity-50 font-medium"
+            onClick={onClose}
+            className="w-full min-h-[44px] text-sm text-gray-500 font-medium rounded-xl bg-gray-100 active:bg-gray-200 transition-colors"
           >
-            {busy === 'resign' ? '...' : t.resign}
+            {t.cancel}
           </button>
-        )}
+        </div>
       </div>
     </div>
   )

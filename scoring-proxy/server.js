@@ -110,7 +110,13 @@ app.use(express.static(uiDist))
 
 const sessions = new Map()
 // Session timeout: 1 minute for debugging. Change to 30 * 60 * 1000 (30 min) for production.
-const SESSION_TTL = 1 * 60 * 1000 // 1 minute inactivity timeout
+const SESSION_TTL = 1 * 60 * 1000 // 1 minute inactivity timeout (default)
+const SESSION_TTL_BY_SCOPE = {
+  staffing: 5 * 60 * 1000, // 5 minutes for staffing
+}
+function getSessionTTL(session) {
+  return (session?.scope && SESSION_TTL_BY_SCOPE[session.scope]) || SESSION_TTL
+}
 const SESSION_COOKIE = 'ssi_session'
 
 // Cleanup expired sessions every 30 seconds (faster for 1-min timeout)
@@ -118,7 +124,7 @@ setInterval(() => {
   const now = Date.now()
   let cleaned = 0
   for (const [id, s] of sessions) {
-    if (now - s.lastUsed > SESSION_TTL) {
+    if (now - s.lastUsed > getSessionTTL(s)) {
       sessions.delete(id)
       cleaned++
     }
@@ -134,7 +140,12 @@ function getSession(req) {
   if (!id) return null
   const session = sessions.get(id)
   if (!session) return null
-  if (Date.now() - session.lastUsed > SESSION_TTL) {
+  const ttl = getSessionTTL(session)
+  const elapsed = Date.now() - session.lastUsed
+  if (!IS_PROD) {
+    console.log(`[session] scope=${session.scope}, ttl=${ttl/1000}s, idle=${Math.round(elapsed/1000)}s`)
+  }
+  if (elapsed > ttl) {
     sessions.delete(id)
     return null
   }
@@ -166,19 +177,24 @@ function requireAuth(allowedScopes = null) {
       }
     }
     
+    // Refresh cookie so it slides forward with each request
+    const id = req.cookies?.[SESSION_COOKIE]
+    if (id) setSessionCookie(res, id, getSessionTTL(session))
+
     req.ssiSession = session
     next()
   }
 }
 
 // Set session cookie on response
-function setSessionCookie(res, sessionId) {
+// Cookie maxAge matches scope TTL; requireAuth refreshes it on every request (sliding window)
+function setSessionCookie(res, sessionId, ttl = SESSION_TTL) {
   res.cookie(SESSION_COOKIE, sessionId, {
     httpOnly: true,
     sameSite: 'lax',
     secure: IS_PROD,
     path: '/api',
-    maxAge: SESSION_TTL,
+    maxAge: ttl,
   })
 }
 
