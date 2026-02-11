@@ -116,6 +116,7 @@ export const fi = {
   yourRole: 'Roolisi',
   filterAll: 'Kaikki',
   filterMissingRoles: 'Roolit puuttuu',
+  filterMissingStaff: 'Vetäjiä puuttuu',
   filterMyEvents: 'Omat',
   missingRolesWarning: 'Vastuuvetäjä tai kalustovastaava puuttuu',
 }
@@ -238,6 +239,7 @@ export const en = {
   yourRole: 'Your role',
   filterAll: 'All',
   filterMissingRoles: 'Missing roles',
+  filterMissingStaff: 'Needs staff',
   filterMyEvents: 'My events',
   missingRolesWarning: 'Lead instructor or equipment manager missing',
 }

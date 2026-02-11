@@ -173,8 +173,8 @@ export default function StaffingPage() {
       {/* Filter chips */}
       {!loading && events.length > 0 && (
         <div className="px-3 pt-3 pb-0 flex gap-2">
-          {['all', 'missingRoles', 'myEvents'].map(f => {
-            const labels = { all: t.filterAll, missingRoles: t.filterMissingRoles, myEvents: t.filterMyEvents }
+          {['all', 'missingRoles', 'missingStaff', 'myEvents'].map(f => {
+            const labels = { all: t.filterAll, missingRoles: t.filterMissingRoles, missingStaff: t.filterMissingStaff, myEvents: t.filterMyEvents }
             const active = filter === f
             return (
               <button
@@ -214,6 +214,7 @@ export default function StaffingPage() {
         {events
           .filter(evt => {
             if (filter === 'missingRoles') return !evt.leadInstructor || !evt.equipmentManager
+            if (filter === 'missingStaff') return evt.currentTrainers < evt.maxTrainers
             if (filter === 'myEvents') return !!getUserRole(evt, userEmail)
             return true
           })
