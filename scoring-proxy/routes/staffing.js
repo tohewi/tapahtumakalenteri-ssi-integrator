@@ -332,12 +332,13 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
         // 2. Remove from trainer squad (Squad 5)
         try {
           // Fetch event squads to find user's participant ID in trainer squad
+          // Uses admin session — user may have lost match access after resignation
           const staffSquadNum = event?.trainingType && config.trainingTypes?.[event.trainingType]?.staffSquad 
             ? config.trainingTypes[event.trainingType].staffSquad 
             : 5
-          const squadData = await graphqlWithRefresh(session, `
-            query GetEventSquads($eventId: Int!) {
-              event(id: $eventId) {
+          const squadData = await graphqlWithRefresh(adminSess, `
+            query GetEventSquads($contentType: Int!, $eventId: Int!) {
+              event(content_type: $contentType, id: $eventId) {
                 squads {
                   id
                   number
@@ -347,13 +348,22 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
                   ... on IpscSquadNode {
                     competitors { id status shooter { email first_name last_name } }
                   }
+                  ... on PpcSquadNode {
+                    competitors { id status shooter { email first_name last_name } }
+                  }
+                  ... on CmpSquadNode {
+                    competitors { id status shooter { email first_name last_name } }
+                  }
+                  ... on PrecisionSquadNode {
+                    competitors { id status shooter { email first_name last_name } }
+                  }
                   ... on GenericSquadNode {
                     competitors { id status shooter { email first_name last_name } }
                   }
                 }
               }
             }
-          `, { eventId: parseInt(eventId) })
+          `, { contentType: parseInt(contentType), eventId: parseInt(eventId) })
 
           // Find user in trainer squad
           const staffSquad = (squadData.event?.squads || []).find(s => s.number === staffSquadNum)
