@@ -24,6 +24,11 @@ This directory contains comprehensive documentation for the tapahtumakalenteri-s
 - **[Refactoring Visual Summary](refactoring-visual-summary.md)** - Quick reference with diagrams and comparisons
 - **[AI Agent Guidelines](ai-agent-guidelines.md)** - Token-efficient development with AI assistants
 
+### Development Process
+- **[Development Modularity Guidelines](DEVELOPMENT-MODULARITY-GUIDELINES.md)** - Guidelines for reducing merge conflicts through modular development
+- **[Shared Component Modification Process](SHARED-COMPONENT-PROCESS.md)** - Quick reference guide for modifying core shared components
+- **[Branching Strategy](BRANCHING-STRATEGY.md)** - Git workflow, PR process, and branch protection rules
+
 ### Release Information
 - **[Release Notes](RELEASE-NOTES.md)** - Version history and changelog
 - **[Release v1.0.0](RELEASE-v1.0.0.md)** - Initial release details
