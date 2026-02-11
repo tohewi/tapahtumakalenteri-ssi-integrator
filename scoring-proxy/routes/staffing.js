@@ -142,7 +142,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
               }))
 
             // Queue SSI staff page scrape for this event
-            if (squadMembers.length > 0 && session.ssiCookies) {
+            if (squadMembers.length > 0) {
               ssiSyncQueue.push({
                 eventId: evt.id,
                 squadMembers,
@@ -154,11 +154,14 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
       }
 
       // Sync staff from SSI: scrape staff pages for official roles, cross-reference
-      // with trainer squad members (who have emails from GraphQL), and populate engine
-      if (ssiSyncQueue.length > 0 && session.ssiCookies) {
+      // with trainer squad members (who have emails from GraphQL), and populate engine.
+      // Uses admin cookies — regular users don't have match admin access.
+      const adminSession = getAdminSession ? await getAdminSession() : null
+      const adminCookies = adminSession?.cookies
+      if (ssiSyncQueue.length > 0 && adminCookies) {
         await Promise.all(ssiSyncQueue.map(async ({ eventId, squadMembers, contentType: evtContentType }) => {
           try {
-            const officials = await ssiGetMatchOfficials(evtContentType, eventId, session.ssiCookies)
+            const officials = await ssiGetMatchOfficials(evtContentType, eventId, adminCookies)
 
             // Build name → officials lookup from staff page
             const officialsByName = new Map()
@@ -232,9 +235,11 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
       const result = signup(req.params.eventId, user, role)
 
       // SSI integration (blocking to provide feedback)
+      // Uses admin cookies — user doesn't have match admin access yet
       const config = loadConfig()
       const staffSquadName = config.eventDiscovery.staffSquadName
-      const cookies = session.ssiCookies
+      const adminSess = getAdminSession ? await getAdminSession() : null
+      const cookies = adminSess?.cookies
       const eventId = req.params.eventId
       const ssiResults = { trainerSquad: null, management: null }
 
@@ -294,8 +299,10 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
       const result = resign(req.params.eventId, userEmail)
 
       // SSI integration: remove from management group (blocking to detect partial state)
+      // Uses admin cookies — user may have already lost match access
       const config = loadConfig()
-      const cookies = session.ssiCookies
+      const adminSess = getAdminSession ? await getAdminSession() : null
+      const cookies = adminSess?.cookies
       const eventId = req.params.eventId
       let ssiWarning = null
 
