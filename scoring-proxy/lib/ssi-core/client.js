@@ -667,6 +667,90 @@ export async function ssiSetParticipantSquad(participantId, squadNumber, cookies
 }
 
 // ============================================================
+// Admin: set match participant status (web scraping)
+// GET  /event/participant/93/{participantId}/edit/  → extract all fields
+// POST /event/participant/93/{participantId}/edit/  → submit with status override
+// Used to delete match participants by setting status='d'
+// ============================================================
+
+export async function ssiSetMatchParticipantStatus(participantId, status, cookies) {
+  const debug = process.env.NODE_ENV !== 'production'
+  const url = `${SSI_BASE_URL}/event/participant/93/${participantId}/edit/`
+
+  // 1. GET the edit form
+  if (debug) console.log(`[match-status] GET ${url}`)
+  const resp = await fetch(url, {
+    headers: { 'Cookie': formatCookies(cookies) },
+    redirect: 'follow',
+  })
+  if (!resp.ok) throw new Error(`Participant edit page HTTP ${resp.status}`)
+  const html = await resp.text()
+
+  // 2. Extract the form content
+  const formMatch = html.match(/<form[^>]*method="post"[^>]*>([\s\S]*?)<\/form>/i)
+  if (!formMatch) throw new Error('No edit form found on participant page')
+
+  // 3. Extract all form fields using shared helper
+  const formData = _extractFormFields(formMatch[1])
+
+  // 4. Override status
+  formData.set('status', status)
+
+  if (debug) console.log(`[match-status] POST status=${status} fields: ${[...formData.keys()].join(', ')}`)
+
+  // 5. POST the edit form
+  const editResp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': formatCookies(cookies),
+      'Referer': url,
+      'Origin': SSI_BASE_URL,
+    },
+    body: formData.toString(),
+    redirect: 'manual',
+  })
+
+  if (debug) console.log(`[match-status] Response: ${editResp.status}`)
+
+  if (editResp.status === 302 || editResp.status === 301) {
+    return { success: true }
+  }
+  if (editResp.status === 200) {
+    const respHtml = await editResp.text()
+    if (respHtml.includes('errorlist') || respHtml.includes('is-invalid')) {
+      const errorMatch = respHtml.match(/<(?:ul|div)[^>]*(?:errorlist|invalid-feedback)[^>]*>([\s\S]*?)<\/(?:ul|div)>/)
+      const errorText = errorMatch ? errorMatch[1].replace(/<[^>]+>/g, '').trim() : 'Edit error'
+      if (debug) console.log(`[match-status] Error: ${errorText}`)
+      return { success: false, message: errorText }
+    }
+    return { success: true }
+  }
+  throw new Error(`Participant status edit failed HTTP ${editResp.status}`)
+}
+
+// ============================================================
+// Admin: delete a match participant (wrapper for status change)
+// Sets status='d' for the participant
+// ============================================================
+
+export async function ssiDeleteMatchParticipant(matchId, participantId, shooterName, cookies) {
+  const debug = process.env.NODE_ENV !== 'production'
+
+  if (debug) console.log(`[match-delete] Deleting "${shooterName}" (ID ${participantId}) from match ${matchId}`)
+
+  const result = await ssiSetMatchParticipantStatus(participantId, 'd', cookies)
+
+  if (result.success) {
+    if (debug) console.log(`[match-delete] Successfully deleted "${shooterName}" from match ${matchId}`)
+    return { success: true, message: 'Deleted from match' }
+  } else {
+    if (debug) console.log(`[match-delete] Failed to delete "${shooterName}": ${result.message}`)
+    return result
+  }
+}
+
+// ============================================================
 // Staffing: extract match management group ID from staff page
 // GET /event/{ct}/{eventId}/staff/ → find /groups/{groupId}/ links
 // ============================================================
