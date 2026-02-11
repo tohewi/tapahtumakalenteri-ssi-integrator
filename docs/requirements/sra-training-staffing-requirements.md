@@ -175,12 +175,14 @@ All SRA trainings have the following squad structure:
 | Entity | Content Type | URL Pattern |
 |--------|-------------|-------------|
 | **SRA/IPSC Match** | **22** | `/event/22/{eventId}/...` |
+| **SRA/IPSC Participant** | **23** | `/event/participant/23/{participantId}/edit/` |
 | Participant Search | 22 | `/event/22/{eventId}/participant-search-and-add/` |
-| Participant Edit | 93 | `/event/participant/93/{participantId}/edit/` |
 | Cup (NordicSerie) | 136 | Not used for SRA staffing |
+| Cup Participant | 137 | Not used for SRA staffing |
 | Nordic Match | 91 | Not used for SRA — this is RESUL/Nordic |
+| Nordic Match Participant | 93 | Not used for SRA — this is RESUL/Nordic |
 
-> **Important**: The design document originally specified content type 91 (NordicMatch). SRA/IPSC matches use content type **22**. This was corrected during implementation.
+> **Important**: The design document originally specified content type 91 (NordicMatch) with participant content type 93. SRA/IPSC matches use event content type **22** and participant content type **23**. This was corrected during implementation to fix the "Participant edit page HTTP 404" error when removing instructors from Squad 5.
 
 ### 4.2 SSI Management Group
 
