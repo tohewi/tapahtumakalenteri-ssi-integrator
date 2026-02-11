@@ -13,7 +13,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { loadConfig, isAdminEmail } from './config-loader.js'
+import { loadConfig, isAdminEmail, isServiceAccount } from './config-loader.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = path.resolve(__dirname, '..', '..', 'data')
@@ -129,9 +129,9 @@ const VALID_ROLES = ['leadInstructor', 'equipmentManager', 'staff']
  * Count total trainers (all roles) for an event.
  */
 function totalTrainers(event) {
-  let count = event.staff.length
-  if (event.leadInstructor) count++
-  if (event.equipmentManager) count++
+  let count = event.staff.filter(s => !isServiceAccount(s.email)).length
+  if (event.leadInstructor && !isServiceAccount(event.leadInstructor.email)) count++
+  if (event.equipmentManager && !isServiceAccount(event.equipmentManager.email)) count++
   return count
 }
 
@@ -241,6 +241,9 @@ export function syncStaffFromSSI(eventId, staffList) {
   for (const member of staffList) {
     if (!member.email) continue
 
+    // Skip service accounts (automation bots)
+    if (isServiceAccount(member.email)) continue
+
     // Skip if already registered in any role
     if (getUserRole(event, member.email)) continue
 
@@ -296,10 +299,12 @@ export function getEventStatus(eventId) {
     equipmentManager: event.equipmentManager
       ? { email: event.equipmentManager.email, userName: event.equipmentManager.userName }
       : null,
-    staff: event.staff.map(s => ({
-      email: s.email,
-      userName: s.userName,
-    })),
+    staff: event.staff
+      .filter(s => !isServiceAccount(s.email))
+      .map(s => ({
+        email: s.email,
+        userName: s.userName,
+      })),
     trainingTypeLabel: ttConfig?.label || null,
   }
 }

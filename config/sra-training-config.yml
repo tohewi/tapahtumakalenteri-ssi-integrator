@@ -10,10 +10,18 @@ organization:
 # Each entry: SSI email address
 adminAllowlist:
   - "turreskuko1@foo.bar"
+  - "turreskuko2@foo.bar"
   - "tohewi@live.com"
   - "tohewi@gmail.com"
   - "tapiosantavuori@protonmail.com"
   - "jarkkoahola@icloud.com"
+  - "joose.olli@gmail.com"
+# Service accounts — automation identities that appear in SSI match roles
+# (Admin, Assistant, Staff, squads) but are NOT real instructors.
+# Excluded from staff management sync and event staffing lists.
+serviceAccounts:
+  - "tohewi@live.com"
+
 # SSI event discovery (R3: search matches by name)
 eventDiscovery:
   searchStrings:

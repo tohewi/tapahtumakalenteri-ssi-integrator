@@ -2,77 +2,60 @@
 
 ## Purpose
 
-This diagnostic test verifies each step of the SSI staffing integration to identify exactly where the HTTP 404 errors are occurring.
+End-to-end test for the core staff management flow:
+**signup → verify SSI state → resign → verify cleanup** for all 3 roles.
+
+This is the authoritative test. It must pass 100% before any staffing changes ship.
 
 ## Usage
 
 ```bash
-cd /home/runner/work/tapahtumakalenteri-ssi-integrator/tapahtumakalenteri-ssi-integrator/test-harness
-node test-staffing-integration.mjs <email> <password> <apiKey> <eventId>
+node --env-file=scoring-proxy/.env test-harness/test-staffing-e2e.mjs [eventId]
 ```
 
-### Example
-
-```bash
-node test-staffing-integration.mjs turreskuko1@foo.bar mypassword myapikey 27391
-```
+Default event: `27394` (TEST TR-SRAN 10.03.2026), test user: `turreskuko1@foo.bar`
 
 ## What It Tests
 
-The test performs 7 sequential steps:
+For each role (`staff`, `leadInstructor`, `equipmentManager`):
 
-1. **Login** - Authenticates with SSI and saves cookies
-2. **Event Access** - Verifies the event exists and is accessible
-3. **Participant Search Page** - Tests access to `/event/22/{eventId}/participant-search-and-add/`
-4. **Staff Page** - Tests access to `/event/22/{eventId}/staff/`
-5. **Management Group Search** - Tests access to `/groups/{groupId}/role/search/`
-6. **Trainer Squad Registration** - Attempts actual registration to Squad 5
-7. **Management Group Registration** - Attempts to add user as admin with MD role
+| Step | Operation | Verifies |
+|------|-----------|----------|
+| 0 | Admin login (web + JWT) | Credentials work |
+| 1 | Event exists | GraphQL access |
+| 2 | Pre-test cleanup | Clean starting state |
+| 3a | Register to trainer squad (Squad 5) | `ssiRegisterToTrainerSquad` + fallback |
+| 3b | Add to management group | `ssiAddToMatchManagement` with correct officials |
+| 3c | Verify Squad 5 via GraphQL | User is in Squad 5 with status=a |
+| 3d | Verify staff page officials | Correct officials for role (MD/QM/none) |
+| 3e | Resign from management group | `ssiRemoveFromMatchManagement` |
+| 3f | Delete from trainer squad | `ssiDeleteMatchParticipant` |
+| 3g | Verify cleanup | User gone from squad and staff page |
 
-Each step provides detailed diagnostic output explaining any failures.
+Plus an **edge case**: re-signup after full resign (tests the "Already registered" fallback path).
 
-## Common Failure Causes
+## Squad 5 Fallback
 
-### HTTP 404 on Participant Search Page
-- Event ID does not exist in SSI
-- Content type is wrong (should be 22 for SRA/IPSC matches)
-- User account does not have admin access to the event
+When SSI returns "Shooter already registered in match for this division" (HTTP 200),
+the user is a participant but not assigned to a squad. The test verifies:
 
-### HTTP 404 on Management Group Search
-- Management group ID extracted incorrectly from staff page
-- User does not have access to the management group
-- Event does not have a management group configured
+1. GraphQL check → not found in any squad (unassigned)
+2. Scrape `/event/{ct}/{eventId}/participants/` → find participant ID
+3. `ssiSetParticipantSquad(participantId, 5, cookies, 'a', 23)` → assign to Squad 5
 
-### User Not Found Errors
-- Email address is not registered in SSI
-- Email address does not match exactly (case-sensitive)
-- User account needs email verification
+## Requirements
 
-## Test Requirements
+- `scoring-proxy/.env` with `SSI_ADMIN_EMAIL`, `SSI_ADMIN_PASSWORD`, `SSI_ADMIN_API_KEY`
+- Test event with 5+ squads and a management group
+- Test user `turreskuko1@foo.bar` registered in SSI
 
-- Valid SSI credentials (email, password, API key)
-- User must be in the admin allowlist (`config/sra-training-config.yml`)
-- User must have admin access to the test event
-- Event must exist and use content type 22
-- Event must have a management group configured
+## Troubleshooting
 
-## Output
-
-The test provides:
-- ✅ Green checkmarks for passing tests
-- ❌ Red X marks for failing tests
-- ⚠️ Yellow warnings for non-critical issues
-- Detailed error messages with diagnostic information
-- A summary at the end showing pass/fail counts
-
-## Next Steps
-
-If tests fail:
-
-1. **Login fails**: Check credentials are correct
-2. **Event access fails**: Verify event ID and content type
-3. **Permission errors**: Verify user has admin access to event
-4. **404 errors**: Check event exists and URLs are correct
-5. **User not found**: Verify email is registered and verified in SSI
-
-Once all diagnostic tests pass, the actual staffing signup flow should work correctly.
+| Failure | Cause |
+|---------|-------|
+| Admin login fails | Bad credentials in `.env` |
+| Event not found | Wrong event ID or content type |
+| Trainer squad fails | Event doesn't have Squad 5, or anti-bot timing |
+| Management group fails | Event has no management group configured |
+| Officials mismatch | `SSI_ROLE_MAP` out of sync with test expectations |
+| Cleanup fails | SSI participant status toggle cycle changed |
