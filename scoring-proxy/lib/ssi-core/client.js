@@ -838,9 +838,10 @@ export async function ssiAddToMatchManagement(groupId, eventContentType, eventId
 export async function ssiRemoveFromMatchManagement(groupId, eventContentType, eventId, email, cookies) {
   const debug = process.env.NODE_ENV !== 'production'
   const nextUrl = `/event/${eventContentType}/${eventId}/staff/`
+  let ssiUserId = null
 
-  // Step 1: Get SSI user ID via participant-search-and-add (works for all users)
-  // The role/search page doesn't show add/invite links for users already in the group.
+  // Step 1: Try to get SSI user ID via participant-search-and-add
+  // This works when user is still a participant (in trainer squad)
   const searchUrl = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/participant-search-and-add/`
   const searchData = new URLSearchParams()
   searchData.append('last_name', '')
@@ -860,18 +861,88 @@ export async function ssiRemoveFromMatchManagement(groupId, eventContentType, ev
     body: searchData.toString(),
     redirect: 'follow',
   })
-  if (!searchResp.ok) throw new Error(`Participant search failed HTTP ${searchResp.status}`)
-  const searchHtml = await searchResp.text()
 
-  // Extract SSI user ID from register-participant or search-and-add links
-  const userIdMatch = searchHtml.match(/(?:register-participant|participant-search-and-add)\/(\d+)\//)
-  if (!userIdMatch) {
-    return { success: false, message: 'User not found in SSI by email' }
+  // If participant search succeeds, extract user ID from the result
+  if (searchResp.ok) {
+    const searchHtml = await searchResp.text()
+    const userIdMatch = searchHtml.match(/(?:register-participant|participant-search-and-add)\/(\d+)\//)
+    if (userIdMatch) {
+      ssiUserId = userIdMatch[1]
+      if (debug) console.log(`[mgmt-remove] Found SSI user ID via participant search: ${ssiUserId}`)
+    }
+  } else {
+    if (debug) console.log(`[mgmt-remove] Participant search failed HTTP ${searchResp.status}, will try staff page fallback`)
   }
-  const ssiUserId = userIdMatch[1]
-  if (debug) console.log(`[mgmt-remove] Found SSI user ID: ${ssiUserId}`)
 
-  // Step 2: GET remove-invitation-role
+  // Step 1b: Fallback - scrape staff page to find user ID by email matching
+  // This handles partial withdrawal where user is in management but not in trainer squad
+  if (!ssiUserId) {
+    if (debug) console.log(`[mgmt-remove] Attempting staff page fallback for ${email}`)
+    try {
+      const staffUrl = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/staff/`
+      const staffResp = await fetch(staffUrl, {
+        headers: { 'Cookie': formatCookies(cookies) },
+        redirect: 'follow',
+      })
+
+      if (!staffResp.ok) {
+        throw new Error(`Staff page HTTP ${staffResp.status}`)
+      }
+
+      const staffHtml = await staffResp.text()
+      
+      // Parse staff table rows to extract user IDs and contact info
+      // Pattern: <tr> with checkbox containing user ID, followed by cells
+      // Table columns: [0] checkbox, [1] actions, [2] name, [3] contact, [4] officials, [5] role
+      const rowRegex = /<tr[^>]*>\s*<td[^>]*>\s*<input[^>]*type="checkbox"[^>]*value="(\d+)"[^>]*>\s*<\/td>([\s\S]*?)<\/tr>/gi
+      let match
+      let foundInStaff = false
+      
+      while ((match = rowRegex.exec(staffHtml)) !== null) {
+        const userId = match[1]
+        const cells = match[2]
+        
+        // Extract table cell contents
+        const tdRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi
+        const tdContents = []
+        let td
+        while ((td = tdRegex.exec(cells)) !== null) {
+          // Remove HTML tags and normalize whitespace
+          const content = td[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+          tdContents.push(content)
+        }
+        
+        // tdContents: [0] actions, [1] name, [2] contact, [3] officials, [4] role
+        // Contact field may contain email
+        if (tdContents.length >= 3) {
+          const contactField = tdContents[2].toLowerCase()
+          const name = tdContents[1]
+          
+          // Check if email appears in contact field
+          if (contactField.includes(email.toLowerCase())) {
+            ssiUserId = userId
+            foundInStaff = true
+            if (debug) console.log(`[mgmt-remove] Found user in staff page: ${name} (ID: ${userId}, contact: ${contactField})`)
+            break
+          }
+        }
+      }
+      
+      if (!foundInStaff) {
+        if (debug) console.log(`[mgmt-remove] User ${email} not found in staff page either`)
+        return { success: false, message: 'User not found in management group (may already be removed)' }
+      }
+    } catch (err) {
+      if (debug) console.error(`[mgmt-remove] Staff page fallback error: ${err.message}`)
+      throw new Error(`Could not find user: ${err.message}`)
+    }
+  }
+
+  // Step 2: Remove from management group using the user ID
+  if (!ssiUserId) {
+    return { success: false, message: 'Could not determine user ID' }
+  }
+
   const removeUrl = `${SSI_BASE_URL}/groups/${groupId}/remove-invitation-role/${ssiUserId}/?next=${nextUrl}`
   if (debug) console.log(`[mgmt-remove] GET ${removeUrl}`)
   const removeResp = await fetch(removeUrl, {
