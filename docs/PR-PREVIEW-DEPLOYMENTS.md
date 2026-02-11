@@ -276,7 +276,36 @@ When testing in a preview environment:
 - [ ] No console errors in browser DevTools
 - [ ] API endpoints respond correctly
 
-## Environment Variables for Preview
+## Environment Variables
+
+Preview environments need all the same environment variables as production to function correctly. These are securely stored as GitHub Secrets and automatically applied when preview services are created.
+
+For complete documentation on environment variable configuration, including:
+- Required environment variables and their purposes
+- Security architecture and secret storage
+- Setup instructions for GitHub Secrets
+- Environment-specific strategies (shared vs separate credentials)
+- Troubleshooting common issues
+
+See: **[PR Preview Environment Variables Design](./PR-PREVIEW-ENV-VARS.md)**
+
+### Quick Summary
+
+Preview environments automatically receive these environment variables from GitHub Secrets:
+- `NODE_ENV=production`
+- `EMAIL_FROM` (email sender address)
+- `RESEND_API_KEY` (email API key)
+- `SSI_ADMIN_EMAIL` (SSI admin account)
+- `SSI_ADMIN_PASSWORD` (SSI admin password)
+- `SSI_ADMIN_API_KEY` (SSI GraphQL API key)
+
+**Setup Required:** Repository maintainers must configure the `PREVIEW_*` GitHub Secrets before preview environments will work correctly. See the [environment variables design document](./PR-PREVIEW-ENV-VARS.md) for detailed setup instructions.
+
+## Legacy Documentation
+
+The following section documents the original manual approach and remains for reference:
+
+### Original Environment Variable Approach
 
 Preview environments should use the same environment variables as production, but consider:
 
