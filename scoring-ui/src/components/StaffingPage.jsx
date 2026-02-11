@@ -190,7 +190,11 @@ function EventCard({ event, isAdmin, userEmail, onUpdate }) {
     try {
       setBusy('resign')
       setError(null)
-      await staffResign(event.eventId)
+      const result = await staffResign(event.eventId)
+      // Show warning if partial withdrawal was detected
+      if (result.warning) {
+        alert(result.warning)
+      }
       onUpdate()
     } catch (err) {
       setError(err.message)

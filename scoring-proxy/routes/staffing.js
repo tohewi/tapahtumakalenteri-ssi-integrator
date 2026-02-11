@@ -273,20 +273,38 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
 
       const result = resign(req.params.eventId, userEmail)
 
-      // SSI integration: remove from management group (non-blocking)
+      // SSI integration: remove from management group (blocking to detect partial state)
       const config = loadConfig()
       const contentType = config.eventDiscovery.matchContentType
       const cookies = session.ssiCookies
       const eventId = req.params.eventId
+      let ssiWarning = null
 
       if (contentType && cookies) {
-        ssiGetMatchGroupId(contentType, eventId, cookies)
-          .then(groupId => ssiRemoveFromMatchManagement(groupId, contentType, eventId, userEmail, cookies))
-          .then(r => console.log(`[staffing] SSI management remove: ${userEmail} → ${r.message}`))
-          .catch(e => console.error(`[staffing] SSI management remove failed for ${userEmail}: ${e.message}`))
+        try {
+          const groupId = await ssiGetMatchGroupId(contentType, eventId, cookies)
+          const removeResult = await ssiRemoveFromMatchManagement(groupId, contentType, eventId, userEmail, cookies)
+          console.log(`[staffing] SSI management remove: ${userEmail} → ${removeResult.message}`)
+          
+          // Check if fallback was used (indicates partial withdrawal state)
+          if (removeResult.usedFallback) {
+            ssiWarning = 'Partial withdrawal detected: You were removed from management but not from trainer squad. Full cleanup completed.'
+          }
+        } catch (e) {
+          console.error(`[staffing] SSI management remove failed for ${userEmail}: ${e.message}`)
+          // Only set warning for non-critical errors (user already removed is OK)
+          if (!e.message.includes('not found') && !e.message.includes('may already be removed')) {
+            ssiWarning = `Warning: Could not remove from SSI management group: ${e.message}`
+          }
+        }
       }
 
-      res.json(result)
+      // Return result with optional warning
+      if (ssiWarning) {
+        res.json({ ...result, warning: ssiWarning })
+      } else {
+        res.json(result)
+      }
     } catch (err) {
       console.error('[staffing] DELETE /signup error:', err.message)
       const status = err.message.includes('not found') || err.message.includes('Not registered') ? 404 : 500

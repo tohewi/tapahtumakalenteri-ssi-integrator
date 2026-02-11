@@ -839,6 +839,7 @@ export async function ssiRemoveFromMatchManagement(groupId, eventContentType, ev
   const debug = process.env.NODE_ENV !== 'production'
   const nextUrl = `/event/${eventContentType}/${eventId}/staff/`
   let ssiUserId = null
+  let usedFallback = false
 
   // Step 1: Try to get SSI user ID via participant-search-and-add
   // This works when user is still a participant (in trainer squad)
@@ -878,6 +879,7 @@ export async function ssiRemoveFromMatchManagement(groupId, eventContentType, ev
   // This handles partial withdrawal where user is in management but not in trainer squad
   if (!ssiUserId) {
     if (debug) console.log(`[mgmt-remove] Attempting staff page fallback for ${email}`)
+    usedFallback = true
     try {
       const staffUrl = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/staff/`
       const staffResp = await fetch(staffUrl, {
@@ -930,7 +932,7 @@ export async function ssiRemoveFromMatchManagement(groupId, eventContentType, ev
       
       if (!foundInStaff) {
         if (debug) console.log(`[mgmt-remove] User ${email} not found in staff page either`)
-        return { success: false, message: 'User not found in management group (may already be removed)' }
+        return { success: false, message: 'User not found in management group (may already be removed)', usedFallback }
       }
     } catch (err) {
       if (debug) console.error(`[mgmt-remove] Staff page fallback error: ${err.message}`)
@@ -940,7 +942,7 @@ export async function ssiRemoveFromMatchManagement(groupId, eventContentType, ev
 
   // Step 2: Remove from management group using the user ID
   if (!ssiUserId) {
-    return { success: false, message: 'Could not determine user ID' }
+    return { success: false, message: 'Could not determine user ID', usedFallback }
   }
 
   const removeUrl = `${SSI_BASE_URL}/groups/${groupId}/remove-invitation-role/${ssiUserId}/?next=${nextUrl}`
@@ -953,7 +955,7 @@ export async function ssiRemoveFromMatchManagement(groupId, eventContentType, ev
   if (debug) console.log(`[mgmt-remove] Response: ${removeResp.status}`)
 
   if (removeResp.ok) {
-    return { success: true, message: 'Removed from management group' }
+    return { success: true, message: 'Removed from management group', usedFallback }
   }
   throw new Error(`Remove from management failed HTTP ${removeResp.status}`)
 }
