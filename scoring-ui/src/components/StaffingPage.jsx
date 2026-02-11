@@ -214,10 +214,34 @@ function EventCard({ event, isAdmin, userEmail, onUpdate }) {
       setBusy('resign')
       setError(null)
       const result = await staffResign(event.eventId)
-      // Show warning if partial withdrawal was detected
-      if (result.warning) {
+      
+      // Show SSI removal status
+      if (result.ssi) {
+        const messages = []
+        if (result.ssi.management) {
+          if (result.ssi.management.success) {
+            messages.push(`✅ Removed from Match Management`)
+          } else {
+            messages.push(`⚠️ Management: ${result.ssi.management.message}`)
+          }
+        }
+        if (result.ssi.trainerSquad) {
+          if (result.ssi.trainerSquad.success) {
+            messages.push(`✅ Removed from Squad 5 (Trainer Squad)`)
+          } else {
+            messages.push(`⚠️ Squad 5: ${result.ssi.trainerSquad.message}`)
+          }
+        }
+        if (messages.length > 0) {
+          alert(messages.join('\n'))
+        }
+      }
+      
+      // Show warning if there were issues (in addition to the detailed messages)
+      if (result.warning && !result.ssi) {
         alert(result.warning)
       }
+      
       onUpdate()
     } catch (err) {
       setError(err.message)
