@@ -341,17 +341,13 @@ const isDirectRun = process.argv[1] && import.meta.url.endsWith(process.argv[1].
   || process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 
 if (isDirectRun) {
-  // Initialize session store (Redis or in-memory fallback)
-  initRedis().then(() => {
-    if (!IS_PROD) console.log('[session] Store initialized')
-  }).catch(err => {
-    console.error('[session] Store init failed:', err.message)
-  })
+  // Initialize session store before accepting requests (Redis or in-memory fallback)
+  await initRedis()
 
   app.listen(PORT, () => {
     console.log(`Scoring proxy running on http://localhost:${PORT}`)
     console.log(`Mode: ${IS_PROD ? 'production' : 'development'}`)
-    console.log(`Session backend: ${process.env.REDIS_URL ? 'redis' : 'memory'}`)
+    console.log(`Session backend: ${isUsingRedis() ? 'redis' : 'memory'}`)
     console.log('Endpoints:')
     console.log('  POST /api/auth/login     { email, password, apiKey }')
     console.log('  GET  /api/auth/status')
