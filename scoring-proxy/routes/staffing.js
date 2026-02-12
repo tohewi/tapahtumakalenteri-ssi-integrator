@@ -442,8 +442,20 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
             }
           `, { contentType: parseInt(contentType), eventId: eventId })
 
+          // Diagnostic: log what GraphQL returned for squads
+          const allSquads = squadData.event?.squads || []
+          console.log(`[staffing] Squad query returned ${allSquads.length} squads for event ${eventId} (ct=${contentType})`)
+          for (const sq of allSquads) {
+            const comps = sq.competitors || []
+            const emails = comps.map(c => c.shooter?.email || '(no email)').join(', ')
+            console.log(`[staffing]   Squad ${sq.number} (id=${sq.id}): ${comps.length} competitors [${emails}]`)
+          }
+
           // Find user in trainer squad
-          const staffSquad = (squadData.event?.squads || []).find(s => s.number === staffSquadNum)
+          const staffSquad = allSquads.find(s => s.number === staffSquadNum)
+          if (!staffSquad) {
+            console.log(`[staffing] Squad ${staffSquadNum} not found! Squad numbers: [${allSquads.map(s => `${s.number}(${typeof s.number})`).join(', ')}], looking for ${staffSquadNum}(${typeof staffSquadNum})`)
+          }
           const userCompetitor = (staffSquad?.competitors || []).find(c => 
             c.shooter?.email?.toLowerCase() === userEmail.toLowerCase()
           )
