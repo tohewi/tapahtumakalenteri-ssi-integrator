@@ -1,0 +1,136 @@
+# SRA Training Staff Management Configuration
+# See docs/design/sra-staffing-design.md for full documentation
+
+organization:
+  name: "Temppelivuori SRA"
+  range: "Temppelivuori"
+  timezone: "Europe/Helsinki"
+
+# Admin allowlist — only these SSI users can sign up as staff (Q1)
+# Each entry: SSI email address
+adminAllowlist:
+  - "turreskuko1@foo.bar"
+  - "turreskuko2@foo.bar"
+  - "tohewi@live.com"
+  - "tohewi@gmail.com"
+  - "tapiosantavuori@protonmail.com"
+  - "jarkkoahola@icloud.com"
+  - "joose.olli@gmail.com"
+# Service accounts — automation identities that appear in SSI match roles
+# (Admin, Assistant, Staff, squads) but are NOT real instructors.
+# Excluded from staff management sync and event staffing lists.
+serviceAccounts:
+  - "tohewi@live.com"
+
+# SSI event discovery (R3: search matches by name)
+eventDiscovery:
+  searchStrings:
+    - "TEST TR-"
+  matchContentType: 22
+  cupContentType: 136
+  staffSquadName: "Squad 5"
+
+# Training types (Q6: same rules for now)
+trainingTypes:
+  oldies:
+    searchPatterns: ["oldies", "srao"]
+    label:
+      fi: "Kokeneiden harjoitus"
+      en: "Experienced training"
+    maxSquads: 4
+    shooterSquads: [1, 2, 3, 4]
+    staffSquad: 5
+    minShootersPerSquad: 5
+    maxTrainers: 6
+  newbie:
+    searchPatterns: ["newbie", "sran"]
+    label:
+      fi: "Uusien koulutus"
+      en: "Newbie training"
+    maxSquads: 4
+    shooterSquads: [1, 2, 3, 4]
+    staffSquad: 5
+    minShootersPerSquad: 5
+    maxTrainers: 8
+
+# Roles
+roles:
+  staff:
+    label:
+      fi: "Vetäjä"
+      en: "Instructor"
+    ssiRole: null
+  leadInstructor:
+    label:
+      fi: "Vastuuvetäjä"
+      en: "Lead Instructor"
+    ssiRole: "Match director"
+    required: true
+    maxPerEvent: 1
+  equipmentManager:
+    label:
+      fi: "Kalustovastaava"
+      en: "Equipment Manager"
+    ssiRole: "Quarter master"
+    required: true
+    maxPerEvent: 1
+
+# Registration
+registration:
+  closesBeforeEventHours: 24
+  queueMode: "fifo"
+  allowCancellation: true
+  cancellationDeadlineHours: 24
+
+# Staff allocation
+staffAllocation:
+  excessStaffAction: "move_to_shooter_squad_and_notify"
+  roleAssignmentMode: "volunteer_then_random"
+  rolePreferenceBinding: true
+  allowDualRoles: false
+
+# Finalization (Q5: fully automated via Render cron)
+finalization:
+  mode: "automated"
+  triggerOnRegistrationClose: true
+
+# Notifications (R4: reuse Resend)
+notifications:
+  channels:
+    - "email"
+  templates:
+    staffConfirmed:
+      subject:
+        fi: "Vetäjävahvistus: {eventName}"
+        en: "Staff confirmation: {eventName}"
+      body:
+        fi: "Olet vahvistettu vetäjäksi tapahtumaan {eventName}. Roolisi: {role}."
+        en: "You are confirmed as staff for {eventName}. Your role: {role}."
+    staffMovedToShooterSquad:
+      subject:
+        fi: "Siirto ampujaksi: {eventName}"
+        en: "Moved to shooter squad: {eventName}"
+      body:
+        fi: "Et mahtunut vetäjäksi tapahtumaan {eventName}. Sinut on siirretty ampujaksi squadiin {squad}."
+        en: "You were not selected as staff for {eventName}. You have been moved to shooter squad {squad}."
+    roleAssigned:
+      subject:
+        fi: "Rooli osoitettu: {eventName}"
+        en: "Role assigned: {eventName}"
+      body:
+        fi: "Sinulle on osoitettu rooli: {role} tapahtumassa {eventName}."
+        en: "You have been assigned the role: {role} for {eventName}."
+    missingRole:
+      subject:
+        fi: "HUOM: Rooli täyttämättä — {eventName}"
+        en: "WARNING: Role unfilled — {eventName}"
+      body:
+        fi: "Roolille {role} ei ole ilmoittautunutta tapahtumassa {eventName}."
+        en: "No volunteer for {role} in {eventName}."
+    promotedFromQueue:
+      subject:
+        fi: "Paikka vetäjänä vapautui: {eventName}"
+        en: "Staff position opened: {eventName}"
+      body:
+        fi: "Paikka vetäjänä vapautui! Olet nyt vahvistettu vetäjäksi tapahtumaan {eventName}."
+        en: "A staff position opened up! You are now confirmed as staff for {eventName}."

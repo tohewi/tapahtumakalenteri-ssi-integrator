@@ -58,6 +58,17 @@ const features = [
     ),
     color: 'teal',
   },
+  {
+    href: '#/staffing',
+    titleKey: 'staffingTitle',
+    descriptionKey: 'staffingDescription',
+    icon: (
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    ),
+    color: 'orange',
+  },
 ]
 
 const colorMap = {
@@ -66,6 +77,7 @@ const colorMap = {
   purple: { bg: 'bg-purple-50', icon: 'text-purple-600', border: 'border-purple-200', hover: 'active:bg-purple-100' },
   amber: { bg: 'bg-amber-50', icon: 'text-amber-600', border: 'border-amber-200', hover: 'active:bg-amber-100' },
   teal: { bg: 'bg-teal-50', icon: 'text-teal-600', border: 'border-teal-200', hover: 'active:bg-teal-100' },
+  orange: { bg: 'bg-orange-50', icon: 'text-orange-600', border: 'border-orange-200', hover: 'active:bg-orange-100' },
 }
 
 export default function HomePage() {

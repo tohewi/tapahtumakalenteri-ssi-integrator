@@ -59,6 +59,27 @@ All features must use the shared components from `scoring-ui/src/components/shar
 - **Mobile-first**: All layouts designed for phone screens, responsive up.
 - **Date badges**: 12×12 rounded squares with weekday abbreviation + day number.
 
+## Session Handling on Page Reload
+
+When a user reloads the browser (or navigates back to a feature page), the React state is lost but the HTTP-only session cookie may still be valid on the server.
+
+**Pattern — restore session on mount:**
+1. On component mount, call `api.getAuthStatus()` (GET `/api/auth/status`).
+2. If `status.authenticated === true`, set `authed` state to `true` — skip the login screen.
+3. If the session has expired server-side, the check returns `authenticated: false` → show login screen as normal.
+
+**Sliding window cookie refresh:**
+- The session cookie is initially issued with a `maxAge` based on the default `SESSION_TTL` (unless the caller passes an explicit scope-specific TTL at login).
+- Every authenticated request passes through `requireAuth`, which **refreshes the cookie** with a new `maxAge`, resetting the browser-side expiry timer according to the current server-side session TTL.
+- This means the session stays alive as long as the user keeps interacting — it only expires after N minutes of **zero activity** (no API calls).
+
+**Scope-based TTL:**
+- `SESSION_TTL_BY_SCOPE` in `server.js` defines per-scope overrides (e.g. `staffing: 5 * 60 * 1000`).
+- `getSessionTTL(session)` returns the TTL for the session's scope, falling back to the default `SESSION_TTL`.
+- Both the server-side cleanup interval and `getSession()` use this function; the initial login cookie `maxAge` continues to use `SESSION_TTL` unless a scope-specific TTL is explicitly provided at login.
+
+**Implementation reference:** `StaffingPage.jsx` mount effect, `server.js` `requireAuth` middleware.
+
 ## Adding a New Feature
 
 1. Create `scoring-ui/src/components/<FeatureName>Page.jsx`.

@@ -1,39 +1,52 @@
 # PR Preview Deployments on Render
 
-This document describes the automated preview deployment system for pull requests.
+This document describes how to deploy pull request branches to Render for testing before merging to main.
 
 ## Overview
 
-**Automated preview environments are configured for this repository.** When you open a pull request, a dedicated Render service is automatically created for testing your changes.
+Render supports **Preview Environments** that automatically deploy pull requests for testing. This allows you to:
 
-### Benefits
+- Test changes in a production-like environment before merging
+- Share working previews with reviewers and stakeholders
+- Catch integration issues early
+- Validate CI/CD changes safely
 
-- 🚀 **Fully automated** - No manual setup required
-- 🔗 **Unique URL per PR** - Each PR gets its own isolated environment
-- 🧹 **Auto cleanup** - Preview services are deleted when PRs are closed
-- ✅ **Production-like** - Same configuration as the main service
-- 💬 **PR integration** - Preview URLs posted as PR comments
+## Solution Options
 
-## How It Works
+### Option 1: Render Preview Environments (Recommended)
 
-The preview deployment system uses GitHub Actions (`.github/workflows/pr-preview.yml`) to automatically manage Render services:
+Render's native preview environment feature automatically creates temporary deployments for each pull request.
 
-1. **PR Opened/Updated** → Creates or updates a preview service for the PR branch
-2. **New Commits** → Triggers automatic deployment to the preview service
-3. **PR Closed/Merged** → Deletes the preview service
+**Pros:**
+- Fully automated - no manual intervention needed
+- Each PR gets its own isolated URL
+- Automatically cleaned up when PR is closed/merged
+- Free for open source projects on Render's free tier
 
-### Preview Service Naming
+**Cons:**
+- Requires Render Team plan ($19/month per team member) or higher for private repos
+- Free tier has limitations (fewer resources, may spin down after inactivity)
 
-Preview services follow this pattern: `ssi-scoring-pr-{NUMBER}`
+#### Setup Instructions
 
-Example: PR #42 → `ssi-scoring-pr-42`
+1. **Enable Preview Environments in Render Dashboard:**
+   - Go to your service (`ssi-scoring`) in Render dashboard
+   - Navigate to **Settings → Pull Request Previews**
+   - Click **Enable Preview Environments**
+   - Configure:
+     - **Auto-deploy**: Enable (recommended)
+     - **Branch pattern**: `*` or specific patterns like `copilot/*`
 
-### Preview URLs
+2. **Configure Environment Variables:**
+   - Preview environments inherit environment variables from the main service
+   - For testing, you may want to use test credentials
+   - Option A: Use same production SSI account (careful with test data!)
+   - Option B: Create separate test environment variables in Render dashboard
 
 3. **Update render.yaml (optional):**
    ```yaml
    projects:
-     - name: SSI Scoring
+     - name: My project
        environments:
          - name: production
            previews:
@@ -54,214 +67,132 @@ Example: PR #42 → `ssi-scoring-pr-42`
                    value: 3001
    ```
 
-Example: `https://ssi-scoring-pr-42.onrender.com`
+4. **Test the Setup:**
+   - Open a new PR or update an existing one
+   - Render will automatically create a preview deployment
+   - Check the PR for a comment from Render with the preview URL
+   - Visit the URL to test your changes
 
-## Using Preview Environments
+#### Preview Environment URLs
 
-### For PR Authors
+Format: `https://ssi-scoring-pr-<NUMBER>.onrender.com`
 
-1. **Open your PR** - The preview service is created automatically
-2. **Check PR comments** - GitHub Actions bot posts the preview URL
-3. **Wait for deployment** - First deployment takes 3-5 minutes
-4. **Test your changes** - Visit the preview URL
-5. **Push updates** - New commits trigger automatic redeployment
-
-### For Reviewers
-
-1. **Find the preview URL** in PR comments (posted by github-actions bot)
-2. **Visit the preview** to test the changes
-3. **Leave feedback** in the PR if issues are found
-
-## Configuration
-
-### GitHub Secrets Required
-
-The workflow requires these secrets to be configured in repository settings:
-
-| Secret | Description | How to obtain |
-|--------|-------------|---------------|
-| `RENDER_API_KEY` | Render API authentication token | Generate in Render Dashboard → Account Settings → API Keys |
-| `RENDER_OWNER_ID` | Your Render workspace ID (format: `tea-XXXXXXXXXXXXX`) | Run: `curl --request GET --url 'https://api.render.com/v1/owners?limit=20' --header 'authorization: Bearer YOUR_API_KEY' \| jq '.[0].owner.id'` |
-
-### Preview Service Configuration
-
-Preview services are configured with:
-
-- **Runtime:** Node.js
-- **Plan:** Starter (same as production)
-- **Region:** Frankfurt (same as production)
-- **Build:** `cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install`
-- **Start:** `cd scoring-proxy && node server.js`
-- **Auto-deploy:** Yes (on every commit to PR branch)
-- **Environment Variables:** `NODE_ENV=production` (PORT is set by Render to 10000)
-
-### Environment Variables
-
-Preview services use the same environment variables as production:
-
-- `NODE_ENV=production`
-- `PORT=3001`
-
-Additional service-specific secrets (SSI credentials, email API keys, etc.) should be configured manually in Render Dashboard for each preview service if needed, or inherited from the main service environment.
-
-## Implementation Details
-
-### GitHub Actions Workflow
-
-The workflow (`.github/workflows/pr-preview.yml`) handles three scenarios:
-
-#### 1. PR Opened or Reopened
-
-```yaml
-- Generates unique service name (ssi-scoring-pr-{NUMBER})
-- Checks if service already exists
-- Creates new service via Render API if needed
-- Posts preview URL as PR comment
-```
-
-#### 2. PR Updated (new commits)
-
-```yaml
-- Checks if service exists
-- Triggers new deployment via Render API
-- Updates PR comment with deployment status
-```
-
-#### 3. PR Closed or Merged
-
-```yaml
-- Finds the preview service
-- Deletes service via Render API
-- Posts deletion confirmation as PR comment
-```
-
-### Render API Integration
-
-The workflow uses the Render REST API:
-
-- **Create Service:** `POST /v1/services`
-- **List Services:** `GET /v1/services?name={SERVICE_NAME}`
-- **Trigger Deploy:** `POST /v1/services/{SERVICE_ID}/deploys`
-- **Delete Service:** `DELETE /v1/services/{SERVICE_ID}`
-
-API Documentation: https://api-docs.render.com/
-
-## Alternative Options
-
-While the automated system works well, here are alternative approaches for specific use cases:
-
-## Alternative Options
-
-While the automated system works well, here are alternative approaches for specific use cases:
-
-### Option 1: Render Native Preview Environments
-
-Render's built-in preview environment feature (requires Team plan or higher for private repos).
-
-**When to use:**
-- You have a Render Team plan ($19/month per user) or higher
-- You want Render to manage everything natively
-- You prefer no GitHub Actions configuration
-
-**Setup:**
-1. In Render Dashboard → Service Settings → Pull Request Previews
-2. Enable "Pull Request Previews"
-3. Set branch pattern (e.g., `*` for all branches)
-4. Update `render.yaml`:
-   ```yaml
-   previews:
-     generation: automatic
-     expireAfterDays: 3
-   ```
-
-**Note:** The current implementation uses GitHub Actions because it works with all Render plans, including the free tier.
+Example: `https://ssi-scoring-pr-123.onrender.com` for PR #123
 
 ### Option 2: Manual Preview Services
 
 Create additional Render services manually for specific branches that need testing.
 
-**When to use:**
-- For critical PRs that need extended testing
-- When you want a preview to persist beyond PR closure
-- For demo/staging purposes
+**Pros:**
+- Works with any Render plan (including free)
+- Full control over which branches get deployed
+- Can keep preview environments running indefinitely
 
-**Setup:**
-1. Render Dashboard → New → Web Service
-2. Connect the same GitHub repository
-3. Configure:
-   - **Name:** `ssi-scoring-demo-{feature}`
-   - **Branch:** Your specific branch
-   - **Build/Start:** Same as main service
-4. Copy environment variables from main service
-5. Manually delete when no longer needed
+**Cons:**
+- Manual setup required for each preview
+- Must manually clean up when done
+- Requires managing multiple services
 
-## Troubleshooting
+#### Setup Instructions
 
-### Workflow Fails to Create Service
+1. **Create a New Web Service:**
+   - In Render dashboard: **New → Web Service**
+   - Connect the same GitHub repository
+   - Configure:
+     - **Name**: `ssi-scoring-preview-<branch-name>`
+     - **Branch**: Your PR branch name (e.g., `copilot/refactor-application-and-cicd`)
+     - **Build/Start Commands**: Same as main service
+     - **Auto-Deploy**: Enable (deploys on every push to the branch)
 
-**Possible causes:**
-- `RENDER_API_KEY` secret not set or invalid
-- `RENDER_OWNER_ID` secret not set or invalid
-- Insufficient permissions on Render API key
-- Service name conflict
+2. **Copy Environment Variables:**
+   - Go to main service → Environment
+   - Copy all environment variables to the new preview service
+   - Consider using test credentials if available
 
-**Solutions:**
-1. Verify secrets are set in GitHub repository settings
-2. Generate a new API key in Render Dashboard → Account Settings → API Keys
-3. Ensure API key has permissions to create/delete services
-4. Check workflow logs for specific error messages
+3. **Access the Preview:**
+   - Render assigns a URL like `https://ssi-scoring-preview-feature.onrender.com`
+   - Share this URL for testing
 
-### Preview URL Returns 502/503
+4. **Clean Up:**
+   - Delete the preview service when PR is merged or closed
+   - Go to service settings → Delete Service
 
-**Cause:** Render services spin down after 15 minutes of inactivity (free/starter plans)
+### Option 3: GitHub Actions + Render API
 
-**Solution:** 
-- Wait 30-60 seconds and refresh
-- First request after spin-down wakes the service
-- Consider upgrading to a paid plan for always-on services
+Use GitHub Actions to automatically create/destroy Render services for PRs.
 
-### Preview Deployment Takes Too Long
+**Pros:**
+- Fully automated
+- Works with free Render tier
+- Complete control via workflow
 
-**Normal behavior:**
-- First deployment: 3-5 minutes (install dependencies + build)
-- Subsequent deployments: 2-3 minutes (cached dependencies)
+**Cons:**
+- Requires workflow development
+- Need to manage Render API tokens
+- More complex to set up
 
-**If slower:**
-- Check Render Dashboard → Service → Events for build logs
-- Verify no errors in build process
-- Check if dependency cache is working
+#### Implementation Outline
 
-### Environment Variables Not Working
+1. **Create GitHub Workflow** (`.github/workflows/pr-preview.yml`):
+   ```yaml
+   name: PR Preview Environment
+   
+   on:
+     pull_request:
+       types: [opened, synchronize, reopened, closed]
+   
+   jobs:
+     preview:
+       runs-on: ubuntu-latest
+       steps:
+         - name: Create/Update Preview
+           if: github.event.action != 'closed'
+           run: |
+             # Use Render API to create/update service
+             # https://api-docs.render.com/reference/create-service
+             
+         - name: Delete Preview
+           if: github.event.action == 'closed'
+           run: |
+             # Use Render API to delete service
+   ```
 
-**Cause:** Preview services are created with minimal environment variables
+2. **Store Render API Token:**
+   - Generate API token in Render dashboard
+   - Add as `RENDER_API_TOKEN` secret in GitHub
 
-**Solution:**
-- Manually add required secrets in Render Dashboard
-- Or update workflow to copy environment variables from main service
-- Consider using separate test credentials for preview environments
+3. **Implement service creation/deletion logic**
 
-### PR Comment Not Posted
+## Recommendation
 
-**Possible causes:**
-- GitHub Actions bot doesn't have `pull-requests: write` permission
-- Network issue during comment creation
+**For this project, we recommend Option 1 (Render Preview Environments)** if budget allows, or **Option 2 (Manual Preview Services)** for the free tier.
 
-**Solution:**
-- Verify `permissions:` section in workflow file
-- Check workflow logs for errors
-- Manually find preview URL in Render Dashboard
+### Current Limitation
 
-### Service Not Deleted After PR Closes
+The current free tier on Render may not support automatic preview environments. In that case:
 
-**Possible causes:**
-- Workflow failed during deletion step
-- Service name mismatch
-- API permission issue
+1. **Use Option 2** for critical PRs that need stakeholder review
+2. Create preview service manually when needed
+3. Delete when PR is closed/merged
 
-**Solution:**
-- Manually delete service in Render Dashboard
-- Check workflow logs for deletion errors
-- Verify API key has delete permissions
+### Example Workflow
+
+For a PR that needs testing:
+
+```bash
+# 1. Create PR with your changes
+git push origin copilot/refactor-application-and-cicd
+
+# 2. Manually create preview service in Render:
+#    - Name: ssi-scoring-preview-refactor
+#    - Branch: copilot/refactor-application-and-cicd
+#    - Copy env vars from main service
+
+# 3. Share preview URL for testing:
+#    https://ssi-scoring-preview-refactor.onrender.com
+
+# 4. After PR is merged, delete the preview service
+```
 
 ## Testing Checklist
 
@@ -291,41 +222,51 @@ Preview environments should use the same environment variables as production, bu
 
 **Important:** If using production SSI credentials, be careful about creating test events that might confuse real users!
 
+## Troubleshooting
+
+### Preview Deployment Fails
+
+- Check build logs in Render dashboard
+- Verify all environment variables are set
+- Ensure the branch exists and is pushed to GitHub
+
+### Preview URL Returns 502/503
+
+- Render free tier services spin down after 15 minutes of inactivity
+- First request after spin-down takes ~30 seconds to wake up
+- Refresh after 30-60 seconds
+
+### Environment Variables Not Working
+
+- Environment variables must be set in Render dashboard
+- They don't automatically copy from the main service
+- Update manually or use Render API to copy them
+
 ## Cost Considerations
 
-The automated preview deployment system works with all Render plans:
+| Plan | Preview Environments | Notes |
+|------|---------------------|-------|
+| **Free** | Manual only (Option 2) | Create services manually for specific PRs |
+| **Individual ($7/mo)** | Manual only | Same as free |
+| **Team ($19/mo per user)** | Automatic (Option 1) | Recommended for active development |
 
-| Plan | Preview Deployment | Notes |
-|------|-------------------|-------|
-| **Free** | ✅ Works with GitHub Actions | Services created via API, cleaned up automatically |
-| **Individual ($7/mo)** | ✅ Works with GitHub Actions | Same as free |
-| **Team ($19/mo per user)** | ✅ Native + GitHub Actions | Can use Render's native preview or keep GitHub Actions |
-
-**Recommendation:** Use the GitHub Actions approach (current implementation) as it works across all plan tiers.
+For this open-source project, **stick with manual preview services** (Option 2) as needed.
 
 ## Related Documentation
 
+- [Render Preview Environments Docs](https://render.com/docs/preview-environments)
 - [Render API Documentation](https://api-docs.render.com/)
-- [GitHub Actions Workflow](./.github/workflows/pr-preview.yml) - Implementation
 - [Installation Guide](./installation-guide.md) - Main deployment setup
 - [Branching Strategy](./BRANCHING-STRATEGY.md) - GitHub Flow branching model
-- [CI/CD Pipeline](./.github/workflows/ci-deploy.yml) - Main CI/CD workflow
 
 ## Summary
 
-**Automated Preview Deployments:**
+**Quick Start for Preview Deployments:**
 
-✅ **Enabled** - Preview environments are automatically created for all pull requests
-
-**How it works:**
-1. Open PR → GitHub Actions creates preview service on Render
-2. Push commits → Preview service automatically redeploys
-3. Close PR → Preview service is automatically deleted
-4. Check PR comments for preview URLs
-
-**Requirements:**
-- `RENDER_API_KEY` and `RENDER_OWNER_ID` secrets configured in GitHub
-- Preview services use same configuration as production
-- First deployment takes 3-5 minutes
+1. If using Render Team plan → Enable Preview Environments in dashboard
+2. If using free tier → Create manual preview service for PR branch
+3. Share preview URL with reviewers
+4. Test thoroughly using the checklist above
+5. Delete preview service after PR is merged
 
 Preview deployments help catch issues early and give confidence before merging to production!
