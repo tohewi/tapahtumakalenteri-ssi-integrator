@@ -26,3 +26,8 @@ export {
   auditTokenRefresh,
   auditSecurityViolation,
 } from './audit.js'
+export {
+  executeSSI,
+  executeSSIAsUser,
+  executeSSIWithCookies,
+} from './impersonation.js'
