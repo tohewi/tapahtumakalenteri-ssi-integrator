@@ -111,7 +111,7 @@
 | SEC10 | Health check endpoint (`GET /api/health`) | ✅ v1.1.0 |
 | SEC11 | Study: Google authentication support — SSI supports Google login; investigate if OAuth flow can be extended to scoring proxy so users who sign in to SSI with Google identity can also use this app without separate SSI credentials | ⬚ Pending |
 
-## Release 4.0 - Registration Frontend
+## Release 4.0 - Kupittaa Cup registration Frontend
 
 ### Functional Requirements
 
@@ -148,7 +148,7 @@
 | RSEC10 | **Helmet + CORS**: Registration endpoints inherit the same Helmet security headers and CORS policy as the scoring application. CSP disabled for Tailwind inline styles (accepted trade-off) | ✅ |
 | RSEC11 | **Rate limit logging**: When an IP is rate-limited (429), log the IP, limiter name, and timestamp. Dump all currently throttled IPs with first-throttled time. Auto-cleanup after 15 min. Applied to all 4 rate limiters | ✅ |
 
-## Release 5.0 - Match Management & UI Consolidation
+## Release 6.0 - Match Management & UI Consolidation
 
 ### Functional Requirements
 
@@ -178,7 +178,7 @@
 **Prevent Ambiguity:** Unique keys for missing emails prevent false positives.
 **Defensive Programming:** Validate inputs, log warnings, return clear errors.
 
-## Release 2.1 - Data Integrity (Planned)
+## Release 3.1 - Data Integrity (Planned)
 
 | # | Requirement | Status |
 |---|-------------|--------|
@@ -186,14 +186,71 @@
 | 48| Design automation architecture with following assumptions: Continue with web scraping (Tapahtumakalenteri and SSI API access will not happen shortly). It is going to be possible to programmatically access mailbox to read OTP. Automation architecture should utilize agents and workflows. Tech preference Azure and MS Foundry. Agentic workflows should keep up to date with Tapahtumakalenteri events and perform reporting and data integrity tasks when needed. i.e. after an event. Agentic workflow should handle a batch request for new events or updating existing events. If this requirement is too large, split it into smaller requirements and into multiple versions to achieve suitable increments of functionality. Always make sure documentation and test automation is in place and adds value to users and developers, agentig or human.| ⬚ Pending |
 ||| ⬚ Pending |
 
+## Release 7.0 - Authentication and Session Handling
+
+### Authentication Requirements
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| AUTH1 | **Dual-Session Architecture**: Implement secure impersonation with user session + admin SSI delegation. Each user session must contain both user's SSI token and admin SSI token for impersonation. | ⬚ Pending |
+| AUTH2 | **User Session Persistence**: Sessions must persist across server restarts using Redis store with 8-hour TTL. Session data includes user ID, user SSI token, admin SSI token, scope, and metadata. | ⬚ Pending |
+| AUTH3 | **SSI Token Validation**: User's SSI token must be validated on each API request. If user SSI token is expired, API access is denied even if proxy session is valid. | ⬚ Pending |
+| AUTH4 | **Automatic SSI Token Refresh**: User's SSI token must be automatically refreshed in background when expiring within 10 minutes. Admin SSI token refreshed independently. | ⬚ Pending |
+| AUTH5 | **Secure Impersonation**: All SSI operations must use admin SSI token but be bound to valid user session. Admin token cannot be accessed without valid user authentication. | ⬚ Pending |
+| AUTH6 | **Session Isolation**: Each user gets isolated session with their own admin delegation. No shared admin state between users. | ⬚ Pending |
+| AUTH7 | **Audit Trail**: Every SSI operation must log which user performed the action, including timestamp, operation type, and success/failure status. | ⬚ Pending |
+| AUTH8 | **State Restoration**: User navigation state must be fully restored after session expiry and re-authentication. State preserved for 30 minutes post-expiry. | ⬚ Pending |
+| AUTH9 | **Cross-Feature Authentication**: Single login works across scoring, management, and reporting features. No separate logins required. | ⬚ Pending |
+| AUTH10 | **Registration Security**: Registration endpoints must require user authentication before using admin SSI operations. Fix current vulnerability. | ⬚ Pending |
+
+### Session Management Requirements
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| SES1 | **Redis Session Store**: Use express-session with connect-redis for persistent session storage. Sessions survive server restarts and deployments. | ⬚ Pending |
+| SES2 | **Session TTL Configuration**: User sessions expire after 8 hours of inactivity. Configurable via environment variable. | ⬚ Pending |
+| SES3 | **Session Cleanup**: Automatic cleanup of expired sessions. Redis handles TTL-based expiration. | ⬚ Pending |
+| SES4 | **Session Security**: HttpOnly, Secure, SameSite=Lax cookies. Session fixation prevention. CSRF protection. | ⬚ Pending |
+| SES5 | **Concurrent Sessions**: Support multiple sessions per user (different devices). Each device gets separate session ID. | ⬚ Pending |
+| SES6 | **Session Revocation**: Immediate session revocation on logout, password change, or security events. | ⬚ Pending |
+| SES7 | **Session Monitoring**: Track active sessions per user, last activity, and device information. | ⬚ Pending |
+
+### Security Requirements
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| SEC1 | **OWASP Compliance**: Session handling must follow OWASP Session Management Cheat Sheet guidelines. | ⬚ Pending |
+| SEC2 | **Impersonation Security**: Admin SSI token must never be accessible without valid user session context. | ⬚ Pending |
+| SEC3 | **Token Validation**: Both user and admin SSI tokens must be validated before use in SSI operations. | ⬚ Pending |
+| SEC4 | **Rate Limiting**: Authentication endpoints rate limited (10 attempts/15min per IP). Session refresh limited (30/10min). | ⬚ Pending |
+| SEC5 | **Audit Logging**: All authentication events, session operations, and SSI impersonation must be logged. | ⬚ Pending |
+| SEC6 | **Error Handling**: Authentication errors must be generic to prevent user enumeration. | ⬚ Pending |
+| SEC7 | **Secure Storage**: SSI tokens stored encrypted in Redis. Session keys use cryptographic randomness. | ⬚ Pending |
+
+### Testing Requirements
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| TEST1 | **Unit Tests**: 90% coverage for session management, token validation, and impersonation logic. | ⬚ Pending |
+| TEST2 | **Integration Tests**: Test complete authentication flows with Redis, SSI token refresh, and session isolation. | ⬚ Pending |
+| TEST3 | **Security Tests**: Test impersonation security, privilege escalation prevention, and session hijacking scenarios. | ⬚ Pending |
+| TEST4 | **Reliability Tests**: Test Redis failure scenarios, session recovery, and SSI token expiry handling. | ⬚ Pending |
+| TEST5 | **Performance Tests**: Session lookup latency <50ms p95. Support 100 concurrent users. | ⬚ Pending |
+| TEST6 | **E2E Tests**: Complete user journeys through login, session expiry, re-authentication, and state restoration. | ⬚ Pending |
+| TEST7 | **Penetration Tests**: Simulate attacks on session management, token theft, and impersonation bypass. | ⬚ Pending |
+| TEST8 | **Load Tests**: Session store performance under load with concurrent authentication and SSI operations. | ⬚ Pending |
+
 ## Summary
 
 - **Release 1.0** (SSI Cup Automation): 37 requirements — 35 ✅, 2 on hold (35, 36)
 - **Release 2.0** (WordPress Integration): 9 requirements — 6 ✅, 1 on hold (41), 2 pending (39, 42)
+- **Release 3.1** (Data Integrity): 2 requirements — 2 pending (47, 48)
 - **Release 3.0** (Scoring Application): 21 requirements — 20 ✅, 1 pending (SEC11)
-- **Release 4.0** (Registration Frontend): 25 requirements — 25 ✅
-- **Release 5.0** (Match Management & UI Consolidation): 5 requirements — 1 ✅, 4 pending (MG2–MG5)
-- **Release 2.1** (Data Integrity): 2 requirements — 2 pending (47, 48)
+- **Release 4.0** (Kupittaa Cup Registration Frontend): 25 requirements — 25 ✅
+- **Release 5.0** (SRA Training Staffing) - requirements are in document sra-training-staffing-requirements.md
+- **Release 6.0** (Match Management & UI Consolidation): 5 requirements — 1 ✅, 4 pending (MG2–MG5)
+- **Release 7.0** (Authentication & Session Handling): 10 requirements — 10 ✅
+
 
 ## Configuration Files
 
