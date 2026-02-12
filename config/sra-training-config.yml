@@ -16,6 +16,7 @@ adminAllowlist:
   - "tapiosantavuori@protonmail.com"
   - "jarkkoahola@icloud.com"
   - "joose.olli@gmail.com"
+  - "antti.lampo@gmail.com"
 # Service accounts — automation identities that appear in SSI match roles
 # (Admin, Assistant, Staff, squads) but are NOT real instructors.
 # Excluded from staff management sync and event staffing lists.
