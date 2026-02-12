@@ -7,14 +7,14 @@ projects:
           # Deployed alongside the web service. Internal-only (no public access).
           # The web service references this via REDIS_URL → connectionString.
           - type: keyvalue
-            name: ssi-scoring-redis
+            name: turres-ssi-tools-redis
             region: frankfurt
             plan: starter
             maxmemoryPolicy: allkeys-lru
             ipAllowList: []  # internal access only (private network)
           # ── Web service ──
           - type: web
-            name: ssi-scoring
+            name: turres-ssi-tools
             runtime: node
             region: frankfurt
             plan: starter
@@ -35,6 +35,6 @@ projects:
                 generateValue: true
               - key: REDIS_URL
                 fromService:
-                  name: ssi-scoring-redis
+                  name: turres-ssi-tools-redis
                   type: keyvalue
                   property: connectionString

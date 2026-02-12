@@ -88,7 +88,7 @@ cd scoring-proxy && node server.js
 
 ### Render Production
 
-The service `ssi-scoring` auto-deploys from `main` when code is merged.
+The service `turres-ssi-tools` auto-deploys from `main` when code is merged.
 
 1. Create a feature branch from `main`
 2. Make changes, commit, push the feature branch
@@ -107,8 +107,8 @@ Preview environments are **automatically created** for all pull requests via Git
 - **Cleanup:** Automatic — deleted when PR is closed or merged
 - **Expiry:** Services persist until PR closes (no time-based expiry)
 - **Plan:** Starter instances (same as production)
-- **Naming:** `ssi-scoring-pr-{NUMBER}` (e.g., `ssi-scoring-pr-42`)
-- **URL:** `https://ssi-scoring-pr-{NUMBER}.onrender.com`
+- **Naming:** `turres-ssi-tools-pr-{NUMBER}` (e.g., `turres-ssi-tools-pr-42`)
+- **URL:** `https://turres-ssi-tools-pr-{NUMBER}.onrender.com`
 
 **How it works:**
 1. Open a PR targeting `main`

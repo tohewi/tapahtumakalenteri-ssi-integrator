@@ -3,7 +3,7 @@ name: PR Preview Environment
 # Automatically creates, updates, and deletes Render preview environments for pull requests.
 #
 # This workflow:
-# 1. Creates a new Render service when a PR is opened (format: ssi-scoring-pr-{NUMBER})
+# 1. Creates a new Render service when a PR is opened (format: turres-ssi-tools-pr-{NUMBER})
 # 2. Triggers redeployment when new commits are pushed to the PR
 # 3. Deletes the preview service when the PR is closed or merged
 # 4. Posts preview URLs and status as PR comments
@@ -45,7 +45,7 @@ jobs:
         run: |
           # Generate a unique service name for this PR
           PR_NUMBER="${{ github.event.pull_request.number }}"
-          SERVICE_NAME="ssi-scoring-pr-${PR_NUMBER}"
+          SERVICE_NAME="turres-ssi-tools-pr-${PR_NUMBER}"
           echo "service_name=${SERVICE_NAME}" >> $GITHUB_OUTPUT
           echo "Preview service name: ${SERVICE_NAME}"
 
