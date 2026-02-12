@@ -3,20 +3,18 @@ import cors from 'cors'
 import helmet from 'helmet'
 import cookieParser from 'cookie-parser'
 import rateLimit from 'express-rate-limit'
-import crypto from 'node:crypto'
 import path from 'path'
 import { existsSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { ssiGraphQL, ssiLogin, ssiRefreshJWT } from './lib/ssi-client.js'
-import { createAuthRouter } from './routes/auth.js'
 import { createScoringRouter } from './routes/scoring.js'
 import { createRegistrationRouter } from './routes/registration.js'
 import { createReportsRouter } from './routes/reports.js'
 import { createManagementRouter } from './routes/management.js'
 import { createStaffingRouter } from './routes/staffing.js'
-import { initRedis, getActiveSessionCount as getV7SessionCount, isUsingRedis } from './lib/session/index.js'
+import { initRedis, getActiveSessionCount, isUsingRedis, touchSession } from './lib/session/index.js'
+import { requireAuthV7 } from './middleware/auth-v7.js'
 import { createAuthV7Router } from './routes/auth-v7.js'
-import { isV7AuthEnabled } from './lib/feature-flags.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -103,105 +101,17 @@ const uiDist = path.join(__dirname, '..', 'scoring-ui', 'dist')
 app.use(express.static(uiDist))
 
 // ============================================================
-// Session store: per-user isolation for multi-user scoring
-//
-// Map<sessionId, {
-//   jwt, refreshToken, apiKey, ssiCookies,
-//   createdAt, lastUsed
-// }>
+// Session store: V7 dual-session (Redis or in-memory fallback)
+// Sessions are managed by lib/session/store.js via initRedis()
+// Legacy session Map removed — all state in Redis/memory store
 // ============================================================
 
-const sessions = new Map()
-// Session timeout: 1 minute for debugging. Change to 30 * 60 * 1000 (30 min) for production.
-const SESSION_TTL = 1 * 60 * 1000 // 1 minute inactivity timeout (default)
-const SESSION_TTL_BY_SCOPE = {
-  staffing: 5 * 60 * 1000, // 5 minutes for staffing
-}
-function getSessionTTL(session) {
-  return (session?.scope && SESSION_TTL_BY_SCOPE[session.scope]) || SESSION_TTL
-}
-const SESSION_COOKIE = 'ssi_session'
+// Auth middleware — used by all protected routes
+const requireAuth = requireAuthV7
 
-// Cleanup expired sessions every 30 seconds (faster for 1-min timeout)
-setInterval(() => {
-  const now = Date.now()
-  let cleaned = 0
-  for (const [id, s] of sessions) {
-    if (now - s.lastUsed > getSessionTTL(s)) {
-      sessions.delete(id)
-      cleaned++
-    }
-  }
-  if (cleaned > 0 && !IS_PROD) {
-    console.log(`[session] Cleaned ${cleaned} expired session(s). Active: ${sessions.size}`)
-  }
-}, 30 * 1000)
-
-// Get session from request cookie
-function getSession(req) {
-  const id = req.cookies?.[SESSION_COOKIE]
-  if (!id) return null
-  const session = sessions.get(id)
-  if (!session) return null
-  const ttl = getSessionTTL(session)
-  const elapsed = Date.now() - session.lastUsed
-  if (!IS_PROD) {
-    console.log(`[session] scope=${session.scope}, ttl=${ttl/1000}s, idle=${Math.round(elapsed/1000)}s`)
-  }
-  if (elapsed > ttl) {
-    sessions.delete(id)
-    return null
-  }
-  session.lastUsed = Date.now()
-  return session
-}
-
-// Middleware: require authenticated session with optional scope validation
-function requireAuth(allowedScopes = null) {
-  return (req, res, next) => {
-    const session = getSession(req)
-    if (!session) {
-      return res.status(401).json({ 
-        error: 'Session expired. Please login again.',
-        sessionExpired: true 
-      })
-    }
-    
-    // Check scope if specified
-    if (allowedScopes) {
-      const scopes = Array.isArray(allowedScopes) ? allowedScopes : [allowedScopes]
-      if (!scopes.includes(session.scope)) {
-        return res.status(403).json({
-          error: 'Access denied. Please login to this feature.',
-          scopeMismatch: true,
-          requiredScope: scopes,
-          currentScope: session.scope
-        })
-      }
-    }
-    
-    // Refresh cookie so it slides forward with each request
-    const id = req.cookies?.[SESSION_COOKIE]
-    if (id) setSessionCookie(res, id, getSessionTTL(session))
-
-    req.ssiSession = session
-    next()
-  }
-}
-
-// Set session cookie on response
-// Cookie maxAge matches scope TTL; requireAuth refreshes it on every request (sliding window)
-function setSessionCookie(res, sessionId, ttl = SESSION_TTL) {
-  res.cookie(SESSION_COOKIE, sessionId, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: IS_PROD,
-    path: '/api',
-    maxAge: ttl,
-  })
-}
-
-// Execute GraphQL with automatic JWT refresh on auth failure
+// Execute GraphQL with automatic JWT refresh on auth failure.
+// Works with the legacy-compatible session view from toLegacySession:
+// session.jwt and session.refreshToken are write-through getters/setters.
 async function graphqlWithRefresh(session, query, variables = {}) {
   try {
     return await ssiGraphQL(session.jwt, query, variables)
@@ -216,6 +126,17 @@ async function graphqlWithRefresh(session, query, variables = {}) {
         const newTokens = await ssiRefreshJWT(session.refreshToken)
         session.jwt = newTokens.token
         session.refreshToken = newTokens.refreshToken
+        // Persist refreshed tokens back to V7 session store
+        if (session._v7SessionId) {
+          await touchSession(session._v7SessionId, {
+            userSSI: {
+              jwt: newTokens.token,
+              refreshToken: newTokens.refreshToken,
+              expiresAt: Date.now() + 15 * 60 * 1000,
+              lastRefreshed: Date.now(),
+            },
+          }).catch(() => {}) // best-effort persistence
+        }
         return await ssiGraphQL(session.jwt, query, variables)
       } catch {
         throw new Error('Session expired. Please login again.')
@@ -229,19 +150,14 @@ async function graphqlWithRefresh(session, query, variables = {}) {
 // GET /api/health — Health check
 // ============================================================
 app.get('/api/health', async (req, res) => {
-  const health = {
+  let activeSessions = 0
+  try { activeSessions = await getActiveSessionCount() } catch { /* ignore */ }
+  res.json({
     status: 'ok',
-    activeSessions: sessions.size,
+    activeSessions,
+    sessionBackend: isUsingRedis() ? 'redis' : 'memory',
     uptime: Math.round(process.uptime()),
-  }
-  // Include V7 session info when enabled
-  if (isV7AuthEnabled()) {
-    try {
-      health.v7Sessions = await getV7SessionCount()
-      health.v7Backend = isUsingRedis() ? 'redis' : 'memory'
-    } catch { /* ignore */ }
-  }
-  res.json(health)
+  })
 })
 
 // ============================================================
@@ -358,25 +274,9 @@ const registerBodyLimit = express.json({ limit: '1kb' })
 // Mount route modules
 // ============================================================
 
-// Auth routes (legacy)
-const authRouter = createAuthRouter({
-  sessions,
-  getSession,
-  setSessionCookie,
-  SESSION_COOKIE,
-  SESSION_TTL,
-  IS_PROD,
-  loginLimiter,
-})
+// Auth routes (V7 — Redis/memory backed dual sessions)
+const authRouter = createAuthV7Router({ loginLimiter, getAdminSession })
 app.use('/api/auth', authRouter)
-
-// V7 Auth routes (behind feature flag, mounted at /api/auth/v7)
-// When V7 is fully rolled out, these replace the legacy routes above.
-if (isV7AuthEnabled()) {
-  const authV7Router = createAuthV7Router({ loginLimiter, getAdminSession })
-  app.use('/api/auth/v7', authV7Router)
-  if (!IS_PROD) console.log('[v7] V7 auth routes mounted at /api/auth/v7')
-}
 
 // Scoring routes
 const scoringRouter = createScoringRouter({
@@ -441,24 +341,17 @@ const isDirectRun = process.argv[1] && import.meta.url.endsWith(process.argv[1].
   || process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 
 if (isDirectRun) {
-  // Initialize V7 session store (Redis or in-memory fallback)
-  if (isV7AuthEnabled()) {
-    initRedis().then(() => {
-      if (!IS_PROD) console.log('[v7] Session store initialized')
-    }).catch(err => {
-      console.error('[v7] Session store init failed:', err.message)
-    })
-  }
+  // Initialize session store (Redis or in-memory fallback)
+  initRedis().then(() => {
+    if (!IS_PROD) console.log('[session] Store initialized')
+  }).catch(err => {
+    console.error('[session] Store init failed:', err.message)
+  })
 
   app.listen(PORT, () => {
     console.log(`Scoring proxy running on http://localhost:${PORT}`)
     console.log(`Mode: ${IS_PROD ? 'production' : 'development'}`)
-    console.log(`Session TTL: ${SESSION_TTL / 3600000}h`)
-    if (isV7AuthEnabled()) {
-      console.log(`V7 Auth: ENABLED (backend: ${process.env.REDIS_URL ? 'redis' : 'memory'})`)
-    } else {
-      console.log('V7 Auth: disabled (set ENABLE_V7_AUTH=true to enable)')
-    }
+    console.log(`Session backend: ${process.env.REDIS_URL ? 'redis' : 'memory'}`)
     console.log('Endpoints:')
     console.log('  POST /api/auth/login     { email, password, apiKey }')
     console.log('  GET  /api/auth/status')

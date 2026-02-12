@@ -118,6 +118,7 @@ export function requireAuthV7(allowedScopes = null) {
       req._v7SessionId = sessionId
       // Legacy-compatible view so existing routes work without changes
       req.ssiSession = toLegacySession(finalSession)
+      req.ssiSession._v7SessionId = sessionId
       req.impersonation = getImpersonationContext(finalSession)
 
       if (!req.impersonation) {
