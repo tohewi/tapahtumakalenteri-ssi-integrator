@@ -1,10 +1,10 @@
 projects:
   - name: My project
+    previews:
+      generation: manual
+      expireAfterDays: 3
     environments:
       - name: production
-        previews:
-          generation: manual
-          expireAfterDays: 3
         services:
           # ── Redis (Key Value) for session storage ──
           # Deployed alongside the web service. Internal-only (no public access).
