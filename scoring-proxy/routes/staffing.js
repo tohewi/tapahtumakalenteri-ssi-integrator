@@ -161,8 +161,14 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
       // Sync staff from SSI: scrape staff pages for official roles, cross-reference
       // with trainer squad members (who have emails from GraphQL), and populate engine.
       // Uses admin cookies — regular users don't have match admin access.
-      const adminSession = getAdminSession ? await getAdminSession() : null
-      const adminCookies = adminSession?.cookies
+      // Wrapped in try/catch: admin session is optional for event listing.
+      let adminCookies = null
+      try {
+        const adminSession = getAdminSession ? await getAdminSession() : null
+        adminCookies = adminSession?.cookies
+      } catch (adminErr) {
+        console.warn('[staffing] Admin session not available for SSI sync:', adminErr.message)
+      }
       if (ssiSyncQueue.length > 0 && adminCookies) {
         await Promise.all(ssiSyncQueue.map(async ({ eventId, squadMembers, contentType: evtContentType }) => {
           try {
