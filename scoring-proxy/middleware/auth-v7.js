@@ -119,17 +119,9 @@ export function requireAuthV7(allowedScopes = null) {
       // Legacy-compatible view so existing routes work without changes
       req.ssiSession = toLegacySession(finalSession)
       req.ssiSession._v7SessionId = sessionId
+      // Impersonation context is optional — null when adminSSI isn't available.
+      // Routes that need admin access get it separately via getAdminSession().
       req.impersonation = getImpersonationContext(finalSession)
-
-      if (!req.impersonation) {
-        // This should not happen if isUserTokenValid passed,
-        // but guard against race conditions
-        auditSecurityViolation('Impersonation context null after token validation', req.ip, session.userId)
-        return res.status(401).json({
-          error: 'Session invalid. Please login again.',
-          sessionExpired: true,
-        })
-      }
 
       next()
     } catch (err) {
