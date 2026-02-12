@@ -6,6 +6,15 @@ projects:
           generation: manual
           expireAfterDays: 3
         services:
+          # ── Redis (Key Value) for session storage ──
+          # Deployed alongside the web service. Internal-only (no public access).
+          # The web service references this via REDIS_URL → connectionString.
+          - type: keyvalue
+            name: ssi-scoring-redis
+            plan: starter
+            maxmemoryPolicy: allkeys-lru
+            ipAllowList: []  # internal access only (private network)
+          # ── Web service ──
           - type: web
             name: ssi-scoring
             runtime: node
@@ -25,3 +34,8 @@ projects:
                 value: info
               - key: SESSION_SECRET
                 generateValue: true
+              - key: REDIS_URL
+                fromService:
+                  name: ssi-scoring-redis
+                  type: keyvalue
+                  property: connectionString

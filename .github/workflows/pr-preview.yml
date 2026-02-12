@@ -113,7 +113,12 @@ jobs:
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
           BRANCH_NAME="${{ github.head_ref }}"
 
+          # Generate a random session secret (base64-encoded, 256-bit)
+          SESSION_SECRET=$(openssl rand -base64 32)
+
           # Create the service using Render API
+          # Note: preview services use in-memory session store (no REDIS_URL).
+          # This is acceptable for short-lived test environments.
           PAYLOAD=$(cat <<EOF
           {
             "type": "web_service",
@@ -135,6 +140,14 @@ jobs:
               {
                 "key": "NODE_ENV",
                 "value": "production"
+              },
+              {
+                "key": "SESSION_SECRET",
+                "value": "${SESSION_SECRET}"
+              },
+              {
+                "key": "LOG_LEVEL",
+                "value": "debug"
               }
             ]
           }
