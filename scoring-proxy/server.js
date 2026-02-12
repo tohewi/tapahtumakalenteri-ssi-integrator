@@ -14,6 +14,9 @@ import { createRegistrationRouter } from './routes/registration.js'
 import { createReportsRouter } from './routes/reports.js'
 import { createManagementRouter } from './routes/management.js'
 import { createStaffingRouter } from './routes/staffing.js'
+import { initRedis, getActiveSessionCount as getV7SessionCount, isUsingRedis } from './lib/session/index.js'
+import { createAuthV7Router } from './routes/auth-v7.js'
+import { isV7AuthEnabled } from './lib/feature-flags.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -225,12 +228,20 @@ async function graphqlWithRefresh(session, query, variables = {}) {
 // ============================================================
 // GET /api/health — Health check
 // ============================================================
-app.get('/api/health', (req, res) => {
-  res.json({
+app.get('/api/health', async (req, res) => {
+  const health = {
     status: 'ok',
     activeSessions: sessions.size,
     uptime: Math.round(process.uptime()),
-  })
+  }
+  // Include V7 session info when enabled
+  if (isV7AuthEnabled()) {
+    try {
+      health.v7Sessions = await getV7SessionCount()
+      health.v7Backend = isUsingRedis() ? 'redis' : 'memory'
+    } catch { /* ignore */ }
+  }
+  res.json(health)
 })
 
 // ============================================================
@@ -347,7 +358,7 @@ const registerBodyLimit = express.json({ limit: '1kb' })
 // Mount route modules
 // ============================================================
 
-// Auth routes
+// Auth routes (legacy)
 const authRouter = createAuthRouter({
   sessions,
   getSession,
@@ -358,6 +369,14 @@ const authRouter = createAuthRouter({
   loginLimiter,
 })
 app.use('/api/auth', authRouter)
+
+// V7 Auth routes (behind feature flag, mounted at /api/auth/v7)
+// When V7 is fully rolled out, these replace the legacy routes above.
+if (isV7AuthEnabled()) {
+  const authV7Router = createAuthV7Router({ loginLimiter, getAdminSession })
+  app.use('/api/auth/v7', authV7Router)
+  if (!IS_PROD) console.log('[v7] V7 auth routes mounted at /api/auth/v7')
+}
 
 // Scoring routes
 const scoringRouter = createScoringRouter({
@@ -422,10 +441,24 @@ const isDirectRun = process.argv[1] && import.meta.url.endsWith(process.argv[1].
   || process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 
 if (isDirectRun) {
+  // Initialize V7 session store (Redis or in-memory fallback)
+  if (isV7AuthEnabled()) {
+    initRedis().then(() => {
+      if (!IS_PROD) console.log('[v7] Session store initialized')
+    }).catch(err => {
+      console.error('[v7] Session store init failed:', err.message)
+    })
+  }
+
   app.listen(PORT, () => {
     console.log(`Scoring proxy running on http://localhost:${PORT}`)
     console.log(`Mode: ${IS_PROD ? 'production' : 'development'}`)
     console.log(`Session TTL: ${SESSION_TTL / 3600000}h`)
+    if (isV7AuthEnabled()) {
+      console.log(`V7 Auth: ENABLED (backend: ${process.env.REDIS_URL ? 'redis' : 'memory'})`)
+    } else {
+      console.log('V7 Auth: disabled (set ENABLE_V7_AUTH=true to enable)')
+    }
     console.log('Endpoints:')
     console.log('  POST /api/auth/login     { email, password, apiKey }')
     console.log('  GET  /api/auth/status')
