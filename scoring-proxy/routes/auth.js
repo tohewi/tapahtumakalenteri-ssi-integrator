@@ -1,6 +1,7 @@
 import express from 'express'
 import crypto from 'node:crypto'
 import { ssiGraphQL, ssiLogin } from '../lib/ssi-client.js'
+import { isAdminEmail } from '../lib/staffing/config-loader.js'
 
 export function createAuthRouter({ sessions, getSession, setSessionCookie, SESSION_COOKIE, SESSION_TTL, IS_PROD, loginLimiter }) {
   const router = express.Router()
@@ -13,9 +14,14 @@ export function createAuthRouter({ sessions, getSession, setSessionCookie, SESSI
       return res.status(400).json({ error: 'email and password required' })
     }
 
-    // Validate scope - must be one of: scoring, manage, reporting
-    const validScopes = ['scoring', 'manage', 'reporting']
+    // Validate scope - must be one of: scoring, manage, reporting, staffing
+    const validScopes = ['scoring', 'manage', 'reporting', 'staffing']
     const sessionScope = scope && validScopes.includes(scope) ? scope : 'scoring'
+
+    // Staffing scope: cross-check email against instructor allowlist
+    if (sessionScope === 'staffing' && !isAdminEmail(email)) {
+      return res.status(403).json({ error: 'Not authorized. You are not on the instructor list.' })
+    }
 
     try {
       // 1. Get JWT token via GraphQL

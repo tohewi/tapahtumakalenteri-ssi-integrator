@@ -1,6 +1,4 @@
-# Copilot Coding Agent Instructions
-
-## Agent Instructions (Cascade)
+# Agent Instructions (Cascade & Copilot)
 
 - When starting work on a requirement, create a **new branch** from `main` (or the correct base branch per the branching guide).
 - **Branch naming:** start with the requirement number, then include the work type (feature/hotfix) in the name.
@@ -8,6 +6,8 @@
 - **Commit messages:** explain how the commit advances the requirement toward completion. Include the requirement number in the subject or body.
 - When a requirement is completed and tests pass, **update the requirements document** to mark it ✅ **Implemented/Ready**.
 - **Keep instructions in sync:** if you modify these agent instructions, update **both** `AGENTS.md` and `.github/copilot-instructions.md` with the same changes.
+
+For full project context, see: `.github/copilot-instructions.md`.
 
 ## Project Overview
 
@@ -127,36 +127,6 @@ Preview environments are **automatically created** for all pull requests via Git
 - Check workflow logs in GitHub Actions tab if preview creation fails
 - Verify secrets are configured in repository settings
 - Preview services may take 30-60 seconds to wake up after inactivity
-
-### Render MCP Tools (Github Coding Agent/Github Actions)
-
-The Render MCP server is configured for this repository. Available tools:
-
-**Workspace Management:**
-- **render-list_workspaces** — List the workspaces that you have access to
-- **render-get_selected_workspace** — Get the currently selected workspace
-- **render-select_workspace** — Select a workspace to use for all actions (requires ownerID)
-
-**Service Management:**
-- **render-list_services** — List all services in your Render account (optional: includePreviews)
-- **render-get_service** — Get details about a specific service (requires serviceId)
-
-**Deployment Tracking:**
-- **render-list_deploys** — List deploys matching the provided filters (requires serviceId, optional: cursor, limit)
-- **render-get_deploy** — Retrieve the details of a particular deploy (requires serviceId, deployId)
-
-**Monitoring & Metrics:**
-- **render-get_metrics** — Get performance metrics for any Render resource (requires resourceId, metricTypes array, optional: startTime, endTime, resolution, etc.)
-
-**Database Management:**
-- **render-list_postgres_instances** — List all Postgres databases in your Render account
-- **render-get_postgres** — Retrieve a Postgres instance by ID (requires postgresId)
-- **render-create_postgres** — Create a new Postgres instance (requires name, optional: plan, region, version, diskSizeGb)
-
-**Key-Value Store:**
-- **render-create_key_value** — Create a new Key Value instance (requires name, optional: plan, region, maxmemoryPolicy)
-
-Use these to check deploy status, view logs, monitor service performance, and manage infrastructure after making changes. See `docs/render-services.md` for detailed documentation and examples.
 
 ## Git Workflow
 
