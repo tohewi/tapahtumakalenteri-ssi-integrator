@@ -21,3 +21,5 @@ projects:
                 value: production
               - key: PORT
                 value: 3001
+              - key: SESSION_SECRET
+                generateValue: true
