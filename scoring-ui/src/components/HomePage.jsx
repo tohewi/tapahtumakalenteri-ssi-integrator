@@ -83,7 +83,7 @@ const colorMap = {
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-gray-50">
-      <AppHeader title="Kupittaa Cup" subtitle="TurRes reservilaisammunta" />
+      <AppHeader title="SSI apurit" subtitle="TurRes SSI-työkalut" />
 
       <div className="p-4 space-y-3">
         {features.map(f => {

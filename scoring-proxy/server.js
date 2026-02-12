@@ -3,17 +3,19 @@ import cors from 'cors'
 import helmet from 'helmet'
 import cookieParser from 'cookie-parser'
 import rateLimit from 'express-rate-limit'
-import crypto from 'node:crypto'
 import path from 'path'
 import { existsSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { ssiGraphQL, ssiLogin, ssiRefreshJWT } from './lib/ssi-client.js'
-import { createAuthRouter } from './routes/auth.js'
+import { log } from './lib/logger.js'
 import { createScoringRouter } from './routes/scoring.js'
 import { createRegistrationRouter } from './routes/registration.js'
 import { createReportsRouter } from './routes/reports.js'
 import { createManagementRouter } from './routes/management.js'
 import { createStaffingRouter } from './routes/staffing.js'
+import { initRedis, getActiveSessionCount, isUsingRedis, touchSession } from './lib/session/index.js'
+import { requireAuthV7 } from './middleware/auth-v7.js'
+import { createAuthV7Router } from './routes/auth-v7.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -100,105 +102,17 @@ const uiDist = path.join(__dirname, '..', 'scoring-ui', 'dist')
 app.use(express.static(uiDist))
 
 // ============================================================
-// Session store: per-user isolation for multi-user scoring
-//
-// Map<sessionId, {
-//   jwt, refreshToken, apiKey, ssiCookies,
-//   createdAt, lastUsed
-// }>
+// Session store: V7 dual-session (Redis or in-memory fallback)
+// Sessions are managed by lib/session/store.js via initRedis()
+// Legacy session Map removed — all state in Redis/memory store
 // ============================================================
 
-const sessions = new Map()
-// Session timeout: 1 minute for debugging. Change to 30 * 60 * 1000 (30 min) for production.
-const SESSION_TTL = 1 * 60 * 1000 // 1 minute inactivity timeout (default)
-const SESSION_TTL_BY_SCOPE = {
-  staffing: 5 * 60 * 1000, // 5 minutes for staffing
-}
-function getSessionTTL(session) {
-  return (session?.scope && SESSION_TTL_BY_SCOPE[session.scope]) || SESSION_TTL
-}
-const SESSION_COOKIE = 'ssi_session'
+// Auth middleware — used by all protected routes
+const requireAuth = requireAuthV7
 
-// Cleanup expired sessions every 30 seconds (faster for 1-min timeout)
-setInterval(() => {
-  const now = Date.now()
-  let cleaned = 0
-  for (const [id, s] of sessions) {
-    if (now - s.lastUsed > getSessionTTL(s)) {
-      sessions.delete(id)
-      cleaned++
-    }
-  }
-  if (cleaned > 0 && !IS_PROD) {
-    console.log(`[session] Cleaned ${cleaned} expired session(s). Active: ${sessions.size}`)
-  }
-}, 30 * 1000)
-
-// Get session from request cookie
-function getSession(req) {
-  const id = req.cookies?.[SESSION_COOKIE]
-  if (!id) return null
-  const session = sessions.get(id)
-  if (!session) return null
-  const ttl = getSessionTTL(session)
-  const elapsed = Date.now() - session.lastUsed
-  if (!IS_PROD) {
-    console.log(`[session] scope=${session.scope}, ttl=${ttl/1000}s, idle=${Math.round(elapsed/1000)}s`)
-  }
-  if (elapsed > ttl) {
-    sessions.delete(id)
-    return null
-  }
-  session.lastUsed = Date.now()
-  return session
-}
-
-// Middleware: require authenticated session with optional scope validation
-function requireAuth(allowedScopes = null) {
-  return (req, res, next) => {
-    const session = getSession(req)
-    if (!session) {
-      return res.status(401).json({ 
-        error: 'Session expired. Please login again.',
-        sessionExpired: true 
-      })
-    }
-    
-    // Check scope if specified
-    if (allowedScopes) {
-      const scopes = Array.isArray(allowedScopes) ? allowedScopes : [allowedScopes]
-      if (!scopes.includes(session.scope)) {
-        return res.status(403).json({
-          error: 'Access denied. Please login to this feature.',
-          scopeMismatch: true,
-          requiredScope: scopes,
-          currentScope: session.scope
-        })
-      }
-    }
-    
-    // Refresh cookie so it slides forward with each request
-    const id = req.cookies?.[SESSION_COOKIE]
-    if (id) setSessionCookie(res, id, getSessionTTL(session))
-
-    req.ssiSession = session
-    next()
-  }
-}
-
-// Set session cookie on response
-// Cookie maxAge matches scope TTL; requireAuth refreshes it on every request (sliding window)
-function setSessionCookie(res, sessionId, ttl = SESSION_TTL) {
-  res.cookie(SESSION_COOKIE, sessionId, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: IS_PROD,
-    path: '/api',
-    maxAge: ttl,
-  })
-}
-
-// Execute GraphQL with automatic JWT refresh on auth failure
+// Execute GraphQL with automatic JWT refresh on auth failure.
+// Works with the legacy-compatible session view from toLegacySession:
+// session.jwt and session.refreshToken are write-through getters/setters.
 async function graphqlWithRefresh(session, query, variables = {}) {
   try {
     return await ssiGraphQL(session.jwt, query, variables)
@@ -213,6 +127,17 @@ async function graphqlWithRefresh(session, query, variables = {}) {
         const newTokens = await ssiRefreshJWT(session.refreshToken)
         session.jwt = newTokens.token
         session.refreshToken = newTokens.refreshToken
+        // Persist refreshed tokens back to V7 session store
+        if (session._v7SessionId) {
+          await touchSession(session._v7SessionId, {
+            userSSI: {
+              jwt: newTokens.token,
+              refreshToken: newTokens.refreshToken,
+              expiresAt: Date.now() + 15 * 60 * 1000,
+              lastRefreshed: Date.now(),
+            },
+          }).catch(() => {}) // best-effort persistence
+        }
         return await ssiGraphQL(session.jwt, query, variables)
       } catch {
         throw new Error('Session expired. Please login again.')
@@ -225,10 +150,13 @@ async function graphqlWithRefresh(session, query, variables = {}) {
 // ============================================================
 // GET /api/health — Health check
 // ============================================================
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+  let activeSessions = 0
+  try { activeSessions = await getActiveSessionCount() } catch { /* ignore */ }
   res.json({
     status: 'ok',
-    activeSessions: sessions.size,
+    activeSessions,
+    sessionBackend: isUsingRedis() ? 'redis' : 'memory',
     uptime: Math.round(process.uptime()),
   })
 })
@@ -241,8 +169,10 @@ app.get('/api/health', (req, res) => {
 let adminCookies = null
 let adminJwt = null
 let adminRefreshToken = null
-let adminLoginTime = 0
-const ADMIN_SESSION_TTL = 4 * 60 * 60 * 1000 // 4 hours
+let adminCookieTime = 0
+let adminJwtTime = 0
+const ADMIN_COOKIE_TTL = 4 * 60 * 60 * 1000 // 4 hours — SSI web cookies
+const ADMIN_JWT_TTL = 14 * 60 * 1000         // 14 min — SSI JWTs expire ~15 min
 
 async function getAdminSession() {
   const email = process.env.SSI_ADMIN_EMAIL
@@ -252,29 +182,74 @@ async function getAdminSession() {
     throw new Error('Registration not configured: SSI_ADMIN_EMAIL and SSI_ADMIN_PASSWORD required')
   }
 
-  // Reuse if still fresh
-  if (adminCookies && (Date.now() - adminLoginTime) < ADMIN_SESSION_TTL) {
+  const now = Date.now()
+
+  // Full re-login if cookies expired
+  if (!adminCookies || (now - adminCookieTime) >= ADMIN_COOKIE_TTL) {
+    log.debug('[admin] Full login (cookies expired or first init)...')
+    adminCookies = await ssiLogin(email, password)
+    adminCookieTime = now
+
+    const authResult = await ssiGraphQL(null, `
+      mutation Auth($email: String!, $password: String!) {
+        token_auth(email: $email, password: $password) {
+          token { token }
+          refresh_token { token }
+        }
+      }
+    `, { email, password }, apiKey)
+    adminJwt = authResult.token_auth?.token?.token || null
+    adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
+    adminJwtTime = now
+
+    log.debug('[admin] Session ready (fresh login)')
     return { cookies: adminCookies, jwt: adminJwt, refreshToken: adminRefreshToken }
   }
 
-  // Login as admin
-  if (!IS_PROD) console.log('[register] Admin login...')
-  adminCookies = await ssiLogin(email, password)
-
-  // Get JWT for GraphQL reads
-  const authResult = await ssiGraphQL(null, `
-    mutation Auth($email: String!, $password: String!) {
-      token_auth(email: $email, password: $password) {
-        token { token }
-        refresh_token { token }
+  // Proactively refresh JWT if near expiry (cookies still valid)
+  if (!adminJwt || (now - adminJwtTime) >= ADMIN_JWT_TTL) {
+    log.debug('[admin] Refreshing JWT (expired after ~14 min)...')
+    try {
+      if (adminRefreshToken) {
+        const newTokens = await ssiRefreshJWT(adminRefreshToken)
+        adminJwt = newTokens.token
+        adminRefreshToken = newTokens.refreshToken
+        adminJwtTime = now
+        log.debug('[admin] JWT refreshed via refresh token')
+      } else {
+        // No refresh token — full re-auth for JWT
+        const authResult = await ssiGraphQL(null, `
+          mutation Auth($email: String!, $password: String!) {
+            token_auth(email: $email, password: $password) {
+              token { token }
+              refresh_token { token }
+            }
+          }
+        `, { email, password }, apiKey)
+        adminJwt = authResult.token_auth?.token?.token || null
+        adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
+        adminJwtTime = now
+        log.debug('[admin] JWT refreshed via re-auth')
       }
+    } catch (err) {
+      console.error('[admin] JWT refresh failed, doing full re-login:', err.message)
+      // Full re-login as fallback
+      adminCookies = await ssiLogin(email, password)
+      adminCookieTime = now
+      const authResult = await ssiGraphQL(null, `
+        mutation Auth($email: String!, $password: String!) {
+          token_auth(email: $email, password: $password) {
+            token { token }
+            refresh_token { token }
+          }
+        }
+      `, { email, password }, apiKey)
+      adminJwt = authResult.token_auth?.token?.token || null
+      adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
+      adminJwtTime = now
     }
-  `, { email, password }, apiKey)
-  adminJwt = authResult.token_auth?.token?.token || null
-  adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
-  adminLoginTime = Date.now()
+  }
 
-  if (!IS_PROD) console.log('[register] Admin session ready')
   return { cookies: adminCookies, jwt: adminJwt, refreshToken: adminRefreshToken }
 }
 
@@ -347,16 +322,8 @@ const registerBodyLimit = express.json({ limit: '1kb' })
 // Mount route modules
 // ============================================================
 
-// Auth routes
-const authRouter = createAuthRouter({
-  sessions,
-  getSession,
-  setSessionCookie,
-  SESSION_COOKIE,
-  SESSION_TTL,
-  IS_PROD,
-  loginLimiter,
-})
+// Auth routes (V7 — Redis/memory backed dual sessions)
+const authRouter = createAuthV7Router({ loginLimiter, getAdminSession })
 app.use('/api/auth', authRouter)
 
 // Scoring routes
@@ -422,10 +389,13 @@ const isDirectRun = process.argv[1] && import.meta.url.endsWith(process.argv[1].
   || process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 
 if (isDirectRun) {
+  // Initialize session store before accepting requests (Redis or in-memory fallback)
+  await initRedis()
+
   app.listen(PORT, () => {
     console.log(`Scoring proxy running on http://localhost:${PORT}`)
     console.log(`Mode: ${IS_PROD ? 'production' : 'development'}`)
-    console.log(`Session TTL: ${SESSION_TTL / 3600000}h`)
+    console.log(`Session backend: ${isUsingRedis() ? 'redis' : 'memory'}`)
     console.log('Endpoints:')
     console.log('  POST /api/auth/login     { email, password, apiKey }')
     console.log('  GET  /api/auth/status')

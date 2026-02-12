@@ -2,22 +2,39 @@ projects:
   - name: My project
     environments:
       - name: production
-        previews:
-          generation: manual
-          expireAfterDays: 3
         services:
+          # ── Redis (Key Value) for session storage ──
+          # Deployed alongside the web service. Internal-only (no public access).
+          # The web service references this via REDIS_URL → connectionString.
+          - type: keyvalue
+            name: turres-ssi-tools-redis
+            region: frankfurt
+            plan: starter
+            maxmemoryPolicy: allkeys-lru
+            ipAllowList: []  # internal access only (private network)
+          # ── Web service ──
           - type: web
-            name: ssi-scoring
+            name: turres-ssi-tools
             runtime: node
+            region: frankfurt
             plan: starter
             branch: main
             repo: https://github.com/tohewi/tapahtumakalenteri-ssi-integrator
             previews:
               plan: starter
-            buildCommand: cd scoring-ui && npm ci && npm run build && cd ../scoring-proxy && npm ci
+            buildCommand: cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm ci
             startCommand: cd scoring-proxy && node server.js
             envVars:
               - key: NODE_ENV
                 value: production
               - key: PORT
                 value: 3001
+              - key: LOG_LEVEL
+                value: info
+              - key: SESSION_SECRET
+                generateValue: true
+              - key: REDIS_URL
+                fromService:
+                  name: turres-ssi-tools-redis
+                  type: keyvalue
+                  property: connectionString

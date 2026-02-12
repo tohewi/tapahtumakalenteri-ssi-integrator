@@ -177,8 +177,8 @@ export default function RegisterPage() {
         <div className="px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex-1">
-              <h1 className="text-xl font-bold">Kupittaa Cup — Ilmoittautuminen</h1>
-              <p className="text-blue-200 text-sm mt-0.5">TurRes reservilaisammunta</p>
+              <h1 className="text-xl font-bold">SSI apurit — Ilmoittautuminen</h1>
+              <p className="text-blue-200 text-sm mt-0.5">TurRes SSI-työkalut</p>
             </div>
             <a href="#/" className="text-blue-200 text-sm active:text-white">
               {fi.home}

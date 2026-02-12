@@ -1439,6 +1439,52 @@ export async function ssiFindCompetitorInMatch(matchId, shooterName, cookies) {
 }
 
 // ============================================================
+// Admin: find participant in any event by scraping participants page.
+// General-purpose version of ssiFindCompetitorInMatch (which is Nordic-only).
+//
+// Scrapes /event/{eventContentType}/{eventId}/participants/ with admin cookies.
+// Parses participant links: <a href="/event/participant/{participantCT}/{id}/">Name</a>
+// Matches by shooterName (word-based flexible matching).
+// Returns { participantId, participantCT } or null.
+//
+// Why scraping instead of GraphQL?
+//   SSI GraphQL returns competitor data but the admin JWT does NOT include
+//   shooter.email for other users (privacy restriction). Web scraping with
+//   admin cookies has no such limitation — all participant data is visible.
+// ============================================================
+
+export async function ssiFindParticipantInEvent(eventContentType, eventId, shooterName, cookies) {
+  const url = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/participants/`
+
+  const resp = await fetch(url, {
+    headers: { 'Cookie': formatCookies(cookies) },
+    redirect: 'follow',
+  })
+  if (!resp.ok) throw new Error(`Participants page HTTP ${resp.status} for event ${eventId}`)
+  const html = await resp.text()
+
+  // Participant links: <a href="/event/participant/{ct}/{id}/">Name</a>
+  // Captures: [1]=participantCT, [2]=participantId, [3]=name
+  const pattern = /<a[^>]*href="\/event\/participant\/(\d+)\/(\d+)\/"[^>]*>([^<]*)<\/a>/gi
+
+  // Normalize search: split into words for flexible matching (handles double spaces etc.)
+  // Keep single-char digits (e.g. "2") to distinguish "Tuloskone 1" from "Tuloskone 2"
+  const searchWords = shooterName.toLowerCase().split(/\s+/).filter(w => w.length > 1 || /\d/.test(w))
+
+  for (const m of html.matchAll(pattern)) {
+    const participantCT = m[1]
+    const participantId = m[2]
+    const name = m[3].trim()
+    const nameLower = name.toLowerCase()
+    if (searchWords.length > 0 && searchWords.every(w => nameLower.includes(w))) {
+      return { participantId, participantCT: parseInt(participantCT) }
+    }
+  }
+
+  return null
+}
+
+// ============================================================
 // Fetch any authenticated SSI web page (HTML scraping)
 // ============================================================
 

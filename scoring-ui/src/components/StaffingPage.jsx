@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import * as api from '../api'
-import { encryptData, decryptData } from '../crypto'
+import { useRememberMe } from '../hooks/useRememberMe'
 import LoginScreen from './LoginScreen'
 import { AppHeader } from './shared'
 import t from '../i18n'
@@ -49,31 +49,14 @@ export default function StaffingPage() {
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
   const [filter, setFilter] = useState('all') // 'all' | 'missingRoles' | 'myEvents'
 
-  // Saved credentials for pre-fill
-  const [savedEmail, setSavedEmail] = useState('')
-  const [savedPassword, setSavedPassword] = useState('')
-  const [savedApiKey, setSavedApiKey] = useState('')
+  // Saved credentials for pre-fill (shared hook — handles save AND clear)
+  const { savedCreds, handleRememberMe } = useRememberMe(LS_CREDS)
 
   // Check existing session on mount (survives page reload)
   useEffect(() => {
     api.getAuthStatus().then(status => {
       if (status.authenticated) setAuthed(true)
     }).catch(() => {})
-  }, [])
-
-  // Load saved credentials for pre-fill
-  useEffect(() => {
-    const loadSavedCreds = async () => {
-      const raw = localStorage.getItem(LS_CREDS)
-      if (!raw) return
-      const creds = await decryptData(raw)
-      if (creds) {
-        setSavedEmail(creds.email || '')
-        setSavedPassword(creds.password || '')
-        setSavedApiKey(creds.apiKey || '')
-      }
-    }
-    loadSavedCreds()
   }, [])
 
   // Session expiry handler
@@ -86,10 +69,7 @@ export default function StaffingPage() {
   const handleLogin = async (email, password, apiKey, rememberMe) => {
     setSessionExpiredMessage(null)
     await api.login(email, password, apiKey, 'staffing')
-    if (rememberMe) {
-      const encrypted = await encryptData({ email, password, apiKey })
-      localStorage.setItem(LS_CREDS, encrypted)
-    }
+    await handleRememberMe(email, password, apiKey, rememberMe)
     setAuthed(true)
   }
 
@@ -147,9 +127,9 @@ export default function StaffingPage() {
         )}
         <LoginScreen
           onLogin={handleLogin}
-          initialEmail={savedEmail}
-          initialPassword={savedPassword}
-          initialApiKey={savedApiKey}
+          initialEmail={savedCreds?.email}
+          initialPassword={savedCreds?.password}
+          initialApiKey={savedCreds?.apiKey}
           hideHeader
         />
       </div>
