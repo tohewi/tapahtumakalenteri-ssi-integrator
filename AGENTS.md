@@ -6,6 +6,13 @@
 - **Commit messages:** explain how the commit advances the requirement toward completion. Include the requirement number in the subject or body.
 - When a requirement is completed and tests pass, **update the requirements document** to mark it ✅ **Implemented/Ready**.
 - **Keep instructions in sync:** if you modify these agent instructions, update **both** `AGENTS.md` and `.github/copilot-instructions.md` with the same changes.
+- **Track token usage:** At the end of each session (or when asked), provide a rough token usage summary per requirement. Count words read (file reads, search results, command output) and words written (edits, new files, commands) during the session. Summarize in a table like:
+
+  | Requirement | Words Read | Words Written | Total (approx tokens) |
+  |-------------|-----------|---------------|----------------------|
+  | R12 staffing | ~3,200 | ~800 | ~5,300 |
+
+  Use the approximation: **1 token ≈ 0.75 words** (i.e., total tokens ≈ total words × 1.33). This is a rough estimate for cost awareness, not exact billing.
 
 For full project context, see: `.github/copilot-instructions.md`.
 
