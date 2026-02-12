@@ -8,6 +8,7 @@ projects:
           # The web service references this via REDIS_URL → connectionString.
           - type: keyvalue
             name: ssi-scoring-redis
+            region: frankfurt
             plan: starter
             maxmemoryPolicy: allkeys-lru
             ipAllowList: []  # internal access only (private network)
@@ -15,6 +16,7 @@ projects:
           - type: web
             name: ssi-scoring
             runtime: node
+            region: frankfurt
             plan: starter
             branch: main
             repo: https://github.com/tohewi/tapahtumakalenteri-ssi-integrator
