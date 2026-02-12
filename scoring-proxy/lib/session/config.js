@@ -16,7 +16,12 @@ export const sessionConfig = {
 
   // Session settings
   session: {
-    secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
+    secret: (() => {
+      if (IS_PROD && !process.env.SESSION_SECRET) {
+        throw new Error('SESSION_SECRET environment variable is required in production')
+      }
+      return process.env.SESSION_SECRET || 'dev-secret-change-in-production'
+    })(),
     ttl: parseInt(process.env.SESSION_TTL, 10) || 8 * 60 * 60 * 1000, // 8 hours
     cookieName: 'ssi_session',
     cookiePath: '/api',

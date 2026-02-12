@@ -7,7 +7,6 @@
 // ============================================================
 
 import crypto from 'node:crypto'
-import { sessionConfig } from './config.js'
 
 const IS_PROD = process.env.NODE_ENV === 'production'
 
