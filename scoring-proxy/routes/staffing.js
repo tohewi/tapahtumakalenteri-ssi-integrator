@@ -391,30 +391,15 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
       const contentType = event?.contentType || config.eventDiscovery.matchContentType
 
       if (contentType && cookies) {
-        // 1. Remove from management group
+        // Step 1: Query squads with USER's session BEFORE management removal.
+        // The user's own JWT returns shooter.email for competitors;
+        // the admin JWT does NOT (SSI privacy restriction).
+        const staffSquadNum = event?.trainingType && config.trainingTypes?.[event.trainingType]?.staffSquad 
+          ? config.trainingTypes[event.trainingType].staffSquad 
+          : 5
+        let participantId = null
         try {
-          const groupId = await ssiGetMatchGroupId(contentType, eventId, cookies)
-          const removeResult = await ssiRemoveFromMatchManagement(groupId, contentType, eventId, userEmail, cookies)
-          console.log(`[staffing] SSI management remove: ${userEmail} → ${removeResult.message}`)
-          ssiResults.management = { success: true, message: removeResult.message, usedFallback: removeResult.usedFallback }
-        } catch (e) {
-          console.error(`[staffing] SSI management remove failed for ${userEmail}: ${e.message}`)
-          // Only set error for critical failures (user already removed is OK)
-          if (!e.message.includes('not found') && !e.message.includes('may already be removed')) {
-            ssiResults.management = { success: false, message: e.message }
-          } else {
-            ssiResults.management = { success: true, message: 'Already removed or not found' }
-          }
-        }
-
-        // 2. Remove from trainer squad (Squad 5)
-        try {
-          // Fetch event squads to find user's participant ID in trainer squad
-          // Uses admin session — user may have lost match access after resignation
-          const staffSquadNum = event?.trainingType && config.trainingTypes?.[event.trainingType]?.staffSquad 
-            ? config.trainingTypes[event.trainingType].staffSquad 
-            : 5
-          const squadData = await graphqlWithRefresh(adminSess, `
+          const squadData = await graphqlWithRefresh(session, `
             query GetEventSquads($contentType: Int!, $eventId: String!) {
               event(content_type: $contentType, id: $eventId) {
                 squads {
@@ -443,46 +428,59 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
             }
           `, { contentType: parseInt(contentType), eventId: eventId })
 
-          // Diagnostic: log what GraphQL returned for squads
           const allSquads = squadData.event?.squads || []
-          log.debug(`[staffing] Squad query returned ${allSquads.length} squads for event ${eventId} (ct=${contentType})`)
+          log.debug(`[staffing] Squad query (user session) returned ${allSquads.length} squads for event ${eventId} (ct=${contentType})`)
           for (const sq of allSquads) {
             const comps = sq.competitors || []
             const emails = comps.map(c => c.shooter?.email || '(no email)').join(', ')
             log.debug(`[staffing]   Squad ${sq.number} (id=${sq.id}): ${comps.length} competitors [${emails}]`)
           }
 
-          // Find user in trainer squad
           const staffSquad = allSquads.find(s => s.number === staffSquadNum)
-          if (!staffSquad) {
-            log.debug(`[staffing] Squad ${staffSquadNum} not found! Squad numbers: [${allSquads.map(s => `${s.number}(${typeof s.number})`).join(', ')}], looking for ${staffSquadNum}(${typeof staffSquadNum})`)
-          }
           const userCompetitor = (staffSquad?.competitors || []).find(c => 
             c.shooter?.email?.toLowerCase() === userEmail.toLowerCase()
           )
-
           if (userCompetitor) {
-            const participantId = userCompetitor.id
-            console.log(`[staffing] Found ${userEmail} in Squad ${staffSquadNum}: participant ID ${participantId}`)
-            
-            // Validate userName is meaningful, fallback to email if needed
+            participantId = userCompetitor.id
+            log.debug(`[staffing] Found ${userEmail} in Squad ${staffSquadNum}: participant ID ${participantId}`)
+          } else {
+            log.debug(`[staffing] ${userEmail} not found in Squad ${staffSquadNum} via user session`)
+          }
+        } catch (e) {
+          console.error(`[staffing] Squad query (user session) failed: ${e.message}`)
+        }
+
+        // Step 2: Remove from management group (admin cookies)
+        try {
+          const groupId = await ssiGetMatchGroupId(contentType, eventId, cookies)
+          const removeResult = await ssiRemoveFromMatchManagement(groupId, contentType, eventId, userEmail, cookies)
+          console.log(`[staffing] SSI management remove: ${userEmail} → ${removeResult.message}`)
+          ssiResults.management = { success: true, message: removeResult.message, usedFallback: removeResult.usedFallback }
+        } catch (e) {
+          console.error(`[staffing] SSI management remove failed for ${userEmail}: ${e.message}`)
+          if (!e.message.includes('not found') && !e.message.includes('may already be removed')) {
+            ssiResults.management = { success: false, message: e.message }
+          } else {
+            ssiResults.management = { success: true, message: 'Already removed or not found' }
+          }
+        }
+
+        // Step 3: Remove from trainer squad (admin cookies) using participant ID from step 1
+        if (participantId) {
+          try {
             const displayName = userName && userName.trim() ? userName : userEmail
-            
-            // Determine participant content type based on event content type
-            // Nordic matches (CT 91) use participant CT 93
-            // IPSC/SRA matches (CT 22) use participant CT 23
+            // Nordic matches (CT 91) use participant CT 93, IPSC/SRA (CT 22) use participant CT 23
             const participantCT = parseInt(contentType) === 22 ? 23 : 93
-            
             const deleteResult = await ssiDeleteMatchParticipant(eventId, participantId, displayName, cookies, participantCT)
             console.log(`[staffing] SSI trainer squad remove: ${userEmail} → ${deleteResult.message}`)
             ssiResults.trainerSquad = { success: true, message: deleteResult.message }
-          } else {
-            console.log(`[staffing] ${userEmail} not found in Squad ${staffSquadNum} (may already be removed)`)
-            ssiResults.trainerSquad = { success: true, message: 'Not found in trainer squad (may already be removed)' }
+          } catch (e) {
+            console.error(`[staffing] SSI trainer squad remove failed for ${userEmail}: ${e.message}`)
+            ssiResults.trainerSquad = { success: false, message: e.message }
           }
-        } catch (e) {
-          console.error(`[staffing] SSI trainer squad remove failed for ${userEmail}: ${e.message}`)
-          ssiResults.trainerSquad = { success: false, message: e.message }
+        } else {
+          console.log(`[staffing] ${userEmail} not found in Squad ${staffSquadNum} (may already be removed)`)
+          ssiResults.trainerSquad = { success: true, message: 'Not found in trainer squad (may already be removed)' }
         }
       }
 
