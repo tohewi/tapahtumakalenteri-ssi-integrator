@@ -7,6 +7,7 @@ import path from 'path'
 import { existsSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { ssiGraphQL, ssiLogin, ssiRefreshJWT } from './lib/ssi-client.js'
+import { log } from './lib/logger.js'
 import { createScoringRouter } from './routes/scoring.js'
 import { createRegistrationRouter } from './routes/registration.js'
 import { createReportsRouter } from './routes/reports.js'
@@ -185,7 +186,7 @@ async function getAdminSession() {
 
   // Full re-login if cookies expired
   if (!adminCookies || (now - adminCookieTime) >= ADMIN_COOKIE_TTL) {
-    if (!IS_PROD) console.log('[admin] Full login (cookies expired or first init)...')
+    log.debug('[admin] Full login (cookies expired or first init)...')
     adminCookies = await ssiLogin(email, password)
     adminCookieTime = now
 
@@ -201,20 +202,20 @@ async function getAdminSession() {
     adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
     adminJwtTime = now
 
-    if (!IS_PROD) console.log('[admin] Session ready (fresh login)')
+    log.debug('[admin] Session ready (fresh login)')
     return { cookies: adminCookies, jwt: adminJwt, refreshToken: adminRefreshToken }
   }
 
   // Proactively refresh JWT if near expiry (cookies still valid)
   if (!adminJwt || (now - adminJwtTime) >= ADMIN_JWT_TTL) {
-    if (!IS_PROD) console.log('[admin] Refreshing JWT (expired after ~14 min)...')
+    log.debug('[admin] Refreshing JWT (expired after ~14 min)...')
     try {
       if (adminRefreshToken) {
         const newTokens = await ssiRefreshJWT(adminRefreshToken)
         adminJwt = newTokens.token
         adminRefreshToken = newTokens.refreshToken
         adminJwtTime = now
-        if (!IS_PROD) console.log('[admin] JWT refreshed via refresh token')
+        log.debug('[admin] JWT refreshed via refresh token')
       } else {
         // No refresh token — full re-auth for JWT
         const authResult = await ssiGraphQL(null, `
@@ -228,7 +229,7 @@ async function getAdminSession() {
         adminJwt = authResult.token_auth?.token?.token || null
         adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
         adminJwtTime = now
-        if (!IS_PROD) console.log('[admin] JWT refreshed via re-auth')
+        log.debug('[admin] JWT refreshed via re-auth')
       }
     } catch (err) {
       console.error('[admin] JWT refresh failed, doing full re-login:', err.message)
