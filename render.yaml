@@ -20,7 +20,7 @@ projects:
             repo: https://github.com/tohewi/tapahtumakalenteri-ssi-integrator
             previews:
               plan: starter
-            buildCommand: cd scoring-ui && npm ci && npm run build && cd ../scoring-proxy && npm ci
+            buildCommand: cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm ci
             startCommand: cd scoring-proxy && node server.js
             envVars:
               - key: NODE_ENV
