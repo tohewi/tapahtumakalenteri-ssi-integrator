@@ -11,15 +11,16 @@ For full project context, see: `.github/copilot-instructions.md`.
 
 ## Project Overview
 
-This is a **shooting competition management system** (SSI Scoring) with two main components:
+This is a **shooting competition management system** to help setting up events in SSI (ShootnScoreIt, a SaaS service for competition management) with two main components:
 
 - **scoring-ui/** — React frontend (Vite, TailwindCSS), mobile-first design
 - **scoring-proxy/** — Express.js backend proxy to ShootNScoreIt (SSI) API
 
 **Key terminology:**
-- **Cup:** A shooting competition event
-- **Match:** A specific discipline within a cup
-- **Squad:** A group of competitors assigned to shoot at the same time
+- **Cup:** A shooting competition event that contains multiple matches
+- **Match:** A shooting competition in a specific discipline. Match can be in a cup or in a league, or be a standalone match.
+- **Squad:** A group of competitors assigned to shoot a stage together.
+- **Stage:** A stage is a carefully designed challenge, presenting a unique set of targets, obstacles, and engagement scenarios. Each stage is a part of a match.
 - **SSI:** ShootNScoreIt, the external competition management system
 
 ## Repository Structure
@@ -30,19 +31,28 @@ This is a **shooting competition management system** (SSI Scoring) with two main
 │   │   ├── main.jsx         # Hash-based routing
 │   │   ├── App.jsx          # Scoring app (state machine)
 │   │   ├── api.js           # API client
+│   │   ├── i18n.js          # Internationalization (fi/en)
 │   │   └── components/      # Page components
 │   └── package.json
 │
 ├── scoring-proxy/           # Express backend
-│   ├── server.js            # All endpoints
+│   ├── server.js            # Main server + session management
+│   ├── routes/
+│   │   ├── auth.js          # Authentication (login, session, allowlist)
+│   │   └── staffing.js      # Staffing endpoints (signup, resign, sync)
 │   ├── lib/
 │   │   ├── ssi-client.js    # SSI GraphQL + web scraping
-│   │   └── email.js         # Email via Resend API
+│   │   ├── email.js         # Email via Resend API
+│   │   └── staffing/        # Staffing engine
+│   │       ├── engine.js    # Core staffing logic
+│   │       └── config-loader.js  # Config loading + helpers
 │   └── package.json
 │
+├── config/                  # Cup templates and defaults
+│   └── sra-training-config.yml  # SRA staffing config (roles, allowlist, service accounts)
+├── test-harness/            # E2E test scripts
 ├── render.yaml              # Render Blueprint (deploy config)
-├── docs/                    # Documentation
-└── config/                  # Cup templates and defaults
+└── docs/                    # Documentation
 ```
 
 ## Development Workflow
@@ -58,7 +68,7 @@ cd scoring-proxy && npm install
 ```
 
 ### Local Development
-
+Please run local development environment on port 3001, as local FW has been configured to allow that traffic.
 ```bash
 # Start the server (serves both API and built frontend)
 cd scoring-proxy && node server.js
@@ -70,8 +80,9 @@ cd scoring-proxy && node server.js
 - No TypeScript — plain JavaScript (ES modules)
 - React with hooks for state management
 - TailwindCSS for styling (mobile-first)
-- No comments/documentation changes unless explicitly requested
+- Always add comments and maintain documentation up to date
 - Follow existing patterns in the codebase
+- If you want to refactor, please prepare a plan and reasoning and ask for approval before starting.
 
 ## Deployment
 
@@ -136,11 +147,21 @@ Preview environments are **automatically created** for all pull requests via Git
 | Modify SSI integration | `scoring-proxy/lib/ssi-client.js` |
 | Update home navigation | `scoring-ui/src/components/HomePage.jsx` |
 | Change deploy config | `render.yaml` |
+| Modify staffing logic | `scoring-proxy/lib/staffing/engine.js`, `scoring-proxy/routes/staffing.js` |
+| Modify staffing config | `config/sra-training-config.yml`, `scoring-proxy/lib/staffing/config-loader.js` |
+| Update staffing UI | `scoring-ui/src/components/StaffingPage.jsx` |
+| Add/update translations | `scoring-ui/src/i18n.js` |
+| Modify authentication | `scoring-proxy/routes/auth.js` |
 
 ## Important Constraints
 
 - SSI API requires authentication via session cookies (stored in-memory on server)
+  - Note that there is User session cookie and Admin session cookie.
+  - User session cookie is to verify user identity and access user data.
+  - Admin session cookie is used in most of the SSI API calls.
 - Server restart clears all sessions — users must re-login
 - The proxy serves the built frontend from `scoring-ui/dist/`
-- Environment variables: `NODE_ENV=production`, `PORT=3001`
+- Environment variables:
+  - `NODE_ENV=development`, `PORT=3001` for local development
+  - `NODE_ENV=production` for production do not specify PORT. Render will assign a port.
 - Max JSON body size: 10kb
