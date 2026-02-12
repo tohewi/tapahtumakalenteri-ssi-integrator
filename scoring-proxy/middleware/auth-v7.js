@@ -6,7 +6,6 @@
 // context to downstream route handlers.
 //
 // Uses the V7.0 session store (Redis or in-memory fallback).
-// Activated via ENABLE_V7_AUTH=true feature flag.
 // ============================================================
 
 import {
