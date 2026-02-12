@@ -57,6 +57,7 @@ All SRA trainings have the following squad structure:
 | S3 | Registration blocked when max trainers reached | ✅ | `totalTrainers(event) >= event.maxTrainers` |
 | S4 | Vastuuvetäjä and kalustovastaava are single-slot roles | ✅ | Engine rejects if slot already taken |
 | S5 | Staff member can resign from their role | ✅ | `DELETE /api/staffing/events/:eventId/signup` |
+| S6 | Signup waits for SSI operations (blocking) before returning | ✅ | UI waits for squad + management updates; errors surfaced immediately |
 
 ### 2.4 SSI Integration — Trainer Squad
 
@@ -207,11 +208,11 @@ All SRA trainings have the following squad structure:
 - User's own cookies used (not admin cookies) — actions performed on behalf of the logged-in user
 - Session TTL configurable (currently 1 min for debug)
 
-### 4.5 Non-Blocking SSI Operations
+### 4.5 Blocking SSI Operations (Reliability-First)
 
-- SSI web scraping (trainer squad registration, management group add/remove) runs **non-blocking** after the internal engine operation succeeds
-- The staffing signup/resign API responds immediately; SSI operations complete asynchronously
-- Failures in SSI operations are logged but don't fail the user-facing operation
+- SSI web scraping (trainer squad registration, management group add/remove) runs **blocking** for signup/resign
+- The staffing API responds only after SSI updates succeed or fail
+- Failures surface immediately to the user (no silent async failures)
 
 ---
 
@@ -296,4 +297,4 @@ scripts-graphql/
 2. **No queue/overflow logic yet**: Current implementation allows direct role selection up to `maxTrainers`. The designed FIFO queue with overflow-to-shooter-squad is not yet implemented.
 3. **No email notifications**: Templates exist in config but the notification module is not implemented.
 4. **Session TTL**: Currently set to 1 minute for debug. Must be increased for production use.
-5. **SSI operations are non-blocking**: If SSI web scraping fails (network, session expiry), the internal engine state will be correct but SSI won't reflect the change. Re-syncing on next page load will correct discrepancies.
+5. **SSI web scraping fragility**: If SSI UI changes (HTML layout, selectors), scraping may fail. Blocking makes failures visible immediately to the user.
