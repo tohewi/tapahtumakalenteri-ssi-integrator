@@ -67,7 +67,9 @@ describe('requireAuthV7 — Authentication', () => {
 
     expect(next).toHaveBeenCalledOnce()
     expect(req.ssiSession).toBeTruthy()
-    expect(req.ssiSession.userId).toBe('test@example.com')
+    // Legacy-compatible view: jwt/refreshToken are getters, userId is at _userId
+    expect(req.ssiSession.jwt).toBe('mock-user-jwt-token')
+    expect(req.ssiSession._userId).toBe('test@example.com')
     expect(req.impersonation).toBeTruthy()
     expect(req.impersonation.user).toBe('test@example.com')
   })

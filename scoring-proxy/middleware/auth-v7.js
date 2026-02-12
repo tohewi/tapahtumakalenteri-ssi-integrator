@@ -18,6 +18,7 @@ import {
   getImpersonationContext,
   sessionConfig,
   auditSecurityViolation,
+  toLegacySession,
 } from '../lib/session/index.js'
 
 const SESSION_COOKIE = sessionConfig.session.cookieName
@@ -112,8 +113,12 @@ export function requireAuthV7(allowedScopes = null) {
       })
 
       // Attach session and impersonation context to request
-      req.ssiSession = updatedSession || session
-      req.impersonation = getImpersonationContext(req.ssiSession)
+      const finalSession = updatedSession || session
+      req._v7Session = finalSession
+      req._v7SessionId = sessionId
+      // Legacy-compatible view so existing routes work without changes
+      req.ssiSession = toLegacySession(finalSession)
+      req.impersonation = getImpersonationContext(finalSession)
 
       if (!req.impersonation) {
         // This should not happen if isUserTokenValid passed,
