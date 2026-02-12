@@ -168,8 +168,10 @@ app.get('/api/health', async (req, res) => {
 let adminCookies = null
 let adminJwt = null
 let adminRefreshToken = null
-let adminLoginTime = 0
-const ADMIN_SESSION_TTL = 4 * 60 * 60 * 1000 // 4 hours
+let adminCookieTime = 0
+let adminJwtTime = 0
+const ADMIN_COOKIE_TTL = 4 * 60 * 60 * 1000 // 4 hours — SSI web cookies
+const ADMIN_JWT_TTL = 14 * 60 * 1000         // 14 min — SSI JWTs expire ~15 min
 
 async function getAdminSession() {
   const email = process.env.SSI_ADMIN_EMAIL
@@ -179,29 +181,74 @@ async function getAdminSession() {
     throw new Error('Registration not configured: SSI_ADMIN_EMAIL and SSI_ADMIN_PASSWORD required')
   }
 
-  // Reuse if still fresh
-  if (adminCookies && (Date.now() - adminLoginTime) < ADMIN_SESSION_TTL) {
+  const now = Date.now()
+
+  // Full re-login if cookies expired
+  if (!adminCookies || (now - adminCookieTime) >= ADMIN_COOKIE_TTL) {
+    if (!IS_PROD) console.log('[admin] Full login (cookies expired or first init)...')
+    adminCookies = await ssiLogin(email, password)
+    adminCookieTime = now
+
+    const authResult = await ssiGraphQL(null, `
+      mutation Auth($email: String!, $password: String!) {
+        token_auth(email: $email, password: $password) {
+          token { token }
+          refresh_token { token }
+        }
+      }
+    `, { email, password }, apiKey)
+    adminJwt = authResult.token_auth?.token?.token || null
+    adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
+    adminJwtTime = now
+
+    if (!IS_PROD) console.log('[admin] Session ready (fresh login)')
     return { cookies: adminCookies, jwt: adminJwt, refreshToken: adminRefreshToken }
   }
 
-  // Login as admin
-  if (!IS_PROD) console.log('[register] Admin login...')
-  adminCookies = await ssiLogin(email, password)
-
-  // Get JWT for GraphQL reads
-  const authResult = await ssiGraphQL(null, `
-    mutation Auth($email: String!, $password: String!) {
-      token_auth(email: $email, password: $password) {
-        token { token }
-        refresh_token { token }
+  // Proactively refresh JWT if near expiry (cookies still valid)
+  if (!adminJwt || (now - adminJwtTime) >= ADMIN_JWT_TTL) {
+    if (!IS_PROD) console.log('[admin] Refreshing JWT (expired after ~14 min)...')
+    try {
+      if (adminRefreshToken) {
+        const newTokens = await ssiRefreshJWT(adminRefreshToken)
+        adminJwt = newTokens.token
+        adminRefreshToken = newTokens.refreshToken
+        adminJwtTime = now
+        if (!IS_PROD) console.log('[admin] JWT refreshed via refresh token')
+      } else {
+        // No refresh token — full re-auth for JWT
+        const authResult = await ssiGraphQL(null, `
+          mutation Auth($email: String!, $password: String!) {
+            token_auth(email: $email, password: $password) {
+              token { token }
+              refresh_token { token }
+            }
+          }
+        `, { email, password }, apiKey)
+        adminJwt = authResult.token_auth?.token?.token || null
+        adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
+        adminJwtTime = now
+        if (!IS_PROD) console.log('[admin] JWT refreshed via re-auth')
       }
+    } catch (err) {
+      console.error('[admin] JWT refresh failed, doing full re-login:', err.message)
+      // Full re-login as fallback
+      adminCookies = await ssiLogin(email, password)
+      adminCookieTime = now
+      const authResult = await ssiGraphQL(null, `
+        mutation Auth($email: String!, $password: String!) {
+          token_auth(email: $email, password: $password) {
+            token { token }
+            refresh_token { token }
+          }
+        }
+      `, { email, password }, apiKey)
+      adminJwt = authResult.token_auth?.token?.token || null
+      adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
+      adminJwtTime = now
     }
-  `, { email, password }, apiKey)
-  adminJwt = authResult.token_auth?.token?.token || null
-  adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
-  adminLoginTime = Date.now()
+  }
 
-  if (!IS_PROD) console.log('[register] Admin session ready')
   return { cookies: adminCookies, jwt: adminJwt, refreshToken: adminRefreshToken }
 }
 
