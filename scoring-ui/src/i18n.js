@@ -22,11 +22,11 @@ export const fi = {
   loginSubtitle: 'Kirjaudu sisään aloittaaksesi tulosten syötön',
   
   // HomePage features
-  scoringTitle: 'Kupittaa Cup tulosten syöttö',
+  scoringTitle: 'SSI apurit tulosten syöttö',
   scoringDescription: 'Syötä kilpailutulokset puhelimella',
-  registrationTitle: 'Kupittaa Cup ilmoittautuminen',
-  registrationDescription: 'Ilmoittaudu Kupittaa CUP -kilpailuun',
-  managementTitle: 'Kupittaa Cup hallinta',
+  registrationTitle: 'SSI apurit ilmoittautuminen',
+  registrationDescription: 'Ilmoittaudu kilpailuun',
+  managementTitle: 'SSI apurit hallinta',
   managementDescription: 'Squadien ja ilmoittautumisten hallinta',
   reportTitle: 'Raportti',
   reportDescription: 'Kilpailuraportit ja tilastot',
@@ -145,11 +145,11 @@ export const en = {
   loginSubtitle: 'Login to start scoring',
   
   // HomePage features
-  scoringTitle: 'Kupittaa Cup Scoring',
+  scoringTitle: 'SSI Helpers Scoring',
   scoringDescription: 'Enter competition scores by phone',
-  registrationTitle: 'Kupittaa Cup Registration',
-  registrationDescription: 'Register for Kupittaa CUP competition',
-  managementTitle: 'Kupittaa Cup Management',
+  registrationTitle: 'SSI Helpers Registration',
+  registrationDescription: 'Register for competition',
+  managementTitle: 'SSI Helpers Management',
   managementDescription: 'Squad and registration management',
   reportTitle: 'Report',
   reportDescription: 'Competition reports and statistics',
