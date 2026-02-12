@@ -185,6 +185,7 @@ Use these to check deploy status, view logs, monitor service performance, and ma
 
 ## Important Constraints
 
+- **All infrastructure must be deployed in Europe** (Render region: `frankfurt`). This applies to all services, databases, and Key Value instances — both in `render.yaml` and in GitHub Actions preview workflows. Never deploy to US or other non-EU regions.
 - SSI API requires authentication via session cookies (stored in-memory on server)
   - Note that there is User session cookie and Admin session cookie.
   - User session cookie is to verify user identity and access user data.
