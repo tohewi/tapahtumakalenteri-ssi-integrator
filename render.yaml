@@ -1,8 +1,5 @@
 projects:
   - name: My project
-    previews:
-      generation: manual
-      expireAfterDays: 3
     environments:
       - name: production
         services:
