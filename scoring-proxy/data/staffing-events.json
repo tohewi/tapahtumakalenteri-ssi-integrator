@@ -1,0 +1,66 @@
+[
+  {
+    "eventId": "27394",
+    "eventName": "TEST TR-SRAN 10.03.2026",
+    "trainingType": "newbie",
+    "eventDate": "2026-03-10T16:00:00+00:00",
+    "shooterCount": 0,
+    "maxTrainers": 8,
+    "leadInstructor": null,
+    "equipmentManager": null,
+    "staff": [],
+    "contentType": 22
+  },
+  {
+    "eventId": "27393",
+    "eventName": "TEST TR-SRAO 03.03.2026",
+    "trainingType": "oldies",
+    "eventDate": "2026-03-03T16:00:00+00:00",
+    "shooterCount": 0,
+    "maxTrainers": 6,
+    "leadInstructor": null,
+    "equipmentManager": null,
+    "staff": [],
+    "contentType": 22
+  },
+  {
+    "eventId": "27392",
+    "eventName": "TEST TR-SRAN 24.02.2026",
+    "trainingType": "newbie",
+    "eventDate": "2026-02-24T16:00:00+00:00",
+    "shooterCount": 0,
+    "maxTrainers": 8,
+    "leadInstructor": {
+      "email": "turreskuko1@foo.bar",
+      "userName": "Turresku Tuloskone 1",
+      "signupTime": "2026-02-11T22:14:05.457Z"
+    },
+    "equipmentManager": null,
+    "staff": [
+      {
+        "email": "tohewi@live.com",
+        "userName": "TurRes Bot",
+        "signupTime": null
+      }
+    ],
+    "contentType": 22
+  },
+  {
+    "eventId": "27391",
+    "eventName": "TEST TR-SRAO 17.02.2026",
+    "trainingType": "oldies",
+    "eventDate": "2026-02-17T16:00:00+00:00",
+    "shooterCount": 0,
+    "maxTrainers": 6,
+    "leadInstructor": null,
+    "equipmentManager": null,
+    "staff": [
+      {
+        "email": "tohewi@live.com",
+        "userName": "TurRes Bot",
+        "signupTime": null
+      }
+    ],
+    "contentType": 22
+  }
+]

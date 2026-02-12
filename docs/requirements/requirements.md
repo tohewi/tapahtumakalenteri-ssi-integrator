@@ -249,7 +249,7 @@
 - **Release 4.0** (Kupittaa Cup Registration Frontend): 25 requirements — 25 ✅
 - **Release 5.0** (SRA Training Staffing) - requirements are in document sra-training-staffing-requirements.md
 - **Release 6.0** (Match Management & UI Consolidation): 5 requirements — 1 ✅, 4 pending (MG2–MG5)
-- **Release 7.0** (Authentication & Session Handling): 10 requirements — 10 ✅
+- **Release 7.0** (Authentication & Session Handling): 25 requirements — 0 ✅, 25 pending (AUTH1–10, SES1–7, SEC1–7, TEST1–8)
 
 
 ## Configuration Files
