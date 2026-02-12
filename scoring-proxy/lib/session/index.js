@@ -31,3 +31,7 @@ export {
   executeSSIAsUser,
   executeSSIWithCookies,
 } from './impersonation.js'
+export {
+  toLegacySession,
+  graphqlWithRefreshV7,
+} from './compat.js'
