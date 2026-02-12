@@ -44,12 +44,6 @@ export const sessionConfig = {
     apiKey: process.env.SSI_ADMIN_API_KEY || null,
   },
 
-  // Feature flags
-  flags: {
-    enabled: process.env.ENABLE_V7_AUTH === 'true',
-    auditToRedis: process.env.AUDIT_REDIS === 'true',
-  },
-
   // Scope-specific TTL overrides (in ms)
   scopeTTL: {
     staffing: 5 * 60 * 1000, // 5 minutes for staffing

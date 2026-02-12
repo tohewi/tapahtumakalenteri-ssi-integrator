@@ -7,15 +7,7 @@
 //
 // Legacy routes expect: req.ssiSession.jwt, .refreshToken, .ssiCookies, .apiKey
 // V7 sessions have:     req.ssiSession.userSSI.jwt, .adminSSI.jwt, etc.
-//
-// This module provides:
-//   - toLegacySession(): maps V7 → legacy format
-//   - graphqlWithRefreshV7(): drop-in replacement for graphqlWithRefresh
 // ============================================================
-
-import { ssiGraphQL, ssiRefreshJWT } from '../ssi-client.js'
-import { touchSession } from './store.js'
-import { auditSSIOperation, auditTokenRefresh } from './audit.js'
 
 // Convert a V7 session to the flat legacy format that existing routes expect.
 // The returned object acts as a view — mutations to jwt/refreshToken are
@@ -44,51 +36,4 @@ export function toLegacySession(v7Session) {
   }
 
   return legacy
-}
-
-// Drop-in replacement for graphqlWithRefresh that works with V7 sessions.
-// Uses the user's JWT (same as legacy) but adds audit logging and
-// properly refreshes tokens back into the V7 session store.
-export function graphqlWithRefreshV7(sessionId) {
-  return async function (session, query, variables = {}) {
-    const user = session._userId || 'unknown'
-    const startTime = Date.now()
-
-    try {
-      const result = await ssiGraphQL(session.jwt, query, variables)
-      return result
-    } catch (err) {
-      // Token refresh on auth failure (same logic as legacy)
-      if (session.refreshToken && (
-        err.message.includes('Signature') ||
-        err.message.includes('expired') ||
-        err.message.includes('401')
-      )) {
-        try {
-          const newTokens = await ssiRefreshJWT(session.refreshToken)
-          session.jwt = newTokens.token
-          session.refreshToken = newTokens.refreshToken
-
-          // Persist refreshed tokens to session store
-          if (sessionId) {
-            await touchSession(sessionId, {
-              userSSI: {
-                jwt: newTokens.token,
-                refreshToken: newTokens.refreshToken,
-                expiresAt: Date.now() + 15 * 60 * 1000,
-                lastRefreshed: Date.now(),
-              },
-            }).catch(() => {}) // best-effort persistence
-          }
-
-          auditTokenRefresh(user, 'user_ssi', true)
-          return await ssiGraphQL(session.jwt, query, variables)
-        } catch (refreshErr) {
-          auditTokenRefresh(user, 'user_ssi', false, refreshErr.message)
-          throw new Error('Session expired. Please login again.')
-        }
-      }
-      throw err
-    }
-  }
 }
