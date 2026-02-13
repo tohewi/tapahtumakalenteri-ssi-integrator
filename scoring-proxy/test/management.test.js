@@ -28,40 +28,49 @@ beforeAll(async () => {
   app.use(express.json())
   app.use(cookieParser())
   
-  // Mock adminGraphQL function for testing
-  let mockAdminGraphQLResponse = null
-  let mockAdminGraphQLError = null
-  
-  const mockAdminGraphQL = async (query, variables) => {
-    if (mockAdminGraphQLError) {
-      throw mockAdminGraphQLError
+  // Encapsulated mock state factory
+  const createMockState = () => {
+    let mockResponse = null
+    let mockError = null
+    
+    return {
+      setResponse: (response) => {
+        mockResponse = response
+        mockError = null
+      },
+      setError: (error) => {
+        mockError = error
+        mockResponse = null
+      },
+      clear: () => {
+        mockResponse = null
+        mockError = null
+      },
+      execute: async (query, variables) => {
+        if (mockError) {
+          throw mockError
+        }
+        if (mockResponse) {
+          return mockResponse
+        }
+        // Default empty response
+        return { events: [] }
+      }
     }
-    if (mockAdminGraphQLResponse) {
-      return mockAdminGraphQLResponse
-    }
-    // Default empty response
-    return { events: [] }
   }
   
-  // Store mocking functions on app for test access
-  app.setMockResponse = (response) => {
-    mockAdminGraphQLResponse = response
-    mockAdminGraphQLError = null
-  }
-  app.setMockError = (error) => {
-    mockAdminGraphQLError = error
-    mockAdminGraphQLResponse = null
-  }
-  app.clearMock = () => {
-    mockAdminGraphQLResponse = null
-    mockAdminGraphQLError = null
-  }
+  const mockState = createMockState()
+  
+  // Expose mock control methods on app for test access
+  app.setMockResponse = mockState.setResponse
+  app.setMockError = mockState.setError
+  app.clearMock = mockState.clear
   
   // Create management router with mocked dependencies
   const managementRouter = createManagementRouter({
     requireAuth: requireAuthV7,
     graphqlWithRefresh: null, // Not used by /cups endpoint
-    adminGraphQL: mockAdminGraphQL,
+    adminGraphQL: mockState.execute,
     IS_PROD: false,
   })
   
@@ -114,6 +123,8 @@ describe('GET /api/manage/cups', () => {
   beforeEach(() => {
     // Clear any previous mock state
     app.clearMock()
+    // Reset IP counter for this test suite
+    ipCounter = 0
   })
 
   it('requires authentication with manage scope', async () => {
