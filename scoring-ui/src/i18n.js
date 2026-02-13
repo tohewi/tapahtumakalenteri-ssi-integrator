@@ -32,6 +32,10 @@ export const fi = {
   reportDescription: 'Kilpailuraportit ja tilastot',
   summaryTitle: 'Yhteenveto',
   summaryDescription: 'Kilpailujen yhteenvetoraportti',
+  staffingTitle: 'SRA-harjoitusten vetäjähallinta',
+  staffingDescription: 'Ilmoittaudu vetäjäksi ja seuraa tilannetta',
+  adminTitle: 'Järjestelmän hallinta',
+  adminDescription: 'Hallinnoi järjestelmän asetuksia',
   
   // Loading states
   loading: 'Ladataan...',
@@ -85,10 +89,8 @@ export const fi = {
   remaining: 'jäljellä',
   saveAndNext: 'Tallenna → Seuraava ampuja',
   tooManyShotsInButton: 'Liikaa laukauksia',
-  
+
   // Staffing module
-  staffingTitle: 'SRA-harjoitusten vetäjähallinta',
-  staffingDescription: 'Ilmoittaudu vetäjäksi ja seuraa tilannetta',
   leadInstructor: 'Vastuuvetäjä',
   equipmentManager: 'Kalustovastaava',
   instructor: 'Vetäjä',
