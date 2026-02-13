@@ -240,6 +240,12 @@
 | TEST7 | **Penetration Tests**: Simulate attacks on session management, token theft, and impersonation bypass. | ⬚ Pending |
 | TEST8 | **Load Tests**: Session store performance under load with concurrent authentication and SSI operations. | ⬚ Pending |
 
+## Release 7.1 — Management Availability
+
+| # | Requirement | Status | Tokens (est.) |
+|---|-------------|--------|---------------|
+| MGMT1 | **Management Independent of Registration**: Kupittaa Cup Hallinta must keep cups available for management independent of registration status, once registration start date has passed and while the cup is still active. Management is available until the cup's end date and time (`ends`), or `starts + 24h` fallback. Cups with no `registration_starts` are excluded. Uses dedicated `/api/manage/cups` endpoint. | ✅ Implemented | ~14,000 |
+
 ## Summary
 
 - **Release 1.0** (SSI Cup Automation): 37 requirements — 35 ✅, 2 on hold (35, 36)
@@ -250,6 +256,7 @@
 - **Release 5.0** (SRA Training Staffing) - requirements are in document sra-training-staffing-requirements.md
 - **Release 6.0** (Match Management & UI Consolidation): 5 requirements — 1 ✅, 4 pending (MG2–MG5)
 - **Release 7.0** (Authentication & Session Handling): 25 requirements — 0 ✅, 25 pending (AUTH1–10, SES1–7, SEC1–7, TEST1–8)
+- **Release 7.1** (Management Availability): 1 requirement — 1 ✅
 
 
 ## Configuration Files
