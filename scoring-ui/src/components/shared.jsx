@@ -94,6 +94,7 @@ export function Spinner() {
  * @param {boolean} props.loading - disables buttons
  * @param {string} props.openLabel - section header for open cups (default: "Ilmoittautuminen auki")
  * @param {string} props.emptyLabel - shown when no open cups (default: "Ei avoimia ilmoittautumisia")
+ * @param {boolean} props.allClickable - when true, all cups are clickable regardless of registrationOpen status (e.g., for management page)
  */
 export function CupList({ cups, onSelect, loading, openLabel = 'Ilmoittautuminen auki', emptyLabel = 'Ei avoimia ilmoittautumisia', allClickable = false }) {
   // Sort ascending by proximity to today (closest first)
