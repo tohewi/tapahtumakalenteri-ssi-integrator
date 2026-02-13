@@ -95,7 +95,7 @@ export function Spinner() {
  * @param {string} props.openLabel - section header for open cups (default: "Ilmoittautuminen auki")
  * @param {string} props.emptyLabel - shown when no open cups (default: "Ei avoimia ilmoittautumisia")
  */
-export function CupList({ cups, onSelect, loading, openLabel = 'Ilmoittautuminen auki', emptyLabel = 'Ei avoimia ilmoittautumisia' }) {
+export function CupList({ cups, onSelect, loading, openLabel = 'Ilmoittautuminen auki', emptyLabel = 'Ei avoimia ilmoittautumisia', allClickable = false }) {
   // Sort ascending by proximity to today (closest first)
   const now = Date.now()
   const sorted = [...cups].sort((a, b) => {
@@ -104,8 +104,9 @@ export function CupList({ cups, onSelect, loading, openLabel = 'Ilmoittautuminen
     return da - db
   })
 
-  const openCups = sorted.filter(c => c.registrationOpen)
-  const closedCups = sorted.filter(c => !c.registrationOpen)
+  // When allClickable is true (e.g. management), treat all cups as "open" (clickable)
+  const openCups = allClickable ? sorted : sorted.filter(c => c.registrationOpen)
+  const closedCups = allClickable ? [] : sorted.filter(c => !c.registrationOpen)
 
   return (
     <div>
