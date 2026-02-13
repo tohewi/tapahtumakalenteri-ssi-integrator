@@ -41,7 +41,11 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
         .filter(e => e.get_content_type_key === 136)
         .filter(e => e.status === 'on')         // active only
         .filter(e => {
-          // Show cups until their end date/time (or starts + 24h fallback if no ends)
+          // Only show cups where registration has already started
+          // (cups still being set up with no registration date are excluded)
+          const regStarts = e.registration_starts ? new Date(e.registration_starts) : null
+          if (!regStarts || regStarts > now) return false
+          // Keep cups until their end date/time (or starts + 24h fallback if no ends)
           const ends = e.ends ? new Date(e.ends) : null
           const fallbackEnd = new Date(new Date(e.starts).getTime() + 24 * 60 * 60 * 1000)
           const effectiveEnd = ends || fallbackEnd

@@ -244,7 +244,7 @@
 
 | # | Requirement | Status | Tokens (est.) |
 |---|-------------|--------|---------------|
-| MGMT1 | **Management Independent of Registration**: Kupittaa Cup Hallinta must keep cups available for management regardless of registration status. Management is available until the cup's end date and time. Uses dedicated `/api/manage/cups` endpoint with end-date filtering (falls back to `starts + 24h` if SSI provides no `ends` field). | ✅ Implemented | ~12,700 |
+| MGMT1 | **Management Independent of Registration**: Kupittaa Cup Hallinta must keep cups available for management independent of registration status, once registration start date has passed and while the cup is still active. Management is available until the cup's end date and time (`ends`), or `starts + 24h` fallback. Cups with no `registration_starts` are excluded. Uses dedicated `/api/manage/cups` endpoint. | ✅ Implemented | ~14,000 |
 
 ## Summary
 
