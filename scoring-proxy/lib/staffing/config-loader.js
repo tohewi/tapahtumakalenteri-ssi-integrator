@@ -2,23 +2,53 @@ import { readFileSync } from 'fs'
 import { parse } from 'yaml'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { getStaffSite, isDbAvailable } from '../db/client.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const CONFIG_PATH = path.resolve(__dirname, '..', '..', '..', 'config', 'sra-training-config.yml')
 
 let cachedConfig = null
+let cacheSource = null // 'database' or 'yaml'
 
 /**
  * Load and validate the SRA training staffing configuration.
+ * Prefers database if available, falls back to YAML file.
  * Caches after first load. Call reload() to force re-read.
  *
- * @returns {object} Parsed and validated config
+ * @param {string} siteKey - Site key to load (default: 'sra-training')
+ * @returns {Promise<object>} Parsed and validated config
  */
-export function loadConfig() {
-  if (cachedConfig) return cachedConfig
+export async function loadConfig(siteKey = 'sra-training') {
+  // Return cached if available and from same source
+  if (cachedConfig && cacheSource === (isDbAvailable() ? 'database' : 'yaml')) {
+    return cachedConfig
+  }
 
-  const raw = readFileSync(CONFIG_PATH, 'utf8')
-  const config = parse(raw)
+  let config
+
+  // Try database first
+  if (isDbAvailable()) {
+    try {
+      const site = await getStaffSite(siteKey)
+      if (site) {
+        config = site.config
+        cacheSource = 'database'
+        console.log(`[config-loader] Loaded config from database (site: ${siteKey})`)
+      } else {
+        console.warn(`[config-loader] Site '${siteKey}' not found in database, falling back to YAML`)
+      }
+    } catch (err) {
+      console.error('[config-loader] Error loading from database, falling back to YAML:', err)
+    }
+  }
+
+  // Fall back to YAML if database failed or not available
+  if (!config) {
+    const raw = readFileSync(CONFIG_PATH, 'utf8')
+    config = parse(raw)
+    cacheSource = 'yaml'
+    console.log('[config-loader] Loaded config from YAML file')
+  }
 
   validate(config)
   cachedConfig = config
@@ -26,21 +56,23 @@ export function loadConfig() {
 }
 
 /**
- * Force reload config from disk.
- * @returns {object} Parsed and validated config
+ * Force reload config from source.
+ * @param {string} siteKey - Site key to load (default: 'sra-training')
+ * @returns {Promise<object>} Parsed and validated config
  */
-export function reloadConfig() {
+export async function reloadConfig(siteKey = 'sra-training') {
   cachedConfig = null
-  return loadConfig()
+  cacheSource = null
+  return loadConfig(siteKey)
 }
 
 /**
  * Check if an email is in the admin allowlist.
  * @param {string} email
- * @returns {boolean}
+ * @returns {Promise<boolean>}
  */
-export function isAdminEmail(email) {
-  const config = loadConfig()
+export async function isAdminEmail(email) {
+  const config = await loadConfig()
   return config.adminAllowlist.some(
     allowed => allowed.toLowerCase() === email.toLowerCase()
   )
@@ -49,10 +81,10 @@ export function isAdminEmail(email) {
 /**
  * Check if an email is a service account (automation identity, not a real instructor).
  * @param {string} email
- * @returns {boolean}
+ * @returns {Promise<boolean>}
  */
-export function isServiceAccount(email) {
-  const config = loadConfig()
+export async function isServiceAccount(email) {
+  const config = await loadConfig()
   const list = config.serviceAccounts || []
   return list.some(sa => sa.toLowerCase() === email.toLowerCase())
 }
@@ -60,10 +92,10 @@ export function isServiceAccount(email) {
 /**
  * Get training type config by key or by matching event name.
  * @param {string} nameOrKey — training type key ("oldies"/"newbie") or event name to match
- * @returns {{ key: string, config: object } | null}
+ * @returns {Promise<{ key: string, config: object } | null>}
  */
-export function getTrainingType(nameOrKey) {
-  const config = loadConfig()
+export async function getTrainingType(nameOrKey) {
+  const config = await loadConfig()
   const types = config.trainingTypes
 
   // Direct key match
@@ -89,10 +121,10 @@ export function getTrainingType(nameOrKey) {
  * Get notification template for a given key and language.
  * @param {string} templateKey
  * @param {string} lang — "fi" or "en"
- * @returns {{ subject: string, body: string } | null}
+ * @returns {Promise<{ subject: string, body: string } | null>}
  */
-export function getNotificationTemplate(templateKey, lang = 'fi') {
-  const config = loadConfig()
+export async function getNotificationTemplate(templateKey, lang = 'fi') {
+  const config = await loadConfig()
   const template = config.notifications?.templates?.[templateKey]
   if (!template) return null
 
@@ -105,19 +137,19 @@ export function getNotificationTemplate(templateKey, lang = 'fi') {
 /**
  * Get role config by key.
  * @param {string} roleKey
- * @returns {object | null}
+ * @returns {Promise<object | null>}
  */
-export function getRoleConfig(roleKey) {
-  const config = loadConfig()
+export async function getRoleConfig(roleKey) {
+  const config = await loadConfig()
   return config.roles?.[roleKey] || null
 }
 
 /**
  * Get all required roles.
- * @returns {Array<{ key: string, config: object }>}
+ * @returns {Promise<Array<{ key: string, config: object }>>}
  */
-export function getRequiredRoles() {
-  const config = loadConfig()
+export async function getRequiredRoles() {
+  const config = await loadConfig()
   return Object.entries(config.roles)
     .filter(([, rc]) => rc.required)
     .map(([key, rc]) => ({ key, config: rc }))

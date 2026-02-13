@@ -19,6 +19,7 @@ import {
   auditSecurityViolation,
   toLegacySession,
 } from '../lib/session/index.js'
+import { getAdminUser, updateAdminLogin } from '../lib/db/client.js'
 
 const SESSION_COOKIE = sessionConfig.session.cookieName
 
@@ -57,13 +58,35 @@ export function requireAuthV7(allowedScopes = null) {
       // Check scope if specified
       if (allowedScopes) {
         const scopes = Array.isArray(allowedScopes) ? allowedScopes : [allowedScopes]
-        if (!scopes.includes(session.scope)) {
-          return res.status(403).json({
-            error: 'Access denied. Please login to this feature.',
-            scopeMismatch: true,
-            requiredScope: scopes,
-            currentScope: session.scope,
-          })
+
+        // Special handling for 'admin' scope — check database
+        if (scopes.includes('admin')) {
+          try {
+            const adminUser = await getAdminUser(session.email)
+            if (!adminUser) {
+              return res.status(403).json({
+                error: 'Admin access denied. You are not authorized.',
+                scopeMismatch: true,
+                requiredScope: scopes,
+                currentScope: session.scope,
+              })
+            }
+            // Update last login timestamp
+            await updateAdminLogin(session.email).catch(() => {}) // best-effort
+          } catch (err) {
+            console.error('[auth-v7] Admin check error:', err)
+            return res.status(500).json({ error: 'Authentication error' })
+          }
+        } else {
+          // Regular scope check
+          if (!scopes.includes(session.scope)) {
+            return res.status(403).json({
+              error: 'Access denied. Please login to this feature.',
+              scopeMismatch: true,
+              requiredScope: scopes,
+              currentScope: session.scope,
+            })
+          }
         }
       }
 
