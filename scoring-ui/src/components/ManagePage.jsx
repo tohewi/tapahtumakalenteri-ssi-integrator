@@ -126,6 +126,12 @@ export default function ManagePage() {
             const data = await resp.json()
             if (data.sessionExpired) throw new api.SessionExpiredError(data.error)
           }
+          if (resp.status === 403) {
+            const data = await resp.json()
+            if (data.scopeMismatch) {
+              throw new api.ScopeMismatchError(data.error, data.requiredScope, data.currentScope)
+            }
+          }
           if (!resp.ok) throw new Error('Failed to load cups')
           const data = await resp.json()
           setCups(data.cups || [])
