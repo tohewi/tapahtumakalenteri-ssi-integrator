@@ -139,12 +139,24 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
             const staffSquad = (evt.squads || []).find(s =>
               s.number === staffSquadNum || (s.comment || '').includes('Trainer')
             )
-            const squadMembers = (staffSquad?.competitors || [])
-              .filter(c => c.status === 'a' && c.shooter?.email && !await isServiceAccount(c.shooter.email))
-              .map(c => ({
-                email: c.shooter.email,
-                userName: `${c.shooter.first_name || ''} ${c.shooter.last_name || ''}`.trim(),
-              }))
+            
+            // Get all competitors with email
+            const competitors = (staffSquad?.competitors || [])
+              .filter(c => c.status === 'a' && c.shooter?.email)
+            
+            // Filter out service accounts (async check)
+            const filteredCompetitors = []
+            for (const c of competitors) {
+              const isService = await isServiceAccount(c.shooter.email)
+              if (!isService) {
+                filteredCompetitors.push(c)
+              }
+            }
+            
+            const squadMembers = filteredCompetitors.map(c => ({
+              email: c.shooter.email,
+              userName: `${c.shooter.first_name || ''} ${c.shooter.last_name || ''}`.trim(),
+            }))
 
             // Queue SSI staff page scrape for this event
             if (squadMembers.length > 0) {
