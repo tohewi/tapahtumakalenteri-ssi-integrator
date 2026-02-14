@@ -211,7 +211,7 @@ async function migrateYamlConfig() {
 
   // Import config loader to read YAML
   const { loadConfig } = await import('../staffing/config-loader.js')
-  const config = loadConfig()
+  const config = await loadConfig()
 
   // Create staff site
   const siteResult = await pool.query(`

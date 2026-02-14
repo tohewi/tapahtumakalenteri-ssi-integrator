@@ -157,6 +157,10 @@ export const en = {
   reportDescription: 'Competition reports and statistics',
   summaryTitle: 'Summary',
   summaryDescription: 'Competition summary report',
+  staffingTitle: 'SRA Training Staff Management',
+  staffingDescription: 'Sign up as instructor and track status',
+  adminTitle: 'System Administration',
+  adminDescription: 'Manage system settings',
   
   // Loading states
   loading: 'Loading...',

@@ -66,10 +66,10 @@ loadState()
  * @param {string} params.eventDate — ISO date
  * @param {number} params.shooterCount — current shooter count in shooter squads
  * @param {number} params.contentType — SSI content type (22 for match, 136 for cup)
- * @returns {object} The training event
+ * @returns {Promise<object>} The training event
  */
-export function upsertEvent({ eventId, eventName, trainingType, eventDate, shooterCount, contentType }) {
-  const config = loadConfig()
+export async function upsertEvent({ eventId, eventName, trainingType, eventDate, shooterCount, contentType }) {
+  const config = await loadConfig()
   const ttConfig = config.trainingTypes[trainingType]
   if (!ttConfig) throw new Error(`Unknown training type: ${trainingType}`)
 
@@ -272,13 +272,13 @@ export function syncStaffFromSSI(eventId, staffList) {
 /**
  * Get event status summary for the API.
  * @param {string} eventId
- * @returns {object | null}
+ * @returns {Promise<object | null>}
  */
-export function getEventStatus(eventId) {
+export async function getEventStatus(eventId) {
   const event = events.get(String(eventId))
   if (!event) return null
 
-  const config = loadConfig()
+  const config = await loadConfig()
   const ttConfig = config.trainingTypes[event.trainingType]
   const current = totalTrainers(event)
   const isFull = current >= event.maxTrainers
