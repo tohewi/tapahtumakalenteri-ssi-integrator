@@ -1,4 +1,3 @@
-$ cd /home/runner/work/tapahtumakalenteri-ssi-integrator/tapahtumakalenteri-ssi-integrator && cat .github/workflows/pr-preview.yml
 name: PR Preview Environment
 
 # Automatically creates, updates, and deletes Render preview environments for pull requests.
