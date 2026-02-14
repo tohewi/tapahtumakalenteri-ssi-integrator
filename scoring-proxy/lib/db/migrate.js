@@ -13,27 +13,33 @@
 import pg from 'pg'
 const { Pool } = pg
 
-const DATABASE_URL = process.env.DATABASE_URL
+// Lazy pool initialization - only create when migrate() is called
+let pool = null
 
-if (!DATABASE_URL) {
-  console.error('DATABASE_URL environment variable is required')
-  process.exit(1)
+function getPool() {
+  if (!pool) {
+    const DATABASE_URL = process.env.DATABASE_URL
+
+    if (!DATABASE_URL) {
+      throw new Error('DATABASE_URL environment variable is required')
+    }
+
+    pool = new Pool({
+      connectionString: DATABASE_URL,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
+    })
+  }
+  return pool
 }
-
-// Create connection pool
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
-})
 
 /**
  * Check if schema_version table exists
  */
 async function schemaExists() {
-  const result = await pool.query(`
+  const result = await getPool().query(`
     SELECT EXISTS (
       SELECT FROM information_schema.tables
       WHERE table_schema = 'public'
@@ -48,7 +54,7 @@ async function schemaExists() {
  */
 async function getCurrentVersion() {
   try {
-    const result = await pool.query('SELECT MAX(version) as version FROM schema_version')
+    const result = await getPool().query('SELECT MAX(version) as version FROM schema_version')
     return result.rows[0].version || 0
   } catch (err) {
     return 0
@@ -60,7 +66,7 @@ async function getCurrentVersion() {
  */
 async function dropAllTables() {
   console.log('⚠️  CLEAN DEPLOY: Dropping all tables...')
-  await pool.query(`
+  await getPool().query(`
     DROP TABLE IF EXISTS site_event_filters CASCADE;
     DROP TABLE IF EXISTS staff_site_config CASCADE;
     DROP TABLE IF EXISTS staff_sites CASCADE;
@@ -77,7 +83,7 @@ async function migrateV1() {
   console.log('Running migration v1: Initial schema...')
 
   // Create schema_version table first
-  await pool.query(`
+  await getPool().query(`
     CREATE TABLE IF NOT EXISTS schema_version (
       version INTEGER NOT NULL PRIMARY KEY,
       applied_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -86,7 +92,7 @@ async function migrateV1() {
   `)
 
   // Create admin_users table
-  await pool.query(`
+  await getPool().query(`
     CREATE TABLE IF NOT EXISTS admin_users (
       id SERIAL PRIMARY KEY,
       email VARCHAR(255) NOT NULL UNIQUE,
@@ -102,7 +108,7 @@ async function migrateV1() {
   `)
 
   // Create staff_sites table
-  await pool.query(`
+  await getPool().query(`
     CREATE TABLE IF NOT EXISTS staff_sites (
       id SERIAL PRIMARY KEY,
       key VARCHAR(100) NOT NULL UNIQUE,
@@ -120,7 +126,7 @@ async function migrateV1() {
   `)
 
   // Create staff_site_config table
-  await pool.query(`
+  await getPool().query(`
     CREATE TABLE IF NOT EXISTS staff_site_config (
       site_id INTEGER NOT NULL REFERENCES staff_sites(id) ON DELETE CASCADE,
       config_key VARCHAR(100) NOT NULL,
@@ -133,7 +139,7 @@ async function migrateV1() {
   `)
 
   // Create site_event_filters table
-  await pool.query(`
+  await getPool().query(`
     CREATE TABLE IF NOT EXISTS site_event_filters (
       id SERIAL PRIMARY KEY,
       site_id INTEGER NOT NULL REFERENCES staff_sites(id) ON DELETE CASCADE,
@@ -147,7 +153,7 @@ async function migrateV1() {
   `)
 
   // Record migration
-  await pool.query(`
+  await getPool().query(`
     INSERT INTO schema_version (version, description)
     VALUES (1, 'Initial schema: admin_users, staff_sites, staff_site_config, site_event_filters')
     ON CONFLICT (version) DO NOTHING;
@@ -178,7 +184,7 @@ async function initRootAdmin() {
   }
 
   // Create root admin
-  await pool.query(`
+  await getPool().query(`
     INSERT INTO admin_users (email, is_root, created_by)
     VALUES ($1, true, 'system')
   `, [rootEmail])
@@ -236,7 +242,7 @@ async function migrateYamlConfig() {
   ]
 
   for (const section of configSections) {
-    await pool.query(`
+    await getPool().query(`
       INSERT INTO staff_site_config (site_id, config_key, config_value)
       VALUES ($1, $2, $3)
     `, [siteId, section.key, JSON.stringify(section.value)])
@@ -245,7 +251,7 @@ async function migrateYamlConfig() {
   // Create event filters from searchStrings
   if (config.eventDiscovery?.searchStrings) {
     for (const searchStr of config.eventDiscovery.searchStrings) {
-      await pool.query(`
+      await getPool().query(`
         INSERT INTO site_event_filters (site_id, filter_type, filter_value, future_only)
         VALUES ($1, $2, $3, $4)
       `, [siteId, 'name_contains', searchStr, true])
@@ -301,11 +307,14 @@ async function migrate() {
  * Close database connection pool
  */
 async function close() {
-  await pool.end()
+  if (pool) {
+    await pool.end()
+    pool = null
+  }
 }
 
 // Export for use in server.js
-export { migrate, close, pool }
+export { migrate, close }
 
 // Run if called directly
 if (import.meta.url === `file://${process.argv[1]}`) {
