@@ -11,17 +11,6 @@ name: PR Preview Environment
 # Required GitHub Secrets:
 # - RENDER_API_KEY: Render API token (generate in Render Dashboard → Account Settings → API Keys)
 # - RENDER_OWNER_ID: Render workspace ID (format: tea-XXXXXXXXXXXXX)
-#   Find by running: curl --request GET --url 'https://api.render.com/v1/owners?limit=20' --header 'authorization: ******' | jq '.[0].owner.id'
-#   For this repo: tea-d62r4ucoud1c73d50qg0
-#
-# Preview services are created with the same configuration as production:
-# - Runtime: Node.js
-# - Plan: Starter
-# - Region: Frankfurt
-# - Build: cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install
-# - Start: cd scoring-proxy && node server.js
-#
-# Documentation: docs/PR-PREVIEW-DEPLOYMENTS.md
 
 on:
   pull_request:
@@ -43,7 +32,6 @@ jobs:
       - name: Generate preview service name
         id: preview-name
         run: |
-          # Generate a unique service name for this PR
           PR_NUMBER="${{ github.event.pull_request.number }}"
           SERVICE_NAME="turres-ssi-tools-pr-${PR_NUMBER}"
           echo "service_name=${SERVICE_NAME}" >> $GITHUB_OUTPUT
@@ -55,7 +43,6 @@ jobs:
         run: |
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
 
-          # Query Render API to check if service exists
           RESPONSE=$(curl -s -w "\n%{http_code}" \
             -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             "https://api.render.com/v1/services?name=${SERVICE_NAME}")
@@ -64,7 +51,6 @@ jobs:
           BODY=$(echo "$RESPONSE" | sed '$d')
 
           if [ "$HTTP_CODE" = "200" ]; then
-            # Check if any services were returned
             SERVICE_COUNT=$(echo "$BODY" | jq '. | length')
             if [ "$SERVICE_COUNT" -gt 0 ]; then
               SERVICE_ID=$(echo "$BODY" | jq -r '.[0].service.id')
@@ -90,15 +76,15 @@ jobs:
           SERVICE_ID="${{ steps.check-service.outputs.service_id }}"
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
           DB_NAME="${SERVICE_NAME}-db"
-          
+
           echo "⚠️  Service has outdated build command, deleting and will recreate..."
 
           DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
             -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             "https://api.render.com/v1/services/${SERVICE_ID}")
-          
+
           DELETE_HTTP_CODE=$(echo "$DELETE_RESPONSE" | tail -n1)
-          
+
           if [ "$DELETE_HTTP_CODE" = "204" ]; then
             echo "✅ Outdated service deleted successfully"
             echo "deleted=true" >> $GITHUB_OUTPUT
@@ -107,7 +93,6 @@ jobs:
             echo "deleted=false" >> $GITHUB_OUTPUT
           fi
 
-          # Also delete the associated database if it exists
           echo "Checking for associated database to delete: ${DB_NAME}"
 
           DB_RESPONSE=$(curl -s -w "\n%{http_code}" \
@@ -119,7 +104,6 @@ jobs:
 
           if [ "$DB_HTTP_CODE" = "200" ]; then
             DB_COUNT=$(echo "$DB_BODY" | jq '. | length')
-
             if [ "$DB_COUNT" -gt 0 ]; then
               DB_ID=$(echo "$DB_BODY" | jq -r '.[0].id')
 
@@ -141,9 +125,34 @@ jobs:
             fi
           fi
 
+      - name: Check if preview database exists
+        id: check-db
+        if: github.event.action != 'closed'
+        run: |
+          SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
+          DB_NAME="${SERVICE_NAME}-db"
+
+          RESP=$(curl -s -w "\n%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/postgres?name=${DB_NAME}")
+
+          CODE=$(echo "$RESP" | tail -n1)
+          BODY=$(echo "$RESP" | sed '$d')
+
+          if [ "$CODE" = "200" ] && [ "$(echo "$BODY" | jq 'length')" -gt 0 ]; then
+            DB_ID=$(echo "$BODY" | jq -r '.[0].id')
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "database_id=$DB_ID" >> $GITHUB_OUTPUT
+            echo "database_name=$DB_NAME" >> $GITHUB_OUTPUT
+            echo "DB exists: $DB_ID"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "DB does not exist"
+          fi
+
       - name: Create preview database
         id: create-database
-        if: github.event.action != 'closed' && (steps.check-service.outputs.exists != 'true' || steps.delete-if-outdated.outputs.deleted == 'true')
+        if: github.event.action != 'closed' && steps.check-db.outputs.exists != 'true' && (steps.check-service.outputs.exists != 'true' || steps.delete-if-outdated.outputs.deleted == 'true')
         run: |
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
           DB_NAME="${SERVICE_NAME}-db"
@@ -151,8 +160,6 @@ jobs:
 
           echo "Creating preview database: ${DB_NAME}"
 
-          # Use jq -n to construct JSON payload directly from variables
-          # This ensures proper variable interpolation and escaping
           DB_PAYLOAD=$(jq -n \
             --arg type "postgres" \
             --arg name "$DB_NAME" \
@@ -196,18 +203,51 @@ jobs:
             exit 1
           fi
 
+      - name: Wait for preview database to be ready
+        if: github.event.action != 'closed'
+        run: |
+          DB_ID="${{ steps.create-database.outputs.database_id || steps.check-db.outputs.database_id }}"
+          echo "Waiting for Render Postgres to be ready: $DB_ID"
+
+          for i in {1..40}; do
+            RESP=$(curl -s \
+              -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              "https://api.render.com/v1/postgres/${DB_ID}")
+
+            HAS_CONN=$(echo "$RESP" | jq -r '(
+                .connectionInfo.connectionString? //
+                .connectionInfo.internalConnectionString? //
+                .connectionString? //
+                empty
+              )' | wc -c)
+
+            STATUS=$(echo "$RESP" | jq -r '.status? // .postgres.status? // .state? // empty')
+
+            echo "Attempt $i: status='${STATUS}', connectionInfo_present=$([ "$HAS_CONN" -gt 1 ] && echo yes || echo no)"
+
+            if [ "$HAS_CONN" -gt 1 ]; then
+              echo "✅ DB is ready"
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          echo "❌ DB not ready after waiting"
+          echo "$RESP" | jq . || true
+          exit 1
+
       - name: Create preview service
         id: create-service
         if: github.event.action != 'closed' && (steps.check-service.outputs.exists != 'true' || steps.delete-if-outdated.outputs.deleted == 'true')
         run: |
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
           BRANCH_NAME="${{ github.head_ref }}"
-          DB_ID="${{ steps.create-database.outputs.database_id }}"
-          DB_NAME="${{ steps.create-database.outputs.database_name }}"
+          DB_ID="${{ steps.create-database.outputs.database_id || steps.check-db.outputs.database_id }}"
+          DB_NAME="${{ steps.create-database.outputs.database_name || steps.check-db.outputs.database_name }}"
           OWNER_ID="${{ secrets.RENDER_OWNER_ID }}"
           REPO_URL="https://github.com/${{ github.repository }}"
 
-          # Generate a random session secret (base64-encoded, 256-bit)
           SESSION_SECRET=$(openssl rand -base64 32)
 
           echo "Creating preview service: ${SERVICE_NAME}"
@@ -217,12 +257,6 @@ jobs:
           echo "Owner ID: ${OWNER_ID}"
           echo "Repo URL: ${REPO_URL}"
 
-          # Create the service using Render API
-          # Note: preview services use in-memory session store (no REDIS_URL).
-          # This is acceptable for short-lived test environments.
-          # Database (DATABASE_URL) is linked for management site features.
-          # Use jq -n to construct JSON payload directly from variables
-          # This ensures proper variable interpolation and escaping
           PAYLOAD=$(jq -n \
             --arg type "web_service" \
             --arg name "$SERVICE_NAME" \
@@ -254,17 +288,15 @@ jobs:
                 }
               },
               envVars: [
+                { key: "NODE_ENV", value: "production" },
+                { key: "SESSION_SECRET", value: $session_secret },
+                { key: "LOG_LEVEL", value: "debug" },
                 {
-                  key: "NODE_ENV",
-                  value: "production"
-                },
-                {
-                  key: "SESSION_SECRET",
-                  value: $session_secret
-                },
-                {
-                  key: "LOG_LEVEL",
-                  value: "debug"
+                  key: "DATABASE_URL",
+                  fromDatabase: {
+                    databaseId: $db_id,
+                    property: "connectionString"
+                  }
                 }
               ]
             }')
@@ -300,8 +332,6 @@ jobs:
         if: github.event.action != 'closed' && steps.check-service.outputs.exists == 'true' && steps.delete-if-outdated.outputs.deleted != 'true'
         run: |
           SERVICE_ID="${{ steps.check-service.outputs.service_id }}"
-
-          # Trigger a deploy for the existing service
           PAYLOAD='{"clearCache": "do_not_clear"}'
 
           echo "Triggering deploy for service: ${SERVICE_ID}"
@@ -321,7 +351,6 @@ jobs:
             echo "✅ Deploy triggered successfully"
             echo "   Deploy ID: ${DEPLOY_ID}"
 
-            # Get service URL
             SERVICE_INFO=$(curl -s \
               -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
               "https://api.render.com/v1/services/${SERVICE_ID}")
@@ -360,7 +389,6 @@ jobs:
 
             This preview environment will be automatically deleted when this PR is closed or merged.`;
 
-            // Check if we already commented on this PR
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -373,7 +401,6 @@ jobs:
             );
 
             if (botComment) {
-              // Update existing comment
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -381,7 +408,6 @@ jobs:
                 body: body
               });
             } else {
-              // Create new comment
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -397,7 +423,6 @@ jobs:
 
           echo "Checking for preview service to delete: ${SERVICE_NAME}"
 
-          # Query Render API to find the service
           RESPONSE=$(curl -s -w "\n%{http_code}" \
             -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             "https://api.render.com/v1/services?name=${SERVICE_NAME}")
@@ -407,7 +432,6 @@ jobs:
 
           if [ "$HTTP_CODE" = "200" ]; then
             SERVICE_COUNT=$(echo "$BODY" | jq '. | length')
-
             if [ "$SERVICE_COUNT" -gt 0 ]; then
               SERVICE_ID=$(echo "$BODY" | jq -r '.[0].service.id')
 
@@ -424,7 +448,6 @@ jobs:
               else
                 echo "⚠️  Failed to delete preview service (HTTP ${DELETE_HTTP_CODE})"
                 echo "$DELETE_RESPONSE" | sed '$d'
-                # Don't fail the workflow if deletion fails
               fi
             else
               echo "ℹ️  No preview service found to delete"
@@ -432,7 +455,6 @@ jobs:
           else
             echo "⚠️  Failed to query services (HTTP ${HTTP_CODE})"
             echo "$BODY"
-            # Don't fail the workflow if query fails
           fi
 
       - name: Delete preview database
@@ -443,7 +465,6 @@ jobs:
 
           echo "Checking for preview database to delete: ${DB_NAME}"
 
-          # Query Render API to find the database
           DB_RESPONSE=$(curl -s -w "\n%{http_code}" \
             -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             "https://api.render.com/v1/postgres?name=${DB_NAME}")
@@ -453,7 +474,6 @@ jobs:
 
           if [ "$DB_HTTP_CODE" = "200" ]; then
             DB_COUNT=$(echo "$DB_BODY" | jq '. | length')
-
             if [ "$DB_COUNT" -gt 0 ]; then
               DB_ID=$(echo "$DB_BODY" | jq -r '.[0].id')
 
@@ -470,7 +490,6 @@ jobs:
               else
                 echo "⚠️  Failed to delete preview database (HTTP ${DELETE_DB_HTTP_CODE})"
                 echo "$DELETE_DB_RESPONSE" | sed '$d'
-                # Don't fail the workflow if deletion fails
               fi
             else
               echo "ℹ️  No preview database found to delete"
@@ -478,7 +497,6 @@ jobs:
           else
             echo "⚠️  Failed to query databases (HTTP ${DB_HTTP_CODE})"
             echo "$DB_BODY"
-            # Don't fail the workflow if query fails
           fi
 
       - name: Comment on PR about deletion
