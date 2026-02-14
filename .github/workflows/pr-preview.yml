@@ -236,7 +236,7 @@ jobs:
             --arg build_cmd "cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install" \
             --arg start_cmd "cd scoring-proxy && node server.js" \
             --arg session_secret "$SESSION_SECRET" \
-            --arg db_name "$DB_NAME" \
+            --arg db_id "$DB_ID" \
             '{
               type: $type,
               name: $name,
@@ -269,7 +269,7 @@ jobs:
                 {
                   key: "DATABASE_URL",
                   fromDatabase: {
-                    name: $db_name,
+                    name: $db_id,
                     property: "connectionString"
                   }
                 }
