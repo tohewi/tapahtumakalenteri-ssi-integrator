@@ -201,6 +201,7 @@ jobs:
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
           BRANCH_NAME="${{ github.head_ref }}"
           DB_ID="${{ steps.create-database.outputs.database_id }}"
+          DB_NAME="${SERVICE_NAME}-db"
           OWNER_ID="${{ secrets.RENDER_OWNER_ID }}"
           REPO_URL="https://github.com/${{ github.repository }}"
 
@@ -210,6 +211,10 @@ jobs:
           echo "Creating preview service: ${SERVICE_NAME}"
           echo "Branch: ${BRANCH_NAME}"
           echo "Database ID: ${DB_ID}"
+          echo "Database Name: ${DB_NAME}"
+          echo "Owner ID: ${OWNER_ID}"
+          echo "Repo URL: ${REPO_URL}"
+          echo "Session Secret length: ${#SESSION_SECRET}"
 
           # Create the service using Render API
           # Note: preview services use in-memory session store (no REDIS_URL).
@@ -230,7 +235,7 @@ jobs:
             --arg build_cmd "cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install" \
             --arg start_cmd "cd scoring-proxy && node server.js" \
             --arg session_secret "$SESSION_SECRET" \
-            --arg db_id "$DB_ID" \
+            --arg db_name "$DB_NAME" \
             '{
               type: $type,
               name: $name,
@@ -263,12 +268,15 @@ jobs:
                 {
                   key: "DATABASE_URL",
                   fromDatabase: {
-                    id: $db_id,
+                    name: $db_name,
                     property: "connectionString"
                   }
                 }
               ]
             }')
+
+          echo "Payload (formatted):"
+          echo "$PAYLOAD" | jq '.'
 
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
