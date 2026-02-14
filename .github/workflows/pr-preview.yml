@@ -191,7 +191,7 @@ jobs:
         run: |
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
           BRANCH_NAME="${{ github.head_ref }}"
-          DB_NAME="${SERVICE_NAME}-db"
+          DB_ID="${{ steps.create-database.outputs.database_id }}"
 
           # Generate a random session secret (base64-encoded, 256-bit)
           SESSION_SECRET=$(openssl rand -base64 32)
@@ -200,17 +200,19 @@ jobs:
           # Note: preview services use in-memory session store (no REDIS_URL).
           # This is acceptable for short-lived test environments.
           # Database (DATABASE_URL) is linked for management site features.
-          PAYLOAD=$(cat <<EOF
+          # IMPORTANT: Use cat <<'EOF' (with quotes) to prevent bash variable expansion in heredoc
+          # Then use jq to properly insert the actual values
+          PAYLOAD=$(cat <<'EOF'
           {
             "type": "web_service",
-            "name": "${SERVICE_NAME}",
-            "ownerId": "${{ secrets.RENDER_OWNER_ID }}",
-            "repo": "https://github.com/${{ github.repository }}",
-            "branch": "${BRANCH_NAME}",
+            "name": "SERVICE_NAME_PLACEHOLDER",
+            "ownerId": "OWNER_ID_PLACEHOLDER",
+            "repo": "REPO_PLACEHOLDER",
+            "branch": "BRANCH_PLACEHOLDER",
             "autoDeploy": "yes",
             "serviceDetails": {
               "env": "node",
-              "plan": "starter",
+              "plan": "free",
               "region": "frankfurt",
               "envSpecificDetails": {
                 "buildCommand": "cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install",
@@ -224,7 +226,7 @@ jobs:
               },
               {
                 "key": "SESSION_SECRET",
-                "value": "${SESSION_SECRET}"
+                "value": "SESSION_SECRET_PLACEHOLDER"
               },
               {
                 "key": "LOG_LEVEL",
@@ -233,16 +235,27 @@ jobs:
               {
                 "key": "DATABASE_URL",
                 "fromDatabase": {
-                  "name": "${DB_NAME}",
+                  "id": "DB_ID_PLACEHOLDER",
                   "property": "connectionString"
                 }
               }
             ]
           }
-          EOF
+EOF
           )
 
+          # Replace placeholders with actual values using jq
+          PAYLOAD=$(echo "$PAYLOAD" | jq \
+            --arg service_name "$SERVICE_NAME" \
+            --arg owner_id "${{ secrets.RENDER_OWNER_ID }}" \
+            --arg repo "https://github.com/${{ github.repository }}" \
+            --arg branch "$BRANCH_NAME" \
+            --arg session_secret "$SESSION_SECRET" \
+            --arg db_id "$DB_ID" \
+            '.name = $service_name | .ownerId = $owner_id | .repo = $repo | .branch = $branch | .envVars[1].value = $session_secret | .envVars[3].fromDatabase.id = $db_id')
+
           echo "Creating preview service: ${SERVICE_NAME}"
+          echo "Database ID: ${DB_ID}"
 
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
