@@ -265,13 +265,6 @@ jobs:
                 {
                   key: "LOG_LEVEL",
                   value: "debug"
-                },
-                {
-                  key: "DATABASE_URL",
-                  fromDatabase: {
-                    databaseId: $db_id,
-                    property: "connectionString"
-                  }
                 }
               ]
             }')
