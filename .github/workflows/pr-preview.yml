@@ -214,18 +214,11 @@ jobs:
               -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
               "https://api.render.com/v1/postgres/${DB_ID}")
 
-            HAS_CONN=$(echo "$RESP" | jq -r '(
-                .connectionInfo.connectionString? //
-                .connectionInfo.internalConnectionString? //
-                .connectionString? //
-                empty
-              )' | wc -c)
-
             STATUS=$(echo "$RESP" | jq -r '.status? // .postgres.status? // .state? // empty')
 
-            echo "Attempt $i: status='${STATUS}', connectionInfo_present=$([ "$HAS_CONN" -gt 1 ] && echo yes || echo no)"
+            echo "Attempt $i: status='${STATUS}'"
 
-            if [ "$HAS_CONN" -gt 1 ]; then
+            if [ "$STATUS" -eq "Available" ]; then
               echo "✅ DB is ready"
               exit 0
             fi
