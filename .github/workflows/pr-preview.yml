@@ -218,7 +218,7 @@ jobs:
 
             echo "Attempt $i: status='${STATUS}'"
 
-            if [ "$STATUS" -eq "Available" ]; then
+            if [ "$STATUS" = "available" ]; then
               echo "✅ DB is ready"
               exit 0
             fi
