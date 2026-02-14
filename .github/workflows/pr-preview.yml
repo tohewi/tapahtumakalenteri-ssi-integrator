@@ -241,7 +241,7 @@ jobs:
               }
             ]
           }
-EOF
+          EOF
           )
 
           # Replace placeholders with actual values using jq
