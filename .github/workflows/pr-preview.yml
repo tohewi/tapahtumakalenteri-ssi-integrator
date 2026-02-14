@@ -57,7 +57,7 @@ jobs:
 
           # Query Render API to check if service exists
           RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             "https://api.render.com/v1/services?name=${SERVICE_NAME}")
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
@@ -92,9 +92,9 @@ jobs:
           DB_NAME="${SERVICE_NAME}-db"
           
           echo "⚠️  Service has outdated build command, deleting and will recreate..."
-          
+
           DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
-            -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             "https://api.render.com/v1/services/${SERVICE_ID}")
           
           DELETE_HTTP_CODE=$(echo "$DELETE_RESPONSE" | tail -n1)
@@ -109,9 +109,9 @@ jobs:
 
           # Also delete the associated database if it exists
           echo "Checking for associated database to delete: ${DB_NAME}"
-          
+
           DB_RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             "https://api.render.com/v1/postgres?name=${DB_NAME}")
 
           DB_HTTP_CODE=$(echo "$DB_RESPONSE" | tail -n1)
@@ -126,7 +126,7 @@ jobs:
               echo "Deleting associated database: ${DB_ID}"
 
               DELETE_DB_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
-                -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
+                -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
                 "https://api.render.com/v1/postgres/${DB_ID}")
 
               DELETE_DB_HTTP_CODE=$(echo "$DELETE_DB_RESPONSE" | tail -n1)
@@ -165,7 +165,7 @@ jobs:
           )
 
           DB_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "$DB_PAYLOAD" \
             "https://api.render.com/v1/postgres")
@@ -244,7 +244,7 @@ jobs:
           echo "Creating preview service: ${SERVICE_NAME}"
 
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD" \
             "https://api.render.com/v1/services")
@@ -278,7 +278,7 @@ jobs:
           echo "Triggering deploy for service: ${SERVICE_ID}"
 
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD" \
             "https://api.render.com/v1/services/${SERVICE_ID}/deploys")
@@ -294,7 +294,7 @@ jobs:
 
             # Get service URL
             SERVICE_INFO=$(curl -s \
-              -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
+              -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
               "https://api.render.com/v1/services/${SERVICE_ID}")
 
             SERVICE_URL=$(echo "$SERVICE_INFO" | jq -r '.serviceDetails.url')
@@ -370,7 +370,7 @@ jobs:
 
           # Query Render API to find the service
           RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             "https://api.render.com/v1/services?name=${SERVICE_NAME}")
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
@@ -385,7 +385,7 @@ jobs:
               echo "Deleting preview service: ${SERVICE_ID}"
 
               DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
-                -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
+                -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
                 "https://api.render.com/v1/services/${SERVICE_ID}")
 
               DELETE_HTTP_CODE=$(echo "$DELETE_RESPONSE" | tail -n1)
@@ -416,7 +416,7 @@ jobs:
 
           # Query Render API to find the database
           DB_RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             "https://api.render.com/v1/postgres?name=${DB_NAME}")
 
           DB_HTTP_CODE=$(echo "$DB_RESPONSE" | tail -n1)
@@ -431,7 +431,7 @@ jobs:
               echo "Deleting preview database: ${DB_ID}"
 
               DELETE_DB_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
-                -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
+                -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
                 "https://api.render.com/v1/postgres/${DB_ID}")
 
               DELETE_DB_HTTP_CODE=$(echo "$DELETE_DB_RESPONSE" | tail -n1)
