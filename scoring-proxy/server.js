@@ -405,6 +405,8 @@ if (isDirectRun) {
     try {
       console.log('Initializing database...')
       await runDbMigration()
+      // Initialize the connection pool so isDbAvailable() returns true
+      initDb()
       console.log('✓ Database ready')
     } catch (err) {
       console.error('✗ Database initialization failed:', err)

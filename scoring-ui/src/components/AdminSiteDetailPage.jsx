@@ -162,7 +162,7 @@ export default function AdminSiteDetailPage({ siteKey }) {
     if (!confirm('Delete this filter?')) return
 
     try {
-      const res = await fetch(`${API_BASE}/sites/${siteKey}/filters/${filterId}`, {
+      const res = await fetch(`${API_BASE}/filters/${filterId}`, {
         method: 'DELETE',
         credentials: 'include'
       })
@@ -328,12 +328,12 @@ export default function AdminSiteDetailPage({ siteKey }) {
                   >
                     <div className="flex-1">
                       <span className="text-sm font-medium text-gray-700">
-                        {f.filterType === 'name_contains' && 'Name contains: '}
-                        {f.filterType === 'cup_id' && 'Cup ID: '}
-                        {f.filterType === 'date_range' && 'Date range: '}
+                        {f.type === 'name_contains' && 'Name contains: '}
+                        {f.type === 'cup_id' && 'Cup ID: '}
+                        {f.type === 'date_range' && 'Date range: '}
                       </span>
                       <code className="text-sm bg-white px-2 py-0.5 rounded border border-gray-300">
-                        {f.filterValue}
+                        {f.value}
                       </code>
                       {f.futureOnly && (
                         <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">

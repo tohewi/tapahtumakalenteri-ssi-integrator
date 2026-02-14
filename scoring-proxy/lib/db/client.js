@@ -236,6 +236,9 @@ export async function getStaffSite(key) {
     id: site.id,
     key: site.key,
     name: site.name,
+    organizationName: site.organization_name,
+    organizationRange: site.organization_range,
+    timezone: site.timezone,
     config
   }
 }
@@ -314,16 +317,21 @@ export async function updateStaffSite(key, updates) {
     await client.query('BEGIN')
 
     // Update site metadata if provided
-    if (updates.name || updates.organizationName || updates.organizationRange || updates.timezone) {
+    const hasMetadataUpdates = updates.name !== undefined || 
+                               updates.organizationName !== undefined || 
+                               updates.organizationRange !== undefined || 
+                               updates.timezone !== undefined
+
+    if (hasMetadataUpdates) {
       const fields = []
       const values = []
       let paramIndex = 1
 
-      if (updates.name) {
+      if (updates.name !== undefined) {
         fields.push(`name = $${paramIndex++}`)
         values.push(updates.name)
       }
-      if (updates.organizationName) {
+      if (updates.organizationName !== undefined) {
         fields.push(`organization_name = $${paramIndex++}`)
         values.push(updates.organizationName)
       }
@@ -331,7 +339,7 @@ export async function updateStaffSite(key, updates) {
         fields.push(`organization_range = $${paramIndex++}`)
         values.push(updates.organizationRange)
       }
-      if (updates.timezone) {
+      if (updates.timezone !== undefined) {
         fields.push(`timezone = $${paramIndex++}`)
         values.push(updates.timezone)
       }

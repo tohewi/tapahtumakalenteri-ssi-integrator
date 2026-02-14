@@ -54,13 +54,13 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
   // ============================================================
   router.get('/events', requireAuth('staffing'), async (req, res) => {
     try {
-      const config = loadConfig()
+      const config = await loadConfig()
       const session = req.ssiSession
 
       // Get current user info (email is primary identifier in SSI)
       const meData = await graphqlWithRefresh(session, '{ me { email } }')
       const userEmail = meData.me?.email
-      const isAdmin = userEmail ? isAdminEmail(userEmail) : false
+      const isAdmin = userEmail ? await isAdminEmail(userEmail) : false
 
       // Search SSI for training events
       const searchStrings = config.eventDiscovery.searchStrings
@@ -126,7 +126,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
               .reduce((sum, s) => sum + (s.competitors || []).filter(c => c.status === 'a').length, 0)
 
             // Upsert event in staffing engine
-            upsertEvent({
+            await upsertEvent({
               eventId: evt.id,
               eventName: evt.name,
               trainingType,
@@ -139,12 +139,24 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
             const staffSquad = (evt.squads || []).find(s =>
               s.number === staffSquadNum || (s.comment || '').includes('Trainer')
             )
-            const squadMembers = (staffSquad?.competitors || [])
-              .filter(c => c.status === 'a' && c.shooter?.email && !isServiceAccount(c.shooter.email))
-              .map(c => ({
-                email: c.shooter.email,
-                userName: `${c.shooter.first_name || ''} ${c.shooter.last_name || ''}`.trim(),
-              }))
+            
+            // Get all competitors with email
+            const competitors = (staffSquad?.competitors || [])
+              .filter(c => c.status === 'a' && c.shooter?.email)
+            
+            // Filter out service accounts (async check)
+            const filteredCompetitors = []
+            for (const c of competitors) {
+              const isService = await isServiceAccount(c.shooter.email)
+              if (!isService) {
+                filteredCompetitors.push(c)
+              }
+            }
+            
+            const squadMembers = filteredCompetitors.map(c => ({
+              email: c.shooter.email,
+              userName: `${c.shooter.first_name || ''} ${c.shooter.last_name || ''}`.trim(),
+            }))
 
             // Queue SSI staff page scrape for this event
             if (squadMembers.length > 0) {
@@ -247,7 +259,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
 
       // SSI integration (blocking to provide feedback)
       // Uses admin cookies — user doesn't have match admin access yet
-      const config = loadConfig()
+      const config = await loadConfig()
       const staffSquadName = config.eventDiscovery.staffSquadName
       const adminSess = getAdminSession ? await getAdminSession() : null
       const cookies = adminSess?.cookies
@@ -255,7 +267,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
       const ssiResults = { trainerSquad: null, management: null }
 
       // Get event-specific content type from stored event data
-      const event = getEventStatus(eventId)
+      const event = await getEventStatus(eventId)
       const contentType = event?.contentType || config.eventDiscovery.matchContentType
 
       // Determine staff squad number from config
@@ -387,14 +399,14 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
 
       // SSI integration: remove from management group AND trainer squad (Squad 5)
       // Uses admin cookies — user may have already lost match access
-      const config = loadConfig()
+      const config = await loadConfig()
       const adminSess = getAdminSession ? await getAdminSession() : null
       const cookies = adminSess?.cookies
       const eventId = req.params.eventId
       const ssiResults = { management: null, trainerSquad: null }
 
       // Get event-specific content type from stored event data
-      const event = getEventStatus(eventId)
+      const event = await getEventStatus(eventId)
       const contentType = event?.contentType || config.eventDiscovery.matchContentType
 
       if (contentType && cookies) {
@@ -464,9 +476,9 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
   // ============================================================
   // GET /config — get staffing configuration
   // ============================================================
-  router.get('/config', requireAuth('staffing'), (req, res) => {
+  router.get('/config', requireAuth('staffing'), async (req, res) => {
     try {
-      const config = loadConfig()
+      const config = await loadConfig()
       res.json({
         trainingTypes: config.trainingTypes,
         roles: config.roles,

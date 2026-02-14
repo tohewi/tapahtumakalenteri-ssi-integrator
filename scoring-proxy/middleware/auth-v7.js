@@ -19,7 +19,7 @@ import {
   auditSecurityViolation,
   toLegacySession,
 } from '../lib/session/index.js'
-import { getAdminUser, updateAdminLogin } from '../lib/db/client.js'
+import { getAdminUser, updateAdminLogin, isDbAvailable } from '../lib/db/client.js'
 
 const SESSION_COOKIE = sessionConfig.session.cookieName
 
@@ -61,6 +61,14 @@ export function requireAuthV7(allowedScopes = null) {
 
         // Special handling for 'admin' scope — check database
         if (scopes.includes('admin')) {
+          // Check if database is available
+          if (!isDbAvailable()) {
+            return res.status(503).json({
+              error: 'Database not available. Admin features require database connection.',
+              dbUnavailable: true,
+            })
+          }
+
           try {
             const adminUser = await getAdminUser(session.email)
             if (!adminUser) {
@@ -75,7 +83,10 @@ export function requireAuthV7(allowedScopes = null) {
             await updateAdminLogin(session.email).catch(() => {}) // best-effort
           } catch (err) {
             console.error('[auth-v7] Admin check error:', err)
-            return res.status(500).json({ error: 'Authentication error' })
+            return res.status(503).json({
+              error: 'Database error. Please try again later.',
+              dbError: true,
+            })
           }
         } else {
           // Regular scope check
