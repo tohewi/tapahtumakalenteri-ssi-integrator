@@ -186,8 +186,10 @@ jobs:
           if [ "$DB_HTTP_CODE" = "201" ]; then
             DB_ID=$(echo "$DB_BODY" | jq -r '.id')
             echo "database_id=${DB_ID}" >> $GITHUB_OUTPUT
+            echo "database_name=${DB_NAME}" >> $GITHUB_OUTPUT
             echo "✅ Preview database created successfully"
             echo "   Database ID: ${DB_ID}"
+            echo "   Database Name: ${DB_NAME}"
           else
             echo "❌ Failed to create preview database (HTTP ${DB_HTTP_CODE})"
             echo "$DB_BODY" | jq '.' || echo "$DB_BODY"
@@ -201,7 +203,7 @@ jobs:
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
           BRANCH_NAME="${{ github.head_ref }}"
           DB_ID="${{ steps.create-database.outputs.database_id }}"
-          DB_NAME="${SERVICE_NAME}-db"
+          DB_NAME="${{ steps.create-database.outputs.database_name }}"
           OWNER_ID="${{ secrets.RENDER_OWNER_ID }}"
           REPO_URL="https://github.com/${{ github.repository }}"
 
@@ -214,7 +216,6 @@ jobs:
           echo "Database Name: ${DB_NAME}"
           echo "Owner ID: ${OWNER_ID}"
           echo "Repo URL: ${REPO_URL}"
-          echo "Session Secret length: ${#SESSION_SECRET}"
 
           # Create the service using Render API
           # Note: preview services use in-memory session store (no REDIS_URL).
