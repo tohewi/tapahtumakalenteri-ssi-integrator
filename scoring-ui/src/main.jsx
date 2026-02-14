@@ -9,6 +9,7 @@ import ReportPage from './components/ReportPage.jsx'
 import SummaryReportPage from './components/SummaryReportPage.jsx'
 import StaffingPage from './components/StaffingPage.jsx'
 import AdminPage from './components/AdminPage.jsx'
+import AdminSiteDetailPage from './components/AdminSiteDetailPage.jsx'
 
 function Router() {
   const [route, setRoute] = useState(window.location.hash)
@@ -36,6 +37,11 @@ function Router() {
   }
   if (route === '#/staffing') {
     return <StaffingPage />
+  }
+  if (route.startsWith('#/admin/sites/')) {
+    // Extract site key from route: #/admin/sites/new or #/admin/sites/sra-training
+    const siteKey = route.replace('#/admin/sites/', '')
+    return <AdminSiteDetailPage siteKey={siteKey} />
   }
   if (route.startsWith('#/admin')) {
     return <AdminPage />
