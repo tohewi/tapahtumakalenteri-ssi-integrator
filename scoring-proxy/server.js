@@ -17,7 +17,7 @@ import { createAdminRouter } from './routes/admin.js'
 import { initRedis, getActiveSessionCount, isUsingRedis, touchSession } from './lib/session/index.js'
 import { requireAuthV7 } from './middleware/auth-v7.js'
 import { createAuthV7Router } from './routes/auth-v7.js'
-import { migrate as runDbMigration, pool as dbPool, initDb } from './lib/db/migrate.js'
+import { migrate as runDbMigration, pool as dbPool } from './lib/db/migrate.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
