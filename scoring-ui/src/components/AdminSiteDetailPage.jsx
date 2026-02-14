@@ -49,6 +49,10 @@ export default function AdminSiteDetailPage({ siteKey }) {
         if (res.status === 404) {
           throw new Error('Site not found')
         }
+        if (res.status === 503) {
+          const data = await res.json()
+          throw new Error(data.error || 'Database not available. Admin features require DATABASE_URL to be configured.')
+        }
         throw new Error('Failed to load site')
       }
 
@@ -102,6 +106,9 @@ export default function AdminSiteDetailPage({ siteKey }) {
 
       if (!res.ok) {
         const data = await res.json()
+        if (res.status === 503) {
+          throw new Error(data.error || 'Database not available. Admin features require DATABASE_URL to be configured.')
+        }
         throw new Error(data.error || 'Failed to save site')
       }
 

@@ -38,6 +38,10 @@ export default function AdminPage() {
         if (sitesRes.status === 403 || adminsRes.status === 403) {
           throw new Error('Admin access denied. You are not authorized.')
         }
+        if (sitesRes.status === 503 || adminsRes.status === 503) {
+          const data = await (sitesRes.status === 503 ? sitesRes : adminsRes).json()
+          throw new Error(data.error || 'Database not available. Admin features require DATABASE_URL to be configured.')
+        }
         throw new Error('Failed to load configuration')
       }
 
