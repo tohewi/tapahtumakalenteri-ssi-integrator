@@ -147,23 +147,32 @@ jobs:
         run: |
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
           DB_NAME="${SERVICE_NAME}-db"
+          OWNER_ID="${{ secrets.RENDER_OWNER_ID }}"
 
           echo "Creating preview database: ${DB_NAME}"
 
-          DB_PAYLOAD=$(cat <<EOF
-          {
-            "type": "postgres",
-            "name": "${DB_NAME}",
-            "ownerId": "${{ secrets.RENDER_OWNER_ID }}",
-            "region": "frankfurt",
-            "plan": "free",
-            "version": "16",
-            "databaseName": "ssitools",
-            "databaseUser": "ssitools",
-            "ipAllowList": []
-          }
-          EOF
-          )
+          # Use jq -n to construct JSON payload directly from variables
+          # This ensures proper variable interpolation and escaping
+          DB_PAYLOAD=$(jq -n \
+            --arg type "postgres" \
+            --arg name "$DB_NAME" \
+            --arg owner_id "$OWNER_ID" \
+            --arg region "frankfurt" \
+            --arg plan "free" \
+            --arg version "16" \
+            --arg db_name "ssitools" \
+            --arg db_user "ssitools" \
+            '{
+              type: $type,
+              name: $name,
+              ownerId: $owner_id,
+              region: $region,
+              plan: $plan,
+              version: $version,
+              databaseName: $db_name,
+              databaseUser: $db_user,
+              ipAllowList: []
+            }')
 
           DB_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
@@ -192,70 +201,74 @@ jobs:
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
           BRANCH_NAME="${{ github.head_ref }}"
           DB_ID="${{ steps.create-database.outputs.database_id }}"
+          OWNER_ID="${{ secrets.RENDER_OWNER_ID }}"
+          REPO_URL="https://github.com/${{ github.repository }}"
 
           # Generate a random session secret (base64-encoded, 256-bit)
           SESSION_SECRET=$(openssl rand -base64 32)
+
+          echo "Creating preview service: ${SERVICE_NAME}"
+          echo "Branch: ${BRANCH_NAME}"
+          echo "Database ID: ${DB_ID}"
 
           # Create the service using Render API
           # Note: preview services use in-memory session store (no REDIS_URL).
           # This is acceptable for short-lived test environments.
           # Database (DATABASE_URL) is linked for management site features.
-          # IMPORTANT: Use cat <<'EOF' (with quotes) to prevent bash variable expansion in heredoc
-          # Then use jq to properly insert the actual values
-          PAYLOAD=$(cat <<'EOF'
-          {
-            "type": "web_service",
-            "name": "SERVICE_NAME_PLACEHOLDER",
-            "ownerId": "OWNER_ID_PLACEHOLDER",
-            "repo": "REPO_PLACEHOLDER",
-            "branch": "BRANCH_PLACEHOLDER",
-            "autoDeploy": "yes",
-            "serviceDetails": {
-              "env": "node",
-              "plan": "free",
-              "region": "frankfurt",
-              "envSpecificDetails": {
-                "buildCommand": "cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install",
-                "startCommand": "cd scoring-proxy && node server.js"
-              }
-            },
-            "envVars": [
-              {
-                "key": "NODE_ENV",
-                "value": "production"
-              },
-              {
-                "key": "SESSION_SECRET",
-                "value": "SESSION_SECRET_PLACEHOLDER"
-              },
-              {
-                "key": "LOG_LEVEL",
-                "value": "debug"
-              },
-              {
-                "key": "DATABASE_URL",
-                "fromDatabase": {
-                  "id": "DB_ID_PLACEHOLDER",
-                  "property": "connectionString"
-                }
-              }
-            ]
-          }
-          EOF
-          )
-
-          # Replace placeholders with actual values using jq
-          PAYLOAD=$(echo "$PAYLOAD" | jq \
-            --arg service_name "$SERVICE_NAME" \
-            --arg owner_id "${{ secrets.RENDER_OWNER_ID }}" \
-            --arg repo "https://github.com/${{ github.repository }}" \
+          # Use jq -n to construct JSON payload directly from variables
+          # This ensures proper variable interpolation and escaping
+          PAYLOAD=$(jq -n \
+            --arg type "web_service" \
+            --arg name "$SERVICE_NAME" \
+            --arg owner_id "$OWNER_ID" \
+            --arg repo "$REPO_URL" \
             --arg branch "$BRANCH_NAME" \
+            --arg auto_deploy "yes" \
+            --arg env "node" \
+            --arg plan "free" \
+            --arg region "frankfurt" \
+            --arg build_cmd "cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install" \
+            --arg start_cmd "cd scoring-proxy && node server.js" \
             --arg session_secret "$SESSION_SECRET" \
             --arg db_id "$DB_ID" \
-            '.name = $service_name | .ownerId = $owner_id | .repo = $repo | .branch = $branch | .envVars[1].value = $session_secret | .envVars[3].fromDatabase.id = $db_id')
-
-          echo "Creating preview service: ${SERVICE_NAME}"
-          echo "Database ID: ${DB_ID}"
+            '{
+              type: $type,
+              name: $name,
+              ownerId: $owner_id,
+              repo: $repo,
+              branch: $branch,
+              autoDeploy: $auto_deploy,
+              serviceDetails: {
+                env: $env,
+                plan: $plan,
+                region: $region,
+                envSpecificDetails: {
+                  buildCommand: $build_cmd,
+                  startCommand: $start_cmd
+                }
+              },
+              envVars: [
+                {
+                  key: "NODE_ENV",
+                  value: "production"
+                },
+                {
+                  key: "SESSION_SECRET",
+                  value: $session_secret
+                },
+                {
+                  key: "LOG_LEVEL",
+                  value: "debug"
+                },
+                {
+                  key: "DATABASE_URL",
+                  fromDatabase: {
+                    id: $db_id,
+                    property: "connectionString"
+                  }
+                }
+              ]
+            }')
 
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
