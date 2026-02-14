@@ -156,7 +156,7 @@ jobs:
             "name": "${DB_NAME}",
             "ownerId": "${{ secrets.RENDER_OWNER_ID }}",
             "region": "frankfurt",
-            "plan": "starter",
+            "plan": "free",
             "version": "16",
             "databaseName": "ssitools",
             "databaseUser": "ssitools",
