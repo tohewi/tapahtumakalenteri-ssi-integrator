@@ -1,3 +1,4 @@
+$ cd /home/runner/work/tapahtumakalenteri-ssi-integrator/tapahtumakalenteri-ssi-integrator && cat .github/workflows/pr-preview.yml
 name: PR Preview Environment
 
 # Automatically creates, updates, and deletes Render preview environments for pull requests.
@@ -11,7 +12,7 @@ name: PR Preview Environment
 # Required GitHub Secrets:
 # - RENDER_API_KEY: Render API token (generate in Render Dashboard → Account Settings → API Keys)
 # - RENDER_OWNER_ID: Render workspace ID (format: tea-XXXXXXXXXXXXX)
-#   Find by running: curl --request GET --url 'https://api.render.com/v1/owners?limit=20' --header 'authorization: Bearer YOUR_API_KEY' | jq '.[0].owner.id'
+#   Find by running: curl --request GET --url 'https://api.render.com/v1/owners?limit=20' --header 'authorization: ******' | jq '.[0].owner.id'
 #   For this repo: tea-d62r4ucoud1c73d50qg0
 #
 # Preview services are created with the same configuration as production:
@@ -57,7 +58,7 @@ jobs:
 
           # Query Render API to check if service exists
           RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
             "https://api.render.com/v1/services?name=${SERVICE_NAME}")
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
@@ -89,11 +90,12 @@ jobs:
         run: |
           SERVICE_ID="${{ steps.check-service.outputs.service_id }}"
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
+          DB_NAME="${SERVICE_NAME}-db"
           
           echo "⚠️  Service has outdated build command, deleting and will recreate..."
           
           DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
             "https://api.render.com/v1/services/${SERVICE_ID}")
           
           DELETE_HTTP_CODE=$(echo "$DELETE_RESPONSE" | tail -n1)
@@ -106,12 +108,90 @@ jobs:
             echo "deleted=false" >> $GITHUB_OUTPUT
           fi
 
+          # Also delete the associated database if it exists
+          echo "Checking for associated database to delete: ${DB_NAME}"
+          
+          DB_RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/postgres?name=${DB_NAME}")
+
+          DB_HTTP_CODE=$(echo "$DB_RESPONSE" | tail -n1)
+          DB_BODY=$(echo "$DB_RESPONSE" | sed '$d')
+
+          if [ "$DB_HTTP_CODE" = "200" ]; then
+            DB_COUNT=$(echo "$DB_BODY" | jq '. | length')
+
+            if [ "$DB_COUNT" -gt 0 ]; then
+              DB_ID=$(echo "$DB_BODY" | jq -r '.[0].id')
+
+              echo "Deleting associated database: ${DB_ID}"
+
+              DELETE_DB_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
+                -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
+                "https://api.render.com/v1/postgres/${DB_ID}")
+
+              DELETE_DB_HTTP_CODE=$(echo "$DELETE_DB_RESPONSE" | tail -n1)
+
+              if [ "$DELETE_DB_HTTP_CODE" = "204" ]; then
+                echo "✅ Associated database deleted successfully"
+              else
+                echo "⚠️  Failed to delete database (HTTP ${DELETE_DB_HTTP_CODE})"
+              fi
+            else
+              echo "ℹ️  No associated database found"
+            fi
+          fi
+
+      - name: Create preview database
+        id: create-database
+        if: github.event.action != 'closed' && (steps.check-service.outputs.exists != 'true' || steps.delete-if-outdated.outputs.deleted == 'true')
+        run: |
+          SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
+          DB_NAME="${SERVICE_NAME}-db"
+
+          echo "Creating preview database: ${DB_NAME}"
+
+          DB_PAYLOAD=$(cat <<EOF
+          {
+            "type": "postgres",
+            "name": "${DB_NAME}",
+            "ownerId": "${{ secrets.RENDER_OWNER_ID }}",
+            "region": "frankfurt",
+            "plan": "starter",
+            "databaseName": "ssitools",
+            "databaseUser": "ssitools",
+            "ipAllowList": []
+          }
+          EOF
+          )
+
+          DB_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "$DB_PAYLOAD" \
+            "https://api.render.com/v1/postgres")
+
+          DB_HTTP_CODE=$(echo "$DB_RESPONSE" | tail -n1)
+          DB_BODY=$(echo "$DB_RESPONSE" | sed '$d')
+
+          if [ "$DB_HTTP_CODE" = "201" ]; then
+            DB_ID=$(echo "$DB_BODY" | jq -r '.id')
+            echo "database_id=${DB_ID}" >> $GITHUB_OUTPUT
+            echo "✅ Preview database created successfully"
+            echo "   Database ID: ${DB_ID}"
+          else
+            echo "❌ Failed to create preview database (HTTP ${DB_HTTP_CODE})"
+            echo "$DB_BODY" | jq '.' || echo "$DB_BODY"
+            exit 1
+          fi
+
       - name: Create preview service
         id: create-service
         if: github.event.action != 'closed' && (steps.check-service.outputs.exists != 'true' || steps.delete-if-outdated.outputs.deleted == 'true')
         run: |
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
           BRANCH_NAME="${{ github.head_ref }}"
+          DB_NAME="${SERVICE_NAME}-db"
 
           # Generate a random session secret (base64-encoded, 256-bit)
           SESSION_SECRET=$(openssl rand -base64 32)
@@ -119,6 +199,7 @@ jobs:
           # Create the service using Render API
           # Note: preview services use in-memory session store (no REDIS_URL).
           # This is acceptable for short-lived test environments.
+          # Database (DATABASE_URL) is linked for management site features.
           PAYLOAD=$(cat <<EOF
           {
             "type": "web_service",
@@ -148,6 +229,13 @@ jobs:
               {
                 "key": "LOG_LEVEL",
                 "value": "debug"
+              },
+              {
+                "key": "DATABASE_URL",
+                "fromDatabase": {
+                  "name": "${DB_NAME}",
+                  "property": "connectionString"
+                }
               }
             ]
           }
@@ -157,7 +245,7 @@ jobs:
           echo "Creating preview service: ${SERVICE_NAME}"
 
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD" \
             "https://api.render.com/v1/services")
@@ -191,7 +279,7 @@ jobs:
           echo "Triggering deploy for service: ${SERVICE_ID}"
 
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD" \
             "https://api.render.com/v1/services/${SERVICE_ID}/deploys")
@@ -207,7 +295,7 @@ jobs:
 
             # Get service URL
             SERVICE_INFO=$(curl -s \
-              -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
               "https://api.render.com/v1/services/${SERVICE_ID}")
 
             SERVICE_URL=$(echo "$SERVICE_INFO" | jq -r '.serviceDetails.url')
@@ -283,7 +371,7 @@ jobs:
 
           # Query Render API to find the service
           RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
             "https://api.render.com/v1/services?name=${SERVICE_NAME}")
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
@@ -298,7 +386,7 @@ jobs:
               echo "Deleting preview service: ${SERVICE_ID}"
 
               DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
-                -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+                -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
                 "https://api.render.com/v1/services/${SERVICE_ID}")
 
               DELETE_HTTP_CODE=$(echo "$DELETE_RESPONSE" | tail -n1)
@@ -319,6 +407,52 @@ jobs:
             # Don't fail the workflow if query fails
           fi
 
+      - name: Delete preview database
+        if: github.event.action == 'closed'
+        run: |
+          SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
+          DB_NAME="${SERVICE_NAME}-db"
+
+          echo "Checking for preview database to delete: ${DB_NAME}"
+
+          # Query Render API to find the database
+          DB_RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/postgres?name=${DB_NAME}")
+
+          DB_HTTP_CODE=$(echo "$DB_RESPONSE" | tail -n1)
+          DB_BODY=$(echo "$DB_RESPONSE" | sed '$d')
+
+          if [ "$DB_HTTP_CODE" = "200" ]; then
+            DB_COUNT=$(echo "$DB_BODY" | jq '. | length')
+
+            if [ "$DB_COUNT" -gt 0 ]; then
+              DB_ID=$(echo "$DB_BODY" | jq -r '.[0].id')
+
+              echo "Deleting preview database: ${DB_ID}"
+
+              DELETE_DB_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
+                -H "Authorization: ****** secrets.RENDER_API_KEY }}" \
+                "https://api.render.com/v1/postgres/${DB_ID}")
+
+              DELETE_DB_HTTP_CODE=$(echo "$DELETE_DB_RESPONSE" | tail -n1)
+
+              if [ "$DELETE_DB_HTTP_CODE" = "204" ]; then
+                echo "✅ Preview database deleted successfully"
+              else
+                echo "⚠️  Failed to delete preview database (HTTP ${DELETE_DB_HTTP_CODE})"
+                echo "$DELETE_DB_RESPONSE" | sed '$d'
+                # Don't fail the workflow if deletion fails
+              fi
+            else
+              echo "ℹ️  No preview database found to delete"
+            fi
+          else
+            echo "⚠️  Failed to query databases (HTTP ${DB_HTTP_CODE})"
+            echo "$DB_BODY"
+            # Don't fail the workflow if query fails
+          fi
+
       - name: Comment on PR about deletion
         if: github.event.action == 'closed'
         uses: actions/github-script@v7
@@ -336,3 +470,4 @@ jobs:
               issue_number: context.issue.number,
               body: body
             });
+<exited with exit code 0>
