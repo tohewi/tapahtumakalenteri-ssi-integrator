@@ -157,6 +157,7 @@ jobs:
             "ownerId": "${{ secrets.RENDER_OWNER_ID }}",
             "region": "frankfurt",
             "plan": "starter",
+            "version": "16",
             "databaseName": "ssitools",
             "databaseUser": "ssitools",
             "ipAllowList": []
