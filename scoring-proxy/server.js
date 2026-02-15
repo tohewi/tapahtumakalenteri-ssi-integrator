@@ -409,6 +409,19 @@ if (isDirectRun) {
       // Initialize the connection pool so isDbAvailable() returns true
       initDb()
       console.log('✓ Database ready')
+      
+      // Log admin configuration status
+      console.log('\n=== Admin Configuration ===')
+      console.log(`ADMIN_ROOT_EMAIL: ${process.env.ADMIN_ROOT_EMAIL ? process.env.ADMIN_ROOT_EMAIL : '(not set)'}`)
+      if (!process.env.ADMIN_ROOT_EMAIL) {
+        console.warn('⚠️  Admin features are DISABLED - no root admin configured')
+        console.warn('   To enable admin UI, set ADMIN_ROOT_EMAIL environment variable')
+      } else {
+        console.log('✓ Admin features enabled')
+        console.log('  Access admin UI at: /#/admin')
+        console.log('  Root admin must first log in via SSI to access admin features')
+      }
+      console.log('===========================\n')
     } catch (err) {
       console.error('✗ Database initialization failed:', err)
       process.exit(1)

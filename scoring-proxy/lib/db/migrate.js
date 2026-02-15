@@ -167,29 +167,39 @@ async function migrateV1() {
  */
 async function initRootAdmin() {
   const rootEmail = process.env.ADMIN_ROOT_EMAIL
+  
+  console.log('\n[admin-init] Checking root admin configuration...')
+  console.log(`[admin-init] ADMIN_ROOT_EMAIL env var: ${rootEmail ? rootEmail : '(not set)'}`)
+  
   if (!rootEmail) {
-    console.warn('⚠️  ADMIN_ROOT_EMAIL not set - no root admin created')
+    console.warn('⚠️  ADMIN_ROOT_EMAIL not set - no root admin will be created')
+    console.warn('   To enable admin features, set ADMIN_ROOT_EMAIL environment variable')
+    console.warn('   Example: ADMIN_ROOT_EMAIL=admin@example.com')
     return
   }
 
   // Check if root admin already exists
-  const existing = await pool.query(
-    'SELECT id FROM admin_users WHERE email = $1',
+  const existing = await getPool().query(
+    'SELECT id, email, is_root FROM admin_users WHERE email = $1',
     [rootEmail]
   )
 
   if (existing.rows.length > 0) {
-    console.log(`✓ Root admin already exists: ${rootEmail}`)
+    const user = existing.rows[0]
+    console.log(`✓ Root admin already exists: ${user.email} (id: ${user.id}, root: ${user.is_root})`)
     return
   }
 
   // Create root admin
-  await getPool().query(`
+  console.log(`[admin-init] Creating root admin: ${rootEmail}`)
+  const result = await getPool().query(`
     INSERT INTO admin_users (email, is_root, created_by)
     VALUES ($1, true, 'system')
+    RETURNING id
   `, [rootEmail])
 
-  console.log(`✓ Root admin created: ${rootEmail}`)
+  console.log(`✓ Root admin created: ${rootEmail} (id: ${result.rows[0].id})`)
+  console.log('  This user can now log in to access the admin UI and add other admins')
 }
 
 /**
