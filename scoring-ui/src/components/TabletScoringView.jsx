@@ -88,7 +88,7 @@ export default function TabletScoringView({
   const totalShotsInMatch = SERIES_COUNT * MAX_HITS_PER_SERIES
 
   // Save scores to SSI
-  const handleSaveScores = async () => {
+  const handleSaveScores = useCallback(async () => {
     if (!selectedShooter || saving) return
 
     setSaving(true)
@@ -96,6 +96,11 @@ export default function TabletScoringView({
 
     try {
       const shooterScores = allScores[selectedShooter.id]
+      if (!shooterScores) {
+        console.error('No scores found for shooter:', selectedShooter.id)
+        return
+      }
+
       const formattedScores = {}
       
       for (let i = 0; i < SERIES_COUNT; i++) {
@@ -104,15 +109,18 @@ export default function TabletScoringView({
         formattedScores[`s${i + 1}`] = parts.join(',') + ',0' // Add max_hits as 0 (not used)
       }
 
+      console.log('Saving scores for shooter:', selectedShooter.id, formattedScores)
       await withSessionCheck(() => api.submitScore(selectedShooter.id, formattedScores))
+      console.log('Scores saved successfully')
     } catch (err) {
+      console.error('Save error:', err)
       if (!(err instanceof api.SessionExpiredError) && !(err instanceof api.ScopeMismatchError)) {
         setSaveError(err.message)
       }
     } finally {
       setSaving(false)
     }
-  }
+  }, [selectedShooter, saving, allScores, withSessionCheck])
 
   // Select first shooter by default
   useEffect(() => {
@@ -131,6 +139,7 @@ export default function TabletScoringView({
     
     // Auto-save current shooter's scores before switching
     if (selectedShooter) {
+      console.log('Auto-saving before switch from', selectedShooter.id, 'to', shooter.id)
       await handleSaveScores()
     }
     
@@ -162,7 +171,7 @@ export default function TabletScoringView({
         setLoadError(err.message)
       }
     }
-  }, [selectedShooter, withSessionCheck, allScores, onScoresUpdate])
+  }, [selectedShooter, withSessionCheck, allScores, onScoresUpdate, handleSaveScores])
 
   const checkScoreDifference = (local, ssi) => {
     for (let i = 0; i < SERIES_COUNT; i++) {
