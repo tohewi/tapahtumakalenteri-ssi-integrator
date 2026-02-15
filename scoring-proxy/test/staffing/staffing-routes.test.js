@@ -69,7 +69,7 @@ vi.mock('../../lib/ssi-client.js', () => ({
 
 import { createStaffingRouter } from '../../routes/staffing.js'
 
-function createTestApp({ sessionSiteKey = 'temppeli-sra' } = {}) {
+function createTestApp({ sessionSiteKey = 'temppeli-sra', graphqlHandler = null } = {}) {
   const app = express()
   app.use(express.json())
 
@@ -79,7 +79,7 @@ function createTestApp({ sessionSiteKey = 'temppeli-sra' } = {}) {
     next()
   }
 
-  const graphqlWithRefresh = vi.fn(async (_session, query) => {
+  const defaultGraphqlHandler = async (_session, query) => {
     if (query.includes('me { email')) {
       return {
         me: {
@@ -90,7 +90,9 @@ function createTestApp({ sessionSiteKey = 'temppeli-sra' } = {}) {
       }
     }
     return { events: [] }
-  })
+  }
+
+  const graphqlWithRefresh = vi.fn(graphqlHandler || defaultGraphqlHandler)
 
   app.use('/api/staffing', createStaffingRouter({
     requireAuth,
@@ -136,6 +138,18 @@ beforeEach(() => {
 })
 
 describe('staffing routes site-aware behavior', () => {
+  it('does not request squads in events search query', async () => {
+    const { app, graphqlWithRefresh } = createTestApp()
+
+    const response = await request(app)
+      .get('/api/staffing/events')
+
+    expect(response.status).toBe(200)
+    const searchCall = graphqlWithRefresh.mock.calls.find(([, query]) => query.includes('events(search: $search)'))
+    expect(searchCall).toBeTruthy()
+    expect(searchCall[1]).not.toContain('squads')
+  })
+
   it('lists staffing sites from database when available', async () => {
     mocks.isDbAvailable.mockReturnValue(true)
     mocks.listStaffSites.mockResolvedValue([
@@ -283,5 +297,63 @@ describe('staffing routes site-aware behavior', () => {
       'staff',
       'temppeli-sra'
     )
+  })
+
+  it('keeps events endpoint functional when event squads query fails for an event', async () => {
+    const graphqlHandler = async (_session, query) => {
+      if (query.includes('me { email')) {
+        return {
+          me: {
+            email: 'instructor@test.com',
+            first_name: 'Instruct',
+            last_name: 'Or',
+          },
+        }
+      }
+
+      if (query.includes('events(search: $search)')) {
+        return {
+          events: [
+            {
+              id: 'evt-graph-1',
+              name: 'Temppeli SRA compatibility check',
+              starts: '2099-06-01T00:00:00.000Z',
+              get_content_type_key: '22',
+            },
+          ],
+        }
+      }
+
+      if (query.includes('query GetEventSquads')) {
+        throw new Error("GraphQL Error: 'NordicSerie' object has no attribute 'squads'")
+      }
+
+      return { events: [] }
+    }
+
+    mocks.getEventStatus.mockResolvedValue({
+      eventId: 'evt-graph-1',
+      eventName: 'Temppeli SRA compatibility check',
+      eventDate: '2099-06-01T00:00:00.000Z',
+      currentTrainers: 0,
+      maxTrainers: 3,
+      staff: [],
+      leadInstructor: null,
+      equipmentManager: null,
+    })
+
+    const { app } = createTestApp({ graphqlHandler })
+
+    const response = await request(app)
+      .get('/api/staffing/events')
+
+    expect(response.status).toBe(200)
+    expect(response.body.events).toHaveLength(1)
+    expect(mocks.upsertEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventId: 'evt-graph-1',
+      shooterCount: 0,
+      contentType: 22,
+      siteKey: 'temppeli-sra',
+    }))
   })
 })

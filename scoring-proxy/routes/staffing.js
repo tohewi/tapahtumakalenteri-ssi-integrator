@@ -138,20 +138,6 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
               name
               starts
               get_content_type_key
-              squads {
-                id
-                number
-                comment
-                ... on NordicSquadNode {
-                  competitors { id status shooter { email first_name last_name } }
-                }
-                ... on IpscSquadNode {
-                  competitors { id status shooter { email first_name last_name } }
-                }
-                ... on GenericSquadNode {
-                  competitors { id status shooter { email first_name last_name } }
-                }
-              }
             }
           }
         `, { search: searchStr })
@@ -179,10 +165,42 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
 
             seenIds.add(evt.id)
 
+            const eventContentType = Number.parseInt(evt.get_content_type_key, 10)
+            const resolvedContentType = Number.isFinite(eventContentType)
+              ? eventContentType
+              : config.eventDiscovery.matchContentType
+            let eventSquads = []
+
+            if (Number.isFinite(eventContentType)) {
+              try {
+                const eventData = await graphqlWithRefresh(session, `
+                  query GetEventSquads($ct: Int!, $id: String!) {
+                    event(content_type: $ct, id: $id) {
+                      squads {
+                        id
+                        number
+                        comment
+                        ... on NordicSquadNode    { competitors { id status shooter { email first_name last_name } } }
+                        ... on IpscSquadNode      { competitors { id status shooter { email first_name last_name } } }
+                        ... on PpcSquadNode       { competitors { id status shooter { email first_name last_name } } }
+                        ... on CmpSquadNode       { competitors { id status shooter { email first_name last_name } } }
+                        ... on PrecisionSquadNode { competitors { id status shooter { email first_name last_name } } }
+                        ... on GenericSquadNode   { competitors { id status shooter { email first_name last_name } } }
+                      }
+                    }
+                  }
+                `, { ct: eventContentType, id: evt.id })
+
+                eventSquads = eventData.event?.squads || []
+              } catch (eventErr) {
+                console.warn(`[staffing] Failed to load squads for event ${evt.id}: ${eventErr.message}`)
+              }
+            }
+
             // Calculate shooter count (exclude staff squad)
             const staffSquadNum = config.trainingTypes[trainingType]?.staffSquad || 5
             const staffSquadName = config.eventDiscovery.staffSquadName
-            const shooterCount = (evt.squads || [])
+            const shooterCount = eventSquads
               .filter(s => {
                 const squadLabel = s.comment || `Squad ${s.number}`
                 return s.number !== staffSquadNum && squadLabel !== staffSquadName
@@ -196,12 +214,12 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
               trainingType,
               eventDate: evt.starts,
               shooterCount,
-              contentType: evt.get_content_type_key || null,
+              contentType: resolvedContentType || null,
               siteKey,
             })
 
             // Extract trainer squad members (with emails from GraphQL)
-            const staffSquad = (evt.squads || []).find(s =>
+            const staffSquad = eventSquads.find(s =>
               s.number === staffSquadNum || (s.comment || '').includes('Trainer')
             )
             
@@ -228,7 +246,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
               ssiSyncQueue.push({
                 eventId: evt.id,
                 squadMembers,
-                contentType: evt.get_content_type_key || contentType,
+                contentType: resolvedContentType || contentType,
                 siteKey,
               })
             }
