@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest'
 import {
   normalizeSiteKey,
   resolveSearchStrings,
+  resolveEventTypes,
   isFutureOnlyEnabled,
   parseDateRange,
+  matchesEventType,
   matchesEventFilters,
 } from '../../lib/staffing/site-filters.js'
 
@@ -20,6 +22,29 @@ describe('staffing site filter helpers', () => {
     it('returns fallback for empty values', () => {
       expect(normalizeSiteKey('', 'sra-training')).toBe('sra-training')
       expect(normalizeSiteKey(null, 'sra-training')).toBe('sra-training')
+    })
+  })
+
+  describe('resolveEventTypes', () => {
+    it('prefers explicit event_type filter over fallback config event types', () => {
+      const filters = [
+        { type: 'event_type', value: 'cup' },
+      ]
+      const fallback = ['match']
+
+      expect(resolveEventTypes(filters, fallback)).toEqual(['cup'])
+    })
+
+    it('supports event_kind alias and comma-separated values', () => {
+      const filters = [
+        { type: 'event_kind', value: 'cup,league,invalid' },
+      ]
+
+      expect(resolveEventTypes(filters, [])).toEqual(['cup', 'league'])
+    })
+
+    it('uses fallback event types when no explicit event filters exist', () => {
+      expect(resolveEventTypes([], ['match', 'cup', 'match'])).toEqual(['match', 'cup'])
     })
   })
 
@@ -117,6 +142,24 @@ describe('staffing site filter helpers', () => {
       const filters = [{ type: 'date_range', value: '2026-04-01T00:00:00.000Z:2026-06-01T00:00:00.000Z' }]
 
       expect(matchesEventFilters(event, filters)).toBe(true)
+    })
+  })
+
+  describe('matchesEventType', () => {
+    it('returns true when allowed types are empty', () => {
+      const event = { id: '1', get_content_type_key: '22' }
+      expect(matchesEventType(event, [], { contentTypeMap: { match: 22, cup: 136 } })).toBe(true)
+    })
+
+    it('matches cup event by content type mapping', () => {
+      const event = { id: '2', get_content_type_key: '136' }
+      expect(matchesEventType(event, ['cup'], { contentTypeMap: { match: 22, cup: 136 } })).toBe(true)
+      expect(matchesEventType(event, ['match'], { contentTypeMap: { match: 22, cup: 136 } })).toBe(false)
+    })
+
+    it('matches using explicit eventType when provided', () => {
+      const event = { id: '3', eventType: 'league' }
+      expect(matchesEventType(event, ['league'], { contentTypeMap: { match: 22, cup: 136 } })).toBe(true)
     })
   })
 })

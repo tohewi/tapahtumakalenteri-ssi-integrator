@@ -5,6 +5,7 @@
  */
 
 const DEFAULT_SITE_KEY = 'sra-training'
+const SUPPORTED_EVENT_TYPES = new Set(['match', 'cup', 'league'])
 
 /**
  * Normalize and validate site key.
@@ -39,6 +40,83 @@ export function resolveSearchStrings(filters = [], fallbackSearchStrings = []) {
 
   // Empty search is not ideal but still valid for PoC fallback.
   return ['']
+}
+
+function normalizeEventType(value) {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim().toLowerCase()
+  return SUPPORTED_EVENT_TYPES.has(normalized) ? normalized : null
+}
+
+function parseEventTypes(value) {
+  if (Array.isArray(value)) {
+    return [...new Set(value
+      .map(normalizeEventType)
+      .filter(Boolean))]
+  }
+
+  if (typeof value === 'string') {
+    return [...new Set(value
+      .split(',')
+      .map(normalizeEventType)
+      .filter(Boolean))]
+  }
+
+  return []
+}
+
+/**
+ * Resolve event types (match/cup/league) from filters.
+ * Uses explicit event_type/event_kind filters when present,
+ * otherwise falls back to site config defaults.
+ */
+export function resolveEventTypes(filters = [], fallbackEventTypes = []) {
+  const explicitTypes = (filters || [])
+    .filter(f => f?.type === 'event_type' || f?.type === 'event_kind')
+    .flatMap(f => parseEventTypes(f.value))
+
+  if (explicitTypes.length > 0) {
+    return [...new Set(explicitTypes)]
+  }
+
+  return parseEventTypes(fallbackEventTypes)
+}
+
+function resolveEventType(event, contentTypeMap = {}) {
+  const explicitType = normalizeEventType(event?.eventType || event?.event_type || event?.kind)
+  if (explicitType) return explicitType
+
+  const rawContentType = event?.get_content_type_key ?? event?.contentType ?? event?.content_type
+  const contentType = Number.parseInt(rawContentType, 10)
+  if (!Number.isFinite(contentType)) return null
+
+  const matchContentType = Number.parseInt(contentTypeMap.match, 10)
+  const cupContentType = Number.parseInt(contentTypeMap.cup, 10)
+  const leagueContentType = Number.parseInt(contentTypeMap.league, 10)
+
+  if (Number.isFinite(cupContentType) && contentType === cupContentType) return 'cup'
+  if (Number.isFinite(leagueContentType) && contentType === leagueContentType) return 'league'
+  if (Number.isFinite(matchContentType) && contentType === matchContentType) return 'match'
+
+  return null
+}
+
+/**
+ * Match event against allowed event types.
+ */
+export function matchesEventType(event, allowedEventTypes = [], options = {}) {
+  if (!Array.isArray(allowedEventTypes) || allowedEventTypes.length === 0) return true
+
+  const normalizedAllowed = [...new Set(allowedEventTypes
+    .map(normalizeEventType)
+    .filter(Boolean))]
+
+  if (normalizedAllowed.length === 0) return true
+
+  const eventType = resolveEventType(event, options.contentTypeMap || {})
+  if (!eventType) return false
+
+  return normalizedAllowed.includes(eventType)
 }
 
 /**

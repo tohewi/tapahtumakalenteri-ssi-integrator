@@ -356,4 +356,104 @@ describe('staffing routes site-aware behavior', () => {
       siteKey: 'temppeli-sra',
     }))
   })
+
+  it('filters by cup event type and uses default training type fallback', async () => {
+    mocks.loadConfig.mockResolvedValueOnce({
+      organization: { name: 'Kupittaa reservilaisammunta', timezone: 'Europe/Helsinki' },
+      adminAllowlist: ['instructor@test.com'],
+      eventDiscovery: {
+        searchStrings: ['Kupittaa'],
+        eventTypes: ['cup'],
+        defaultTrainingType: 'kupittaa',
+        matchContentType: 22,
+        cupContentType: 136,
+        staffSquadName: 'Vetäjät',
+      },
+      trainingTypes: {
+        kupittaa: {
+          label: 'Kupittaa',
+          searchPatterns: ['does-not-match-event-name'],
+          staffSquad: 5,
+          maxTrainers: 4,
+        },
+      },
+      roles: {},
+      notifications: { templates: {} },
+    })
+
+    const graphqlHandler = async (_session, query) => {
+      if (query.includes('me { email')) {
+        return {
+          me: {
+            email: 'instructor@test.com',
+            first_name: 'Instruct',
+            last_name: 'Or',
+          },
+        }
+      }
+
+      if (query.includes('events(search: $search)')) {
+        return {
+          events: [
+            {
+              id: 'cup-100',
+              name: 'Kupittaa CUP 2026-03-01',
+              starts: '2099-03-01T09:00:00.000Z',
+              get_content_type_key: '136',
+            },
+            {
+              id: 'match-200',
+              name: 'Kupittaa Match 2026-03-01',
+              starts: '2099-03-01T09:00:00.000Z',
+              get_content_type_key: '22',
+            },
+          ],
+        }
+      }
+
+      if (query.includes('query GetEventSquads')) {
+        return {
+          event: {
+            squads: [],
+          },
+        }
+      }
+
+      return { events: [] }
+    }
+
+    mocks.getEventStatus.mockImplementation(async (eventId) => {
+      if (eventId === 'cup-100') {
+        return {
+          eventId: 'cup-100',
+          eventName: 'Kupittaa CUP 2026-03-01',
+          eventDate: '2099-03-01T09:00:00.000Z',
+          currentTrainers: 0,
+          maxTrainers: 4,
+          staff: [],
+          leadInstructor: null,
+          equipmentManager: null,
+        }
+      }
+      return null
+    })
+
+    const { app } = createTestApp({ graphqlHandler })
+
+    const response = await request(app)
+      .get('/api/staffing/events')
+
+    expect(response.status).toBe(200)
+    expect(response.body.events).toHaveLength(1)
+    expect(response.body.events[0].eventId).toBe('cup-100')
+    expect(mocks.upsertEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventId: 'cup-100',
+      trainingType: 'kupittaa',
+      contentType: 136,
+      siteKey: 'temppeli-sra',
+    }))
+    expect(mocks.upsertEvent).not.toHaveBeenCalledWith(expect.objectContaining({
+      eventId: 'match-200',
+    }))
+  })
 })

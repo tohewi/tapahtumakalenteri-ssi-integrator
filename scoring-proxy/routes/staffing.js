@@ -21,7 +21,9 @@ import { getEventFilters, listStaffSites, isDbAvailable } from '../lib/db/client
 import {
   normalizeSiteKey,
   resolveSearchStrings,
+  resolveEventTypes,
   isFutureOnlyEnabled,
+  matchesEventType,
   matchesEventFilters,
 } from '../lib/staffing/site-filters.js'
 import {
@@ -43,6 +45,35 @@ const SSI_ROLE_MAP = {
   staff:            { role: '1', officials: [] },
   leadInstructor:   { role: '1', officials: ['MD'] },
   equipmentManager: { role: '1', officials: ['QM'] },
+}
+
+function resolveTrainingTypeFromEventName(eventName, config) {
+  const types = config?.trainingTypes || {}
+  const nameLower = String(eventName || '').toLowerCase()
+
+  for (const [key, typeCfg] of Object.entries(types)) {
+    const patterns = typeCfg.searchPatterns || [key]
+    if (patterns.some(p => nameLower.includes(String(p || '').toLowerCase()))) {
+      return key
+    }
+  }
+
+  const defaultTrainingTypeRaw = typeof config?.eventDiscovery?.defaultTrainingType === 'string'
+    ? config.eventDiscovery.defaultTrainingType.trim()
+    : ''
+  if (defaultTrainingTypeRaw) {
+    const defaultTrainingType = Object.keys(types).find(
+      key => key.toLowerCase() === defaultTrainingTypeRaw.toLowerCase()
+    )
+    if (defaultTrainingType) return defaultTrainingType
+  }
+
+  const typeKeys = Object.keys(types)
+  if (typeKeys.length === 1) {
+    return typeKeys[0]
+  }
+
+  return null
 }
 
 function resolveRequestSiteKey(req) {
@@ -124,6 +155,12 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
 
       // Search SSI for training events
       const searchStrings = resolveSearchStrings(eventFilters, config.eventDiscovery.searchStrings)
+      const allowedEventTypes = resolveEventTypes(eventFilters, config.eventDiscovery?.eventTypes || [])
+      const contentTypeMap = {
+        match: config.eventDiscovery?.matchContentType,
+        cup: config.eventDiscovery?.cupContentType,
+        league: config.eventDiscovery?.leagueContentType,
+      }
       const futureOnly = isFutureOnlyEnabled(eventFilters)
       const contentType = config.eventDiscovery.matchContentType
       const seenIds = new Set()
@@ -151,16 +188,10 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
 
             if (!matchesEventFilters(evt, eventFilters)) continue
 
+            if (!matchesEventType(evt, allowedEventTypes, { contentTypeMap })) continue
+
             // Determine training type from name
-            const nameLower = evt.name.toLowerCase()
-            let trainingType = null
-            for (const [key, typeCfg] of Object.entries(config.trainingTypes)) {
-              const patterns = typeCfg.searchPatterns || [key]
-              if (patterns.some(p => nameLower.includes(p.toLowerCase()))) {
-                trainingType = key
-                break
-              }
-            }
+            const trainingType = resolveTrainingTypeFromEventName(evt.name, config)
             if (!trainingType) continue
 
             seenIds.add(evt.id)
