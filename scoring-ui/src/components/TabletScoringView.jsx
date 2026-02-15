@@ -89,12 +89,16 @@ export default function TabletScoringView({
   // Select first shooter by default
   useEffect(() => {
     if (!selectedShooter && squad.shooters.length > 0) {
-      handleShooterSelect(squad.shooters[0])
+      const firstShooter = squad.shooters[0]
+      setSelectedShooter(firstShooter)
+      setSelectedScoreIndex(null)
+      setLoadError(null)
+      setSaveError(null)
     }
-  }, [squad.shooters])
+  }, [squad.shooters, selectedShooter])
 
   // Load shooter data from SSI when selected
-  const handleShooterSelect = async (shooter) => {
+  const handleShooterSelect = useCallback(async (shooter) => {
     if (selectedShooter?.id === shooter.id) return
     
     setSelectedShooter(shooter)
@@ -125,7 +129,7 @@ export default function TabletScoringView({
         setLoadError(err.message)
       }
     }
-  }
+  }, [selectedShooter, withSessionCheck, allScores, onScoresUpdate])
 
   const checkScoreDifference = (local, ssi) => {
     for (let i = 0; i < SERIES_COUNT; i++) {
@@ -192,6 +196,9 @@ export default function TabletScoringView({
   }
 
   // Remove selected score
+  // Note: Scores are stored as counts per zone, not individual hits.
+  // When a user clicks on a specific hit button, we decrement the count for that zone.
+  // This is simpler than tracking individual hit IDs and matches the underlying data model.
   const handleScoreRemove = () => {
     if (!selectedShooter || !selectedScoreIndex) return
 
@@ -524,7 +531,7 @@ export default function TabletScoringView({
                 onClick={handleScoreRemove}
                 className="w-full mt-4 py-3 rounded-xl font-semibold bg-red-100 text-red-700 hover:bg-red-200 active:bg-red-300 transition-colors"
               >
-                Remove {selectedScoreIndex.zone}
+                Remove one {selectedScoreIndex.zone}
               </button>
             )}
           </div>
