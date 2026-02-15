@@ -281,7 +281,8 @@ function TabletApp() {
       <MatchPicker
         cup={selectedCup}
         matches={matches}
-        onMatchSelected={handleMatchSelected}
+        onSelect={handleMatchSelected}
+        cupName={selectedCup?.name}
         onBack={() => setView('cup')}
         onLogout={handleLogout}
         loading={loading}
@@ -294,7 +295,7 @@ function TabletApp() {
     return (
       <SquadPicker
         match={selectedMatch}
-        onSquadSelected={handleSquadSelected}
+        onSelect={handleSquadSelected}
         onBack={() => setView('match')}
         onLogout={handleLogout}
         loading={loading}
