@@ -148,13 +148,13 @@ export default function TabletScoringView({
     setLoadError(null)
     setSaveError(null)
 
-    // Try to load from SSI
+    // Load SSI scores from the shooter data (already loaded with squad)
+    // Note: getCompetitor doesn't return scores, only getSquad does
     try {
       console.log('Loading SSI scores for shooter:', shooter.id)
-      const competitorData = await withSessionCheck(() => api.getCompetitor(shooter.id))
-      console.log('Received competitor data:', competitorData)
+      console.log('Shooter data from squad:', shooter)
       
-      const ssiScores = api.buildScoresFromSSI(competitorData, SERIES_COUNT)
+      const ssiScores = api.buildScoresFromSSI(shooter, SERIES_COUNT)
       console.log('Built SSI scores:', ssiScores)
       
       // Check if local scores differ from SSI
