@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import * as api from '../api'
-import * as regApi from '../register-api'
+// register-api no longer needed — cups loaded from /api/manage/cups
 import { useRememberMe } from '../hooks/useRememberMe'
 import LoginScreen from './LoginScreen'
 import { AppHeader, ErrorBanner, Spinner, CupList } from './shared'
@@ -114,21 +114,37 @@ export default function ManagePage() {
     setError(null)
   }
 
-  // Load cups from registration API (same data as Register page)
+  // Load cups from management API (shows cups until end date, regardless of registration status)
   useEffect(() => {
     if (view !== 'cups' || cups.length > 0) return
     const loadCups = async () => {
       setLoading(true)
       try {
-        const cupList = await regApi.getCups()
-        setCups(cupList)
+        await withSessionCheck(async () => {
+          const resp = await fetch('/api/manage/cups', { credentials: 'include' })
+          if (resp.status === 401) {
+            const data = await resp.json()
+            if (data.sessionExpired) throw new api.SessionExpiredError(data.error)
+          }
+          if (resp.status === 403) {
+            const data = await resp.json()
+            if (data.scopeMismatch) {
+              throw new api.ScopeMismatchError(data.error, data.requiredScope, data.currentScope)
+            }
+          }
+          if (!resp.ok) throw new Error('Failed to load cups')
+          const data = await resp.json()
+          setCups(data.cups || [])
+        })
       } catch (err) {
-        setError(err.message)
+        if (!(err instanceof api.SessionExpiredError)) {
+          setError(err.message)
+        }
       }
       setLoading(false)
     }
     loadCups()
-  }, [view]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [view, withSessionCheck]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load management data for selected cup
   const handleSelectCup = useCallback(async (cup) => {
@@ -222,6 +238,7 @@ export default function ManagePage() {
             loading={loading}
             openLabel="Hallitse"
             emptyLabel="Ei cupeja"
+            allClickable
           />
         </div>
       )}

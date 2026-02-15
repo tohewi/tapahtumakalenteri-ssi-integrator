@@ -341,6 +341,7 @@ app.use('/api', scoringRouter)
 const managementRouter = createManagementRouter({
   requireAuth,
   graphqlWithRefresh,
+  adminGraphQL,
   IS_PROD,
 })
 app.use('/api/manage', managementRouter)

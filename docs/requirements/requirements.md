@@ -265,6 +265,11 @@
 | MGMT-Q1 | **Regression Safety**: Existing scoring/registration/management behavior must remain unchanged outside explicit staffing multi-site updates. | 🧪 PoC |
 | MGMT-Q2 | **Test Coverage**: Add/maintain unit and integration tests for site-aware auth, staffing route behavior, and filter handling. | ✅ Implemented |
 | MGMT-Q3 | **Design Documentation**: Maintain architecture/design docs for management site data model, API contracts, and rollout steps. | ✅ Implemented |
+## Release 7.1 — Management Availability
+
+| # | Requirement | Status | Tokens (est.) |
+|---|-------------|--------|---------------|
+| MGMT1 | **Management Independent of Registration**: Kupittaa Cup Hallinta must keep cups available for management independent of registration status, once registration start date has passed and while the cup is still active. Management is available until the cup's end date and time (`ends`), or `starts + 24h` fallback. Cups with no `registration_starts` are excluded. Uses dedicated `/api/manage/cups` endpoint. | ✅ Implemented | ~14,000 |
 
 ## Summary
 

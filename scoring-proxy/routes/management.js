@@ -3,7 +3,94 @@ import { ssiSearchAndAddParticipant, ssiFindCompetitorInMatch, ssiSetParticipant
 
 const router = express.Router()
 
-export function createManagementRouter({ requireAuth, graphqlWithRefresh, IS_PROD }) {
+export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminGraphQL, IS_PROD }) {
+  // ============================================================
+  // GET /api/manage/cups — List cups available for management
+  // Returns cups that haven't ended yet, regardless of registration status.
+  // Uses admin GraphQL to query SSI events (same as registration endpoint
+  // but with relaxed filtering: no registration status check, uses end date).
+  // ============================================================
+  router.get('/cups', requireAuth('manage'), async (req, res) => {
+    try {
+      const result = await adminGraphQL(`
+        query {
+          events(search: "Kupittaa CUP") {
+            id name starts ends status get_content_type_key
+            max_competitors
+            registration
+            ... on NordicSerieNode {
+              registration_starts
+              registration_closes
+              component_matches {
+                number included
+                match {
+                  squads {
+                    ... on NordicSquadNode {
+                      competitors { id status }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      `)
+
+      const now = new Date()
+      const cups = (result.events || [])
+        .filter(e => e.get_content_type_key === 136)
+        .filter(e => e.status === 'on')         // active only
+        .filter(e => {
+          // Only show cups where registration has already started
+          // (cups still being set up with no registration date are excluded)
+          const regStarts = e.registration_starts ? new Date(e.registration_starts) : null
+          if (!regStarts || regStarts > now) return false
+          // Keep cups until their end date/time (or starts + 24h fallback if no ends)
+          const ends = e.ends ? new Date(e.ends) : null
+          const fallbackEnd = new Date(new Date(e.starts).getTime() + 24 * 60 * 60 * 1000)
+          const effectiveEnd = ends || fallbackEnd
+          return effectiveEnd > now
+        })
+        .map(c => {
+          // Count approved competitors from the first component match's squads
+          const firstMatch = (c.component_matches || []).find(cm => cm.included && cm.match)
+          const approvedIds = new Set()
+          if (firstMatch?.match?.squads) {
+            for (const s of firstMatch.match.squads) {
+              for (const comp of (s.competitors || [])) {
+                if (comp.status === 'a') approvedIds.add(comp.id)
+              }
+            }
+          }
+          const registered = approvedIds.size
+          const maxCompetitors = c.max_competitors || 25
+          const full = registered >= maxCompetitors
+          const regStarts = c.registration_starts ? new Date(c.registration_starts) : null
+          const regCloses = c.registration_closes ? new Date(c.registration_closes) : null
+          const registrationOpen = (c.registration === 'op' || c.registration === 'aa')
+            && (!regStarts || now >= regStarts)
+            && (!regCloses || now <= regCloses)
+            && !full
+          return {
+            id: c.id,
+            name: c.name,
+            starts: c.starts,
+            ends: c.ends || null,
+            maxCompetitors,
+            registered,
+            full,
+            registrationOpen,
+          }
+        })
+        .sort((a, b) => new Date(a.starts) - new Date(b.starts))
+
+      res.json({ cups })
+    } catch (err) {
+      console.error('[manage] Failed to list cups:', err.message)
+      res.status(500).json({ error: 'Hallintapalvelu ei ole käytettävissä.' })
+    }
+  })
+
   // ============================================================
   // GET /api/manage/cup/:id — Consolidated squadding overview
   // Requires manage auth
