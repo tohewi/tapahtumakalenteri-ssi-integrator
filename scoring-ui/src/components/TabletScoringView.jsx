@@ -407,20 +407,7 @@ export default function TabletScoringView({
             <p className="text-xs text-gray-500">{t.reenterScore}</p>
           </div>
           
-          {/* Error messages */}
-          {loadError && (
-            <div className="mx-3 mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-700 font-medium">{t.loadFromSSIFailed}</p>
-              <p className="text-xs text-red-600 mt-1">{loadError}</p>
-              <button
-                onClick={() => handleShooterSelect(selectedShooter)}
-                className="mt-2 text-xs font-medium text-red-700 hover:text-red-800"
-              >
-                {t.retryLoad}
-              </button>
-            </div>
-          )}
-          
+          {/* Save error message */}
           {saveError && (
             <div className="mx-3 mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
               <p className="text-sm text-amber-700 font-medium">{t.saveFailed}</p>
