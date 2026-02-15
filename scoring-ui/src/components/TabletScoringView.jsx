@@ -99,12 +99,17 @@ export default function TabletScoringView({
 
       const formattedScores = {}
       
+      console.log('[SAVE DEBUG] Raw shooterScores for', selectedShooter.id, ':', shooterScores)
+      
       for (let i = 0; i < SERIES_COUNT; i++) {
         const seriesScores = shooterScores[i]
+        console.log(`[SAVE DEBUG] Series ${i + 1} scores:`, seriesScores)
         const parts = SCORE_ZONES.map(z => seriesScores[z] || 0)
+        console.log(`[SAVE DEBUG] Series ${i + 1} parts array:`, parts)
         formattedScores[`s${i + 1}`] = parts.join(',') + ',0' // Add max_hits as 0 (not used)
       }
 
+      console.log('[SAVE DEBUG] Final formatted scores:', formattedScores)
       console.log('Saving scores for shooter:', selectedShooter.id, formattedScores)
       await withSessionCheck(() => api.submitScore(selectedShooter.id, formattedScores))
       console.log('Scores saved successfully')
