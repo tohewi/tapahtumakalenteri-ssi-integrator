@@ -76,10 +76,6 @@ export default function TabletScoringView({
   const [selectedScoreIndex, setSelectedScoreIndex] = useState(null) // { seriesIdx, hitIdx }
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
-  const [loadError, setLoadError] = useState(null)
-  const [showMergeConflict, setShowMergeConflict] = useState(false)
-  const [mergeData, setMergeData] = useState(null)
-  const [mergeSelections, setMergeSelections] = useState({}) // { seriesIdx: 'local' | 'ssi' }
   const [draggedShooter, setDraggedShooter] = useState(null)
   
   const scoreTrackRef = useRef(null)
@@ -90,13 +86,6 @@ export default function TabletScoringView({
   // Save scores to SSI
   const handleSaveScores = useCallback(async () => {
     if (!selectedShooter || saving) return
-    
-    // Block save if there's an unresolved merge conflict
-    if (showMergeConflict) {
-      console.log('Cannot save: merge conflict must be resolved first')
-      setSaveError('Please resolve the merge conflict before saving')
-      return
-    }
 
     setSaving(true)
     setSaveError(null)
@@ -119,15 +108,18 @@ export default function TabletScoringView({
       console.log('Saving scores for shooter:', selectedShooter.id, formattedScores)
       await withSessionCheck(() => api.submitScore(selectedShooter.id, formattedScores))
       console.log('Scores saved successfully')
+      
+      // Verify save by checking if returned data matches what we sent
+      // (Note: SSI API doesn't return the saved scores, so we just check for success)
     } catch (err) {
       console.error('Save error:', err)
       if (!(err instanceof api.SessionExpiredError) && !(err instanceof api.ScopeMismatchError)) {
-        setSaveError(err.message)
+        setSaveError('Failed to save scores to SSI: ' + err.message)
       }
     } finally {
       setSaving(false)
     }
-  }, [selectedShooter, saving, allScores, withSessionCheck, showMergeConflict])
+  }, [selectedShooter, saving, allScores, withSessionCheck])
 
   // Select first shooter by default
   useEffect(() => {
@@ -135,20 +127,30 @@ export default function TabletScoringView({
       const firstShooter = squad.shooters[0]
       setSelectedShooter(firstShooter)
       setSelectedScoreIndex(null)
-      setLoadError(null)
       setSaveError(null)
+      
+      // Load SSI scores for first shooter (only if no local scores exist)
+      const shooterScores = allScores[firstShooter.id]
+      const hasLocalScores = shooterScores && getTotalHits(shooterScores) > 0
+      
+      if (!hasLocalScores) {
+        // Load from SSI since no local data
+        try {
+          const ssiScores = api.buildScoresFromSSI(firstShooter, SERIES_COUNT)
+          if (getTotalHits(ssiScores) > 0) {
+            console.log('Loading initial SSI scores for first shooter:', firstShooter.id)
+            onScoresUpdate(firstShooter.id, ssiScores)
+          }
+        } catch (err) {
+          console.error('Error loading initial SSI scores:', err)
+        }
+      }
     }
-  }, [squad.shooters, selectedShooter])
+  }, [squad.shooters, selectedShooter, allScores, onScoresUpdate])
 
-  // Load shooter data from SSI when selected
+  // Handle shooter selection
   const handleShooterSelect = useCallback(async (shooter) => {
     if (selectedShooter?.id === shooter.id) return
-    
-    // Block shooter switch if there's an unresolved merge conflict
-    if (showMergeConflict) {
-      setSaveError('Please resolve the merge conflict before switching shooters')
-      return
-    }
     
     // Auto-save current shooter's scores before switching
     if (selectedShooter) {
@@ -158,92 +160,34 @@ export default function TabletScoringView({
     
     setSelectedShooter(shooter)
     setSelectedScoreIndex(null)
-    setLoadError(null)
     setSaveError(null)
 
-    // Load SSI scores from the shooter data (already loaded with squad)
-    // Note: getCompetitor doesn't return scores, only getSquad does
-    try {
-      console.log('Loading SSI scores for shooter:', shooter.id)
-      console.log('Shooter data from squad:', shooter)
-      
-      const ssiScores = api.buildScoresFromSSI(shooter, SERIES_COUNT)
-      console.log('Built SSI scores:', ssiScores)
-      
-      // Check if local scores differ from SSI
-      const localScores = allScores[shooter.id]
-      console.log('Local scores:', localScores)
-      
-      const hasDifference = checkScoreDifference(localScores, ssiScores)
-      console.log('Has difference:', hasDifference)
-      
-      if (hasDifference) {
-        // Show merge conflict UI with per-string comparison
-        console.log('Showing merge conflict UI')
-        setMergeData({ local: localScores, ssi: ssiScores })
-        setShowMergeConflict(true)
-      } else {
-        // Update with SSI data
-        console.log('No difference, updating with SSI data')
-        onScoresUpdate(shooter.id, ssiScores)
-      }
-    } catch (err) {
-      console.error('Error loading SSI scores:', err)
-      // If load fails, continue with local data
-      if (!(err instanceof api.SessionExpiredError) && !(err instanceof api.ScopeMismatchError)) {
-        setLoadError(err.message)
-      }
-    }
-  }, [selectedShooter, withSessionCheck, allScores, onScoresUpdate, handleSaveScores])
-
-  const checkScoreDifference = (local, ssi) => {
-    for (let i = 0; i < SERIES_COUNT; i++) {
-      for (const zone of SCORE_ZONES) {
-        if ((local[i]?.[zone] || 0) !== (ssi[i]?.[zone] || 0)) {
-          return true
+    // Load SSI scores from squad data (only if no local scores exist)
+    const shooterScores = allScores[shooter.id]
+    const hasLocalScores = shooterScores && getTotalHits(shooterScores) > 0
+    
+    if (!hasLocalScores) {
+      // Load from SSI since no local data
+      try {
+        console.log('Loading SSI scores for shooter:', shooter.id)
+        const ssiScores = api.buildScoresFromSSI(shooter, SERIES_COUNT)
+        
+        if (getTotalHits(ssiScores) > 0) {
+          console.log('Loaded SSI scores with', getTotalHits(ssiScores), 'hits')
+          onScoresUpdate(shooter.id, ssiScores)
+        } else {
+          console.log('No SSI scores found (zero data is not an error)')
+        }
+      } catch (err) {
+        console.error('Error loading SSI scores:', err)
+        if (!(err instanceof api.SessionExpiredError) && !(err instanceof api.ScopeMismatchError)) {
+          setSaveError('Failed to load scores from SSI: ' + err.message)
         }
       }
+    } else {
+      console.log('Using local scores for shooter:', shooter.id)
     }
-    return false
-  }
-
-  const handleMergeKeepLocal = () => {
-    setShowMergeConflict(false)
-    setMergeData(null)
-    setMergeSelections({})
-  }
-
-  const handleMergeKeepSSI = () => {
-    if (mergeData && selectedShooter) {
-      onScoresUpdate(selectedShooter.id, mergeData.ssi)
-    }
-    setShowMergeConflict(false)
-    setMergeData(null)
-    setMergeSelections({})
-  }
-
-  const handleMergeConfirm = () => {
-    if (!mergeData || !selectedShooter) return
-    
-    // Build merged scores based on user selections
-    const mergedScores = {}
-    for (let i = 0; i < SERIES_COUNT; i++) {
-      const selection = mergeSelections[i] || 'local' // Default to local if not selected
-      mergedScores[i] = selection === 'local' ? mergeData.local[i] : mergeData.ssi[i]
-    }
-    
-    onScoresUpdate(selectedShooter.id, mergedScores)
-    setShowMergeConflict(false)
-    setMergeData(null)
-    setMergeSelections({})
-  }
-
-  const handleMergeSelectString = (seriesIdx, source) => {
-    setMergeSelections(prev => ({
-      ...prev,
-      [seriesIdx]: source
-    }))
-  }
+  }, [selectedShooter, allScores, onScoresUpdate, handleSaveScores])
 
   // Add score to current series
   const handleScoreAdd = (zone) => {
@@ -600,132 +544,6 @@ export default function TabletScoringView({
           </div>
         </div>
       </div>
-
-      {/* Merge conflict modal - per-string comparison */}
-      {showMergeConflict && mergeData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full p-6 my-8">
-            <h3 className="text-xl font-bold text-gray-800 mb-2">{t.mergeConflict}</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Local scores differ from SSI. Select which version to keep for each string:
-            </p>
-            
-            {/* Per-string comparison */}
-            <div className="space-y-3 mb-6 max-h-96 overflow-y-auto">
-              {Array.from({ length: SERIES_COUNT }, (_, i) => {
-                const localSeries = mergeData.local[i]
-                const ssiSeries = mergeData.ssi[i]
-                const localHits = hitsInSeries(localSeries)
-                const ssiHits = hitsInSeries(ssiSeries)
-                const localPoints = pointsInSeries(localSeries)
-                const ssiPoints = pointsInSeries(ssiSeries)
-                const selected = mergeSelections[i] || 'local'
-                const hasDifference = JSON.stringify(localSeries) !== JSON.stringify(ssiSeries)
-                
-                if (!hasDifference) return null // Skip identical strings
-                
-                return (
-                  <div key={i} className={`border rounded-lg p-4 ${STRING_COLORS[i]}`}>
-                    <h4 className="font-semibold text-gray-800 mb-3">{t.string} {i + 1}</h4>
-                    
-                    <div className="grid grid-cols-2 gap-3">
-                      {/* Local version */}
-                      <button
-                        onClick={() => handleMergeSelectString(i, 'local')}
-                        className={`p-3 rounded-lg border-2 transition-all ${
-                          selected === 'local'
-                            ? 'border-blue-600 bg-blue-50'
-                            : 'border-gray-300 bg-white hover:border-gray-400'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-semibold text-sm">Local</span>
-                          {selected === 'local' && (
-                            <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-600 space-y-1">
-                          <div>Hits: {localHits}/{MAX_HITS_PER_SERIES}</div>
-                          <div>Points: {localPoints}</div>
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {SCORE_ZONES.map(zone => {
-                              const count = localSeries[zone] || 0
-                              if (count === 0) return null
-                              return (
-                                <span key={zone} className="px-1.5 py-0.5 bg-gray-700 text-white text-xs rounded">
-                                  {zone}×{count}
-                                </span>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      </button>
-                      
-                      {/* SSI version */}
-                      <button
-                        onClick={() => handleMergeSelectString(i, 'ssi')}
-                        className={`p-3 rounded-lg border-2 transition-all ${
-                          selected === 'ssi'
-                            ? 'border-green-600 bg-green-50'
-                            : 'border-gray-300 bg-white hover:border-gray-400'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-semibold text-sm">SSI</span>
-                          {selected === 'ssi' && (
-                            <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-600 space-y-1">
-                          <div>Hits: {ssiHits}/{MAX_HITS_PER_SERIES}</div>
-                          <div>Points: {ssiPoints}</div>
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {SCORE_ZONES.map(zone => {
-                              const count = ssiSeries[zone] || 0
-                              if (count === 0) return null
-                              return (
-                                <span key={zone} className="px-1.5 py-0.5 bg-gray-700 text-white text-xs rounded">
-                                  {zone}×{count}
-                                </span>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-            
-            {/* Action buttons */}
-            <div className="flex gap-3">
-              <button
-                onClick={handleMergeConfirm}
-                className="flex-1 py-3 rounded-xl font-semibold bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 transition-colors"
-              >
-                Confirm Selection
-              </button>
-              <button
-                onClick={handleMergeKeepLocal}
-                className="px-6 py-3 rounded-xl font-semibold bg-gray-200 text-gray-700 hover:bg-gray-300 active:bg-gray-400 transition-colors"
-              >
-                Keep All Local
-              </button>
-              <button
-                onClick={handleMergeKeepSSI}
-                className="px-6 py-3 rounded-xl font-semibold bg-gray-200 text-gray-700 hover:bg-gray-300 active:bg-gray-400 transition-colors"
-              >
-                Keep All SSI
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
