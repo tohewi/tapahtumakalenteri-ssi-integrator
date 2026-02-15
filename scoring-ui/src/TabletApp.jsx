@@ -268,7 +268,7 @@ function TabletApp() {
   if (view === 'cup') {
     return (
       <CupSearch
-        onCupSelected={handleCupSelected}
+        onSelectCup={handleCupSelected}
         onLogout={handleLogout}
         loading={loading}
         error={error}
