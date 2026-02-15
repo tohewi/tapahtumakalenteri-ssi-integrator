@@ -166,6 +166,28 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
       const seenIds = new Set()
       const ssiSyncQueue = [] // events needing staff page scrape
       const now = new Date()
+      const searchStats = {
+        queried: 0,
+        deduped: 0,
+        skippedPast: 0,
+        skippedByFilter: 0,
+        skippedByType: 0,
+        skippedByTrainingType: 0,
+        accepted: 0,
+      }
+      const acceptedEventsForLog = []
+
+      log.info(`[staffing] Event discovery start (site=${siteKey}, user=${userEmail || 'unknown'})`, {
+        filters: eventFilters.map(f => ({
+          type: f.type,
+          value: f.value,
+          futureOnly: f.futureOnly !== false,
+        })),
+        searchStrings,
+        allowedEventTypes: allowedEventTypes.length > 0 ? allowedEventTypes : ['any'],
+        futureOnly,
+        contentTypeMap,
+      })
 
       for (const searchStr of searchStrings) {
         const data = await graphqlWithRefresh(session, `
@@ -179,27 +201,56 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
           }
         `, { search: searchStr })
 
+        const searchResults = Array.isArray(data.events) ? data.events.length : 0
+        log.info(`[staffing] SSI search completed (site=${siteKey}, search="${searchStr}", results=${searchResults})`)
+
         if (data.events) {
           for (const evt of data.events) {
-            if (seenIds.has(evt.id)) continue
+            searchStats.queried += 1
+
+            if (seenIds.has(evt.id)) {
+              searchStats.deduped += 1
+              continue
+            }
 
             // Only show future events
-            if (futureOnly && new Date(evt.starts) <= now) continue
+            if (futureOnly && new Date(evt.starts) <= now) {
+              searchStats.skippedPast += 1
+              continue
+            }
 
-            if (!matchesEventFilters(evt, eventFilters)) continue
+            if (!matchesEventFilters(evt, eventFilters)) {
+              searchStats.skippedByFilter += 1
+              continue
+            }
 
-            if (!matchesEventType(evt, allowedEventTypes, { contentTypeMap })) continue
+            if (!matchesEventType(evt, allowedEventTypes, { contentTypeMap })) {
+              searchStats.skippedByType += 1
+              continue
+            }
 
             // Determine training type from name
             const trainingType = resolveTrainingTypeFromEventName(evt.name, config)
-            if (!trainingType) continue
+            if (!trainingType) {
+              searchStats.skippedByTrainingType += 1
+              continue
+            }
 
             seenIds.add(evt.id)
+            searchStats.accepted += 1
 
             const eventContentType = Number.parseInt(evt.get_content_type_key, 10)
             const resolvedContentType = Number.isFinite(eventContentType)
               ? eventContentType
               : config.eventDiscovery.matchContentType
+            if (acceptedEventsForLog.length < 25) {
+              acceptedEventsForLog.push({
+                id: evt.id,
+                contentType: resolvedContentType,
+                name: evt.name,
+                starts: evt.starts,
+              })
+            }
             let eventSquads = []
 
             if (Number.isFinite(eventContentType)) {
@@ -342,6 +393,23 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
 
       // Sort by event date ascending
       allMatches.sort((a, b) => new Date(a.eventDate) - new Date(b.eventDate))
+
+      log.info(`[staffing] Event discovery completed (site=${siteKey})`, {
+        searchStats,
+        discoveredEventIds: [...seenIds],
+        acceptedEventsSample: acceptedEventsForLog,
+        responseCount: allMatches.length,
+        queuedForSsiSync: ssiSyncQueue.length,
+      })
+
+      if (seenIds.size === 0) {
+        log.warn(`[staffing] Event discovery returned no SSI matches (site=${siteKey})`, {
+          searchStrings,
+          allowedEventTypes: allowedEventTypes.length > 0 ? allowedEventTypes : ['any'],
+          futureOnly,
+          filters: eventFilters,
+        })
+      }
 
       res.json({ events: allMatches, isAdmin, userEmail, siteKey })
     } catch (err) {
