@@ -271,7 +271,9 @@ export function buildScoresFromSSI(shooter, seriesCount = 6) {
   const scores = {}
   for (let i = 0; i < seriesCount; i++) {
     const sKey = `s${i + 1}`
-    scores[i] = parseStringScore(shooter?.ssiScores?.[sKey])
+    // Support both shooter.s1 (direct from SSI/getCompetitor) and shooter.ssiScores.s1 (legacy)
+    const scoreString = shooter?.[sKey] || shooter?.ssiScores?.[sKey]
+    scores[i] = parseStringScore(scoreString)
   }
   return scores
 }
