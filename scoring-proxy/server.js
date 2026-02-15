@@ -18,6 +18,7 @@ import { initRedis, getActiveSessionCount, isUsingRedis, touchSession } from './
 import { requireAuthV7 } from './middleware/auth-v7.js'
 import { createAuthV7Router } from './routes/auth-v7.js'
 import { migrate as runDbMigration } from './lib/db/migrate.js'
+import { initDb } from './lib/db/client.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
