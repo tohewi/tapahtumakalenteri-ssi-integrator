@@ -87,6 +87,33 @@ export default function TabletScoringView({
   // Calculate total shots for the match
   const totalShotsInMatch = SERIES_COUNT * MAX_HITS_PER_SERIES
 
+  // Save scores to SSI
+  const handleSaveScores = async () => {
+    if (!selectedShooter || saving) return
+
+    setSaving(true)
+    setSaveError(null)
+
+    try {
+      const shooterScores = allScores[selectedShooter.id]
+      const formattedScores = {}
+      
+      for (let i = 0; i < SERIES_COUNT; i++) {
+        const seriesScores = shooterScores[i]
+        const parts = SCORE_ZONES.map(z => seriesScores[z] || 0)
+        formattedScores[`s${i + 1}`] = parts.join(',') + ',0' // Add max_hits as 0 (not used)
+      }
+
+      await withSessionCheck(() => api.submitScore(selectedShooter.id, formattedScores))
+    } catch (err) {
+      if (!(err instanceof api.SessionExpiredError) && !(err instanceof api.ScopeMismatchError)) {
+        setSaveError(err.message)
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
   // Select first shooter by default
   useEffect(() => {
     if (!selectedShooter && squad.shooters.length > 0) {
@@ -248,33 +275,6 @@ export default function TabletScoringView({
 
     onScoresUpdate(selectedShooter.id, newScores)
     setSelectedScoreIndex(null)
-  }
-
-  // Save scores to SSI
-  const handleSaveScores = async () => {
-    if (!selectedShooter || saving) return
-
-    setSaving(true)
-    setSaveError(null)
-
-    try {
-      const shooterScores = allScores[selectedShooter.id]
-      const formattedScores = {}
-      
-      for (let i = 0; i < SERIES_COUNT; i++) {
-        const seriesScores = shooterScores[i]
-        const parts = SCORE_ZONES.map(z => seriesScores[z] || 0)
-        formattedScores[`s${i + 1}`] = parts.join(',') + ',0' // Add max_hits as 0 (not used)
-      }
-
-      await withSessionCheck(() => api.submitScore(selectedShooter.id, formattedScores))
-    } catch (err) {
-      if (!(err instanceof api.SessionExpiredError) && !(err instanceof api.ScopeMismatchError)) {
-        setSaveError(err.message)
-      }
-    } finally {
-      setSaving(false)
-    }
   }
 
   // Drag and drop handlers
