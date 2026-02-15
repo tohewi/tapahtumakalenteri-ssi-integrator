@@ -268,12 +268,15 @@ export function transformMatchListItem(ssiMatch) {
 
 // Build scores object from SSI competitor data for all 6 strings
 export function buildScoresFromSSI(shooter, seriesCount = 6) {
+  console.log('[buildScoresFromSSI] Input shooter:', shooter)
   const scores = {}
   for (let i = 0; i < seriesCount; i++) {
     const sKey = `s${i + 1}`
     // Support both shooter.s1 (direct from SSI/getCompetitor) and shooter.ssiScores.s1 (legacy)
     const scoreString = shooter?.[sKey] || shooter?.ssiScores?.[sKey]
+    console.log(`[buildScoresFromSSI] ${sKey}:`, scoreString)
     scores[i] = parseStringScore(scoreString)
   }
+  console.log('[buildScoresFromSSI] Result scores:', scores)
   return scores
 }

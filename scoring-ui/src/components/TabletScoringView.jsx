@@ -150,22 +150,32 @@ export default function TabletScoringView({
 
     // Try to load from SSI
     try {
+      console.log('Loading SSI scores for shooter:', shooter.id)
       const competitorData = await withSessionCheck(() => api.getCompetitor(shooter.id))
+      console.log('Received competitor data:', competitorData)
+      
       const ssiScores = api.buildScoresFromSSI(competitorData, SERIES_COUNT)
+      console.log('Built SSI scores:', ssiScores)
       
       // Check if local scores differ from SSI
       const localScores = allScores[shooter.id]
+      console.log('Local scores:', localScores)
+      
       const hasDifference = checkScoreDifference(localScores, ssiScores)
+      console.log('Has difference:', hasDifference)
       
       if (hasDifference) {
         // Show merge conflict UI with per-string comparison
+        console.log('Showing merge conflict UI')
         setMergeData({ local: localScores, ssi: ssiScores })
         setShowMergeConflict(true)
       } else {
         // Update with SSI data
+        console.log('No difference, updating with SSI data')
         onScoresUpdate(shooter.id, ssiScores)
       }
     } catch (err) {
+      console.error('Error loading SSI scores:', err)
       // If load fails, continue with local data
       if (!(err instanceof api.SessionExpiredError) && !(err instanceof api.ScopeMismatchError)) {
         setLoadError(err.message)
