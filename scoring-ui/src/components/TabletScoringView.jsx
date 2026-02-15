@@ -90,6 +90,13 @@ export default function TabletScoringView({
   // Save scores to SSI
   const handleSaveScores = useCallback(async () => {
     if (!selectedShooter || saving) return
+    
+    // Block save if there's an unresolved merge conflict
+    if (showMergeConflict) {
+      console.log('Cannot save: merge conflict must be resolved first')
+      setSaveError('Please resolve the merge conflict before saving')
+      return
+    }
 
     setSaving(true)
     setSaveError(null)
@@ -120,7 +127,7 @@ export default function TabletScoringView({
     } finally {
       setSaving(false)
     }
-  }, [selectedShooter, saving, allScores, withSessionCheck])
+  }, [selectedShooter, saving, allScores, withSessionCheck, showMergeConflict])
 
   // Select first shooter by default
   useEffect(() => {
@@ -136,6 +143,12 @@ export default function TabletScoringView({
   // Load shooter data from SSI when selected
   const handleShooterSelect = useCallback(async (shooter) => {
     if (selectedShooter?.id === shooter.id) return
+    
+    // Block shooter switch if there's an unresolved merge conflict
+    if (showMergeConflict) {
+      setSaveError('Please resolve the merge conflict before switching shooters')
+      return
+    }
     
     // Auto-save current shooter's scores before switching
     if (selectedShooter) {
