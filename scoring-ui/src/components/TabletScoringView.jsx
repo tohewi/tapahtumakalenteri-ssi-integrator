@@ -199,7 +199,7 @@ export default function TabletScoringView({
     const shooterScores = allScores[selectedShooter.id]
     if (!shooterScores) return
 
-    const currentCount = shooterScores[seriesIdx][zone]
+    const currentCount = shooterScores[seriesIdx][zone] || 0
     if (currentCount <= 0) return
 
     const newScores = { ...shooterScores }
