@@ -79,6 +79,7 @@ export default function TabletScoringView({
   const [loadError, setLoadError] = useState(null)
   const [showMergeConflict, setShowMergeConflict] = useState(false)
   const [mergeData, setMergeData] = useState(null)
+  const [mergeSelections, setMergeSelections] = useState({}) // { seriesIdx: 'local' | 'ssi' }
   const [draggedShooter, setDraggedShooter] = useState(null)
   
   const scoreTrackRef = useRef(null)
@@ -101,6 +102,11 @@ export default function TabletScoringView({
   const handleShooterSelect = useCallback(async (shooter) => {
     if (selectedShooter?.id === shooter.id) return
     
+    // Auto-save current shooter's scores before switching
+    if (selectedShooter) {
+      await handleSaveScores()
+    }
+    
     setSelectedShooter(shooter)
     setSelectedScoreIndex(null)
     setLoadError(null)
@@ -116,7 +122,7 @@ export default function TabletScoringView({
       const hasDifference = checkScoreDifference(localScores, ssiScores)
       
       if (hasDifference) {
-        // Show merge conflict UI
+        // Show merge conflict UI with per-string comparison
         setMergeData({ local: localScores, ssi: ssiScores })
         setShowMergeConflict(true)
       } else {
@@ -145,6 +151,7 @@ export default function TabletScoringView({
   const handleMergeKeepLocal = () => {
     setShowMergeConflict(false)
     setMergeData(null)
+    setMergeSelections({})
   }
 
   const handleMergeKeepSSI = () => {
@@ -153,6 +160,30 @@ export default function TabletScoringView({
     }
     setShowMergeConflict(false)
     setMergeData(null)
+    setMergeSelections({})
+  }
+
+  const handleMergeConfirm = () => {
+    if (!mergeData || !selectedShooter) return
+    
+    // Build merged scores based on user selections
+    const mergedScores = {}
+    for (let i = 0; i < SERIES_COUNT; i++) {
+      const selection = mergeSelections[i] || 'local' // Default to local if not selected
+      mergedScores[i] = selection === 'local' ? mergeData.local[i] : mergeData.ssi[i]
+    }
+    
+    onScoresUpdate(selectedShooter.id, mergedScores)
+    setShowMergeConflict(false)
+    setMergeData(null)
+    setMergeSelections({})
+  }
+
+  const handleMergeSelectString = (seriesIdx, source) => {
+    setMergeSelections(prev => ({
+      ...prev,
+      [seriesIdx]: source
+    }))
   }
 
   // Add score to current series
@@ -340,7 +371,7 @@ export default function TabletScoringView({
       {/* Main content area - 3 columns on desktop, stacked on mobile */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         {/* Left: Shooter list */}
-        <div className="lg:w-64 xl:w-72 bg-white border-b lg:border-b-0 lg:border-r border-gray-200 overflow-y-auto">
+        <div className="w-full lg:w-64 xl:w-80 bg-white border-b lg:border-b-0 lg:border-r border-gray-200 flex-shrink-0 overflow-y-auto">
           <div className="p-3 border-b border-gray-200">
             <h3 className="font-semibold text-gray-700 text-sm">{squad.name}</h3>
             <p className="text-xs text-gray-500">{squad.shooters.length} {t.shooters}</p>
@@ -498,7 +529,7 @@ export default function TabletScoringView({
         </div>
 
         {/* Right: Number pad */}
-        <div className="lg:w-64 xl:w-80 bg-white border-t lg:border-t-0 lg:border-l border-gray-200">
+        <div className="w-full lg:w-80 xl:w-96 bg-white border-t lg:border-t-0 lg:border-l border-gray-200 flex-shrink-0">
           <div className="p-3 border-b border-gray-200">
             <h3 className="font-semibold text-gray-700 text-sm">Score Pad</h3>
           </div>
@@ -538,25 +569,126 @@ export default function TabletScoringView({
         </div>
       </div>
 
-      {/* Merge conflict modal */}
-      {showMergeConflict && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6">
+      {/* Merge conflict modal - per-string comparison */}
+      {showMergeConflict && mergeData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full p-6 my-8">
             <h3 className="text-xl font-bold text-gray-800 mb-2">{t.mergeConflict}</h3>
-            <p className="text-sm text-gray-600 mb-4">{t.mergeConflictMessage}</p>
+            <p className="text-sm text-gray-600 mb-4">
+              Local scores differ from SSI. Select which version to keep for each string:
+            </p>
             
-            <div className="space-y-3">
+            {/* Per-string comparison */}
+            <div className="space-y-3 mb-6 max-h-96 overflow-y-auto">
+              {Array.from({ length: SERIES_COUNT }, (_, i) => {
+                const localSeries = mergeData.local[i]
+                const ssiSeries = mergeData.ssi[i]
+                const localHits = hitsInSeries(localSeries)
+                const ssiHits = hitsInSeries(ssiSeries)
+                const localPoints = pointsInSeries(localSeries)
+                const ssiPoints = pointsInSeries(ssiSeries)
+                const selected = mergeSelections[i] || 'local'
+                const hasDifference = JSON.stringify(localSeries) !== JSON.stringify(ssiSeries)
+                
+                if (!hasDifference) return null // Skip identical strings
+                
+                return (
+                  <div key={i} className={`border rounded-lg p-4 ${STRING_COLORS[i]}`}>
+                    <h4 className="font-semibold text-gray-800 mb-3">{t.string} {i + 1}</h4>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Local version */}
+                      <button
+                        onClick={() => handleMergeSelectString(i, 'local')}
+                        className={`p-3 rounded-lg border-2 transition-all ${
+                          selected === 'local'
+                            ? 'border-blue-600 bg-blue-50'
+                            : 'border-gray-300 bg-white hover:border-gray-400'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-sm">Local</span>
+                          {selected === 'local' && (
+                            <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-600 space-y-1">
+                          <div>Hits: {localHits}/{MAX_HITS_PER_SERIES}</div>
+                          <div>Points: {localPoints}</div>
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {SCORE_ZONES.map(zone => {
+                              const count = localSeries[zone] || 0
+                              if (count === 0) return null
+                              return (
+                                <span key={zone} className="px-1.5 py-0.5 bg-gray-700 text-white text-xs rounded">
+                                  {zone}×{count}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </button>
+                      
+                      {/* SSI version */}
+                      <button
+                        onClick={() => handleMergeSelectString(i, 'ssi')}
+                        className={`p-3 rounded-lg border-2 transition-all ${
+                          selected === 'ssi'
+                            ? 'border-green-600 bg-green-50'
+                            : 'border-gray-300 bg-white hover:border-gray-400'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-sm">SSI</span>
+                          {selected === 'ssi' && (
+                            <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-600 space-y-1">
+                          <div>Hits: {ssiHits}/{MAX_HITS_PER_SERIES}</div>
+                          <div>Points: {ssiPoints}</div>
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {SCORE_ZONES.map(zone => {
+                              const count = ssiSeries[zone] || 0
+                              if (count === 0) return null
+                              return (
+                                <span key={zone} className="px-1.5 py-0.5 bg-gray-700 text-white text-xs rounded">
+                                  {zone}×{count}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            
+            {/* Action buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={handleMergeConfirm}
+                className="flex-1 py-3 rounded-xl font-semibold bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 transition-colors"
+              >
+                Confirm Selection
+              </button>
               <button
                 onClick={handleMergeKeepLocal}
-                className="w-full py-3 rounded-xl font-semibold bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 transition-colors"
+                className="px-6 py-3 rounded-xl font-semibold bg-gray-200 text-gray-700 hover:bg-gray-300 active:bg-gray-400 transition-colors"
               >
-                {t.keepLocal}
+                Keep All Local
               </button>
               <button
                 onClick={handleMergeKeepSSI}
-                className="w-full py-3 rounded-xl font-semibold bg-gray-200 text-gray-700 hover:bg-gray-300 active:bg-gray-400 transition-colors"
+                className="px-6 py-3 rounded-xl font-semibold bg-gray-200 text-gray-700 hover:bg-gray-300 active:bg-gray-400 transition-colors"
               >
-                {t.keepSSI}
+                Keep All SSI
               </button>
             </div>
           </div>
