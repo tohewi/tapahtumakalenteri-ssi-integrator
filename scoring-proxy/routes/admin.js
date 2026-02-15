@@ -28,6 +28,8 @@ import {
 
 export function createAdminRouter({ requireAuth }) {
   const router = express.Router()
+  const validFilterTypes = ['name_contains', 'cup_id', 'date_range', 'event_type', 'event_kind']
+  const validEventKinds = new Set(['match', 'cup', 'league'])
 
   // ============================================================
   // Admin Users Management
@@ -285,11 +287,24 @@ export function createAdminRouter({ requireAuth }) {
       }
 
       // Validate filter type
-      const validTypes = ['name_contains', 'cup_id', 'date_range']
-      if (!validTypes.includes(type)) {
+      if (!validFilterTypes.includes(type)) {
         return res.status(400).json({
-          error: `Invalid filter type. Must be one of: ${validTypes.join(', ')}`
+          error: `Invalid filter type. Must be one of: ${validFilterTypes.join(', ')}`
         })
+      }
+
+      if (type === 'event_type' || type === 'event_kind') {
+        const parsedKinds = String(value)
+          .split(',')
+          .map(v => v.trim().toLowerCase())
+          .filter(Boolean)
+
+        const hasInvalidKind = parsedKinds.some(kind => !validEventKinds.has(kind))
+        if (parsedKinds.length === 0 || hasInvalidKind) {
+          return res.status(400).json({
+            error: 'Invalid event type value. Supported values: match, cup, league'
+          })
+        }
       }
 
       await addEventFilter(req.params.key, { type, value, futureOnly })

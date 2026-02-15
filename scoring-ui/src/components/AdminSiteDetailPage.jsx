@@ -3,6 +3,29 @@ import { AppHeader } from './shared'
 
 const API_BASE = '/api/admin'
 
+const FILTER_TYPE_LABELS = {
+  name_contains: 'Name contains',
+  cup_id: 'Cup ID',
+  date_range: 'Date range',
+  event_type: 'Event type',
+  event_kind: 'Event type',
+}
+
+const EVENT_KIND_OPTIONS = [
+  { value: 'match', label: 'Match' },
+  { value: 'cup', label: 'Cup' },
+  { value: 'league', label: 'League' },
+]
+
+function formatEventKindValue(rawValue) {
+  return String(rawValue || '')
+    .split(',')
+    .map(v => v.trim())
+    .filter(Boolean)
+    .map(v => v.charAt(0).toUpperCase() + v.slice(1).toLowerCase())
+    .join(', ')
+}
+
 /**
  * Admin Site Detail Page
  *
@@ -328,12 +351,12 @@ export default function AdminSiteDetailPage({ siteKey }) {
                   >
                     <div className="flex-1">
                       <span className="text-sm font-medium text-gray-700">
-                        {f.type === 'name_contains' && 'Name contains: '}
-                        {f.type === 'cup_id' && 'Cup ID: '}
-                        {f.type === 'date_range' && 'Date range: '}
+                        {(FILTER_TYPE_LABELS[f.type] || f.type) + ': '}
                       </span>
                       <code className="text-sm bg-white px-2 py-0.5 rounded border border-gray-300">
-                        {f.value}
+                        {f.type === 'event_type' || f.type === 'event_kind'
+                          ? formatEventKindValue(f.value)
+                          : f.value}
                       </code>
                       {f.futureOnly && (
                         <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
@@ -366,12 +389,19 @@ export default function AdminSiteDetailPage({ siteKey }) {
                 </label>
                 <select
                   value={newFilterType}
-                  onChange={(e) => setNewFilterType(e.target.value)}
+                  onChange={(e) => {
+                    const nextType = e.target.value
+                    setNewFilterType(nextType)
+                    if ((nextType === 'event_type' || nextType === 'event_kind') && !newFilterValue.trim()) {
+                      setNewFilterValue('match')
+                    }
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 >
                   <option value="name_contains">Name contains</option>
                   <option value="cup_id">Cup ID</option>
                   <option value="date_range">Date range</option>
+                  <option value="event_type">Event type (Cup / League / Match)</option>
                 </select>
               </div>
 
@@ -379,17 +409,29 @@ export default function AdminSiteDetailPage({ siteKey }) {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Filter Value
                 </label>
-                <input
-                  type="text"
-                  value={newFilterValue}
-                  onChange={(e) => setNewFilterValue(e.target.value)}
-                  placeholder={
-                    newFilterType === 'name_contains' ? 'e.g., reservi' :
-                    newFilterType === 'cup_id' ? 'e.g., 12345' :
-                    'e.g., 2024-01-01:2024-12-31'
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                />
+                {newFilterType === 'event_type' || newFilterType === 'event_kind' ? (
+                  <select
+                    value={newFilterValue || 'match'}
+                    onChange={(e) => setNewFilterValue(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    {EVENT_KIND_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={newFilterValue}
+                    onChange={(e) => setNewFilterValue(e.target.value)}
+                    placeholder={
+                      newFilterType === 'name_contains' ? 'e.g., reservi' :
+                      newFilterType === 'cup_id' ? 'e.g., 12345' :
+                      'e.g., 2024-01-01:2024-12-31'
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  />
+                )}
               </div>
 
               <div className="flex items-center">
