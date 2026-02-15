@@ -124,29 +124,39 @@ export default function TabletScoringView({
   // Select first shooter by default
   useEffect(() => {
     if (!selectedShooter && squad.shooters.length > 0) {
+      // Clear all local scores when starting fresh from first shooter
+      console.log('Starting fresh: clearing all local scores and loading from SSI')
+      const freshScores = {}
+      
+      squad.shooters.forEach(shooter => {
+        // Load SSI scores for each shooter
+        try {
+          const ssiScores = api.buildScoresFromSSI(shooter, SERIES_COUNT)
+          freshScores[shooter.id] = ssiScores
+        } catch (err) {
+          console.error('Error loading SSI scores for shooter:', shooter.id, err)
+          // Initialize with empty scores if SSI load fails
+          const emptyScores = {}
+          for (let i = 0; i < SERIES_COUNT; i++) {
+            emptyScores[i] = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0, 10: 0, X: 0, M: 0 }
+          }
+          freshScores[shooter.id] = emptyScores
+        }
+      })
+      
+      // Replace all local scores with SSI data
+      Object.keys(freshScores).forEach(shooterId => {
+        onScoresUpdate(shooterId, freshScores[shooterId])
+      })
+      
       const firstShooter = squad.shooters[0]
       setSelectedShooter(firstShooter)
       setSelectedScoreIndex(null)
       setSaveError(null)
       
-      // Load SSI scores for first shooter (only if no local scores exist)
-      const shooterScores = allScores[firstShooter.id]
-      const hasLocalScores = shooterScores && getTotalHits(shooterScores) > 0
-      
-      if (!hasLocalScores) {
-        // Load from SSI since no local data
-        try {
-          const ssiScores = api.buildScoresFromSSI(firstShooter, SERIES_COUNT)
-          if (getTotalHits(ssiScores) > 0) {
-            console.log('Loading initial SSI scores for first shooter:', firstShooter.id)
-            onScoresUpdate(firstShooter.id, ssiScores)
-          }
-        } catch (err) {
-          console.error('Error loading initial SSI scores:', err)
-        }
-      }
+      console.log('Loaded SSI scores for all shooters, starting with:', firstShooter.id)
     }
-  }, [squad.shooters, selectedShooter, allScores, onScoresUpdate])
+  }, [squad.shooters, selectedShooter, onScoresUpdate])
 
   // Handle shooter selection
   const handleShooterSelect = useCallback(async (shooter) => {
