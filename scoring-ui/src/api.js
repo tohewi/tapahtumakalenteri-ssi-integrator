@@ -33,12 +33,17 @@ async function handleResponse(resp) {
   return data
 }
 
-export async function login(email, password, apiKey, scope = 'scoring') {
+export async function login(email, password, apiKey, scope = 'scoring', siteKey = null) {
+  const payload = { email, password, apiKey, scope }
+  if (scope === 'staffing' && siteKey) {
+    payload.siteKey = siteKey
+  }
+
   const resp = await fetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ email, password, apiKey, scope }),
+    body: JSON.stringify(payload),
   })
   return handleResponse(resp)
 }

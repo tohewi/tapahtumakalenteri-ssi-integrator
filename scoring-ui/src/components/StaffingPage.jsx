@@ -4,10 +4,11 @@ import { useRememberMe } from '../hooks/useRememberMe'
 import LoginScreen from './LoginScreen'
 import { AppHeader } from './shared'
 import t from '../i18n'
-import { fetchStaffingEvents, staffSignup, staffResign } from '../staffing-api'
+import { fetchStaffingEvents, staffSignup, staffResign, fetchStaffingSites } from '../staffing-api'
 
 const LS_CREDS = 'ssi_credentials'
 const isDev = import.meta.env.DEV
+const DEFAULT_SITE_KEY = 'sra-training'
 
 const ROLE_LABELS = {
   leadInstructor: t.leadInstructor,
@@ -44,6 +45,9 @@ export default function StaffingPage() {
   const [events, setEvents] = useState([])
   const [isAdmin, setIsAdmin] = useState(false)
   const [userEmail, setUserEmail] = useState(null)
+  const [staffingSites, setStaffingSites] = useState([])
+  const [activeSiteKey, setActiveSiteKey] = useState(DEFAULT_SITE_KEY)
+  const [siteLoadError, setSiteLoadError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
@@ -52,11 +56,56 @@ export default function StaffingPage() {
   // Saved credentials for pre-fill (shared hook — handles save AND clear)
   const { savedCreds, handleRememberMe } = useRememberMe(LS_CREDS)
 
+  const activeSite = staffingSites.find(site => site.key === activeSiteKey) || null
+  const activeSiteName = activeSite?.name || 'SRA training'
+
   // Check existing session on mount (survives page reload)
   useEffect(() => {
-    api.getAuthStatus().then(status => {
-      if (status.authenticated) setAuthed(true)
-    }).catch(() => {})
+    let cancelled = false
+
+    async function bootstrap() {
+      const [sitesResult, statusResult] = await Promise.allSettled([
+        fetchStaffingSites(),
+        api.getAuthStatus(),
+      ])
+
+      if (cancelled) return
+
+      const sites =
+        sitesResult.status === 'fulfilled' &&
+        Array.isArray(sitesResult.value?.sites) &&
+        sitesResult.value.sites.length > 0
+          ? sitesResult.value.sites
+          : [{ key: DEFAULT_SITE_KEY, name: 'SRA training' }]
+
+      setStaffingSites(sites)
+
+      if (sitesResult.status === 'rejected') {
+        setSiteLoadError('Failed to load staffing sites. Using default site.')
+      }
+
+      if (statusResult.status === 'fulfilled') {
+        const status = statusResult.value
+        const statusSiteKey = typeof status?.siteKey === 'string' ? status.siteKey : null
+        const selectedSiteKey = statusSiteKey && sites.some(site => site.key === statusSiteKey)
+          ? statusSiteKey
+          : sites[0].key
+
+        setActiveSiteKey(selectedSiteKey)
+        if (status.authenticated) setAuthed(true)
+      }
+    }
+
+    bootstrap().catch(() => {
+      if (cancelled) return
+      setStaffingSites([{ key: DEFAULT_SITE_KEY, name: 'SRA training' }])
+      setActiveSiteKey(DEFAULT_SITE_KEY)
+      setSiteLoadError('Failed to initialize staffing site settings.')
+    })
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   // Session expiry handler
@@ -68,7 +117,7 @@ export default function StaffingPage() {
   // Login handler — scope: 'staffing', instructor list checked server-side
   const handleLogin = async (email, password, apiKey, rememberMe) => {
     setSessionExpiredMessage(null)
-    await api.login(email, password, apiKey, 'staffing')
+    await api.login(email, password, apiKey, 'staffing', activeSiteKey)
     await handleRememberMe(email, password, apiKey, rememberMe)
     setAuthed(true)
   }
@@ -85,7 +134,7 @@ export default function StaffingPage() {
     try {
       setLoading(true)
       setError(null)
-      const data = await fetchStaffingEvents()
+      const data = await fetchStaffingEvents(activeSiteKey)
       setEvents(data.events || [])
       setIsAdmin(data.isAdmin || false)
       setUserEmail(data.userEmail || null)
@@ -102,8 +151,8 @@ export default function StaffingPage() {
 
   // Load events when authenticated
   useEffect(() => {
-    if (authed) loadEvents()
-  }, [authed]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (authed && activeSiteKey) loadEvents()
+  }, [authed, activeSiteKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Login screen
   if (!authed) {
@@ -113,13 +162,32 @@ export default function StaffingPage() {
           <div className="flex items-center justify-between">
             <div className="flex-1">
               <h1 className="text-xl font-bold">{t.staffingTitle}</h1>
-              <p className="text-slate-300 text-sm mt-1">Temppelivuori SRA</p>
+              <p className="text-slate-300 text-sm mt-1">{activeSiteName}</p>
             </div>
             <a href="#/" className="text-slate-300 text-sm active:text-white">
               {t.home}
             </a>
           </div>
         </div>
+        <div className="mx-4 mt-4 bg-white border border-gray-200 rounded-xl p-3">
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+            Staff management site
+          </label>
+          <select
+            value={activeSiteKey}
+            onChange={e => setActiveSiteKey(e.target.value)}
+            className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+          >
+            {staffingSites.map(site => (
+              <option key={site.key} value={site.key}>{site.name}</option>
+            ))}
+          </select>
+        </div>
+        {siteLoadError && (
+          <div className="mx-4 mt-3 bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-center">
+            <p className="text-yellow-700 text-sm">{siteLoadError}</p>
+          </div>
+        )}
         {sessionExpiredMessage && (
           <div className="mx-4 mt-4 bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-center">
             <p className="text-yellow-700 text-sm">{sessionExpiredMessage}</p>
@@ -142,7 +210,7 @@ export default function StaffingPage() {
         <div className="flex items-center justify-between">
           <div className="flex-1">
             <h1 className="text-xl font-bold">{t.staffingTitle}</h1>
-            <p className="text-slate-300 text-sm mt-1">Temppelivuori SRA</p>
+            <p className="text-slate-300 text-sm mt-1">{activeSiteName}</p>
           </div>
           <button onClick={handleLogout} className="text-slate-300 text-sm active:text-white">
             {t.logout}
@@ -202,6 +270,7 @@ export default function StaffingPage() {
           <EventCard
             key={evt.eventId}
             event={evt}
+            siteKey={activeSiteKey}
             isAdmin={isAdmin}
             userEmail={userEmail}
             onUpdate={loadEvents}
@@ -216,7 +285,7 @@ export default function StaffingPage() {
 // Event Card — single CTA with bottom sheet role picker
 // ============================================================
 
-function EventCard({ event, isAdmin, userEmail, onUpdate }) {
+function EventCard({ event, siteKey, isAdmin, userEmail, onUpdate }) {
   const [busy, setBusy] = useState(false)
   const [banner, setBanner] = useState(null) // { message, type }
   const [showRolePicker, setShowRolePicker] = useState(false)
@@ -234,7 +303,7 @@ function EventCard({ event, isAdmin, userEmail, onUpdate }) {
     try {
       setBusy(true)
       setBanner(null)
-      const result = await staffSignup(event.eventId, role)
+      const result = await staffSignup(event.eventId, role, siteKey)
 
       if (isDev && result.ssi) {
         console.log('[staffing] SSI signup result:', JSON.stringify(result.ssi, null, 2))
@@ -254,7 +323,7 @@ function EventCard({ event, isAdmin, userEmail, onUpdate }) {
     try {
       setBusy(true)
       setBanner(null)
-      const result = await staffResign(event.eventId)
+      const result = await staffResign(event.eventId, siteKey)
 
       if (isDev && result.ssi) {
         console.log('[staffing] SSI resign result:', JSON.stringify(result.ssi, null, 2))

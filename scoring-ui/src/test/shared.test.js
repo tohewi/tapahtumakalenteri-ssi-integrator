@@ -373,10 +373,17 @@ describe('isToday', () => {
       }
     }
 
-    // In UTC it's Feb 15, but in some timezones (like PST -8) it might still be Feb 14
-    // However, isToday uses the local date extraction, so it should correctly identify
+    // isToday compares LOCAL calendar day. The same UTC instant may map
+    // to either previous day or current day depending on local timezone.
     expect(isToday('2026-02-15')).toBe(true)
-    expect(isToday('2026-02-14T23:00:00Z')).toBe(false)
+    const boundaryIso = '2026-02-14T23:00:00Z'
+    const boundaryDate = new Date(boundaryIso)
+    const expectedBoundaryMatch = (
+      boundaryDate.getFullYear() === mockDate.getFullYear() &&
+      boundaryDate.getMonth() === mockDate.getMonth() &&
+      boundaryDate.getDate() === mockDate.getDate()
+    )
+    expect(isToday(boundaryIso)).toBe(expectedBoundaryMatch)
   })
 })
 

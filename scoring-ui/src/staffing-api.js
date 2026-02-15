@@ -4,6 +4,12 @@
 
 const API_BASE = '/api/staffing'
 
+function withSite(url, siteKey) {
+  if (!siteKey) return url
+  const separator = url.includes('?') ? '&' : '?'
+  return `${url}${separator}siteKey=${encodeURIComponent(siteKey)}`
+}
+
 async function fetchJson(url, options = {}) {
   const resp = await fetch(url, {
     credentials: 'include',
@@ -21,31 +27,36 @@ async function fetchJson(url, options = {}) {
 }
 
 /** List training events with staffing status */
-export function fetchStaffingEvents() {
-  return fetchJson(`${API_BASE}/events`)
+export function fetchStaffingEvents(siteKey) {
+  return fetchJson(withSite(`${API_BASE}/events`, siteKey))
 }
 
 /** Get single event staffing details */
-export function fetchStaffingEvent(eventId) {
-  return fetchJson(`${API_BASE}/events/${eventId}`)
+export function fetchStaffingEvent(eventId, siteKey) {
+  return fetchJson(withSite(`${API_BASE}/events/${eventId}`, siteKey))
 }
 
 /** Register for a specific role in an event */
-export function staffSignup(eventId, role) {
-  return fetchJson(`${API_BASE}/events/${eventId}/signup`, {
+export function staffSignup(eventId, role, siteKey) {
+  return fetchJson(withSite(`${API_BASE}/events/${eventId}/signup`, siteKey), {
     method: 'POST',
     body: JSON.stringify({ role }),
   })
 }
 
 /** Resign from own role in an event */
-export function staffResign(eventId) {
-  return fetchJson(`${API_BASE}/events/${eventId}/signup`, {
+export function staffResign(eventId, siteKey) {
+  return fetchJson(withSite(`${API_BASE}/events/${eventId}/signup`, siteKey), {
     method: 'DELETE',
   })
 }
 
 /** Get staffing config (roles, training types) */
-export function fetchStaffingConfig() {
-  return fetchJson(`${API_BASE}/config`)
+export function fetchStaffingConfig(siteKey) {
+  return fetchJson(withSite(`${API_BASE}/config`, siteKey))
+}
+
+/** List available staffing sites */
+export function fetchStaffingSites() {
+  return fetchJson(`${API_BASE}/sites`)
 }

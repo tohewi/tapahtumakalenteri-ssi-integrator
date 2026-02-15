@@ -11,6 +11,18 @@ import { createSession } from '../../lib/session/store.js'
 import { requireAuthV7, requireScopeV7 } from '../../middleware/auth-v7.js'
 import { createMockSessionInput, createExpiredUserSSI } from '../fixtures/sessions.js'
 
+const dbClientMocks = vi.hoisted(() => ({
+  getAdminUser: vi.fn(),
+  updateAdminLogin: vi.fn(),
+  isDbAvailable: vi.fn(() => false),
+}))
+
+vi.mock('../../lib/db/client.js', () => ({
+  getAdminUser: dbClientMocks.getAdminUser,
+  updateAdminLogin: dbClientMocks.updateAdminLogin,
+  isDbAvailable: dbClientMocks.isDbAvailable,
+}))
+
 // ---- Helpers: mock Express req/res/next ----
 
 function mockReq(cookies = {}, extras = {}) {
@@ -43,6 +55,8 @@ function mockNext() {
 // ---- Setup ----
 
 beforeEach(async () => {
+  vi.clearAllMocks()
+  dbClientMocks.isDbAvailable.mockReturnValue(false)
   delete process.env.REDIS_URL
   await initRedis()
 })
@@ -129,6 +143,42 @@ describe('requireAuthV7 — Authentication', () => {
     expect(req.impersonation.adminSSI).toBeTruthy()
     expect(req.impersonation.adminSSI.jwt).toBe('mock-admin-jwt-token')
     expect(req.impersonation.userSSI.jwt).toBe('mock-user-jwt-token')
+  })
+
+  it('should expose normalized staffing site key for staffing scope', async () => {
+    const { sessionId } = await createSession(createMockSessionInput({
+      scope: 'staffing',
+      metadata: {
+        staffingSiteKey: 'Temppeli-SRA',
+      },
+    }))
+    const req = mockReq({ ssi_session: sessionId })
+    const res = mockRes()
+    const next = mockNext()
+
+    const middleware = requireAuthV7('staffing')
+    await middleware(req, res, next)
+
+    expect(next).toHaveBeenCalledOnce()
+    expect(req.staffingSiteKey).toBe('temppeli-sra')
+  })
+
+  it('should not expose staffing site key for non-staffing scope', async () => {
+    const { sessionId } = await createSession(createMockSessionInput({
+      scope: 'scoring',
+      metadata: {
+        staffingSiteKey: 'temppeli-sra',
+      },
+    }))
+    const req = mockReq({ ssi_session: sessionId })
+    const res = mockRes()
+    const next = mockNext()
+
+    const middleware = requireAuthV7('scoring')
+    await middleware(req, res, next)
+
+    expect(next).toHaveBeenCalledOnce()
+    expect(req.staffingSiteKey).toBeNull()
   })
 
   it('should slide session cookie on each request', async () => {

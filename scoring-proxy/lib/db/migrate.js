@@ -10,8 +10,26 @@
  *   - Clean deploy: Set CLEAN_DEPLOY=true to drop and recreate all tables
  */
 
-import pg from 'pg'
-const { Pool } = pg
+import { createRequire } from 'module'
+
+const require = createRequire(import.meta.url)
+
+let Pool = null
+let pgLoadError = null
+
+function getPoolCtor() {
+  if (Pool || pgLoadError) return Pool
+
+  try {
+    const pg = require('pg')
+    Pool = pg.Pool
+  } catch (err) {
+    pgLoadError = err
+    Pool = null
+  }
+
+  return Pool
+}
 
 // Lazy pool initialization - only create when migrate() is called
 let pool = null
@@ -24,7 +42,12 @@ function getPool() {
       throw new Error('DATABASE_URL environment variable is required')
     }
 
-    pool = new Pool({
+    const PoolCtor = getPoolCtor()
+    if (!PoolCtor) {
+      throw new Error(`DATABASE_URL is set but pg package is not available: ${pgLoadError?.message || 'unknown error'}`)
+    }
+
+    pool = new PoolCtor({
       connectionString: DATABASE_URL,
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
       max: 10,

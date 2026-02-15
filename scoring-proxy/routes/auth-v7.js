@@ -7,7 +7,8 @@
 
 import express from 'express'
 import { ssiGraphQL, ssiLogin } from '../lib/ssi-client.js'
-import { isAdminEmail } from '../lib/staffing/config-loader.js'
+import { isAdminEmail, DEFAULT_SITE_KEY } from '../lib/staffing/config-loader.js'
+import { normalizeSiteKey } from '../lib/staffing/site-filters.js'
 import {
   createSession,
   getSession,
@@ -46,14 +47,20 @@ export function createAuthV7Router({ loginLimiter, getAdminSession }) {
     // Validate scope
     const validScopes = ['scoring', 'manage', 'reporting', 'staffing']
     const sessionScope = scope && validScopes.includes(scope) ? scope : 'scoring'
-
-    // Staffing scope: cross-check email against instructor allowlist
-    if (sessionScope === 'staffing' && !isAdminEmail(email)) {
-      auditLogin(email, req.ip, false, 'Not on instructor list')
-      return res.status(403).json({ error: 'Not authorized. You are not on the instructor list.' })
-    }
+    const staffingSiteKey = sessionScope === 'staffing'
+      ? normalizeSiteKey(req.body?.siteKey, DEFAULT_SITE_KEY)
+      : null
 
     try {
+      // Staffing scope: cross-check email against instructor allowlist
+      if (sessionScope === 'staffing') {
+        const allowlisted = await isAdminEmail(email, staffingSiteKey)
+        if (!allowlisted) {
+          auditLogin(email, req.ip, false, `Not on instructor list for site ${staffingSiteKey}`)
+          return res.status(403).json({ error: 'Not authorized. You are not on the instructor list for this site.' })
+        }
+      }
+
       // 1. Authenticate user — get user's own SSI tokens
       const authResult = await ssiGraphQL(null, AUTH_MUTATION, { email, password }, apiKey)
 
@@ -98,6 +105,7 @@ export function createAuthV7Router({ loginLimiter, getAdminSession }) {
         metadata: {
           ipAddress: req.ip,
           userAgent: req.headers['user-agent'] || null,
+          staffingSiteKey,
         },
       })
 
@@ -124,6 +132,7 @@ export function createAuthV7Router({ loginLimiter, getAdminSession }) {
         hasSession: !!userCookies,
         hasAdminDelegation: !!adminSSI,
         scope: sessionScope,
+        siteKey: staffingSiteKey,
       })
     } catch (err) {
       auditLogin(email, req.ip, false, err.message)
@@ -143,6 +152,7 @@ export function createAuthV7Router({ loginLimiter, getAdminSession }) {
         hasJwt: false,
         hasSession: false,
         remainingMs: 0,
+        siteKey: null,
       })
     }
 
@@ -153,6 +163,7 @@ export function createAuthV7Router({ loginLimiter, getAdminSession }) {
         hasJwt: false,
         hasSession: false,
         remainingMs: 0,
+        siteKey: null,
       })
     }
 
@@ -167,6 +178,9 @@ export function createAuthV7Router({ loginLimiter, getAdminSession }) {
       hasAdminDelegation: !!session.adminSSI?.jwt,
       scope: session.scope,
       remainingMs,
+      siteKey: session.scope === 'staffing'
+        ? normalizeSiteKey(session.metadata?.staffingSiteKey, DEFAULT_SITE_KEY)
+        : null,
     })
   })
 

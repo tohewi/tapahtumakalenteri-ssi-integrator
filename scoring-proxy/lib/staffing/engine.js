@@ -13,7 +13,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { loadConfig, isAdminEmail, isServiceAccount } from './config-loader.js'
+import { loadConfig, DEFAULT_SITE_KEY } from './config-loader.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = path.resolve(__dirname, '..', '..', 'data')
@@ -25,12 +25,37 @@ const DATA_FILE = path.join(DATA_DIR, 'staffing-events.json')
 
 let events = new Map() // eventId → TrainingEvent
 
+function normalizeSiteKey(siteKey) {
+  if (!siteKey || typeof siteKey !== 'string') return DEFAULT_SITE_KEY
+  const normalized = siteKey.trim().toLowerCase()
+  if (!normalized) return DEFAULT_SITE_KEY
+  return /^[a-z0-9-]+$/.test(normalized) ? normalized : DEFAULT_SITE_KEY
+}
+
+function getEventStoreKey(eventId, siteKey = DEFAULT_SITE_KEY) {
+  return `${normalizeSiteKey(siteKey)}:${String(eventId)}`
+}
+
+function normalizeStoredEvent(rawEvent) {
+  const siteKey = normalizeSiteKey(rawEvent?.siteKey)
+  return {
+    ...rawEvent,
+    siteKey,
+    eventId: String(rawEvent?.eventId),
+  }
+}
+
 function loadState() {
   try {
     if (existsSync(DATA_FILE)) {
       const raw = readFileSync(DATA_FILE, 'utf8')
       const arr = JSON.parse(raw)
-      events = new Map(arr.map(e => [e.eventId, e]))
+      events = new Map(
+        (arr || []).map(event => {
+          const normalizedEvent = normalizeStoredEvent(event)
+          return [getEventStoreKey(normalizedEvent.eventId, normalizedEvent.siteKey), normalizedEvent]
+        })
+      )
       console.log(`[staffing] Loaded ${events.size} event(s) from disk`)
     }
   } catch (err) {
@@ -66,14 +91,17 @@ loadState()
  * @param {string} params.eventDate — ISO date
  * @param {number} params.shooterCount — current shooter count in shooter squads
  * @param {number} params.contentType — SSI content type (22 for match, 136 for cup)
+ * @param {string} params.siteKey — staffing site key
  * @returns {Promise<object>} The training event
  */
-export async function upsertEvent({ eventId, eventName, trainingType, eventDate, shooterCount, contentType }) {
-  const config = await loadConfig()
+export async function upsertEvent({ eventId, eventName, trainingType, eventDate, shooterCount, contentType, siteKey = DEFAULT_SITE_KEY }) {
+  const normalizedSiteKey = normalizeSiteKey(siteKey)
+  const config = await loadConfig(normalizedSiteKey)
   const ttConfig = config.trainingTypes[trainingType]
   if (!ttConfig) throw new Error(`Unknown training type: ${trainingType}`)
 
-  let event = events.get(String(eventId))
+  const eventStoreKey = getEventStoreKey(eventId, normalizedSiteKey)
+  let event = events.get(eventStoreKey)
   if (event) {
     // Update mutable fields from SSI
     event.eventName = eventName
@@ -83,6 +111,7 @@ export async function upsertEvent({ eventId, eventName, trainingType, eventDate,
   } else {
     event = {
       eventId: String(eventId),
+      siteKey: normalizedSiteKey,
       eventName,
       trainingType,
       eventDate,
@@ -95,7 +124,7 @@ export async function upsertEvent({ eventId, eventName, trainingType, eventDate,
       // Staff list (vetäjät): array of { userId, userName, email, signupTime }
       staff: [],
     }
-    events.set(String(eventId), event)
+    events.set(eventStoreKey, event)
   }
 
   saveState()
@@ -106,8 +135,9 @@ export async function upsertEvent({ eventId, eventName, trainingType, eventDate,
  * Get all training events.
  * @returns {Array<object>}
  */
-export function getAllEvents() {
-  return [...events.values()]
+export function getAllEvents(siteKey = DEFAULT_SITE_KEY) {
+  const normalizedSiteKey = normalizeSiteKey(siteKey)
+  return [...events.values()].filter(event => normalizeSiteKey(event.siteKey) === normalizedSiteKey)
 }
 
 /**
@@ -115,8 +145,8 @@ export function getAllEvents() {
  * @param {string} eventId
  * @returns {object | null}
  */
-export function getEvent(eventId) {
-  return events.get(String(eventId)) || null
+export function getEvent(eventId, siteKey = DEFAULT_SITE_KEY) {
+  return events.get(getEventStoreKey(eventId, siteKey)) || null
 }
 
 // ============================================================
@@ -129,9 +159,9 @@ const VALID_ROLES = ['leadInstructor', 'equipmentManager', 'staff']
  * Count total trainers (all roles) for an event.
  */
 function totalTrainers(event) {
-  let count = event.staff.filter(s => !isServiceAccount(s.email)).length
-  if (event.leadInstructor && !isServiceAccount(event.leadInstructor.email)) count++
-  if (event.equipmentManager && !isServiceAccount(event.equipmentManager.email)) count++
+  let count = event.staff.length
+  if (event.leadInstructor) count++
+  if (event.equipmentManager) count++
   return count
 }
 
@@ -152,19 +182,15 @@ function getUserRole(event, email) {
  * @param {string} eventId
  * @param {object} user — { email, userName }
  * @param {string} role — "leadInstructor", "equipmentManager", or "staff"
+ * @param {string} siteKey - staffing site key
  * @returns {{ role: string, userName: string }}
  */
-export function signup(eventId, user, role) {
-  const event = events.get(String(eventId))
+export function signup(eventId, user, role, siteKey = DEFAULT_SITE_KEY) {
+  const event = events.get(getEventStoreKey(eventId, siteKey))
   if (!event) throw new Error('Event not found')
 
   if (!VALID_ROLES.includes(role)) {
     throw new Error(`Invalid role: ${role}`)
-  }
-
-  // Check admin eligibility
-  if (!isAdminEmail(user.email)) {
-    throw new Error('Not authorized to sign up as staff')
   }
 
   // Check if already registered in any role (email is primary key)
@@ -199,10 +225,11 @@ export function signup(eventId, user, role) {
  *
  * @param {string} eventId
  * @param {string} email — user's email (primary identifier)
+ * @param {string} siteKey - staffing site key
  * @returns {{ resigned: boolean, previousRole: string }}
  */
-export function resign(eventId, email) {
-  const event = events.get(String(eventId))
+export function resign(eventId, email, siteKey = DEFAULT_SITE_KEY) {
+  const event = events.get(getEventStoreKey(eventId, siteKey))
   if (!event) throw new Error('Event not found')
 
   const currentRole = getUserRole(event, email)
@@ -231,18 +258,16 @@ export function resign(eventId, email) {
  * @param {string} eventId
  * @param {Array<{email: string, userName: string, role: string}>} staffList
  *   role: "leadInstructor" | "equipmentManager" | "staff"
+ * @param {string} siteKey - staffing site key
  */
-export function syncStaffFromSSI(eventId, staffList) {
-  const event = events.get(String(eventId))
+export function syncStaffFromSSI(eventId, staffList, siteKey = DEFAULT_SITE_KEY) {
+  const event = events.get(getEventStoreKey(eventId, siteKey))
   if (!event) return
 
   let changed = false
 
   for (const member of staffList) {
     if (!member.email) continue
-
-    // Skip service accounts (automation bots)
-    if (isServiceAccount(member.email)) continue
 
     // Skip if already registered in any role
     if (getUserRole(event, member.email)) continue
@@ -272,13 +297,14 @@ export function syncStaffFromSSI(eventId, staffList) {
 /**
  * Get event status summary for the API.
  * @param {string} eventId
+ * @param {string} siteKey - staffing site key
  * @returns {Promise<object | null>}
  */
-export async function getEventStatus(eventId) {
-  const event = events.get(String(eventId))
+export async function getEventStatus(eventId, siteKey = DEFAULT_SITE_KEY) {
+  const event = events.get(getEventStoreKey(eventId, siteKey))
   if (!event) return null
 
-  const config = await loadConfig()
+  const config = await loadConfig(event.siteKey || siteKey)
   const ttConfig = config.trainingTypes[event.trainingType]
   const current = totalTrainers(event)
   const isFull = current >= event.maxTrainers
@@ -300,7 +326,6 @@ export async function getEventStatus(eventId) {
       ? { email: event.equipmentManager.email, userName: event.equipmentManager.userName }
       : null,
     staff: event.staff
-      .filter(s => !isServiceAccount(s.email))
       .map(s => ({
         email: s.email,
         userName: s.userName,

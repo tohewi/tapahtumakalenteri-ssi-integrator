@@ -104,6 +104,21 @@ describe('createSession', () => {
     expect(sessionData.metadata.userAgent).toBe('TestBrowser/1.0')
     expect(sessionData.metadata.loginTime).toBeGreaterThan(0)
   })
+
+  it('should preserve custom metadata fields', async () => {
+    const input = createMockSessionInput({
+      scope: 'staffing',
+      metadata: {
+        ipAddress: '10.0.0.1',
+        userAgent: 'TestBrowser/1.0',
+        staffingSiteKey: 'temppeli-sra',
+      },
+    })
+
+    const { sessionData } = await createSession(input)
+
+    expect(sessionData.metadata.staffingSiteKey).toBe('temppeli-sra')
+  })
 })
 
 // ============================================================

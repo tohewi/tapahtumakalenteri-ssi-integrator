@@ -5,8 +5,26 @@
  * Falls back to YAML file if DATABASE_URL is not set (local development).
  */
 
-import pg from 'pg'
-const { Pool } = pg
+import { createRequire } from 'module'
+
+const require = createRequire(import.meta.url)
+
+let Pool = null
+let pgLoadError = null
+
+function getPoolCtor() {
+  if (Pool || pgLoadError) return Pool
+
+  try {
+    const pg = require('pg')
+    Pool = pg.Pool
+  } catch (err) {
+    pgLoadError = err
+    Pool = null
+  }
+
+  return Pool
+}
 
 let pool = null
 
@@ -19,9 +37,14 @@ export function initDb() {
     return null
   }
 
+  const PoolCtor = getPoolCtor()
+  if (!PoolCtor) {
+    throw new Error(`DATABASE_URL is set but pg package is not available: ${pgLoadError?.message || 'unknown error'}`)
+  }
+
   if (pool) return pool
 
-  pool = new Pool({
+  pool = new PoolCtor({
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
     max: 10,

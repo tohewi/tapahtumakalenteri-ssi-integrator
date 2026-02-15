@@ -20,6 +20,7 @@ import {
   toLegacySession,
 } from '../lib/session/index.js'
 import { getAdminUser, updateAdminLogin, isDbAvailable } from '../lib/db/client.js'
+import { normalizeSiteKey, DEFAULT_SITE_KEY } from '../lib/staffing/site-filters.js'
 
 const SESSION_COOKIE = sessionConfig.session.cookieName
 
@@ -156,6 +157,9 @@ export function requireAuthV7(allowedScopes = null) {
       // Legacy-compatible view so existing routes work without changes
       req.ssiSession = toLegacySession(finalSession)
       req.ssiSession._v7SessionId = sessionId
+      req.staffingSiteKey = finalSession.scope === 'staffing'
+        ? normalizeSiteKey(finalSession.metadata?.staffingSiteKey, DEFAULT_SITE_KEY)
+        : null
       // Impersonation context is optional — null when adminSSI isn't available.
       // Routes that need admin access get it separately via getAdminSession().
       req.impersonation = getImpersonationContext(finalSession)
