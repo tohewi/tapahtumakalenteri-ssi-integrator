@@ -63,6 +63,7 @@ export function requireAuthV7(allowedScopes = null) {
         if (scopes.includes('admin')) {
           // Check if database is available
           if (!isDbAvailable()) {
+            console.warn('[auth-v7] Admin access denied: database not available')
             return res.status(503).json({
               error: 'Database not available. Admin features require database connection.',
               dbUnavailable: true,
@@ -70,8 +71,10 @@ export function requireAuthV7(allowedScopes = null) {
           }
 
           try {
+            console.log(`[auth-v7] Checking admin access for: ${session.email}`)
             const adminUser = await getAdminUser(session.email)
             if (!adminUser) {
+              console.warn(`[auth-v7] Admin access denied for: ${session.email} (not in admin_users table)`)
               return res.status(403).json({
                 error: 'Admin access denied. You are not authorized.',
                 scopeMismatch: true,
@@ -79,6 +82,7 @@ export function requireAuthV7(allowedScopes = null) {
                 currentScope: session.scope,
               })
             }
+            console.log(`[auth-v7] Admin access granted: ${session.email} (id: ${adminUser.id}, root: ${adminUser.isRoot})`)
             // Update last login timestamp
             await updateAdminLogin(session.email).catch(() => {}) // best-effort
           } catch (err) {

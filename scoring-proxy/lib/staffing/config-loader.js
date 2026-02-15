@@ -21,6 +21,7 @@ let cacheSource = null // 'database' or 'yaml'
 export async function loadConfig(siteKey = 'sra-training') {
   // Return cached if available and from same source
   if (cachedConfig && cacheSource === (isDbAvailable() ? 'database' : 'yaml')) {
+    console.log(`[config-loader] Using cached config from ${cacheSource} (site: ${siteKey})`)
     return cachedConfig
   }
 
@@ -28,26 +29,36 @@ export async function loadConfig(siteKey = 'sra-training') {
 
   // Try database first
   if (isDbAvailable()) {
+    console.log(`[config-loader] Database available, attempting to load config for site: ${siteKey}`)
     try {
       const site = await getStaffSite(siteKey)
       if (site) {
         config = site.config
         cacheSource = 'database'
-        console.log(`[config-loader] Loaded config from database (site: ${siteKey})`)
+        console.log(`[config-loader] ✓ Loaded config from database (site: ${siteKey})`)
+        console.log(`[config-loader]   Organization: ${site.config?.organization?.name || 'N/A'}`)
+        console.log(`[config-loader]   Training types: ${Object.keys(site.config?.trainingTypes || {}).join(', ')}`)
+        console.log(`[config-loader]   Admin allowlist: ${site.config?.adminAllowlist?.length || 0} users`)
       } else {
-        console.warn(`[config-loader] Site '${siteKey}' not found in database, falling back to YAML`)
+        console.warn(`[config-loader] ⚠️  Site '${siteKey}' not found in database, falling back to YAML`)
       }
     } catch (err) {
-      console.error('[config-loader] Error loading from database, falling back to YAML:', err)
+      console.error('[config-loader] ✗ Error loading from database, falling back to YAML:', err.message)
     }
+  } else {
+    console.log('[config-loader] Database not available (DATABASE_URL not set or not initialized)')
   }
 
   // Fall back to YAML if database failed or not available
   if (!config) {
+    console.log(`[config-loader] Loading config from YAML file: ${CONFIG_PATH}`)
     const raw = readFileSync(CONFIG_PATH, 'utf8')
     config = parse(raw)
     cacheSource = 'yaml'
-    console.log('[config-loader] Loaded config from YAML file')
+    console.log('[config-loader] ✓ Loaded config from YAML file')
+    console.log(`[config-loader]   Organization: ${config?.organization?.name || 'N/A'}`)
+    console.log(`[config-loader]   Training types: ${Object.keys(config?.trainingTypes || {}).join(', ')}`)
+    console.log(`[config-loader]   Admin allowlist: ${config?.adminAllowlist?.length || 0} users`)
   }
 
   validate(config)

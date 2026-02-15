@@ -255,7 +255,8 @@ jobs:
               envVars: [
                 { key: "NODE_ENV", value: "production" },
                 { key: "SESSION_SECRET", value: $session_secret },
-                { key: "LOG_LEVEL", value: "debug" }
+                { key: "LOG_LEVEL", value: "debug" },
+                { key: "ADMIN_ROOT_EMAIL", value: "tohewi@live.com" }
               ]
             }')
 
