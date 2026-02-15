@@ -71,10 +71,10 @@ export function requireAuthV7(allowedScopes = null) {
           }
 
           try {
-            console.log(`[auth-v7] Checking admin access for: ${session.email}`)
-            const adminUser = await getAdminUser(session.email)
+            console.log(`[auth-v7] Checking admin access for: ${session.userId}`)
+            const adminUser = await getAdminUser(session.userId)
             if (!adminUser) {
-              console.warn(`[auth-v7] Admin access denied for: ${session.email} (not in admin_users table)`)
+              console.warn(`[auth-v7] Admin access denied for: ${session.userId} (not in admin_users table)`)
               return res.status(403).json({
                 error: 'Admin access denied. You are not authorized.',
                 scopeMismatch: true,
@@ -82,9 +82,9 @@ export function requireAuthV7(allowedScopes = null) {
                 currentScope: session.scope,
               })
             }
-            console.log(`[auth-v7] Admin access granted: ${session.email} (id: ${adminUser.id}, root: ${adminUser.isRoot})`)
+            console.log(`[auth-v7] Admin access granted: ${session.userId} (id: ${adminUser.id}, root: ${adminUser.isRoot})`)
             // Update last login timestamp
-            await updateAdminLogin(session.email).catch(() => {}) // best-effort
+            await updateAdminLogin(session.userId).catch(() => {}) // best-effort
           } catch (err) {
             console.error('[auth-v7] Admin check error:', err)
             return res.status(503).json({

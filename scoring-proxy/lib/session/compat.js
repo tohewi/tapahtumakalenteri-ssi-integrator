@@ -27,6 +27,7 @@ export function toLegacySession(v7Session) {
     get scope() { return v7Session.scope },
     get createdAt() { return v7Session.createdAt },
     get lastUsed() { return v7Session.lastUsed },
+    get email() { return v7Session.userId }, // userId contains the email
 
     // V7-specific (available to routes that are V7-aware)
     get _v7() { return true },
