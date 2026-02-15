@@ -129,6 +129,26 @@ export const fi = {
   unpaid: 'Ei maksettu',
   didNotShow: 'DNS',
   moveSquad: '→ S?',
+
+  // Tablet scoring
+  tabletScoringTitle: 'Kupittaa Cup tulosten syöttö (Tabletti)',
+  tabletScoringDescription: 'Syötä kilpailutulokset tabletilla tai tietokoneella',
+  selectShooter: 'Valitse ampuja',
+  shotsFired: 'laukausta',
+  shotsTotal: 'yhteensä',
+  scoreTrack: 'Tulosrata',
+  reenterScore: 'Valitse tulos muokataksesi sitä',
+  loadingShooterData: 'Ladataan ampujan tietoja...',
+  loadFromSSIFailed: 'SSI:n lataus epäonnistui',
+  retryLoad: 'Yritä uudelleen',
+  mergeConflict: 'Tietojen yhdistäminen',
+  mergeConflictMessage: 'Paikalliset tulokset eroavat SSI:stä. Valitse kumpi pidetään:',
+  keepLocal: 'Pidä paikalliset',
+  keepSSI: 'Pidä SSI:n',
+  string: 'Sarake',
+  saveFailed: 'Tallennus epäonnistui',
+  retryAction: 'Yritä uudelleen',
+  scoresSavedLocally: 'Tulokset tallennettu paikallisesti',
 }
 
 // English UI strings
@@ -262,6 +282,26 @@ export const en = {
   unpaid: 'Unpaid',
   didNotShow: 'DNS',
   moveSquad: '→ S?',
+
+  // Tablet scoring
+  tabletScoringTitle: 'Kupittaa Cup Scoring (Tablet)',
+  tabletScoringDescription: 'Enter competition scores on tablet or computer',
+  selectShooter: 'Select shooter',
+  shotsFired: 'shots',
+  shotsTotal: 'total',
+  scoreTrack: 'Score Track',
+  reenterScore: 'Select score to edit it',
+  loadingShooterData: 'Loading shooter data...',
+  loadFromSSIFailed: 'Failed to load from SSI',
+  retryLoad: 'Retry',
+  mergeConflict: 'Data Merge',
+  mergeConflictMessage: 'Local scores differ from SSI. Choose which to keep:',
+  keepLocal: 'Keep Local',
+  keepSSI: 'Keep SSI',
+  string: 'String',
+  saveFailed: 'Save failed',
+  retryAction: 'Retry',
+  scoresSavedLocally: 'Scores saved locally',
 }
 
 // Detect browser language and return appropriate translations
