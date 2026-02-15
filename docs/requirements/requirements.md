@@ -246,6 +246,27 @@
 |---|-------------|--------|---------------|
 | MGMT1 | **Management Independent of Registration**: Kupittaa Cup Hallinta must keep cups available for management independent of registration status, once registration start date has passed and while the cup is still active. Management is available until the cup's end date and time (`ends`), or `starts + 24h` fallback. Cups with no `registration_starts` are excluded. Uses dedicated `/api/manage/cups` endpoint. | ✅ Implemented | ~14,000 |
 
+## Release 7.2 — Management Actions
+
+| # | Requirement | Status | Tokens (est.) |
+|---|-------------|--------|---------------|
+| MGMT2 | **Move Squadded Shooter**: It must be possible to move a shooter to another squad in Kupittaa Cup Hallinta. Action is available for shooters already assigned to a squad and visible in squad sections in the UI. | ⬚ Pending (Design approved, implementation pending) | TBD |
+| MGMT3 | **Set DNS (Did Not Start)**: It must be possible to mark any visible shooter as DNS. DNS shooter is recorded as not present / did not shoot / no score, and must not appear in squads as a scorable shooter. | ⬚ Pending (Design approved, implementation pending) | TBD |
+
+### Design Decisions (confirmed)
+
+- MGMT2 move action is available only in **"Squadit"** section.
+- MGMT2 enforces squad limits strictly. Target squad must have room for shooter.
+- MGMT3 DNS is applied to both **CUP-level** and **match-level** participant records.
+- MGMT3 DNS applies to **all component matches** in the cup.
+- MGMT3 must be reversible in UI (undo DNS).
+- DNS shooters remain visible in squad with DNS flag; shooter's squad position is released.
+
+### Implementation Design
+
+- Detailed design for MGMT2 and MGMT3 is documented in:
+  - `docs/design/release-7.2-management-actions-design.md`
+
 ## Summary
 
 - **Release 1.0** (SSI Cup Automation): 37 requirements — 35 ✅, 2 on hold (35, 36)
@@ -257,6 +278,7 @@
 - **Release 6.0** (Match Management & UI Consolidation): 5 requirements — 1 ✅, 4 pending (MG2–MG5)
 - **Release 7.0** (Authentication & Session Handling): 25 requirements — 0 ✅, 25 pending (AUTH1–10, SES1–7, SEC1–7, TEST1–8)
 - **Release 7.1** (Management Availability): 1 requirement — 1 ✅
+- **Release 7.2** (Management Actions): 2 requirements — 0 ✅, 2 pending (MGMT2, MGMT3)
 
 
 ## Configuration Files
