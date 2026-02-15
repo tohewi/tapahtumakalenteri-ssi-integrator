@@ -272,8 +272,8 @@ export function buildScoresFromSSI(shooter, seriesCount = 6) {
   const scores = {}
   for (let i = 0; i < seriesCount; i++) {
     const sKey = `s${i + 1}`
-    // Support both shooter.s1 (direct from SSI/getCompetitor) and shooter.ssiScores.s1 (legacy)
-    const scoreString = shooter?.[sKey] || shooter?.ssiScores?.[sKey]
+    // Support both shooter.ssiScores.s1 (transformed squad data) and shooter.s1 (direct from SSI API)
+    const scoreString = shooter?.ssiScores?.[sKey] || shooter?.[sKey]
     console.log(`[buildScoresFromSSI] ${sKey}:`, scoreString)
     scores[i] = parseStringScore(scoreString)
   }
