@@ -2,46 +2,170 @@ import { readFileSync } from 'fs'
 import { parse } from 'yaml'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { getStaffSite, isDbAvailable } from '../db/client.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const CONFIG_PATH = path.resolve(__dirname, '..', '..', '..', 'config', 'sra-training-config.yml')
+const CONFIG_PATH = path.resolve(__dirname, '..', '..', '..', 'config', 'training-staffing-configuration.yml')
+export const DEFAULT_SITE_KEY = 'sra-training'
 
-let cachedConfig = null
+const configCache = new Map()
+let yamlTemplateCache = null
 
-/**
- * Load and validate the SRA training staffing configuration.
- * Caches after first load. Call reload() to force re-read.
- *
- * @returns {object} Parsed and validated config
- */
-export function loadConfig() {
-  if (cachedConfig) return cachedConfig
+function normalizeSiteKey(siteKey) {
+  if (!siteKey || typeof siteKey !== 'string') return DEFAULT_SITE_KEY
+  const normalized = siteKey.trim().toLowerCase()
+  if (!normalized) return DEFAULT_SITE_KEY
+  return /^[a-z0-9-]+$/.test(normalized) ? normalized : DEFAULT_SITE_KEY
+}
 
+function deepClone(value) {
+  if (value === undefined) return undefined
+  return JSON.parse(JSON.stringify(value))
+}
+
+function mergeConfig(baseValue, overrideValue) {
+  if (overrideValue === undefined) return deepClone(baseValue)
+
+  if (Array.isArray(overrideValue)) {
+    return deepClone(overrideValue)
+  }
+
+  if (overrideValue === null || typeof overrideValue !== 'object') {
+    return overrideValue
+  }
+
+  const baseObject = (baseValue && typeof baseValue === 'object' && !Array.isArray(baseValue))
+    ? baseValue
+    : {}
+
+  const merged = {}
+  const keys = new Set([...Object.keys(baseObject), ...Object.keys(overrideValue)])
+
+  for (const key of keys) {
+    merged[key] = mergeConfig(baseObject[key], overrideValue[key])
+  }
+
+  return merged
+}
+
+function loadYamlTemplate() {
+  if (yamlTemplateCache) {
+    return deepClone(yamlTemplateCache)
+  }
+
+  console.log(`[config-loader] Loading config template from YAML file: ${CONFIG_PATH}`)
   const raw = readFileSync(CONFIG_PATH, 'utf8')
-  const config = parse(raw)
+  const parsed = parse(raw)
+  validate(parsed)
 
-  validate(config)
-  cachedConfig = config
-  return config
+  yamlTemplateCache = parsed
+  return deepClone(yamlTemplateCache)
+}
+
+function buildSiteConfigFromDatabase(site, baseTemplate) {
+  const merged = mergeConfig(baseTemplate, site?.config || {})
+
+  const mergedOrg = merged.organization || {}
+  merged.organization = {
+    ...(baseTemplate.organization || {}),
+    ...mergedOrg,
+    name: site.organizationName || mergedOrg.name || baseTemplate.organization?.name,
+    range: site.organizationRange ?? mergedOrg.range ?? baseTemplate.organization?.range,
+    timezone: site.timezone || mergedOrg.timezone || baseTemplate.organization?.timezone,
+  }
+
+  return merged
 }
 
 /**
- * Force reload config from disk.
- * @returns {object} Parsed and validated config
+ * Load and validate the staffing configuration.
+ * Prefers database if available, falls back to YAML file.
+ * Caches after first load. Call reload() to force re-read.
+ *
+ * @param {string} siteKey - Site key to load (default: 'sra-training')
+ * @returns {Promise<object>} Parsed and validated config
  */
-export function reloadConfig() {
-  cachedConfig = null
-  return loadConfig()
+export async function loadConfig(siteKey = 'sra-training') {
+  const normalizedSiteKey = normalizeSiteKey(siteKey)
+
+  // Return cached site config if available.
+  for (const source of ['database', 'yaml']) {
+    const cacheKey = `${source}:${normalizedSiteKey}`
+    if (configCache.has(cacheKey)) {
+      console.log(`[config-loader] Using cached config from ${source} (site: ${normalizedSiteKey})`)
+      return deepClone(configCache.get(cacheKey))
+    }
+  }
+
+  const baseTemplate = loadYamlTemplate()
+  let config = null
+  let source = 'yaml'
+
+  // Try database first
+  if (isDbAvailable()) {
+    console.log(`[config-loader] Database available, attempting to load config for site: ${normalizedSiteKey}`)
+    try {
+      const site = await getStaffSite(normalizedSiteKey)
+      if (site) {
+        config = buildSiteConfigFromDatabase(site, baseTemplate)
+        source = 'database'
+        console.log(`[config-loader] ✓ Loaded config from database (site: ${normalizedSiteKey})`)
+        console.log(`[config-loader]   Organization: ${config?.organization?.name || 'N/A'}`)
+        console.log(`[config-loader]   Training types: ${Object.keys(config?.trainingTypes || {}).join(', ')}`)
+        console.log(`[config-loader]   Admin allowlist: ${config?.adminAllowlist?.length || 0} users`)
+      } else {
+        console.warn(`[config-loader] ⚠️  Site '${normalizedSiteKey}' not found in database, falling back to YAML template`)
+      }
+    } catch (err) {
+      console.error('[config-loader] ✗ Error loading from database, falling back to YAML template:', err.message)
+    }
+  } else {
+    console.log('[config-loader] Database not available (DATABASE_URL not set or not initialized)')
+  }
+
+  // Fall back to YAML template if database failed or not available
+  if (!config) {
+    config = deepClone(baseTemplate)
+    source = 'yaml'
+    console.log('[config-loader] ✓ Loaded config from YAML template')
+    console.log(`[config-loader]   Organization: ${config?.organization?.name || 'N/A'}`)
+    console.log(`[config-loader]   Training types: ${Object.keys(config?.trainingTypes || {}).join(', ')}`)
+    console.log(`[config-loader]   Admin allowlist: ${config?.adminAllowlist?.length || 0} users`)
+  }
+
+  validate(config)
+  configCache.set(`${source}:${normalizedSiteKey}`, deepClone(config))
+
+  return deepClone(config)
+}
+
+/**
+ * Force reload config from source.
+ * @param {string} siteKey - Site key to load (default: 'sra-training')
+ * @returns {Promise<object>} Parsed and validated config
+ */
+export async function reloadConfig(siteKey = null) {
+  if (siteKey) {
+    const normalizedSiteKey = normalizeSiteKey(siteKey)
+    configCache.delete(`database:${normalizedSiteKey}`)
+    configCache.delete(`yaml:${normalizedSiteKey}`)
+    return loadConfig(normalizedSiteKey)
+  }
+
+  configCache.clear()
+  return loadConfig(DEFAULT_SITE_KEY)
 }
 
 /**
  * Check if an email is in the admin allowlist.
  * @param {string} email
- * @returns {boolean}
+ * @returns {Promise<boolean>}
  */
-export function isAdminEmail(email) {
-  const config = loadConfig()
-  return config.adminAllowlist.some(
+export async function isAdminEmail(email, siteKey = DEFAULT_SITE_KEY) {
+  const config = await loadConfig(siteKey)
+  const allowlist = Array.isArray(config.adminAllowlist) ? config.adminAllowlist : []
+
+  return allowlist.some(
     allowed => allowed.toLowerCase() === email.toLowerCase()
   )
 }
@@ -49,10 +173,10 @@ export function isAdminEmail(email) {
 /**
  * Check if an email is a service account (automation identity, not a real instructor).
  * @param {string} email
- * @returns {boolean}
+ * @returns {Promise<boolean>}
  */
-export function isServiceAccount(email) {
-  const config = loadConfig()
+export async function isServiceAccount(email, siteKey = DEFAULT_SITE_KEY) {
+  const config = await loadConfig(siteKey)
   const list = config.serviceAccounts || []
   return list.some(sa => sa.toLowerCase() === email.toLowerCase())
 }
@@ -60,10 +184,10 @@ export function isServiceAccount(email) {
 /**
  * Get training type config by key or by matching event name.
  * @param {string} nameOrKey — training type key ("oldies"/"newbie") or event name to match
- * @returns {{ key: string, config: object } | null}
+ * @returns {Promise<{ key: string, config: object } | null>}
  */
-export function getTrainingType(nameOrKey) {
-  const config = loadConfig()
+export async function getTrainingType(nameOrKey, siteKey = DEFAULT_SITE_KEY) {
+  const config = await loadConfig(siteKey)
   const types = config.trainingTypes
 
   // Direct key match
@@ -89,10 +213,10 @@ export function getTrainingType(nameOrKey) {
  * Get notification template for a given key and language.
  * @param {string} templateKey
  * @param {string} lang — "fi" or "en"
- * @returns {{ subject: string, body: string } | null}
+ * @returns {Promise<{ subject: string, body: string } | null>}
  */
-export function getNotificationTemplate(templateKey, lang = 'fi') {
-  const config = loadConfig()
+export async function getNotificationTemplate(templateKey, lang = 'fi', siteKey = DEFAULT_SITE_KEY) {
+  const config = await loadConfig(siteKey)
   const template = config.notifications?.templates?.[templateKey]
   if (!template) return null
 
@@ -105,19 +229,19 @@ export function getNotificationTemplate(templateKey, lang = 'fi') {
 /**
  * Get role config by key.
  * @param {string} roleKey
- * @returns {object | null}
+ * @returns {Promise<object | null>}
  */
-export function getRoleConfig(roleKey) {
-  const config = loadConfig()
+export async function getRoleConfig(roleKey, siteKey = DEFAULT_SITE_KEY) {
+  const config = await loadConfig(siteKey)
   return config.roles?.[roleKey] || null
 }
 
 /**
  * Get all required roles.
- * @returns {Array<{ key: string, config: object }>}
+ * @returns {Promise<Array<{ key: string, config: object }>>}
  */
-export function getRequiredRoles() {
-  const config = loadConfig()
+export async function getRequiredRoles(siteKey = DEFAULT_SITE_KEY) {
+  const config = await loadConfig(siteKey)
   return Object.entries(config.roles)
     .filter(([, rc]) => rc.required)
     .map(([key, rc]) => ({ key, config: rc }))
@@ -143,6 +267,6 @@ function validate(config) {
   }
 
   if (errors.length > 0) {
-    throw new Error(`SRA training config validation failed:\n  ${errors.join('\n  ')}`)
+    throw new Error(`Staffing config validation failed:\n  ${errors.join('\n  ')}`)
   }
 }

@@ -1,4 +1,4 @@
-# SRA Training Staff Management Configuration
+# Training Staff Management Configuration
 # See docs/design/sra-staffing-design.md for full documentation
 
 organization:
@@ -53,6 +53,16 @@ trainingTypes:
     staffSquad: 5
     minShootersPerSquad: 5
     maxTrainers: 8
+  kupittaa:
+    searchPatterns: ["kupittaa", "kupittaa"]
+    label:
+      fi: "Reserviläisammunta"
+      en: "Reservist shooting"
+    maxSquads: 3
+    shooterSquads: [1, 2, 3]
+    staffSquad: 2
+    minShootersPerSquad: 5
+    maxTrainers: 2
 
 # Roles
 roles:

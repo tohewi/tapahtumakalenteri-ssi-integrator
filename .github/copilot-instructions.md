@@ -56,7 +56,7 @@ This is a **shooting competition management system** to help setting up events i
 │   └── package.json
 │
 ├── config/                  # Cup templates and defaults
-│   └── sra-training-config.yml  # SRA staffing config (roles, allowlist, service accounts)
+│   └── training-staffing-configuration.yml  # Staffing config (roles, allowlist, service accounts)
 ├── test-harness/            # E2E test scripts
 ├── render.yaml              # Render Blueprint (deploy config)
 └── docs/                    # Documentation
@@ -185,7 +185,7 @@ Use these to check deploy status, view logs, monitor service performance, and ma
 | Update home navigation | `scoring-ui/src/components/HomePage.jsx` |
 | Change deploy config | `render.yaml` |
 | Modify staffing logic | `scoring-proxy/lib/staffing/engine.js`, `scoring-proxy/routes/staffing.js` |
-| Modify staffing config | `config/sra-training-config.yml`, `scoring-proxy/lib/staffing/config-loader.js` |
+| Modify staffing config | `config/training-staffing-configuration.yml`, `scoring-proxy/lib/staffing/config-loader.js` |
 | Update staffing UI | `scoring-ui/src/components/StaffingPage.jsx` |
 | Add/update translations | `scoring-ui/src/i18n.js` |
 | Modify authentication | `scoring-proxy/routes/auth.js` |

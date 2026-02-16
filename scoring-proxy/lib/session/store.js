@@ -23,6 +23,7 @@ export async function createSession({ userId, userSSI, adminSSI, scope, metadata
   const sessionId = crypto.randomUUID()
   const now = Date.now()
   const ttl = getSessionTTLForScope(scope)
+  const inputMetadata = metadata && typeof metadata === 'object' ? metadata : {}
 
   const sessionData = {
     userId,
@@ -43,8 +44,9 @@ export async function createSession({ userId, userSSI, adminSSI, scope, metadata
     } : null,
     scope: scope || 'scoring',
     metadata: {
-      ipAddress: metadata?.ipAddress || null,
-      userAgent: metadata?.userAgent || null,
+      ...inputMetadata,
+      ipAddress: inputMetadata.ipAddress || null,
+      userAgent: inputMetadata.userAgent || null,
       loginTime: now,
       lastActivity: now,
     },

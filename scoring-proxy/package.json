@@ -19,6 +19,7 @@
     "express-rate-limit": "^8.2.1",
     "express-session": "^1.19.0",
     "helmet": "^8.1.0",
+    "pg": "^8.14.0",
     "redis": "^5.10.0",
     "resend": "^6.9.1",
     "yaml": "^2.8.2"

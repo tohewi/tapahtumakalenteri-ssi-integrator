@@ -16,7 +16,16 @@ import {
   upsertEvent,
   syncStaffFromSSI,
 } from '../lib/staffing/engine.js'
-import { loadConfig, isAdminEmail, isServiceAccount } from '../lib/staffing/config-loader.js'
+import { loadConfig, isAdminEmail, isServiceAccount, DEFAULT_SITE_KEY } from '../lib/staffing/config-loader.js'
+import { getEventFilters, listStaffSites, isDbAvailable } from '../lib/db/client.js'
+import {
+  normalizeSiteKey,
+  resolveSearchStrings,
+  resolveEventTypes,
+  isFutureOnlyEnabled,
+  matchesEventType,
+  matchesEventFilters,
+} from '../lib/staffing/site-filters.js'
 import {
   ssiRegisterToTrainerSquad,
   ssiGetMatchGroupId,
@@ -38,6 +47,56 @@ const SSI_ROLE_MAP = {
   equipmentManager: { role: '1', officials: ['QM'] },
 }
 
+function resolveTrainingTypeFromEventName(eventName, config) {
+  const types = config?.trainingTypes || {}
+  const nameLower = String(eventName || '').toLowerCase()
+
+  for (const [key, typeCfg] of Object.entries(types)) {
+    const patterns = typeCfg.searchPatterns || [key]
+    if (patterns.some(p => nameLower.includes(String(p || '').toLowerCase()))) {
+      return key
+    }
+  }
+
+  const defaultTrainingTypeRaw = typeof config?.eventDiscovery?.defaultTrainingType === 'string'
+    ? config.eventDiscovery.defaultTrainingType.trim()
+    : ''
+  if (defaultTrainingTypeRaw) {
+    const defaultTrainingType = Object.keys(types).find(
+      key => key.toLowerCase() === defaultTrainingTypeRaw.toLowerCase()
+    )
+    if (defaultTrainingType) return defaultTrainingType
+  }
+
+  const typeKeys = Object.keys(types)
+  if (typeKeys.length === 1) {
+    return typeKeys[0]
+  }
+
+  return null
+}
+
+function resolveRequestSiteKey(req) {
+  const rawQuerySiteKey = typeof req.query?.siteKey === 'string' ? req.query.siteKey : null
+  const rawBodySiteKey = typeof req.body?.siteKey === 'string' ? req.body.siteKey : null
+  const rawExplicitSiteKey = rawQuerySiteKey || rawBodySiteKey
+  const explicitSiteKey = rawExplicitSiteKey
+    ? normalizeSiteKey(rawExplicitSiteKey, DEFAULT_SITE_KEY)
+    : null
+
+  const sessionSiteKey = req.staffingSiteKey
+    ? normalizeSiteKey(req.staffingSiteKey, DEFAULT_SITE_KEY)
+    : null
+
+  if (sessionSiteKey && explicitSiteKey && explicitSiteKey !== sessionSiteKey) {
+    const err = new Error('Site key mismatch for active staffing session')
+    err.code = 'SITE_KEY_MISMATCH'
+    throw err
+  }
+
+  return sessionSiteKey || explicitSiteKey || DEFAULT_SITE_KEY
+}
+
 /**
  * Create the staffing router.
  *
@@ -50,23 +109,85 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
   const router = Router()
 
   // ============================================================
+  // GET /sites — list staffing sites for login selection
+  // ============================================================
+  router.get('/sites', async (req, res) => {
+    try {
+      if (isDbAvailable()) {
+        const sites = await listStaffSites()
+        if (sites.length > 0) {
+          return res.json({
+            sites: sites.map(site => ({
+              key: site.key,
+              name: site.name,
+            })),
+          })
+        }
+      }
+
+      const config = await loadConfig(DEFAULT_SITE_KEY)
+      return res.json({
+        sites: [{
+          key: DEFAULT_SITE_KEY,
+          name: config?.organization?.name || 'SRA training',
+        }],
+      })
+    } catch (err) {
+      console.error('[staffing] GET /sites error:', err.message)
+      return res.status(500).json({ error: 'Failed to load staffing sites' })
+    }
+  })
+
+  // ============================================================
   // GET /events — list training events with staffing status
   // ============================================================
   router.get('/events', requireAuth('staffing'), async (req, res) => {
     try {
-      const config = loadConfig()
+      const siteKey = resolveRequestSiteKey(req)
+      const config = await loadConfig(siteKey)
+      const eventFilters = isDbAvailable() ? await getEventFilters(siteKey) : []
       const session = req.ssiSession
 
       // Get current user info (email is primary identifier in SSI)
       const meData = await graphqlWithRefresh(session, '{ me { email } }')
       const userEmail = meData.me?.email
-      const isAdmin = userEmail ? isAdminEmail(userEmail) : false
+      const isAdmin = userEmail ? await isAdminEmail(userEmail, siteKey) : false
 
       // Search SSI for training events
-      const searchStrings = config.eventDiscovery.searchStrings
+      const searchStrings = resolveSearchStrings(eventFilters, config.eventDiscovery.searchStrings)
+      const allowedEventTypes = resolveEventTypes(eventFilters, config.eventDiscovery?.eventTypes || [])
+      const contentTypeMap = {
+        match: config.eventDiscovery?.matchContentType,
+        cup: config.eventDiscovery?.cupContentType,
+        league: config.eventDiscovery?.leagueContentType,
+      }
+      const futureOnly = isFutureOnlyEnabled(eventFilters)
       const contentType = config.eventDiscovery.matchContentType
       const seenIds = new Set()
       const ssiSyncQueue = [] // events needing staff page scrape
+      const now = new Date()
+      const searchStats = {
+        queried: 0,
+        deduped: 0,
+        skippedPast: 0,
+        skippedByFilter: 0,
+        skippedByType: 0,
+        skippedByTrainingType: 0,
+        accepted: 0,
+      }
+      const acceptedEventsForLog = []
+
+      log.info(`[staffing] Event discovery start (site=${siteKey}, user=${userEmail || 'unknown'})`, {
+        filters: eventFilters.map(f => ({
+          type: f.type,
+          value: f.value,
+          futureOnly: f.futureOnly !== false,
+        })),
+        searchStrings,
+        allowedEventTypes: allowedEventTypes.length > 0 ? allowedEventTypes : ['any'],
+        futureOnly,
+        contentTypeMap,
+      })
 
       for (const searchStr of searchStrings) {
         const data = await graphqlWithRefresh(session, `
@@ -76,49 +197,92 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
               name
               starts
               get_content_type_key
-              squads {
-                id
-                number
-                comment
-                ... on NordicSquadNode {
-                  competitors { id status shooter { email first_name last_name } }
-                }
-                ... on IpscSquadNode {
-                  competitors { id status shooter { email first_name last_name } }
-                }
-                ... on GenericSquadNode {
-                  competitors { id status shooter { email first_name last_name } }
-                }
-              }
             }
           }
         `, { search: searchStr })
 
+        const searchResults = Array.isArray(data.events) ? data.events.length : 0
+        log.info(`[staffing] SSI search completed (site=${siteKey}, search="${searchStr}", results=${searchResults})`)
+
         if (data.events) {
-          const now = new Date()
           for (const evt of data.events) {
-            if (seenIds.has(evt.id)) continue
-            seenIds.add(evt.id)
+            searchStats.queried += 1
+
+            if (seenIds.has(evt.id)) {
+              searchStats.deduped += 1
+              continue
+            }
 
             // Only show future events
-            if (new Date(evt.starts) <= now) continue
+            if (futureOnly && new Date(evt.starts) <= now) {
+              searchStats.skippedPast += 1
+              continue
+            }
+
+            if (!matchesEventFilters(evt, eventFilters)) {
+              searchStats.skippedByFilter += 1
+              continue
+            }
+
+            if (!matchesEventType(evt, allowedEventTypes, { contentTypeMap })) {
+              searchStats.skippedByType += 1
+              continue
+            }
 
             // Determine training type from name
-            const nameLower = evt.name.toLowerCase()
-            let trainingType = null
-            for (const [key, typeCfg] of Object.entries(config.trainingTypes)) {
-              const patterns = typeCfg.searchPatterns || [key]
-              if (patterns.some(p => nameLower.includes(p.toLowerCase()))) {
-                trainingType = key
-                break
+            const trainingType = resolveTrainingTypeFromEventName(evt.name, config)
+            if (!trainingType) {
+              searchStats.skippedByTrainingType += 1
+              continue
+            }
+
+            seenIds.add(evt.id)
+            searchStats.accepted += 1
+
+            const eventContentType = Number.parseInt(evt.get_content_type_key, 10)
+            const resolvedContentType = Number.isFinite(eventContentType)
+              ? eventContentType
+              : config.eventDiscovery.matchContentType
+            if (acceptedEventsForLog.length < 25) {
+              acceptedEventsForLog.push({
+                id: evt.id,
+                contentType: resolvedContentType,
+                name: evt.name,
+                starts: evt.starts,
+              })
+            }
+            let eventSquads = []
+
+            if (Number.isFinite(eventContentType)) {
+              try {
+                const eventData = await graphqlWithRefresh(session, `
+                  query GetEventSquads($ct: Int!, $id: String!) {
+                    event(content_type: $ct, id: $id) {
+                      squads {
+                        id
+                        number
+                        comment
+                        ... on NordicSquadNode    { competitors { id status shooter { email first_name last_name } } }
+                        ... on IpscSquadNode      { competitors { id status shooter { email first_name last_name } } }
+                        ... on PpcSquadNode       { competitors { id status shooter { email first_name last_name } } }
+                        ... on CmpSquadNode       { competitors { id status shooter { email first_name last_name } } }
+                        ... on PrecisionSquadNode { competitors { id status shooter { email first_name last_name } } }
+                        ... on GenericSquadNode   { competitors { id status shooter { email first_name last_name } } }
+                      }
+                    }
+                  }
+                `, { ct: eventContentType, id: evt.id })
+
+                eventSquads = eventData.event?.squads || []
+              } catch (eventErr) {
+                console.warn(`[staffing] Failed to load squads for event ${evt.id}: ${eventErr.message}`)
               }
             }
-            if (!trainingType) continue
 
             // Calculate shooter count (exclude staff squad)
             const staffSquadNum = config.trainingTypes[trainingType]?.staffSquad || 5
             const staffSquadName = config.eventDiscovery.staffSquadName
-            const shooterCount = (evt.squads || [])
+            const shooterCount = eventSquads
               .filter(s => {
                 const squadLabel = s.comment || `Squad ${s.number}`
                 return s.number !== staffSquadNum && squadLabel !== staffSquadName
@@ -126,32 +290,46 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
               .reduce((sum, s) => sum + (s.competitors || []).filter(c => c.status === 'a').length, 0)
 
             // Upsert event in staffing engine
-            upsertEvent({
+            await upsertEvent({
               eventId: evt.id,
               eventName: evt.name,
               trainingType,
               eventDate: evt.starts,
               shooterCount,
-              contentType: evt.get_content_type_key || null,
+              contentType: resolvedContentType || null,
+              siteKey,
             })
 
             // Extract trainer squad members (with emails from GraphQL)
-            const staffSquad = (evt.squads || []).find(s =>
+            const staffSquad = eventSquads.find(s =>
               s.number === staffSquadNum || (s.comment || '').includes('Trainer')
             )
-            const squadMembers = (staffSquad?.competitors || [])
-              .filter(c => c.status === 'a' && c.shooter?.email && !isServiceAccount(c.shooter.email))
-              .map(c => ({
-                email: c.shooter.email,
-                userName: `${c.shooter.first_name || ''} ${c.shooter.last_name || ''}`.trim(),
-              }))
+            
+            // Get all competitors with email
+            const competitors = (staffSquad?.competitors || [])
+              .filter(c => c.status === 'a' && c.shooter?.email)
+            
+            // Filter out service accounts (async check)
+            const filteredCompetitors = []
+            for (const c of competitors) {
+              const isService = await isServiceAccount(c.shooter.email, siteKey)
+              if (!isService) {
+                filteredCompetitors.push(c)
+              }
+            }
+            
+            const squadMembers = filteredCompetitors.map(c => ({
+              email: c.shooter.email,
+              userName: `${c.shooter.first_name || ''} ${c.shooter.last_name || ''}`.trim(),
+            }))
 
             // Queue SSI staff page scrape for this event
             if (squadMembers.length > 0) {
               ssiSyncQueue.push({
                 eventId: evt.id,
                 squadMembers,
-                contentType: evt.get_content_type_key || contentType
+                contentType: resolvedContentType || contentType,
+                siteKey,
               })
             }
           }
@@ -170,7 +348,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
         console.warn('[staffing] Admin session not available for SSI sync:', adminErr.message)
       }
       if (ssiSyncQueue.length > 0 && adminCookies) {
-        await Promise.all(ssiSyncQueue.map(async ({ eventId, squadMembers, contentType: evtContentType }) => {
+        await Promise.all(ssiSyncQueue.map(async ({ eventId, squadMembers, contentType: evtContentType, siteKey: syncSiteKey }) => {
           try {
             const officials = await ssiGetMatchOfficials(evtContentType, eventId, adminCookies)
 
@@ -189,7 +367,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
               return { email: member.email, userName: member.userName, role }
             })
 
-            syncStaffFromSSI(eventId, staffList)
+            syncStaffFromSSI(eventId, staffList, syncSiteKey)
           } catch (err) {
             console.error(`[staffing] SSI sync failed for event ${eventId}: ${err.message}`)
           }
@@ -199,24 +377,45 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
       // Build response with synced state
       const allMatches = []
       for (const eid of seenIds) {
-        const status = getEventStatus(eid)
+        const status = await getEventStatus(eid, siteKey)
         if (status) allMatches.push(status)
       }
 
       // Also include future events from local state not in SSI results
-      const now = new Date()
-      for (const le of getAllEvents()) {
+      for (const le of getAllEvents(siteKey)) {
         if (new Date(le.eventDate) <= now) continue
+        if (!matchesEventFilters({ id: le.eventId, name: le.eventName, starts: le.eventDate }, eventFilters)) continue
         if (!seenIds.has(le.eventId)) {
-          allMatches.push(getEventStatus(le.eventId))
+          const status = await getEventStatus(le.eventId, siteKey)
+          if (status) allMatches.push(status)
         }
       }
 
       // Sort by event date ascending
       allMatches.sort((a, b) => new Date(a.eventDate) - new Date(b.eventDate))
 
-      res.json({ events: allMatches, isAdmin, userEmail })
+      log.info(`[staffing] Event discovery completed (site=${siteKey})`, {
+        searchStats,
+        discoveredEventIds: [...seenIds],
+        acceptedEventsSample: acceptedEventsForLog,
+        responseCount: allMatches.length,
+        queuedForSsiSync: ssiSyncQueue.length,
+      })
+
+      if (seenIds.size === 0) {
+        log.warn(`[staffing] Event discovery returned no SSI matches (site=${siteKey})`, {
+          searchStrings,
+          allowedEventTypes: allowedEventTypes.length > 0 ? allowedEventTypes : ['any'],
+          futureOnly,
+          filters: eventFilters,
+        })
+      }
+
+      res.json({ events: allMatches, isAdmin, userEmail, siteKey })
     } catch (err) {
+      if (err.code === 'SITE_KEY_MISMATCH') {
+        return res.status(403).json({ error: err.message })
+      }
       console.error('[staffing] GET /events error:', err.message)
       res.status(500).json({ error: err.message })
     }
@@ -228,6 +427,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
   // ============================================================
   router.post('/events/:eventId/signup', requireAuth('staffing'), async (req, res) => {
     try {
+      const siteKey = resolveRequestSiteKey(req)
       const session = req.ssiSession
       const { role } = req.body || {}
 
@@ -243,11 +443,11 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
         userName: `${me.first_name} ${me.last_name}`.trim(),
       }
 
-      const result = signup(req.params.eventId, user, role)
+      const result = signup(req.params.eventId, user, role, siteKey)
 
       // SSI integration (blocking to provide feedback)
       // Uses admin cookies — user doesn't have match admin access yet
-      const config = loadConfig()
+      const config = await loadConfig(siteKey)
       const staffSquadName = config.eventDiscovery.staffSquadName
       const adminSess = getAdminSession ? await getAdminSession() : null
       const cookies = adminSess?.cookies
@@ -255,7 +455,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
       const ssiResults = { trainerSquad: null, management: null }
 
       // Get event-specific content type from stored event data
-      const event = getEventStatus(eventId)
+      const event = await getEventStatus(eventId, siteKey)
       const contentType = event?.contentType || config.eventDiscovery.matchContentType
 
       // Determine staff squad number from config
@@ -361,10 +561,11 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
         }
       }
 
-      res.json({ ...result, ssi: ssiResults })
+      res.json({ ...result, ssi: ssiResults, siteKey })
     } catch (err) {
       console.error('[staffing] POST /signup error:', err.message)
-      const status = err.message.includes('Not authorized') ? 403
+      const status = err.code === 'SITE_KEY_MISMATCH' ? 403
+        : err.message.includes('Not authorized') ? 403
         : err.message.includes('not found') ? 404
         : err.message.includes('full') || err.message.includes('taken') || err.message.includes('Already') ? 409
         : 500
@@ -377,24 +578,25 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
   // ============================================================
   router.delete('/events/:eventId/signup', requireAuth('staffing'), async (req, res) => {
     try {
+      const siteKey = resolveRequestSiteKey(req)
       const session = req.ssiSession
       const meData = await graphqlWithRefresh(session, '{ me { email first_name last_name } }')
       const userEmail = meData.me?.email
       if (!userEmail) return res.status(401).json({ error: 'Could not get user info' })
 
       const userName = `${meData.me.first_name} ${meData.me.last_name}`.trim()
-      const result = resign(req.params.eventId, userEmail)
+      const result = resign(req.params.eventId, userEmail, siteKey)
 
       // SSI integration: remove from management group AND trainer squad (Squad 5)
       // Uses admin cookies — user may have already lost match access
-      const config = loadConfig()
+      const config = await loadConfig(siteKey)
       const adminSess = getAdminSession ? await getAdminSession() : null
       const cookies = adminSess?.cookies
       const eventId = req.params.eventId
       const ssiResults = { management: null, trainerSquad: null }
 
       // Get event-specific content type from stored event data
-      const event = getEventStatus(eventId)
+      const event = await getEventStatus(eventId, siteKey)
       const contentType = event?.contentType || config.eventDiscovery.matchContentType
 
       if (contentType && cookies) {
@@ -450,13 +652,15 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
 
       // Return result with optional warning
       if (ssiWarning) {
-        res.json({ ...result, warning: ssiWarning, ssi: ssiResults })
+        res.json({ ...result, warning: ssiWarning, ssi: ssiResults, siteKey })
       } else {
-        res.json({ ...result, ssi: ssiResults })
+        res.json({ ...result, ssi: ssiResults, siteKey })
       }
     } catch (err) {
       console.error('[staffing] DELETE /signup error:', err.message)
-      const status = err.message.includes('not found') || err.message.includes('Not registered') ? 404 : 500
+      const status = err.code === 'SITE_KEY_MISMATCH' ? 403
+        : err.message.includes('not found') || err.message.includes('Not registered') ? 404
+        : 500
       res.status(status).json({ error: err.message })
     }
   })
@@ -464,14 +668,19 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
   // ============================================================
   // GET /config — get staffing configuration
   // ============================================================
-  router.get('/config', requireAuth('staffing'), (req, res) => {
+  router.get('/config', requireAuth('staffing'), async (req, res) => {
     try {
-      const config = loadConfig()
+      const siteKey = resolveRequestSiteKey(req)
+      const config = await loadConfig(siteKey)
       res.json({
+        siteKey,
         trainingTypes: config.trainingTypes,
         roles: config.roles,
       })
     } catch (err) {
+      if (err.code === 'SITE_KEY_MISMATCH') {
+        return res.status(403).json({ error: err.message })
+      }
       res.status(500).json({ error: err.message })
     }
   })

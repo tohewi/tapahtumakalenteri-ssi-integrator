@@ -19,6 +19,8 @@ import {
   auditSecurityViolation,
   toLegacySession,
 } from '../lib/session/index.js'
+import { getAdminUser, updateAdminLogin, isDbAvailable } from '../lib/db/client.js'
+import { normalizeSiteKey, DEFAULT_SITE_KEY } from '../lib/staffing/site-filters.js'
 
 const SESSION_COOKIE = sessionConfig.session.cookieName
 
@@ -57,13 +59,50 @@ export function requireAuthV7(allowedScopes = null) {
       // Check scope if specified
       if (allowedScopes) {
         const scopes = Array.isArray(allowedScopes) ? allowedScopes : [allowedScopes]
-        if (!scopes.includes(session.scope)) {
-          return res.status(403).json({
-            error: 'Access denied. Please login to this feature.',
-            scopeMismatch: true,
-            requiredScope: scopes,
-            currentScope: session.scope,
-          })
+
+        // Special handling for 'admin' scope — check database
+        if (scopes.includes('admin')) {
+          // Check if database is available
+          if (!isDbAvailable()) {
+            console.warn('[auth-v7] Admin access denied: database not available')
+            return res.status(503).json({
+              error: 'Database not available. Admin features require database connection.',
+              dbUnavailable: true,
+            })
+          }
+
+          try {
+            console.log(`[auth-v7] Checking admin access for: ${session.userId}`)
+            const adminUser = await getAdminUser(session.userId)
+            if (!adminUser) {
+              console.warn(`[auth-v7] Admin access denied for: ${session.userId} (not in admin_users table)`)
+              return res.status(403).json({
+                error: 'Admin access denied. You are not authorized.',
+                scopeMismatch: true,
+                requiredScope: scopes,
+                currentScope: session.scope,
+              })
+            }
+            console.log(`[auth-v7] Admin access granted: ${session.userId} (id: ${adminUser.id}, root: ${adminUser.isRoot})`)
+            // Update last login timestamp
+            await updateAdminLogin(session.userId).catch(() => {}) // best-effort
+          } catch (err) {
+            console.error('[auth-v7] Admin check error:', err)
+            return res.status(503).json({
+              error: 'Database error. Please try again later.',
+              dbError: true,
+            })
+          }
+        } else {
+          // Regular scope check
+          if (!scopes.includes(session.scope)) {
+            return res.status(403).json({
+              error: 'Access denied. Please login to this feature.',
+              scopeMismatch: true,
+              requiredScope: scopes,
+              currentScope: session.scope,
+            })
+          }
         }
       }
 
@@ -118,6 +157,9 @@ export function requireAuthV7(allowedScopes = null) {
       // Legacy-compatible view so existing routes work without changes
       req.ssiSession = toLegacySession(finalSession)
       req.ssiSession._v7SessionId = sessionId
+      req.staffingSiteKey = finalSession.scope === 'staffing'
+        ? normalizeSiteKey(finalSession.metadata?.staffingSiteKey, DEFAULT_SITE_KEY)
+        : null
       // Impersonation context is optional — null when adminSSI isn't available.
       // Routes that need admin access get it separately via getAdminSession().
       req.impersonation = getImpersonationContext(finalSession)

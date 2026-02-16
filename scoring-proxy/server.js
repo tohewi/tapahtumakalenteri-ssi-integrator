@@ -13,9 +13,12 @@ import { createRegistrationRouter } from './routes/registration.js'
 import { createReportsRouter } from './routes/reports.js'
 import { createManagementRouter } from './routes/management.js'
 import { createStaffingRouter } from './routes/staffing.js'
+import { createAdminRouter } from './routes/admin.js'
 import { initRedis, getActiveSessionCount, isUsingRedis, touchSession } from './lib/session/index.js'
 import { requireAuthV7 } from './middleware/auth-v7.js'
 import { createAuthV7Router } from './routes/auth-v7.js'
+import { migrate as runDbMigration } from './lib/db/migrate.js'
+import { initDb } from './lib/db/client.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -373,6 +376,12 @@ const staffingRouter = createStaffingRouter({
 })
 app.use('/api/staffing', staffingRouter)
 
+// Admin routes (management site configuration)
+const adminRouter = createAdminRouter({
+  requireAuth,
+})
+app.use('/api/admin', adminRouter)
+
 // ============================================================
 // SPA fallback — serve index.html for non-API routes (production)
 // ============================================================
@@ -392,6 +401,36 @@ const isDirectRun = process.argv[1] && import.meta.url.endsWith(process.argv[1].
 if (isDirectRun) {
   // Initialize session store before accepting requests (Redis or in-memory fallback)
   await initRedis()
+
+  // Initialize database and run migrations if DATABASE_URL is set
+  if (process.env.DATABASE_URL) {
+    try {
+      console.log('Initializing database...')
+      await runDbMigration()
+      // Initialize the connection pool so isDbAvailable() returns true
+      initDb()
+      console.log('✓ Database ready')
+      
+      // Log admin configuration status
+      console.log('\n=== Admin Configuration ===')
+      console.log(`ADMIN_ROOT_EMAIL: ${process.env.ADMIN_ROOT_EMAIL ? process.env.ADMIN_ROOT_EMAIL : '(not set)'}`)
+      if (!process.env.ADMIN_ROOT_EMAIL) {
+        console.warn('⚠️  Admin features are DISABLED - no root admin configured')
+        console.warn('   To enable admin UI, set ADMIN_ROOT_EMAIL environment variable')
+      } else {
+        console.log('✓ Admin features enabled')
+        console.log('  Access admin UI at: /#/admin')
+        console.log('  Root admin must first log in via SSI to access admin features')
+      }
+      console.log('===========================\n')
+    } catch (err) {
+      console.error('✗ Database initialization failed:', err)
+      process.exit(1)
+    }
+  } else {
+    console.warn('⚠️  DATABASE_URL not set - management site features disabled')
+    console.warn('   Configuration will load from YAML files only')
+  }
 
   app.listen(PORT, () => {
     console.log(`Scoring proxy running on http://localhost:${PORT}`)

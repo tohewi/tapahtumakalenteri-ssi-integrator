@@ -3,6 +3,16 @@ projects:
     environments:
       - name: production
         services:
+          # ── PostgreSQL for persistent configuration storage ──
+          # Deployed alongside the web service. Internal-only (no public access).
+          # The web service references this via DATABASE_URL → connectionString.
+          - type: postgres
+            name: turres-ssi-tools-db
+            region: frankfurt
+            plan: starter
+            databaseName: ssitools
+            databaseUser: ssitools
+            ipAllowList: []  # internal access only (private network)
           # ── Redis (Key Value) for session storage ──
           # Deployed alongside the web service. Internal-only (no public access).
           # The web service references this via REDIS_URL → connectionString.
@@ -33,6 +43,13 @@ projects:
                 value: info
               - key: SESSION_SECRET
                 generateValue: true
+              - key: ADMIN_ROOT_EMAIL
+                value: tohewi@live.com
+              - key: DATABASE_URL
+                fromService:
+                  name: turres-ssi-tools-db
+                  type: postgres
+                  property: connectionString
               - key: REDIS_URL
                 fromService:
                   name: turres-ssi-tools-redis

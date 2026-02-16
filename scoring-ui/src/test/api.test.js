@@ -547,6 +547,29 @@ describe('API client', () => {
       })
     })
 
+    it('includes siteKey when logging into staffing scope', async () => {
+      const mockResponse = { success: true, hasJwt: true, hasSession: true, scope: 'staffing', siteKey: 'temppeli-sra' }
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      })
+
+      const result = await login('staff@test.com', 'pass123', 'apikey', 'staffing', 'temppeli-sra')
+      expect(result).toEqual(mockResponse)
+      expect(fetch).toHaveBeenCalledWith('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          email: 'staff@test.com',
+          password: 'pass123',
+          apiKey: 'apikey',
+          scope: 'staffing',
+          siteKey: 'temppeli-sra',
+        }),
+      })
+    })
+
     it('throws on invalid credentials', async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: false,

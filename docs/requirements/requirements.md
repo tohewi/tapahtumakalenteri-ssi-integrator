@@ -240,6 +240,32 @@
 | TEST7 | **Penetration Tests**: Simulate attacks on session management, token theft, and impersonation bypass. | ⬚ Pending |
 | TEST8 | **Load Tests**: Session store performance under load with concurrent authentication and SSI operations. | ⬚ Pending |
 
+## Release 7.1 - Staffing Multi-Site Management Site
+
+### Functional Requirements
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| MGMT1 | **Management Site Core**: Provide a management site to create, edit, list, and deactivate staffing sub-sites (key + display name) without code changes. | 🧪 PoC |
+| MGMT2 | **Built-in Root Admin**: Root administrator defined by `ADMIN_ROOT_EMAIL` can grant and revoke admin rights to other SSI users. | 🧪 PoC |
+| MGMT3 | **SSI-based Auth with Delegation**: All non-root users authenticate via SSI. Management permissions are controlled by database admin records. | 🧪 PoC |
+| MGMT4 | **Per-Site Staff Definition**: Each staffing site has its own instructor allowlist (email addresses) used to authorize staffing access. | 🧪 PoC |
+| MGMT5 | **Per-Site Event Filters**: Each staffing site can define event filters (`name_contains`, `cup_id`, `date_range`, `event_type`/`event_kind`) and `futureOnly` behavior for event discovery. | 🧪 PoC |
+| MGMT6 | **Site-Aware Staffing APIs**: Staffing endpoints must use `siteKey` for config load, event state, signup/resign operations, and SSI staff sync. | 🧪 PoC |
+| MGMT7 | **Site-Aware Session Context**: Staffing login/session status must persist the selected `siteKey` and expose it for downstream authorization and API calls. | 🧪 PoC |
+| MGMT8 | **Dynamic Config Reload**: Configuration changes in management UI take effect without redeploy (cache invalidation/reload supported). | 🧪 PoC |
+| MGMT9 | **Persistence Across Deployments**: Staffing site/admin/filter settings persist across restarts and normal redeploys using PostgreSQL. | 🧪 PoC |
+| MGMT10 | **Clean Slate Deploy Option**: Deployment mode `CLEAN_DEPLOY=true` resets management configuration and recreates schema/root admin. | 🧪 PoC |
+| MGMT11 | **Backward Compatibility + Neutral Template Naming**: Existing staffing behavior must continue to work with YAML fallback when DB is unavailable. Fallback template path is `config/training-staffing-configuration.yml` (replaces legacy SRA-only naming) to support multi-sport staffing setups. | ✅ Implemented |
+| MGMT12 | **Per-Site Training Type Profiles**: Management site must support creating/updating/removing `trainingTypes` and `eventDiscovery.defaultTrainingType` per site (including search patterns, labels, and staffing limits) so events can be mapped for different sports and ranges. | ✅ Implemented |
+
+### Quality, Test, and Documentation Requirements
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| MGMT-Q1 | **Regression Safety**: Existing scoring/registration/management behavior must remain unchanged outside explicit staffing multi-site updates. | 🧪 PoC |
+| MGMT-Q2 | **Test Coverage**: Add/maintain unit and integration tests for site-aware auth, staffing route behavior, and filter handling. | ✅ Implemented |
+| MGMT-Q3 | **Design Documentation**: Maintain architecture/design docs for management site data model, API contracts, and rollout steps. | ✅ Implemented |
 ## Release 7.1 — Management Availability
 
 | # | Requirement | Status | Tokens (est.) |
@@ -256,7 +282,7 @@
 - **Release 5.0** (SRA Training Staffing) - requirements are in document sra-training-staffing-requirements.md
 - **Release 6.0** (Match Management & UI Consolidation): 5 requirements — 1 ✅, 4 pending (MG2–MG5)
 - **Release 7.0** (Authentication & Session Handling): 25 requirements — 0 ✅, 25 pending (AUTH1–10, SES1–7, SEC1–7, TEST1–8)
-- **Release 7.1** (Management Availability): 1 requirement — 1 ✅
+- **Release 7.1** (Staffing Multi-Site Management Site): 15 requirements — 4 ✅, 11 🧪 PoC
 
 
 ## Configuration Files
@@ -265,6 +291,7 @@
 |------|---------|
 | `config/kupittaa-cup-config.yml` | All SSI and WordPress settings |
 | `config/kupittaa-cup-dates.txt` | Date list for batch creation |
+| `config/training-staffing-configuration.yml` | Default YAML fallback template for staffing configuration (multi-sport) |
 
 ## Scripts
 
@@ -287,6 +314,8 @@
 | `docs/RELEASE-NOTES.md` | Version history and changelog |
 | `docs/registration-flow.md` | Backend sequence diagrams and SSI state machine |
 | `docs/scoring-architecture.md` | Proxy architecture, session management, scoring flow |
+| `docs/design/management-site-database-schema.md` | Management site database schema and migration model |
+| `docs/design/release-7.1-management-site-design.md` | Release 7.1 architecture, API contracts, and PoC scope |
 | `docs/ssi-admin-operations.md` | Web scraping endpoints and form field reference |
 | `docs/README.md` | Cup creation scripts reference (PowerShell) |
 | `docs/developer-guide.md` | Cup creation process technical details |

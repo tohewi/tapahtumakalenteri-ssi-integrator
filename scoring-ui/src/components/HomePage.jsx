@@ -69,6 +69,17 @@ const features = [
     ),
     color: 'orange',
   },
+  {
+    href: '#/admin',
+    titleKey: 'adminTitle',
+    descriptionKey: 'adminDescription',
+    icon: (
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+      </svg>
+    ),
+    color: 'red',
+  },
 ]
 
 const colorMap = {
@@ -78,6 +89,7 @@ const colorMap = {
   amber: { bg: 'bg-amber-50', icon: 'text-amber-600', border: 'border-amber-200', hover: 'active:bg-amber-100' },
   teal: { bg: 'bg-teal-50', icon: 'text-teal-600', border: 'border-teal-200', hover: 'active:bg-teal-100' },
   orange: { bg: 'bg-orange-50', icon: 'text-orange-600', border: 'border-orange-200', hover: 'active:bg-orange-100' },
+  red: { bg: 'bg-red-50', icon: 'text-red-600', border: 'border-red-200', hover: 'active:bg-red-100' },
 }
 
 export default function HomePage() {
