@@ -97,25 +97,12 @@ export default function TabletScoringView({
         return
       }
 
-      const formattedScores = {}
-      
-      console.log('[SAVE DEBUG] Raw shooterScores for', selectedShooter.id, ':', shooterScores)
-      
-      for (let i = 0; i < SERIES_COUNT; i++) {
-        const seriesScores = shooterScores[i]
-        console.log(`[SAVE DEBUG] Series ${i + 1} scores:`, seriesScores)
-        const parts = SCORE_ZONES.map(z => seriesScores[z] || 0)
-        console.log(`[SAVE DEBUG] Series ${i + 1} parts array:`, parts)
-        formattedScores[`s${i + 1}`] = parts.join(',') + ',0' // Add max_hits as 0 (not used)
-      }
-
-      console.log('[SAVE DEBUG] Final formatted scores:', formattedScores)
-      console.log('Saving scores for shooter:', selectedShooter.id, formattedScores)
-      await withSessionCheck(() => api.submitScore(selectedShooter.id, formattedScores))
+      // The API expects scores in the same format as mobile UI:
+      // { 0: { X: 0, '10': 5, ... }, 1: { ... }, ... }
+      // NOT as pre-formatted strings like { s1: "0,5,0,0,..." }
+      console.log('Saving scores for shooter:', selectedShooter.id, shooterScores)
+      await withSessionCheck(() => api.submitScore(selectedShooter.id, shooterScores))
       console.log('Scores saved successfully')
-      
-      // Verify save by checking if returned data matches what we sent
-      // (Note: SSI API doesn't return the saved scores, so we just check for success)
     } catch (err) {
       console.error('Save error:', err)
       if (!(err instanceof api.SessionExpiredError) && !(err instanceof api.ScopeMismatchError)) {
