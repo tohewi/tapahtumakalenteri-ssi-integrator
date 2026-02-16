@@ -240,7 +240,7 @@ async function migrateYamlConfig() {
     return
   }
 
-  console.log('Migrating sra-training-config.yml to database...')
+  console.log('Migrating training-staffing-configuration.yml to database...')
 
   // Import config loader to read YAML
   const { loadConfig } = await import('../staffing/config-loader.js')
@@ -291,7 +291,7 @@ async function migrateYamlConfig() {
     }
   }
 
-  console.log(`✓ Migrated sra-training-config.yml (site_id: ${siteId})`)
+  console.log(`✓ Migrated training-staffing-configuration.yml (site_id: ${siteId})`)
 }
 
 /**

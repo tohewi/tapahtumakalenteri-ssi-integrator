@@ -177,7 +177,7 @@ On first deploy with empty database:
 1. Create all tables
 2. Insert schema_version record (version=1)
 3. Create root admin from `ADMIN_ROOT_EMAIL` env var
-4. Migrate existing `sra-training-config.yml` to database:
+4. Migrate existing `training-staffing-configuration.yml` to database:
    - Create "sra-training" site
    - Insert configuration from YAML into staff_site_config
    - Create event filters from eventDiscovery.searchStrings

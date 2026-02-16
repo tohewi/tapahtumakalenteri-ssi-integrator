@@ -57,7 +57,7 @@ On first deploy with `DATABASE_URL` set:
 
 1. Server creates all database tables (schema v1)
 2. Creates root admin user from `ADMIN_ROOT_EMAIL`
-3. Migrates existing `config/sra-training-config.yml` to database
+3. Migrates existing `config/training-staffing-configuration.yml` to database
 4. Creates "sra-training" site with all config sections
 
 **Migration only happens once** — on subsequent deploys, existing data is preserved.

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 import { getStaffSite, isDbAvailable } from '../db/client.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const CONFIG_PATH = path.resolve(__dirname, '..', '..', '..', 'config', 'sra-training-config.yml')
+const CONFIG_PATH = path.resolve(__dirname, '..', '..', '..', 'config', 'training-staffing-configuration.yml')
 export const DEFAULT_SITE_KEY = 'sra-training'
 
 const configCache = new Map()
@@ -78,7 +78,7 @@ function buildSiteConfigFromDatabase(site, baseTemplate) {
 }
 
 /**
- * Load and validate the SRA training staffing configuration.
+ * Load and validate the staffing configuration.
  * Prefers database if available, falls back to YAML file.
  * Caches after first load. Call reload() to force re-read.
  *
@@ -267,6 +267,6 @@ function validate(config) {
   }
 
   if (errors.length > 0) {
-    throw new Error(`SRA training config validation failed:\n  ${errors.join('\n  ')}`)
+    throw new Error(`Staffing config validation failed:\n  ${errors.join('\n  ')}`)
   }
 }

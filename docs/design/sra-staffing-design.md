@@ -89,7 +89,7 @@ SRA Training Staff Management automates the coordination of training instructors
 | **staffing UI** | `scoring-ui/src/components/StaffingPage.jsx` | Frontend staff management page |
 | **staffing API client** | `scoring-ui/src/staffing-api.js` | Frontend API calls for staffing |
 | **i18n (staffing)** | `scoring-ui/src/i18n.js` | Staffing-related UI strings (fi/en) |
-| **config** | `config/sra-training-config.yml` | Organization, roles, thresholds |
+| **config** | `config/training-staffing-configuration.yml` | Organization, roles, thresholds |
 
 ---
 
@@ -98,7 +98,7 @@ SRA Training Staff Management automates the coordination of training instructors
 ### 3.1 Configuration Data (YAML)
 
 ```yaml
-# config/sra-training-config.yml
+# config/training-staffing-configuration.yml
 
 organization:
   name: "Temppelivuori SRA"
@@ -520,7 +520,7 @@ Admin status is determined by the **config file allowlist**, not SSI roles:
 
 ```
 1. User logs in → system gets their SSI email via `me` GraphQL query
-2. Check email against `adminAllowlist` in sra-training-config.yml
+2. Check email against `adminAllowlist` in training-staffing-configuration.yml
 3. If match → user can sign up as staff (Squad 5 visible + enabled)
 4. If no match → Squad 5 visible but disabled with "admin only" label (Q2)
 ```
@@ -568,7 +568,7 @@ When statistics tracking becomes important, migrate to a lightweight database (S
 
 ```
 config/
-  sra-training-config.yml           # Staffing configuration
+  training-staffing-configuration.yml # Staffing configuration
 
 scoring-proxy/
   routes/
@@ -666,7 +666,7 @@ The cron job authenticates via a shared secret (`STAFFING_CRON_SECRET`) passed a
 ### 13.1 Search Configuration
 
 ```yaml
-# In config/sra-training-config.yml
+# In config/training-staffing-configuration.yml
 eventDiscovery:
   searchStrings:
     - "oldies"
@@ -734,7 +734,7 @@ All phases include SSI integration from day 1 (Q8).
 - Feature card on HomePage
 
 **Config:**
-- `config/sra-training-config.yml`
+- `config/training-staffing-configuration.yml`
 - Cron job entry in `render.yaml`
 
 ### Phase 2: SSI Roles & Admin Tools

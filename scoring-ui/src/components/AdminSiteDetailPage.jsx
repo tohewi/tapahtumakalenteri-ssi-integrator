@@ -26,6 +26,71 @@ function formatEventKindValue(rawValue) {
     .join(', ')
 }
 
+function parseCsvStrings(value) {
+  return String(value || '')
+    .split(',')
+    .map(v => v.trim())
+    .filter(Boolean)
+}
+
+function parseCsvNumbers(value) {
+  return parseCsvStrings(value)
+    .map(v => Number.parseInt(v, 10))
+    .filter(Number.isFinite)
+}
+
+function parsePositiveInt(value) {
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+function sanitizeTrainingTypes(trainingTypes) {
+  const result = {}
+
+  for (const [typeKey, typeCfg] of Object.entries(trainingTypes || {})) {
+    const normalizedKey = String(typeKey || '').trim().toLowerCase()
+    if (!normalizedKey) continue
+
+    const searchPatterns = Array.isArray(typeCfg?.searchPatterns)
+      ? typeCfg.searchPatterns.map(v => String(v || '').trim()).filter(Boolean)
+      : parseCsvStrings(typeCfg?.searchPatterns)
+    const shooterSquads = Array.isArray(typeCfg?.shooterSquads)
+      ? typeCfg.shooterSquads.map(v => Number.parseInt(v, 10)).filter(Number.isFinite)
+      : parseCsvNumbers(typeCfg?.shooterSquads)
+
+    const maxSquads = parsePositiveInt(typeCfg?.maxSquads)
+    const staffSquad = parsePositiveInt(typeCfg?.staffSquad)
+    const minShootersPerSquad = parsePositiveInt(typeCfg?.minShootersPerSquad)
+    const maxTrainers = parsePositiveInt(typeCfg?.maxTrainers)
+
+    result[normalizedKey] = {
+      searchPatterns: searchPatterns.length > 0 ? searchPatterns : [normalizedKey],
+      label: {
+        fi: String(typeCfg?.label?.fi || normalizedKey).trim(),
+        en: String(typeCfg?.label?.en || normalizedKey).trim(),
+      },
+      ...(maxSquads ? { maxSquads } : {}),
+      ...(shooterSquads.length > 0 ? { shooterSquads } : {}),
+      ...(staffSquad ? { staffSquad } : {}),
+      ...(minShootersPerSquad ? { minShootersPerSquad } : {}),
+      ...(maxTrainers ? { maxTrainers } : {}),
+    }
+  }
+
+  return result
+}
+
+function sanitizeEventDiscovery(eventDiscovery) {
+  const next = { ...(eventDiscovery || {}) }
+  const defaultTrainingType = String(next.defaultTrainingType || '').trim().toLowerCase()
+  if (defaultTrainingType) {
+    next.defaultTrainingType = defaultTrainingType
+  } else {
+    delete next.defaultTrainingType
+  }
+  return next
+}
+
 /**
  * Admin Site Detail Page
  *
@@ -53,11 +118,77 @@ export default function AdminSiteDetailPage({ siteKey }) {
   const [newFilterValue, setNewFilterValue] = useState('')
   const [newFilterFutureOnly, setNewFilterFutureOnly] = useState(true)
 
+  // Training type configuration
+  const [trainingTypes, setTrainingTypes] = useState({})
+  const [eventDiscoveryConfig, setEventDiscoveryConfig] = useState({})
+  const [newTrainingTypeKey, setNewTrainingTypeKey] = useState('')
+  const [hasTrainingTypesConfigSection, setHasTrainingTypesConfigSection] = useState(false)
+  const [hasEventDiscoveryConfigSection, setHasEventDiscoveryConfigSection] = useState(false)
+
   useEffect(() => {
     if (!isNew) {
       loadSite()
     }
-  }, [siteKey])
+  }, [isNew, siteKey])
+
+  function handleAddTrainingType() {
+    const typeKey = newTrainingTypeKey.trim().toLowerCase()
+    if (!typeKey) {
+      alert('Training type key is required')
+      return
+    }
+    if (!/^[a-z0-9-]+$/.test(typeKey)) {
+      alert('Training type key must contain only lowercase letters, numbers, and hyphens')
+      return
+    }
+    if (trainingTypes[typeKey]) {
+      alert('Training type key already exists')
+      return
+    }
+
+    setTrainingTypes(prev => ({
+      ...prev,
+      [typeKey]: {
+        searchPatterns: [typeKey],
+        label: { fi: typeKey, en: typeKey },
+        maxSquads: 4,
+        shooterSquads: [1, 2, 3, 4],
+        staffSquad: 5,
+        minShootersPerSquad: 5,
+        maxTrainers: 6,
+      },
+    }))
+    setHasTrainingTypesConfigSection(true)
+    setNewTrainingTypeKey('')
+  }
+
+  function handleDeleteTrainingType(typeKey) {
+    setTrainingTypes(prev => {
+      const next = { ...prev }
+      delete next[typeKey]
+      return next
+    })
+
+    if (eventDiscoveryConfig.defaultTrainingType === typeKey) {
+      setEventDiscoveryConfig(prev => ({
+        ...prev,
+        defaultTrainingType: '',
+      }))
+      setHasEventDiscoveryConfigSection(true)
+    }
+  }
+
+  function updateTrainingType(typeKey, updater) {
+    setTrainingTypes(prev => {
+      const current = prev[typeKey] || {}
+      const nextValue = updater(current)
+      return {
+        ...prev,
+        [typeKey]: nextValue,
+      }
+    })
+    setHasTrainingTypesConfigSection(true)
+  }
 
   async function loadSite() {
     try {
@@ -86,6 +217,12 @@ export default function AdminSiteDetailPage({ siteKey }) {
       setOrganizationRange(site.organizationRange || site.organization_range || '')
       setTimezone(site.timezone || 'Europe/Helsinki')
       setFilters(site.filters || [])
+
+      const config = site.config || {}
+      setTrainingTypes(config.trainingTypes || {})
+      setEventDiscoveryConfig(config.eventDiscovery || {})
+      setHasTrainingTypesConfigSection(Object.prototype.hasOwnProperty.call(config, 'trainingTypes'))
+      setHasEventDiscoveryConfigSection(Object.prototype.hasOwnProperty.call(config, 'eventDiscovery'))
     } catch (err) {
       console.error('Load error:', err)
       setError(err.message)
@@ -115,6 +252,28 @@ export default function AdminSiteDetailPage({ siteKey }) {
         organizationName,
         organizationRange,
         timezone
+      }
+
+      const sanitizedTrainingTypes = sanitizeTrainingTypes(trainingTypes)
+      const sanitizedEventDiscovery = sanitizeEventDiscovery(eventDiscoveryConfig)
+      const configPayload = {}
+
+      const hasTrainingTypes = Object.keys(sanitizedTrainingTypes).length > 0
+      if (hasTrainingTypes || hasTrainingTypesConfigSection) {
+        configPayload.trainingTypes = sanitizedTrainingTypes
+      }
+
+      if (sanitizedEventDiscovery.defaultTrainingType && !sanitizedTrainingTypes[sanitizedEventDiscovery.defaultTrainingType]) {
+        throw new Error('Default training type must match one of the configured training type keys')
+      }
+
+      const hasEventDiscoveryValues = Object.keys(sanitizedEventDiscovery).length > 0
+      if (hasEventDiscoveryValues || hasEventDiscoveryConfigSection) {
+        configPayload.eventDiscovery = sanitizedEventDiscovery
+      }
+
+      if (Object.keys(configPayload).length > 0) {
+        payload.config = configPayload
       }
 
       const url = isNew ? `${API_BASE}/sites` : `${API_BASE}/sites/${siteKey}`
@@ -318,6 +477,204 @@ export default function AdminSiteDetailPage({ siteKey }) {
                 <option value="Europe/Stockholm">Europe/Stockholm</option>
                 <option value="UTC">UTC</option>
               </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Training Types */}
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h2 className="font-semibold text-lg text-gray-800 mb-2">Training Types</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Configure staffing profiles for match/cup event categories. These settings drive trainer limits,
+            squad rules, and event-to-training-type mapping.
+          </p>
+
+          {Object.entries(trainingTypes).length > 0 ? (
+            <div className="space-y-4 mb-4">
+              {Object.entries(trainingTypes).map(([typeKey, typeCfg]) => (
+                <div key={typeKey} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                  <div className="flex items-center justify-between mb-3">
+                    <code className="text-sm font-semibold text-gray-700">{typeKey}</code>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTrainingType(typeKey)}
+                      className="px-3 py-1 bg-red-600 text-white text-sm rounded"
+                    >
+                      Delete
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Search patterns (comma separated)</label>
+                      <input
+                        type="text"
+                        value={(typeCfg.searchPatterns || []).join(', ')}
+                        onChange={(e) => updateTrainingType(typeKey, current => ({
+                          ...current,
+                          searchPatterns: parseCsvStrings(e.target.value),
+                        }))}
+                        placeholder="e.g., kupittaa cup, turres kupittaa"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Label (fi)</label>
+                        <input
+                          type="text"
+                          value={typeCfg.label?.fi || ''}
+                          onChange={(e) => updateTrainingType(typeKey, current => ({
+                            ...current,
+                            label: {
+                              ...(current.label || {}),
+                              fi: e.target.value,
+                            },
+                          }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Label (en)</label>
+                        <input
+                          type="text"
+                          value={typeCfg.label?.en || ''}
+                          onChange={(e) => updateTrainingType(typeKey, current => ({
+                            ...current,
+                            label: {
+                              ...(current.label || {}),
+                              en: e.target.value,
+                            },
+                          }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Max trainers</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={typeCfg.maxTrainers ?? ''}
+                          onChange={(e) => updateTrainingType(typeKey, current => ({
+                            ...current,
+                            maxTrainers: e.target.value,
+                          }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Staff squad</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={typeCfg.staffSquad ?? ''}
+                          onChange={(e) => updateTrainingType(typeKey, current => ({
+                            ...current,
+                            staffSquad: e.target.value,
+                          }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Max shooter squads</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={typeCfg.maxSquads ?? ''}
+                          onChange={(e) => updateTrainingType(typeKey, current => ({
+                            ...current,
+                            maxSquads: e.target.value,
+                          }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Min shooters per squad</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={typeCfg.minShootersPerSquad ?? ''}
+                          onChange={(e) => updateTrainingType(typeKey, current => ({
+                            ...current,
+                            minShootersPerSquad: e.target.value,
+                          }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Shooter squads (comma separated numbers)</label>
+                      <input
+                        type="text"
+                        value={(typeCfg.shooterSquads || []).join(', ')}
+                        onChange={(e) => updateTrainingType(typeKey, current => ({
+                          ...current,
+                          shooterSquads: parseCsvNumbers(e.target.value),
+                        }))}
+                        placeholder="e.g., 1, 2, 3, 4"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500 mb-4 p-3 bg-gray-50 rounded-lg">
+              No training types configured yet.
+            </div>
+          )}
+
+          <div className="border-t border-gray-200 pt-4 space-y-3">
+            <h3 className="font-medium text-gray-800">Add Training Type</h3>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newTrainingTypeKey}
+                onChange={(e) => setNewTrainingTypeKey(e.target.value.toLowerCase())}
+                placeholder="e.g., kupittaa-cup"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg"
+              />
+              <button
+                type="button"
+                onClick={handleAddTrainingType}
+                className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg active:bg-green-700"
+              >
+                + Add
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Default training type for unmatched events
+              </label>
+              <select
+                value={eventDiscoveryConfig.defaultTrainingType || ''}
+                onChange={(e) => {
+                  setEventDiscoveryConfig(prev => ({
+                    ...prev,
+                    defaultTrainingType: e.target.value,
+                  }))
+                  setHasEventDiscoveryConfigSection(true)
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              >
+                <option value="">None (pattern match required)</option>
+                {Object.keys(trainingTypes).map(typeKey => (
+                  <option key={typeKey} value={typeKey}>{typeKey}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                If set, events that pass site filters but do not match any training type search pattern will use this type.
+              </p>
             </div>
           </div>
         </div>

@@ -256,7 +256,7 @@
 | MGMT8 | **Dynamic Config Reload**: Configuration changes in management UI take effect without redeploy (cache invalidation/reload supported). | 🧪 PoC |
 | MGMT9 | **Persistence Across Deployments**: Staffing site/admin/filter settings persist across restarts and normal redeploys using PostgreSQL. | 🧪 PoC |
 | MGMT10 | **Clean Slate Deploy Option**: Deployment mode `CLEAN_DEPLOY=true` resets management configuration and recreates schema/root admin. | 🧪 PoC |
-| MGMT11 | **Backward Compatibility**: Existing staffing behavior must continue to work with YAML fallback when DB is unavailable. | 🧪 PoC |
+| MGMT11 | **Backward Compatibility + Neutral Template Naming**: Existing staffing behavior must continue to work with YAML fallback when DB is unavailable. Fallback template path is `config/training-staffing-configuration.yml` (replaces legacy SRA-only naming) to support multi-sport staffing setups. | ✅ Implemented |
 
 ### Quality, Test, and Documentation Requirements
 
@@ -281,7 +281,7 @@
 - **Release 5.0** (SRA Training Staffing) - requirements are in document sra-training-staffing-requirements.md
 - **Release 6.0** (Match Management & UI Consolidation): 5 requirements — 1 ✅, 4 pending (MG2–MG5)
 - **Release 7.0** (Authentication & Session Handling): 25 requirements — 0 ✅, 25 pending (AUTH1–10, SES1–7, SEC1–7, TEST1–8)
-- **Release 7.1** (Staffing Multi-Site Management Site): 14 requirements — 2 ✅, 12 🧪 PoC
+- **Release 7.1** (Staffing Multi-Site Management Site): 14 requirements — 3 ✅, 11 🧪 PoC
 
 
 ## Configuration Files
@@ -290,6 +290,7 @@
 |------|---------|
 | `config/kupittaa-cup-config.yml` | All SSI and WordPress settings |
 | `config/kupittaa-cup-dates.txt` | Date list for batch creation |
+| `config/training-staffing-configuration.yml` | Default YAML fallback template for staffing configuration (multi-sport) |
 
 ## Scripts
 
