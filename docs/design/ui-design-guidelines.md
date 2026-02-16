@@ -80,6 +80,135 @@ When a user reloads the browser (or navigates back to a feature page), the React
 
 **Implementation reference:** `StaffingPage.jsx` mount effect, `server.js` `requireAuth` middleware.
 
+## Tablet Scoring UI Enhancements (PROPOSED)
+
+### Overview
+Improvements to the tablet scoring interface (`#/scoring-tablet`) for better screen estate utilization, navigation, and touch interactions.
+
+### 1. Fixed-Height Score Display (PROPOSED)
+**Problem:** Score bars change size when scores are added, causing layout shifts and poor user experience.
+
+**Solution:**
+- Set consistent `min-height` on all score display elements
+- Use CSS Grid with fixed row heights for the score track
+- Prevent content reflow when scores are added/removed
+- Ensure empty strings display with same height as filled strings
+
+**Implementation:**
+```css
+.score-bar {
+  min-height: 60px; /* or appropriate rem value */
+  display: grid;
+  grid-template-rows: auto;
+}
+```
+
+### 2. Navigation Breadcrumbs (PROPOSED)
+**Problem:** No way to navigate back to squad/cup/match selection once in scoring view. Users are stuck.
+
+**Solution:**
+- Add breadcrumb navigation bar at top: `Cup Name > Match Name > Squad Name`
+- Each breadcrumb segment is clickable to navigate back
+- Clicking "Cup" returns to match selection
+- Clicking "Match" returns to squad selection
+- Add "Change Squad" button in header for quick squad switching
+
+**Implementation:**
+```jsx
+<nav className="breadcrumb">
+  <button onClick={() => navigate('cup')}>{cupName}</button>
+  <span> &gt; </span>
+  <button onClick={() => navigate('match')}>{matchName}</button>
+  <span> &gt; </span>
+  <span>{squadName}</span>
+</nav>
+```
+
+### 3. User Info Display (PROPOSED)
+**Problem:** Signed-in user information not visible (standard UI pattern: top-right corner).
+
+**Solution:**
+- Display user email/name in top-right corner of header
+- Add small logout button next to user info
+- Use consistent styling with mobile UI: `text-blue-200 text-sm`
+
+**Implementation:**
+```jsx
+<div className="user-info">
+  <span className="text-blue-200 text-sm">{userEmail}</span>
+  <button className="text-blue-200 text-xs ml-2" onClick={handleLogout}>
+    {t('logout')}
+  </button>
+</div>
+```
+
+### 4. Touch-Friendly Score Deletion (PROPOSED)
+**Problem:** Deleting scores requires two separate gestures at different screen locations (select score, then click "Remove" button). Inefficient for tablets.
+
+**Solution - Option A: Long-Press**
+- Long-press (750ms) on a score button to delete it
+- Visual feedback during long-press (progress ring animation)
+- Haptic feedback on delete (if supported)
+- Toast notification: "Score deleted"
+
+**Solution - Option B: Double-Tap**
+- Double-tap on score to delete it
+- Short animation on delete
+- Toast notification: "Score deleted"
+
+**Recommended:** Long-press with visual feedback (clearer intent, less accidental deletion)
+
+**Implementation:**
+```jsx
+const handleTouchStart = (zone) => {
+  longPressTimer = setTimeout(() => {
+    // Delete score
+    handleDeleteScore(zone);
+    showToast('Score deleted');
+  }, 750);
+};
+
+const handleTouchEnd = () => {
+  clearTimeout(longPressTimer);
+};
+```
+
+### 5. Responsive Scaling (PROPOSED)
+**Problem:** UI doesn't scale well to different tablet sizes and orientations.
+
+**Solution:**
+- Add viewport meta tag validation
+- Use `rem` units for consistent scaling
+- Add breakpoints for different tablet sizes:
+  - Small tablets (768px-1024px)
+  - Large tablets (1024px-1366px)
+  - Desktop (1366px+)
+- Ensure minimum touch target size: 44x44px (Apple HIG, Material Design)
+- Test in both portrait and landscape orientations
+
+**Implementation:**
+```css
+/* Tablet Portrait */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .score-pad button { font-size: 1.25rem; }
+}
+
+/* Tablet Landscape / Desktop */
+@media (min-width: 1024px) {
+  .score-pad button { font-size: 1.5rem; min-height: 44px; min-width: 44px; }
+}
+```
+
+### Design Principles for Tablet UI
+- **Fixed layouts:** Prevent unwanted content reflow
+- **Clear navigation:** Always show where you are and how to go back
+- **Touch-optimized:** 44x44px minimum tap targets, long-press for destructive actions
+- **Responsive:** Scale gracefully across device sizes
+- **Consistent:** Match mobile UI patterns and color scheme
+
+### Status: PROPOSED
+These enhancements are proposed for the tablet scoring interface. Implementation pending user approval and UAT planning.
+
 ## Adding a New Feature
 
 1. Create `scoring-ui/src/components/<FeatureName>Page.jsx`.
