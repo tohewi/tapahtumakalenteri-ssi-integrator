@@ -87,12 +87,15 @@ export default function TabletScoringView({
   const scoreTrackRef = useRef(null)
   const longPressTimerRef = useRef(null)
 
+  // Check if match is completed (status: 'cp')
+  const isMatchCompleted = match?.status === 'cp'
+  
   // Calculate total shots for the match
   const totalShotsInMatch = SERIES_COUNT * MAX_HITS_PER_SERIES
 
   // Save scores to SSI
   const handleSaveScores = useCallback(async () => {
-    if (!selectedShooter || saving) return
+    if (!selectedShooter || saving || isMatchCompleted) return
 
     setSaving(true)
     setSaveError(null)
@@ -118,7 +121,7 @@ export default function TabletScoringView({
     } finally {
       setSaving(false)
     }
-  }, [selectedShooter, saving, allScores, withSessionCheck])
+  }, [selectedShooter, saving, allScores, withSessionCheck, isMatchCompleted])
 
   // Select first shooter by default
   useEffect(() => {
@@ -200,7 +203,7 @@ export default function TabletScoringView({
 
   // Add score to current series
   const handleScoreAdd = (zone) => {
-    if (!selectedShooter) return
+    if (!selectedShooter || isMatchCompleted) return
 
     const shooterScores = allScores[selectedShooter.id]
     if (!shooterScores) return
@@ -264,6 +267,7 @@ export default function TabletScoringView({
 
   // Long-press handlers for touch-friendly deletion
   const handleLongPressStart = (seriesIdx, zone, hitIdx) => {
+    if (isMatchCompleted) return // Don't allow deletion in completed matches
     // Clear any existing timer
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current)
@@ -414,6 +418,11 @@ export default function TabletScoringView({
             >
               {match.name}
             </button>
+            {isMatchCompleted && (
+              <span className="ml-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded">
+                {t.completed}
+              </span>
+            )}
             <span className="opacity-70">›</span>
             <button
               onClick={onBack}
@@ -628,14 +637,14 @@ export default function TabletScoringView({
           <div className="p-2 bg-white border-t border-gray-200 flex-shrink-0">
             <button
               onClick={handleSaveScores}
-              disabled={saving || !selectedShooter}
+              disabled={saving || !selectedShooter || isMatchCompleted}
               className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors ${
-                saving
+                saving || isMatchCompleted
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
               }`}
             >
-              {saving ? t.saving : t.saveScores}
+              {saving ? t.saving : isMatchCompleted ? t.matchCompleted : t.saveScores}
             </button>
           </div>
         </div>
@@ -659,7 +668,7 @@ export default function TabletScoringView({
                   <button
                     key={zone}
                     onClick={() => handleScoreAdd(zone)}
-                    disabled={!selectedShooter}
+                    disabled={!selectedShooter || isMatchCompleted}
                     className={`h-16 lg:h-14 xl:h-16 rounded-lg font-bold text-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation ${colors[variant]}`}
                   >
                     {zone}

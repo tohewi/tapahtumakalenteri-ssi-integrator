@@ -151,6 +151,8 @@ export const fi = {
   scoresSavedLocally: 'Tulokset tallennettu paikallisesti',
   loggedInAs: 'Kirjautunut',
   saveToSSI: 'Tallenna SSI:hin',
+  completed: 'Valmis',
+  matchCompleted: 'Ottelu valmis',
 }
 
 // English UI strings
@@ -306,6 +308,8 @@ export const en = {
   scoresSavedLocally: 'Scores saved locally',
   loggedInAs: 'Logged in',
   saveToSSI: 'Save to SSI',
+  completed: 'Completed',
+  matchCompleted: 'Match Completed',
 }
 
 // Detect browser language and return appropriate translations
