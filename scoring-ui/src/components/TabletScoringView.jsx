@@ -347,26 +347,23 @@ export default function TabletScoringView({
             </button>
           </div>
 
-          {/* User Info */}
-          <div className="flex items-center gap-4">
-            {userEmail && (
-              <div className="text-sm opacity-90">
-                <span className="hidden sm:inline">{t.loggedInAs}: </span>
-                <span className="font-medium">{userEmail}</span>
-              </div>
-            )}
-            <button
-              onClick={onLogout}
-              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded text-sm font-medium transition-colors"
-            >
-              {t.logout}
-            </button>
-          </div>
+          {/* Logout Button */}
+          <button
+            onClick={onLogout}
+            className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded text-sm font-medium transition-colors"
+          >
+            {t.logout}
+          </button>
         </div>
 
-        {/* Match Date */}
-        <div className="mt-2 text-sm opacity-90">
-          {match.date}
+        {/* Match Date and User Info */}
+        <div className="mt-2 flex items-center justify-between text-sm opacity-90">
+          <div>{match.date}</div>
+          {userEmail && (
+            <div>
+              {t.loggedInAs}: <span className="font-medium">{userEmail}</span>
+            </div>
+          )}
         </div>
       </div>
 
