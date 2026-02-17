@@ -120,13 +120,18 @@ function TabletApp() {
     // Fetch user info from SSI in background (non-blocking)
     api.getUserInfo()
       .then(userInfo => {
-        const fullName = `${userInfo.firstName} ${userInfo.lastName}`.trim()
+        console.log('[TabletApp] User info received:', userInfo)
+        const fullName = `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim()
+        console.log('[TabletApp] Full name constructed:', fullName, 'isEmpty:', !fullName)
         if (fullName) {
+          console.log('[TabletApp] Setting userName to:', fullName)
           setUserName(fullName) // Update with real name when available
+        } else {
+          console.warn('[TabletApp] User info has no name, keeping email prefix')
         }
       })
       .catch(err => {
-        console.warn('Could not fetch user info:', err)
+        console.warn('[TabletApp] Could not fetch user info:', err)
         // Keep the email prefix fallback we already set
       })
     
