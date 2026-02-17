@@ -149,6 +149,9 @@ export const fi = {
   saveFailed: 'Tallennus epäonnistui',
   retryAction: 'Yritä uudelleen',
   scoresSavedLocally: 'Tulokset tallennettu paikallisesti',
+  changeSquad: 'Vaihda Squad',
+  loggedInAs: 'Kirjautunut',
+  saveToSSI: 'Tallenna SSI:hin',
 }
 
 // English UI strings
@@ -302,6 +305,9 @@ export const en = {
   saveFailed: 'Save failed',
   retryAction: 'Retry',
   scoresSavedLocally: 'Scores saved locally',
+  changeSquad: 'Change Squad',
+  loggedInAs: 'Logged in',
+  saveToSSI: 'Save to SSI',
 }
 
 // Detect browser language and return appropriate translations

@@ -64,6 +64,7 @@ function TabletApp() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
+  const [userEmail, setUserEmail] = useState(null)
 
   // --- Helper to handle session expiry ---
   const handleSessionExpired = useCallback(() => {
@@ -109,6 +110,7 @@ function TabletApp() {
   const handleLogin = async (email, password, apiKey, rememberMe) => {
     setSessionExpiredMessage(null)
     await api.login(email, password, apiKey, 'scoring')
+    setUserEmail(email) // Store the logged-in user's email
     await handleRememberMe(email, password, apiKey, rememberMe)
     await restoreNavState()
   }
@@ -165,6 +167,7 @@ function TabletApp() {
 
   const handleLogout = async () => {
     await api.logout()
+    setUserEmail(null) // Clear user email on logout
     lsRemove(LS_KEYS.NAV)
     lsRemove(LS_KEYS.SCORES)
     setView('login')
@@ -254,6 +257,19 @@ function TabletApp() {
     }))
   }
 
+  // Navigation handlers for breadcrumbs
+  const handleBackToCup = () => {
+    setView('cup')
+  }
+
+  const handleBackToMatch = () => {
+    setView('match')
+  }
+
+  const handleBackToSquad = () => {
+    setView('squad')
+  }
+
   // Render appropriate view
   if (view === 'login') {
     return (
@@ -307,12 +323,16 @@ function TabletApp() {
   if (view === 'scoring') {
     return (
       <TabletScoringView
+        cup={selectedCup}
         match={selectedMatch}
         squad={selectedSquad}
         allScores={allScores}
+        userEmail={userEmail}
         onScoresUpdate={handleScoresUpdate}
         onShootersReorder={handleShootersReorder}
-        onBack={() => setView('squad')}
+        onBack={handleBackToSquad}
+        onBackToCup={handleBackToCup}
+        onBackToMatch={handleBackToMatch}
         onLogout={handleLogout}
         withSessionCheck={withSessionCheck}
       />

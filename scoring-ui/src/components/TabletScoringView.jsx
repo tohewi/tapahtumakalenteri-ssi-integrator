@@ -63,12 +63,16 @@ const STRING_COLORS = [
 // ============================================================
 
 export default function TabletScoringView({
+  cup,
   match,
   squad,
   allScores,
+  userEmail,
   onScoresUpdate,
   onShootersReorder,
   onBack,
+  onBackToCup,
+  onBackToMatch,
   onLogout,
   withSessionCheck,
 }) {
@@ -316,13 +320,61 @@ export default function TabletScoringView({
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Header */}
-      <AppHeader 
-        title={match.name}
-        subtitle={`${squad.name} • ${match.date}`}
-        onBack={onBack}
-        onLogout={onLogout}
-      />
+      {/* Breadcrumb Navigation Header */}
+      <div className="bg-blue-600 text-white px-4 py-3 shadow-md">
+        <div className="flex items-center justify-between">
+          {/* Breadcrumb Trail */}
+          <div className="flex items-center gap-2 text-sm">
+            <button
+              onClick={onBackToCup}
+              className="hover:underline focus:outline-none focus:underline"
+            >
+              {cup?.name || t.cups}
+            </button>
+            <span className="opacity-70">›</span>
+            <button
+              onClick={onBackToMatch}
+              className="hover:underline focus:outline-none focus:underline"
+            >
+              {match.name}
+            </button>
+            <span className="opacity-70">›</span>
+            <button
+              onClick={onBack}
+              className="hover:underline focus:outline-none focus:underline font-semibold"
+            >
+              {squad.name}
+            </button>
+          </div>
+
+          {/* User Info */}
+          <div className="flex items-center gap-4">
+            {userEmail && (
+              <div className="text-sm opacity-90">
+                <span className="hidden sm:inline">{t.loggedInAs}: </span>
+                <span className="font-medium">{userEmail}</span>
+              </div>
+            )}
+            <button
+              onClick={onLogout}
+              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded text-sm font-medium transition-colors"
+            >
+              {t.logout}
+            </button>
+          </div>
+        </div>
+
+        {/* Match Date & Change Squad Button */}
+        <div className="mt-2 flex items-center justify-between text-sm">
+          <div className="opacity-90">{match.date}</div>
+          <button
+            onClick={onBack}
+            className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded text-xs font-medium transition-colors"
+          >
+            {t.changeSquad}
+          </button>
+        </div>
+      </div>
 
       {/* Top bar with scoring stats */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
