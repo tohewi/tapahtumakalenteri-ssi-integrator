@@ -364,15 +364,9 @@ export default function TabletScoringView({
           </div>
         </div>
 
-        {/* Match Date & Change Squad Button */}
-        <div className="mt-2 flex items-center justify-between text-sm">
-          <div className="opacity-90">{match.date}</div>
-          <button
-            onClick={onBack}
-            className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded text-xs font-medium transition-colors"
-          >
-            {t.changeSquad}
-          </button>
+        {/* Match Date */}
+        <div className="mt-2 text-sm opacity-90">
+          {match.date}
         </div>
       </div>
 
