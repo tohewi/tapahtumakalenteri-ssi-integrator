@@ -251,15 +251,16 @@
 | # | Requirement | Status |
 |---|-------------|--------|
 | CUP1 | **Move Shooter Between Squads**: In the "Squadit" section, it must be possible to move a shooter from one squad to another. The UI must show the same `→ S?` button as in the "Ei Squadeissa" section and function identically (squad picker dialog, SSI sync). Move is only allowed within the same match via Squadit. | 📋 Specified |
-| CUP2 | **Set Shooter as DNS (Did Not Start)**: SSI calls this "Did Not Show". Setting DNS must be applied at the **cup level** and on **all matches** in the cup. The button must appear next to every shooter regardless of which section they are in. Clicking it shows a confirmation dialog: "Set N.N as DNS?" / "Aseta Etu Suku DNS?" (fi/en). It must be possible to **undo** (reverse) DNS if set by accident. SSI endpoints: `POST /event/participant/{ct}/{id}/set-did-not-show/` (cup + each match). | 📋 Specified |
-| CUP3 | **Mark Payment Received**: Per-competitor paid toggle at the **cup level**. UI shows a checkbox or toggle next to each shooter. State is stored in SSI via `POST /event/participant/{ct}/{id}/toggle-paid/`. Must reflect current paid status from SSI and allow toggling. | 📋 Specified |
+| CUP2 | **Set Shooter as DNS (Did Not Start)**: SSI calls this "Did Not Show". Setting DNS must be applied at the **cup level** and on **all matches** in the cup. The button must appear next to every shooter regardless of which section they are in. Clicking it shows a confirmation dialog: "Set N.N as DNS?" / "Aseta Etu Suku DNS?" (fi/en). It must be possible to **undo** (reverse) DNS if set by accident. SSI endpoints: `POST /event/participant/{ct}/{id}/set-did-not-show/` (set) and `POST /event/participant/{ct}/{id}/undo-did-not-show/` (undo), applied to cup + each match. | 📋 Specified |
+| CUP3 | **Mark Payment Received**: Per-competitor paid toggle at the **cup level only**. UI shows a checkbox or toggle next to each shooter. State is stored in SSI via `POST /event/participant/{ct}/{id}/toggle-paid/`. Must reflect current paid status from SSI and allow toggling. | 📋 Specified |
 
 ### Design Decisions (CUP1–CUP3)
 
 - **All features** are added to the existing **Hallinta** page (`SquadManagementPage` component). No new pages needed.
 - **CUP1**: Move is performed only within Squadit (not across matches). Strict capacity enforcement — cannot move into a full squad. Same `→ S?` button and squad picker as "Ei Squadeissa" section.
 - **CUP2**: DNS is set on cup **and** all matches in the cup in a single action. Reversible — undo removes DNS from cup and all matches. DNS status must be visually distinct (e.g., strikethrough or badge). Confirmation dialog is bilingual (fi/en).
-- **CUP3**: Paid status is read from and written to SSI. No local persistence — SSI is the source of truth.
+- **CUP3**: Paid status is read from and written to SSI at **cup level only**. No local persistence — SSI is the source of truth.
+- **SSI integration**: CUP2 and CUP3 use **web scraping** (admin cookies) for both reading and writing state. SSI GraphQL does not support write operations reliably. Endpoints: `set-did-not-show`, `undo-did-not-show`, `toggle-paid` via `POST /event/participant/{ct}/{id}/...`. Reading paid/DNS status also requires scraping the participant page since GraphQL does not expose these fields.
 
 ## Summary
 
