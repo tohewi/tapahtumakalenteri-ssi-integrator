@@ -561,7 +561,7 @@ export default function TabletScoringView({
                         {track.hits.length} / {MAX_HITS_PER_SERIES}
                       </span>
                     </div>
-                    <div className="grid grid-cols-5 gap-2 min-h-[72px]">
+                    <div className="grid grid-cols-5 gap-2 min-h-[80px] lg:min-h-[72px] xl:min-h-[80px]">
                       {track.hits.map((zone, hitIdx) => {
                         const isSelected = 
                           selectedScoreIndex?.seriesIdx === idx &&
@@ -592,7 +592,7 @@ export default function TabletScoringView({
                             onMouseDown={() => handleLongPressStart(idx, zone, hitIdx)}
                             onMouseUp={handleLongPressEnd}
                             onMouseLeave={handleLongPressEnd}
-                            className={`relative w-12 h-12 rounded-lg font-bold text-lg transition-all ${
+                            className={`relative w-14 h-14 lg:w-12 lg:h-12 xl:w-14 xl:h-14 rounded-lg font-bold text-lg transition-all touch-manipulation ${
                               isSelected
                                 ? 'bg-white border-2 border-blue-600 text-blue-600 shadow-md scale-110'
                                 : zone === 'X' || zone === '10'
@@ -659,23 +659,13 @@ export default function TabletScoringView({
                     key={zone}
                     onClick={() => handleScoreAdd(zone)}
                     disabled={!selectedShooter}
-                    className={`h-20 rounded-xl font-bold text-2xl transition-all disabled:opacity-30 disabled:cursor-not-allowed ${colors[variant]}`}
+                    className={`min-h-[88px] lg:min-h-[80px] xl:min-h-[88px] rounded-xl font-bold text-2xl lg:text-xl xl:text-2xl transition-all disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation ${colors[variant]}`}
                   >
                     {zone}
                   </button>
                 )
               })}
             </div>
-            
-            {/* Remove selected score button */}
-            {selectedScoreIndex && (
-              <button
-                onClick={handleScoreRemove}
-                className="w-full mt-4 py-3 rounded-xl font-semibold bg-red-100 text-red-700 hover:bg-red-200 active:bg-red-300 transition-colors"
-              >
-                Remove one {selectedScoreIndex.zone}
-              </button>
-            )}
           </div>
         </div>
       </div>
