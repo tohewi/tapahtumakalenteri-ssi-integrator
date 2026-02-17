@@ -1499,12 +1499,13 @@ export async function ssiSetDidNotShow(participantContentType, participantId, co
   if (debug) console.log(`[dns-set] GET ${fullUrl}`)
   const resp = await fetch(fullUrl, {
     headers: { 'Cookie': formatCookies(cookies) },
-    redirect: 'follow',
+    redirect: 'manual',
   })
 
   if (debug) console.log(`[dns-set] Response: ${resp.status}`)
 
-  if (resp.ok || resp.status === 302 || resp.status === 301) {
+  // SSI redirects (302/301) on success. A 200 likely means redirect to login/error page.
+  if (resp.status === 302 || resp.status === 301) {
     return { success: true, message: 'Did Not Show set' }
   }
   throw new Error(`Set Did Not Show failed HTTP ${resp.status}`)
@@ -1525,12 +1526,13 @@ export async function ssiUndoDidNotShow(participantContentType, participantId, c
   if (debug) console.log(`[dns-undo] GET ${fullUrl}`)
   const resp = await fetch(fullUrl, {
     headers: { 'Cookie': formatCookies(cookies) },
-    redirect: 'follow',
+    redirect: 'manual',
   })
 
   if (debug) console.log(`[dns-undo] Response: ${resp.status}`)
 
-  if (resp.ok || resp.status === 302 || resp.status === 301) {
+  // SSI redirects (302/301) on success. A 200 likely means redirect to login/error page.
+  if (resp.status === 302 || resp.status === 301) {
     return { success: true, message: 'Did Not Show undone' }
   }
   throw new Error(`Undo Did Not Show failed HTTP ${resp.status}`)
@@ -1551,12 +1553,13 @@ export async function ssiTogglePaid(participantContentType, participantId, cooki
   if (debug) console.log(`[toggle-paid] GET ${fullUrl}`)
   const resp = await fetch(fullUrl, {
     headers: { 'Cookie': formatCookies(cookies) },
-    redirect: 'follow',
+    redirect: 'manual',
   })
 
   if (debug) console.log(`[toggle-paid] Response: ${resp.status}`)
 
-  if (resp.ok || resp.status === 302 || resp.status === 301) {
+  // SSI redirects (302/301) on success. A 200 likely means redirect to login/error page.
+  if (resp.status === 302 || resp.status === 301) {
     return { success: true, message: 'Paid status toggled' }
   }
   throw new Error(`Toggle paid failed HTTP ${resp.status}`)
