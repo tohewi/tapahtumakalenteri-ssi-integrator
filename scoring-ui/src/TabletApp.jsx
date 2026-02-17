@@ -65,6 +65,7 @@ function TabletApp() {
   const [error, setError] = useState(null)
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
   const [userEmail, setUserEmail] = useState(null)
+  const [userName, setUserName] = useState(null)
 
   // --- Helper to handle session expiry ---
   const handleSessionExpired = useCallback(() => {
