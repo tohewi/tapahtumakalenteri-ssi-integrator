@@ -108,6 +108,21 @@ export default function TabletScoringView({
         return
       }
 
+      // Validate score counts per string before saving
+      const validationErrors = []
+      for (let i = 0; i < SERIES_COUNT; i++) {
+        const hits = hitsInSeries(shooterScores[i])
+        if (hits !== MAX_HITS_PER_SERIES && hits !== 0) {
+          validationErrors.push(`String ${i + 1}: ${hits}/${MAX_HITS_PER_SERIES} scores`)
+        }
+      }
+
+      if (validationErrors.length > 0) {
+        const errorMsg = `Cannot save: Each string must have exactly ${MAX_HITS_PER_SERIES} scores or be empty.\n${validationErrors.join('\n')}`
+        setSaveError(errorMsg)
+        return
+      }
+
       // The API expects scores in the same format as mobile UI:
       // { 0: { X: 0, '10': 5, ... }, 1: { ... }, ... }
       // NOT as pre-formatted strings like { s1: "0,5,0,0,..." }
@@ -117,7 +132,17 @@ export default function TabletScoringView({
     } catch (err) {
       console.error('Save error:', err)
       if (!(err instanceof api.SessionExpiredError) && !(err instanceof api.ScopeMismatchError)) {
-        setSaveError('Failed to save scores to SSI: ' + err.message)
+        // Parse SSI validation errors if available
+        let errorMessage = 'Failed to save scores to SSI'
+        if (err.message) {
+          // Check for specific validation messages
+          if (err.message.includes('validation') || err.message.includes('errorlist')) {
+            errorMessage += ': ' + err.message
+          } else {
+            errorMessage += '. ' + err.message
+          }
+        }
+        setSaveError(errorMessage)
       }
     } finally {
       setSaving(false)
@@ -213,9 +238,16 @@ export default function TabletScoringView({
     if (selectedScoreIndex) {
       const { seriesIdx, zone: oldZone } = selectedScoreIndex
       
-      // Remove the old score
+      // Check current count
       const currentCount = shooterScores[seriesIdx][oldZone] || 0
       if (currentCount > 0) {
+        // Calculate if replacement would exceed max (if zones are in different series, this shouldn't happen
+        // but if the same series, we're just swapping zones which is always safe)
+        const currentHits = hitsInSeries(shooterScores[seriesIdx])
+        
+        // If old and new zones are different, check we're not at max before allowing
+        // Actually, replacement is same series so hits stay the same - just zone changes
+        // This is always safe
         const newScores = { ...shooterScores }
         newScores[seriesIdx] = {
           ...newScores[seriesIdx],
@@ -241,7 +273,10 @@ export default function TabletScoringView({
     // Check if we can add
     const currentHits = hitsInSeries(shooterScores[targetSeries])
     if (currentHits >= MAX_HITS_PER_SERIES) {
-      return // All series full
+      // Show error - all series are full
+      setSaveError(`Cannot add score: All strings are full (${MAX_HITS_PER_SERIES} scores each)`)
+      setTimeout(() => setSaveError(null), 3000)
+      return
     }
 
     // Add the score
