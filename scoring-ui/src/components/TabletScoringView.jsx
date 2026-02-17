@@ -475,9 +475,9 @@ export default function TabletScoringView({
                 <p>{t.noShootersFound}</p>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="grid grid-cols-1 gap-2">
                 {scoreTrack.map((track, idx) => (
-                  <div key={idx} className={`rounded-lg p-3 ${track.color}`}>
+                  <div key={idx} className={`rounded-lg p-3 ${track.color} min-h-[120px]`}>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-semibold text-gray-700">
                         {t.string} {idx + 1}
@@ -486,7 +486,7 @@ export default function TabletScoringView({
                         {track.hits.length} / {MAX_HITS_PER_SERIES}
                       </span>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="grid grid-cols-5 gap-2 min-h-[72px]">
                       {track.hits.map((zone, hitIdx) => {
                         const isSelected = 
                           selectedScoreIndex?.seriesIdx === idx &&
