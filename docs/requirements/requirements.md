@@ -246,6 +246,21 @@
 |---|-------------|--------|---------------|
 | MGMT1 | **Management Independent of Registration**: Kupittaa Cup Hallinta must keep cups available for management independent of registration status, once registration start date has passed and while the cup is still active. Management is available until the cup's end date and time (`ends`), or `starts + 24h` fallback. Cups with no `registration_starts` are excluded. Uses dedicated `/api/manage/cups` endpoint. | ✅ Implemented | ~14,000 |
 
+## Release 7.2 — Kupittaa Cup Management
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| CUP1 | **Move Shooter Between Squads**: In the "Squadit" section, it must be possible to move a shooter from one squad to another. The UI must show the same `→ S?` button as in the "Ei Squadeissa" section and function identically (squad picker dialog, SSI sync). Move is only allowed within the same match via Squadit. | 📋 Specified |
+| CUP2 | **Set Shooter as DNS (Did Not Start)**: SSI calls this "Did Not Show". Setting DNS must be applied at the **cup level** and on **all matches** in the cup. The button must appear next to every shooter regardless of which section they are in. Clicking it shows a confirmation dialog: "Set N.N as DNS?" / "Aseta Etu Suku DNS?" (fi/en). It must be possible to **undo** (reverse) DNS if set by accident. SSI endpoints: `POST /event/participant/{ct}/{id}/set-did-not-show/` (cup + each match). | 📋 Specified |
+| CUP3 | **Mark Payment Received**: Per-competitor paid toggle at the **cup level**. UI shows a checkbox or toggle next to each shooter. State is stored in SSI via `POST /event/participant/{ct}/{id}/toggle-paid/`. Must reflect current paid status from SSI and allow toggling. | 📋 Specified |
+
+### Design Decisions (CUP1–CUP3)
+
+- **All features** are added to the existing **Hallinta** page (`SquadManagementPage` component). No new pages needed.
+- **CUP1**: Move is performed only within Squadit (not across matches). Strict capacity enforcement — cannot move into a full squad. Same `→ S?` button and squad picker as "Ei Squadeissa" section.
+- **CUP2**: DNS is set on cup **and** all matches in the cup in a single action. Reversible — undo removes DNS from cup and all matches. DNS status must be visually distinct (e.g., strikethrough or badge). Confirmation dialog is bilingual (fi/en).
+- **CUP3**: Paid status is read from and written to SSI. No local persistence — SSI is the source of truth.
+
 ## Summary
 
 - **Release 1.0** (SSI Cup Automation): 37 requirements — 35 ✅, 2 on hold (35, 36)
@@ -257,6 +272,7 @@
 - **Release 6.0** (Match Management & UI Consolidation): 5 requirements — 1 ✅, 4 pending (MG2–MG5)
 - **Release 7.0** (Authentication & Session Handling): 25 requirements — 0 ✅, 25 pending (AUTH1–10, SES1–7, SEC1–7, TEST1–8)
 - **Release 7.1** (Management Availability): 1 requirement — 1 ✅
+- **Release 7.2** (Kupittaa Cup Management): 3 requirements — 0 ✅, 3 📋 Specified (CUP1–CUP3)
 
 
 ## Configuration Files
