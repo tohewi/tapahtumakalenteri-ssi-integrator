@@ -361,7 +361,7 @@ export default function TabletScoringView({
           <div>{match.date}</div>
           {userEmail && (
             <div>
-              {t.loggedInAs}: <span className="font-medium">{userEmail}</span>
+              Kirjautunut: <span className="font-medium">{userEmail.split('@')[0]}</span> (<span className="text-xs">{userEmail}</span>)
             </div>
           )}
         </div>
@@ -369,9 +369,6 @@ export default function TabletScoringView({
 
       {/* Top bar with scoring stats */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-        <div className="text-sm">
-          <span className="font-semibold text-gray-700">{selectedShooter?.name || t.selectShooter}</span>
-        </div>
         <div className="flex items-center gap-4 text-sm">
           <div>
             <span className="text-gray-500">{t.shotsFired}: </span>
