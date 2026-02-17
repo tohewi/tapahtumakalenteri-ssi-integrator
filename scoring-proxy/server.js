@@ -325,7 +325,12 @@ const registerBodyLimit = express.json({ limit: '1kb' })
 // ============================================================
 
 // Auth routes (V7 — Redis/memory backed dual sessions)
-const authRouter = createAuthV7Router({ loginLimiter, getAdminSession })
+const authRouter = createAuthV7Router({ 
+  loginLimiter, 
+  getAdminSession,
+  requireAuth,
+  graphqlWithRefresh,
+})
 app.use('/api/auth', authRouter)
 
 // Scoring routes

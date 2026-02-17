@@ -52,6 +52,11 @@ export async function getAuthStatus() {
   return resp.json()
 }
 
+export async function getUserInfo() {
+  const resp = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' })
+  return handleResponse(resp)
+}
+
 export async function searchCups(search) {
   const resp = await fetch(`${API_BASE}/cups?search=${encodeURIComponent(search)}`, { credentials: 'include' })
   const data = await handleResponse(resp)

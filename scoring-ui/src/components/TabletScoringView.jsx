@@ -68,6 +68,7 @@ export default function TabletScoringView({
   squad,
   allScores,
   userEmail,
+  userName, // Add userName prop
   onScoresUpdate,
   onShootersReorder,
   onBack,
@@ -361,7 +362,7 @@ export default function TabletScoringView({
           <div>{match.date}</div>
           {userEmail && (
             <div>
-              Kirjautunut: <span className="font-medium">{userEmail.split('@')[0]}</span> (<span className="text-xs">{userEmail}</span>)
+              Kirjautunut: <span className="font-medium">{userName || userEmail.split('@')[0]}</span> (<span className="text-xs">{userEmail}</span>)
             </div>
           )}
         </div>

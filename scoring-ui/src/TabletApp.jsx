@@ -111,6 +111,17 @@ function TabletApp() {
     setSessionExpiredMessage(null)
     await api.login(email, password, apiKey, 'scoring')
     setUserEmail(email) // Store the logged-in user's email
+    
+    // Fetch user info from SSI
+    try {
+      const userInfo = await api.getUserInfo()
+      const fullName = `${userInfo.firstName} ${userInfo.lastName}`.trim()
+      setUserName(fullName || email.split('@')[0]) // Fallback to email prefix if no name
+    } catch (err) {
+      console.warn('Could not fetch user info:', err)
+      setUserName(email.split('@')[0]) // Fallback to email prefix
+    }
+    
     await handleRememberMe(email, password, apiKey, rememberMe)
     await restoreNavState()
   }
@@ -168,6 +179,7 @@ function TabletApp() {
   const handleLogout = async () => {
     await api.logout()
     setUserEmail(null) // Clear user email on logout
+    setUserName('') // Clear user name
     lsRemove(LS_KEYS.NAV)
     lsRemove(LS_KEYS.SCORES)
     setView('login')
@@ -328,6 +340,7 @@ function TabletApp() {
         squad={selectedSquad}
         allScores={allScores}
         userEmail={userEmail}
+        userName={userName} // Pass user name
         onScoresUpdate={handleScoresUpdate}
         onShootersReorder={handleShootersReorder}
         onBack={handleBackToSquad}

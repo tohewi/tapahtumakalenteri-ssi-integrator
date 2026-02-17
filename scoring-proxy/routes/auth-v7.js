@@ -31,7 +31,7 @@ const AUTH_MUTATION = `
   }
 `
 
-export function createAuthV7Router({ loginLimiter, getAdminSession }) {
+export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth, graphqlWithRefresh }) {
   const router = express.Router()
 
   // ============================================================
@@ -183,6 +183,27 @@ export function createAuthV7Router({ loginLimiter, getAdminSession }) {
     }
     res.clearCookie(SESSION_COOKIE, { path: sessionConfig.session.cookiePath })
     res.json({ success: true })
+  })
+
+  // ============================================================
+  // GET /api/auth/me — Get current user info from SSI
+  // ============================================================
+  router.get('/me', requireAuth, async (req, res) => {
+    try {
+      const meData = await graphqlWithRefresh(req.ssiSession, '{ me { email first_name last_name } }')
+      const me = meData.me
+      if (!me?.email) {
+        return res.status(401).json({ error: 'Could not get user info' })
+      }
+      res.json({
+        email: me.email,
+        firstName: me.first_name || '',
+        lastName: me.last_name || '',
+      })
+    } catch (err) {
+      if (!IS_PROD) console.error('[auth-v7] /me error:', err)
+      res.status(500).json({ error: 'Failed to fetch user info' })
+    }
   })
 
   return router
