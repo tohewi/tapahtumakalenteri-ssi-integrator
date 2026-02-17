@@ -82,8 +82,10 @@ export default function TabletScoringView({
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
   const [draggedShooter, setDraggedShooter] = useState(null)
+  const [longPressState, setLongPressState] = useState(null) // { seriesIdx, hitIdx, progress }
   
   const scoreTrackRef = useRef(null)
+  const longPressTimerRef = useRef(null)
 
   // Calculate total shots for the match
   const totalShotsInMatch = SERIES_COUNT * MAX_HITS_PER_SERIES
@@ -259,6 +261,79 @@ export default function TabletScoringView({
     onScoresUpdate(selectedShooter.id, newScores)
     setSelectedScoreIndex(null)
   }
+
+  // Long-press handlers for touch-friendly deletion
+  const handleLongPressStart = (seriesIdx, zone, hitIdx) => {
+    // Clear any existing timer
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+    }
+
+    // Set initial state
+    setLongPressState({ seriesIdx, zone, hitIdx, progress: 0 })
+
+    // Increment progress animation
+    const startTime = Date.now()
+    const duration = 750 // 750ms hold time
+
+    const updateProgress = () => {
+      const elapsed = Date.now() - startTime
+      const progress = Math.min(elapsed / duration, 1)
+      
+      setLongPressState(prev => 
+        prev?.seriesIdx === seriesIdx && prev?.hitIdx === hitIdx
+          ? { ...prev, progress }
+          : null
+      )
+
+      if (progress < 1) {
+        longPressTimerRef.current = setTimeout(updateProgress, 16) // ~60fps
+      } else {
+        // Long press complete - delete the score
+        handleScoreDelete(seriesIdx, zone, hitIdx)
+      }
+    }
+
+    updateProgress()
+  }
+
+  const handleLongPressEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+    }
+    setLongPressState(null)
+  }
+
+  const handleScoreDelete = (seriesIdx, zone, hitIdx) => {
+    if (!selectedShooter) return
+
+    const shooterScores = allScores[selectedShooter.id]
+    if (!shooterScores) return
+
+    const currentCount = shooterScores[seriesIdx][zone] || 0
+    if (currentCount <= 0) return
+
+    const newScores = { ...shooterScores }
+    newScores[seriesIdx] = {
+      ...newScores[seriesIdx],
+      [zone]: currentCount - 1,
+    }
+
+    onScoresUpdate(selectedShooter.id, newScores)
+    setLongPressState(null)
+    
+    // Could add toast notification here
+    console.log(`Deleted score: ${zone} from string ${seriesIdx + 1}`)
+  }
+
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current)
+      }
+    }
+  }, [])
 
   // Drag and drop handlers
   const handleDragStart = (e, shooter) => {
@@ -493,11 +568,31 @@ export default function TabletScoringView({
                           selectedScoreIndex?.zone === zone &&
                           selectedScoreIndex?.hitIdx === hitIdx
                         
+                        const isLongPressing =
+                          longPressState?.seriesIdx === idx &&
+                          longPressState?.zone === zone &&
+                          longPressState?.hitIdx === hitIdx
+                        
                         return (
                           <button
                             key={hitIdx}
                             onClick={() => setSelectedScoreIndex({ seriesIdx: idx, zone, hitIdx })}
-                            className={`w-12 h-12 rounded-lg font-bold text-lg transition-all ${
+                            onTouchStart={(e) => {
+                              e.preventDefault()
+                              handleLongPressStart(idx, zone, hitIdx)
+                            }}
+                            onTouchEnd={(e) => {
+                              e.preventDefault()
+                              handleLongPressEnd()
+                            }}
+                            onTouchCancel={(e) => {
+                              e.preventDefault()
+                              handleLongPressEnd()
+                            }}
+                            onMouseDown={() => handleLongPressStart(idx, zone, hitIdx)}
+                            onMouseUp={handleLongPressEnd}
+                            onMouseLeave={handleLongPressEnd}
+                            className={`relative w-12 h-12 rounded-lg font-bold text-lg transition-all ${
                               isSelected
                                 ? 'bg-white border-2 border-blue-600 text-blue-600 shadow-md scale-110'
                                 : zone === 'X' || zone === '10'
@@ -508,6 +603,16 @@ export default function TabletScoringView({
                             }`}
                           >
                             {zone}
+                            {/* Long-press progress indicator */}
+                            {isLongPressing && (
+                              <div
+                                className="absolute inset-0 rounded-lg border-4 border-red-500 pointer-events-none"
+                                style={{
+                                  clipPath: `inset(0 ${100 - longPressState.progress * 100}% 0 0)`,
+                                  transition: 'clip-path 0.016s linear',
+                                }}
+                              />
+                            )}
                           </button>
                         )
                       })}
