@@ -82,10 +82,11 @@ export default function TabletScoringView({
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
   const [draggedShooter, setDraggedShooter] = useState(null)
-  const [longPressState, setLongPressState] = useState(null) // { seriesIdx, hitIdx, progress }
+  const [lastTapTime, setLastTapTime] = useState(null)
+  const [lastTapTarget, setLastTapTarget] = useState(null)
+  const DOUBLE_TAP_DELAY = 300 // ms
   
   const scoreTrackRef = useRef(null)
-  const longPressTimerRef = useRef(null)
 
   // Check if match is completed (status: 'cp')
   const isMatchCompleted = match?.status === 'cp'
@@ -201,14 +202,33 @@ export default function TabletScoringView({
     }
   }, [selectedShooter, allScores, onScoresUpdate, handleSaveScores])
 
-  // Add score to current series
+  // Add score to current series or replace selected score
   const handleScoreAdd = (zone) => {
     if (!selectedShooter || isMatchCompleted) return
 
     const shooterScores = allScores[selectedShooter.id]
     if (!shooterScores) return
 
-    // Find first series with space
+    // If a score is selected, replace it
+    if (selectedScoreIndex) {
+      const { seriesIdx, zone: oldZone } = selectedScoreIndex
+      
+      // Remove the old score
+      const currentCount = shooterScores[seriesIdx][oldZone] || 0
+      if (currentCount > 0) {
+        const newScores = { ...shooterScores }
+        newScores[seriesIdx] = {
+          ...newScores[seriesIdx],
+          [oldZone]: currentCount - 1,
+          [zone]: (newScores[seriesIdx][zone] || 0) + 1,
+        }
+        onScoresUpdate(selectedShooter.id, newScores)
+        setSelectedScoreIndex(null)
+        return
+      }
+    }
+
+    // Otherwise, find first series with space
     let targetSeries = 0
     for (let i = 0; i < SERIES_COUNT; i++) {
       const hits = hitsInSeries(shooterScores[i])
@@ -265,47 +285,31 @@ export default function TabletScoringView({
     setSelectedScoreIndex(null)
   }
 
-  // Long-press handlers for touch-friendly deletion
-  const handleLongPressStart = (seriesIdx, zone, hitIdx) => {
+  // Double-tap handler for touch-friendly deletion
+  const handleScoreTap = (seriesIdx, zone, hitIdx) => {
     if (isMatchCompleted) return // Don't allow deletion in completed matches
-    // Clear any existing timer
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current)
+    
+    const now = Date.now()
+    const targetKey = `${seriesIdx}-${zone}-${hitIdx}`
+    
+    // Check if this is a double-tap
+    if (
+      lastTapTime &&
+      lastTapTarget === targetKey &&
+      now - lastTapTime < DOUBLE_TAP_DELAY
+    ) {
+      // Double-tap detected - delete the score
+      handleScoreDelete(seriesIdx, zone, hitIdx)
+      // Reset tap tracking
+      setLastTapTime(null)
+      setLastTapTarget(null)
+    } else {
+      // Single tap - select the score for replacement
+      setSelectedScoreIndex({ seriesIdx, zone, hitIdx })
+      // Track this tap for double-tap detection
+      setLastTapTime(now)
+      setLastTapTarget(targetKey)
     }
-
-    // Set initial state
-    setLongPressState({ seriesIdx, zone, hitIdx, progress: 0 })
-
-    // Increment progress animation
-    const startTime = Date.now()
-    const duration = 750 // 750ms hold time
-
-    const updateProgress = () => {
-      const elapsed = Date.now() - startTime
-      const progress = Math.min(elapsed / duration, 1)
-      
-      setLongPressState(prev => 
-        prev?.seriesIdx === seriesIdx && prev?.hitIdx === hitIdx
-          ? { ...prev, progress }
-          : null
-      )
-
-      if (progress < 1) {
-        longPressTimerRef.current = setTimeout(updateProgress, 16) // ~60fps
-      } else {
-        // Long press complete - delete the score
-        handleScoreDelete(seriesIdx, zone, hitIdx)
-      }
-    }
-
-    updateProgress()
-  }
-
-  const handleLongPressEnd = () => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current)
-    }
-    setLongPressState(null)
   }
 
   const handleScoreDelete = (seriesIdx, zone, hitIdx) => {
@@ -324,20 +328,9 @@ export default function TabletScoringView({
     }
 
     onScoresUpdate(selectedShooter.id, newScores)
-    setLongPressState(null)
     
-    // Could add toast notification here
     console.log(`Deleted score: ${zone} from string ${seriesIdx + 1}`)
   }
-
-  // Clean up timer on unmount
-  useEffect(() => {
-    return () => {
-      if (longPressTimerRef.current) {
-        clearTimeout(longPressTimerRef.current)
-      }
-    }
-  }, [])
 
   // Drag and drop handlers
   const handleDragStart = (e, shooter) => {
@@ -573,35 +566,15 @@ export default function TabletScoringView({
                     </div>
                     <div className="grid grid-cols-5 gap-1.5 min-h-[60px]">
                       {track.hits.map((zone, hitIdx) => {
-                        const isSelected = 
+                        const isSelected =
                           selectedScoreIndex?.seriesIdx === idx &&
                           selectedScoreIndex?.zone === zone &&
                           selectedScoreIndex?.hitIdx === hitIdx
                         
-                        const isLongPressing =
-                          longPressState?.seriesIdx === idx &&
-                          longPressState?.zone === zone &&
-                          longPressState?.hitIdx === hitIdx
-                        
                         return (
                           <button
                             key={hitIdx}
-                            onClick={() => setSelectedScoreIndex({ seriesIdx: idx, zone, hitIdx })}
-                            onTouchStart={(e) => {
-                              e.preventDefault()
-                              handleLongPressStart(idx, zone, hitIdx)
-                            }}
-                            onTouchEnd={(e) => {
-                              e.preventDefault()
-                              handleLongPressEnd()
-                            }}
-                            onTouchCancel={(e) => {
-                              e.preventDefault()
-                              handleLongPressEnd()
-                            }}
-                            onMouseDown={() => handleLongPressStart(idx, zone, hitIdx)}
-                            onMouseUp={handleLongPressEnd}
-                            onMouseLeave={handleLongPressEnd}
+                            onClick={() => handleScoreTap(idx, zone, hitIdx)}
                             className={`relative w-12 h-12 rounded font-bold text-base transition-all touch-manipulation ${
                               isSelected
                                 ? 'bg-white border-2 border-blue-600 text-blue-600 shadow-md scale-110'
@@ -613,16 +586,6 @@ export default function TabletScoringView({
                             }`}
                           >
                             {zone}
-                            {/* Long-press progress indicator */}
-                            {isLongPressing && (
-                              <div
-                                className="absolute inset-0 rounded-lg border-4 border-red-500 pointer-events-none"
-                                style={{
-                                  clipPath: `inset(0 ${100 - longPressState.progress * 100}% 0 0)`,
-                                  transition: 'clip-path 0.016s linear',
-                                }}
-                              />
-                            )}
                           </button>
                         )
                       })}
