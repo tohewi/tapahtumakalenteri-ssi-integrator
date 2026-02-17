@@ -1,6 +1,18 @@
 import fi from '../i18n'
 import { AppHeader } from './shared'
 
+// Map translated status text back to status codes
+// SSI returns translated status text, but we want to show the raw codes
+function getRawStatusCode(status) {
+  const statusMap = {
+    'Completed': 'cp',
+    'Valmis': 'cp',
+    'Active': 'on',
+    'Aktiivinen': 'on',
+  }
+  return statusMap[status] || status
+}
+
 export default function MatchPicker({ matches, onSelect, cupName, onBack }) {
   const now = new Date()
   const year = now.getFullYear()
@@ -81,7 +93,7 @@ function MatchCard({ match, onSelect, highlight }) {
       {/* Match info */}
       <div className="flex-1 min-w-0">
         <div className="font-semibold text-gray-800 truncate">{match.name}</div>
-        <div className="text-xs text-gray-400">{match.status === 'on' ? fi.active : match.status} · {match.type}</div>
+        <div className="text-xs text-gray-400">{getRawStatusCode(match.status)} · {match.type}</div>
       </div>
 
       {/* Arrow */}
