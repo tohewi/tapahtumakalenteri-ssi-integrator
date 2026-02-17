@@ -170,6 +170,36 @@ export async function manageRemovePending(cupId, shooterName, email = null, cupP
   return handleResponse(resp)
 }
 
+export async function manageSetDns(cupId, shooterName, email = null, cupParticipantId = null) {
+  const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/set-dns`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ shooterName, email, cupParticipantId }),
+  })
+  return handleResponse(resp)
+}
+
+export async function manageUndoDns(cupId, shooterName, email = null, cupParticipantId = null) {
+  const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/undo-dns`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ shooterName, email, cupParticipantId }),
+  })
+  return handleResponse(resp)
+}
+
+export async function manageTogglePaid(cupId, shooterName, cupParticipantId) {
+  const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/toggle-paid`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ shooterName, cupParticipantId }),
+  })
+  return handleResponse(resp)
+}
+
 // ============================================================
 // Data transformers: SSI API → UI format
 // ============================================================

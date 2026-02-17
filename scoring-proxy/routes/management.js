@@ -1,9 +1,9 @@
 import express from 'express'
-import { ssiSearchAndAddParticipant, ssiFindCompetitorInMatch, ssiSetParticipantSquad, ssiFindAndApproveCupParticipant, ssiFindAndDeleteCupParticipant, ssiDeleteMatchParticipant } from '../lib/ssi-client.js'
+import { ssiSearchAndAddParticipant, ssiFindCompetitorInMatch, ssiSetParticipantSquad, ssiFindAndApproveCupParticipant, ssiFindAndDeleteCupParticipant, ssiDeleteMatchParticipant, ssiSetDidNotShow, ssiUndoDidNotShow, ssiTogglePaid, ssiGetCupParticipantStatuses } from '../lib/ssi-client.js'
 
 const router = express.Router()
 
-export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminGraphQL, IS_PROD }) {
+export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminGraphQL, getAdminSession, IS_PROD }) {
   // ============================================================
   // GET /api/manage/cups — List cups available for management
   // Returns cups that haven't ended yet, regardless of registration status.
@@ -441,11 +441,60 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
 
       const pendingShooters = [...pendingMap.values()]
 
+      // Scrape paid/DNS status from CUP participants page (admin cookies)
+      let cupParticipantStatuses = new Map()
+      try {
+        const adminSess = getAdminSession ? await getAdminSession() : null
+        if (adminSess?.cookies) {
+          cupParticipantStatuses = await ssiGetCupParticipantStatuses(req.params.id, adminSess.cookies)
+          if (!IS_PROD) console.log(`[manage] Scraped paid/DNS status for ${cupParticipantStatuses.size} CUP participants`)
+        }
+      } catch (err) {
+        console.warn(`[manage] Failed to scrape paid/DNS status: ${err.message}`)
+      }
+
+      // Build cupParticipantId map: name → participantId (from CUP competitors)
+      // This is needed for DNS/paid operations which require the CUP participant ID (ct=137)
+      const cupParticipantIdMap = new Map()
+      for (const c of (cup.competitors || [])) {
+        if (c.status !== 'a') continue
+        const firstName = c.shooter?.first_name || ''
+        const lastName = c.shooter?.last_name || ''
+        const name = `${firstName} ${lastName}`.trim()
+        if (name) cupParticipantIdMap.set(name.toLowerCase(), { id: c.id, firstName, lastName })
+      }
+
+      // Attach paid/DNS status and cupParticipantId to shooters
+      const shootersWithStatus = [...shooterMap.values()].map(s => {
+        const cupPartInfo = cupParticipantIdMap.get(s.name.toLowerCase())
+        const cupPartId = cupPartInfo?.id || null
+        const statusInfo = cupPartId ? cupParticipantStatuses.get(String(cupPartId)) : null
+        return {
+          ...s,
+          cupParticipantId: cupPartId,
+          paid: statusInfo?.paid ?? false,
+          didNotShow: statusInfo?.didNotShow ?? false,
+        }
+      })
+
+      // Attach paid/DNS to cupOnly shooters
+      const cupOnlyWithStatus = cupOnly.map(s => {
+        const cupPartInfo = cupParticipantIdMap.get(s.name.toLowerCase())
+        const cupPartId = cupPartInfo?.id || null
+        const statusInfo = cupPartId ? cupParticipantStatuses.get(String(cupPartId)) : null
+        return {
+          ...s,
+          cupParticipantId: cupPartId,
+          paid: statusInfo?.paid ?? false,
+          didNotShow: statusInfo?.didNotShow ?? false,
+        }
+      })
+
       res.json({
         cup: { id: cup.id, name: cup.name, starts: cup.starts },
         matches,
-        shooters: [...shooterMap.values()],
-        cupOnly,
+        shooters: shootersWithStatus,
+        cupOnly: cupOnlyWithStatus,
         matchOnly,
         pendingShooters,
       })
@@ -772,6 +821,169 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       res.json({ success: true, message: 'Removed from all locations', results })
     } catch (err) {
       console.error('[manage] remove-pending error:', err.message)
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ============================================================
+  // POST /api/manage/cup/:id/set-dns
+  // Set "Did Not Show" on a shooter at CUP level + all matches
+  // Body: { shooterName, email, cupParticipantId }
+  // Uses admin cookies for web scraping (SSI has no GraphQL write support)
+  // ============================================================
+  router.post('/cup/:id/set-dns', requireAuth('manage'), async (req, res) => {
+    const { shooterName, email, cupParticipantId } = req.body
+    if (!shooterName) {
+      return res.status(400).json({ error: 'shooterName required' })
+    }
+
+    try {
+      const adminSess = getAdminSession ? await getAdminSession() : null
+      const cookies = adminSess?.cookies
+      if (!cookies) return res.status(500).json({ error: 'Admin session not available' })
+
+      const cupId = req.params.id
+      const results = []
+
+      // 1. Set DNS on CUP participant (ct=137)
+      if (cupParticipantId) {
+        if (!IS_PROD) console.log(`[manage] Setting DNS on CUP participant ${cupParticipantId} ("${shooterName}")`)
+        const cupResult = await ssiSetDidNotShow(137, cupParticipantId, cookies)
+        results.push({ location: 'CUP', success: cupResult.success, message: cupResult.message })
+      } else {
+        if (!IS_PROD) console.log(`[manage] No cupParticipantId for "${shooterName}", skipping CUP DNS`)
+      }
+
+      // 2. Set DNS on all match participants (ct=93)
+      // Get cup component matches and find participant IDs
+      const cupData = await graphqlWithRefresh(req.ssiSession, `
+        query ManageCup($id: String!) {
+          event(content_type: 136, id: $id) {
+            id
+            ... on NordicSerieNode {
+              component_matches {
+                number included
+                match { id name }
+              }
+            }
+          }
+        }
+      `, { id: cupId })
+
+      if (cupData.event) {
+        const matchIds = (cupData.event.component_matches || [])
+          .filter(cm => cm.included && cm.match)
+          .map(cm => ({ id: cm.match.id, name: cm.match.name }))
+
+        for (const match of matchIds) {
+          const participantId = await ssiFindCompetitorInMatch(match.id, shooterName, cookies, email)
+          if (participantId) {
+            if (!IS_PROD) console.log(`[manage] Setting DNS on match ${match.name} participant ${participantId}`)
+            const matchResult = await ssiSetDidNotShow(93, participantId, cookies)
+            results.push({ location: match.name, success: matchResult.success, message: matchResult.message })
+          } else {
+            if (!IS_PROD) console.log(`[manage] "${shooterName}" not found in match ${match.name}`)
+            results.push({ location: match.name, success: false, message: 'Participant not found' })
+          }
+        }
+      }
+
+      const allOk = results.every(r => r.success)
+      res.json({ success: allOk || results.some(r => r.success), results })
+    } catch (err) {
+      console.error('[manage] set-dns error:', err.message)
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ============================================================
+  // POST /api/manage/cup/:id/undo-dns
+  // Undo "Did Not Show" on a shooter at CUP level + all matches
+  // Body: { shooterName, email, cupParticipantId }
+  // ============================================================
+  router.post('/cup/:id/undo-dns', requireAuth('manage'), async (req, res) => {
+    const { shooterName, email, cupParticipantId } = req.body
+    if (!shooterName) {
+      return res.status(400).json({ error: 'shooterName required' })
+    }
+
+    try {
+      const adminSess = getAdminSession ? await getAdminSession() : null
+      const cookies = adminSess?.cookies
+      if (!cookies) return res.status(500).json({ error: 'Admin session not available' })
+
+      const cupId = req.params.id
+      const results = []
+
+      // 1. Undo DNS on CUP participant (ct=137)
+      if (cupParticipantId) {
+        if (!IS_PROD) console.log(`[manage] Undoing DNS on CUP participant ${cupParticipantId} ("${shooterName}")`)
+        const cupResult = await ssiUndoDidNotShow(137, cupParticipantId, cookies)
+        results.push({ location: 'CUP', success: cupResult.success, message: cupResult.message })
+      }
+
+      // 2. Undo DNS on all match participants (ct=93)
+      const cupData = await graphqlWithRefresh(req.ssiSession, `
+        query ManageCup($id: String!) {
+          event(content_type: 136, id: $id) {
+            id
+            ... on NordicSerieNode {
+              component_matches {
+                number included
+                match { id name }
+              }
+            }
+          }
+        }
+      `, { id: cupId })
+
+      if (cupData.event) {
+        const matchIds = (cupData.event.component_matches || [])
+          .filter(cm => cm.included && cm.match)
+          .map(cm => ({ id: cm.match.id, name: cm.match.name }))
+
+        for (const match of matchIds) {
+          const participantId = await ssiFindCompetitorInMatch(match.id, shooterName, cookies, email)
+          if (participantId) {
+            if (!IS_PROD) console.log(`[manage] Undoing DNS on match ${match.name} participant ${participantId}`)
+            const matchResult = await ssiUndoDidNotShow(93, participantId, cookies)
+            results.push({ location: match.name, success: matchResult.success, message: matchResult.message })
+          } else {
+            results.push({ location: match.name, success: false, message: 'Participant not found' })
+          }
+        }
+      }
+
+      const allOk = results.every(r => r.success)
+      res.json({ success: allOk || results.some(r => r.success), results })
+    } catch (err) {
+      console.error('[manage] undo-dns error:', err.message)
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ============================================================
+  // POST /api/manage/cup/:id/toggle-paid
+  // Toggle paid status on a CUP participant (cup level only)
+  // Body: { shooterName, cupParticipantId }
+  // ============================================================
+  router.post('/cup/:id/toggle-paid', requireAuth('manage'), async (req, res) => {
+    const { shooterName, cupParticipantId } = req.body
+    if (!shooterName || !cupParticipantId) {
+      return res.status(400).json({ error: 'shooterName and cupParticipantId required' })
+    }
+
+    try {
+      const adminSess = getAdminSession ? await getAdminSession() : null
+      const cookies = adminSess?.cookies
+      if (!cookies) return res.status(500).json({ error: 'Admin session not available' })
+
+      if (!IS_PROD) console.log(`[manage] Toggling paid for CUP participant ${cupParticipantId} ("${shooterName}")`)
+      const result = await ssiTogglePaid(137, cupParticipantId, cookies)
+
+      res.json({ success: result.success, message: result.message })
+    } catch (err) {
+      console.error('[manage] toggle-paid error:', err.message)
       res.status(500).json({ error: err.message })
     }
   })

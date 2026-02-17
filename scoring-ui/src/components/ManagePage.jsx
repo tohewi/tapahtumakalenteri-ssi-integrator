@@ -357,6 +357,9 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
     setActionLoading(null)
   }
 
+  // DNS confirmation dialog state
+  const [dnsConfirm, setDnsConfirm] = useState(null) // { shooter, action: 'set'|'undo' }
+
   const handleAssignSquad = (shooter, squadNumber) => {
     setSquadPicker(null)
     runAction(() => api.manageAssignSquad(cupId, shooter.name, squadNumber, shooter.email), shooter.name, 'assign')
@@ -376,6 +379,37 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
 
   const handleRemovePending = (shooter) => {
     runAction(() => api.manageRemovePending(cupId, shooter.name, shooter.email, shooter.cupParticipantId, shooter.inMatches), shooter.name, 'remove')
+  }
+
+  // CUP2: DNS handlers
+  const handleSetDns = (shooter) => {
+    setDnsConfirm({ shooter, action: 'set' })
+  }
+
+  const handleUndoDns = (shooter) => {
+    setDnsConfirm({ shooter, action: 'undo' })
+  }
+
+  const confirmDns = () => {
+    if (!dnsConfirm) return
+    const { shooter, action } = dnsConfirm
+    setDnsConfirm(null)
+    if (action === 'set') {
+      runAction(() => api.manageSetDns(cupId, shooter.name, shooter.email, shooter.cupParticipantId), shooter.name, 'dns')
+    } else {
+      runAction(() => api.manageUndoDns(cupId, shooter.name, shooter.email, shooter.cupParticipantId), shooter.name, 'undoDns')
+    }
+  }
+
+  // CUP3: Paid toggle handler
+  const handleTogglePaid = (shooter) => {
+    if (!shooter.cupParticipantId) return
+    runAction(() => api.manageTogglePaid(cupId, shooter.name, shooter.cupParticipantId), shooter.name, 'paid')
+  }
+
+  // CUP1: Move squad handler (for shooters already in a squad)
+  const handleMoveSquad = (shooter) => {
+    setSquadPicker({ shooter, type: 'assign' })
   }
 
   return (
@@ -462,22 +496,25 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
             <SectionHeader icon="⚠" title="Ei squadeissa" count={classified.unsquadded.length} color="red" />
             <div className="space-y-2">
               {classified.unsquadded.map((s, i) => (
-                <div key={i} className="bg-white rounded-xl border border-red-200 p-3 flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-gray-800 text-sm">{s.name}</div>
-                    {s.email ? (
-                      <div className="text-xs text-gray-500 mt-0.5 truncate">{s.email}</div>
-                    ) : (
-                      <div className="text-xs text-red-600 mt-0.5 font-medium">🚨 Sähköposti puuttuu</div>
-                    )}
-                    <div className="text-xs text-red-500 mt-0.5">Osakilpailuissa mutta ei squadissa</div>
+                <div key={i} className={`bg-white rounded-xl border border-red-200 p-3 ${s.didNotShow ? 'opacity-50' : ''}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className={`font-medium text-gray-800 text-sm ${s.didNotShow ? 'line-through' : ''}`}>{s.name}</div>
+                      {s.email ? (
+                        <div className="text-xs text-gray-500 mt-0.5 truncate">{s.email}</div>
+                      ) : (
+                        <div className="text-xs text-red-600 mt-0.5 font-medium">🚨 Sähköposti puuttuu</div>
+                      )}
+                      <div className="text-xs text-red-500 mt-0.5">Osakilpailuissa mutta ei squadissa</div>
+                      <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={handleSetDns} onUndoDns={handleUndoDns} onTogglePaid={handleTogglePaid} />
+                    </div>
+                    <ActionButton
+                      label="→ S?"
+                      loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'assign'}
+                      onClick={() => setSquadPicker({ shooter: s, type: 'assign' })}
+                      color="blue"
+                    />
                   </div>
-                  <ActionButton
-                    label="→ S?"
-                    loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'assign'}
-                    onClick={() => setSquadPicker({ shooter: s, type: 'assign' })}
-                    color="blue"
-                  />
                 </div>
               ))}
             </div>
@@ -490,15 +527,16 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
             <SectionHeader icon="↔" title="Eri squadissa" count={classified.inconsistent.length} color="amber" />
             <div className="space-y-2">
               {classified.inconsistent.map((s, i) => (
-                <div key={i} className="bg-white rounded-xl border border-amber-200 p-3">
+                <div key={i} className={`bg-white rounded-xl border border-amber-200 p-3 ${s.didNotShow ? 'opacity-50' : ''}`}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-gray-800 text-sm">{s.name}</div>
+                      <div className={`font-medium text-gray-800 text-sm ${s.didNotShow ? 'line-through' : ''}`}>{s.name}</div>
                       {s.email ? (
                         <div className="text-xs text-gray-500 truncate">{s.email}</div>
                       ) : (
                         <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
                       )}
+                      <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={handleSetDns} onUndoDns={handleUndoDns} onTogglePaid={handleTogglePaid} />
                     </div>
                     <ActionButton
                       label={`Korjaa → S${s.suggestedSquad}`}
@@ -533,22 +571,25 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                 <SectionHeader icon="📋" title="Cupissa mutta ei osakilpailuissa" count={cupOnly.length} color="red" />
                 <div className="space-y-2 mb-4">
                   {cupOnly.map((s, i) => (
-                    <div key={i} className="bg-white rounded-xl border border-red-200 p-3 flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-gray-800 text-sm">{s.name}</div>
-                        {s.email ? (
-                          <div className="text-xs text-gray-500 mt-0.5 truncate">{s.email}</div>
-                        ) : (
-                          <div className="text-xs text-red-600 mt-0.5 font-medium">🚨 Sähköposti puuttuu</div>
-                        )}
-                        <div className="text-xs text-red-500 mt-0.5">Ilmoittautunut cupiin, ei osakilpailuissa</div>
+                    <div key={i} className={`bg-white rounded-xl border border-red-200 p-3 ${s.didNotShow ? 'opacity-50' : ''}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className={`font-medium text-gray-800 text-sm ${s.didNotShow ? 'line-through' : ''}`}>{s.name}</div>
+                          {s.email ? (
+                            <div className="text-xs text-gray-500 mt-0.5 truncate">{s.email}</div>
+                          ) : (
+                            <div className="text-xs text-red-600 mt-0.5 font-medium">🚨 Sähköposti puuttuu</div>
+                          )}
+                          <div className="text-xs text-red-500 mt-0.5">Ilmoittautunut cupiin, ei osakilpailuissa</div>
+                          <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={handleSetDns} onUndoDns={handleUndoDns} onTogglePaid={handleTogglePaid} />
+                        </div>
+                        <ActionButton
+                          label="→ S?"
+                          loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'assign'}
+                          onClick={() => setSquadPicker({ shooter: s, type: 'assignCupOnly' })}
+                          color="blue"
+                        />
                       </div>
-                      <ActionButton
-                        label="→ S?"
-                        loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'assign'}
-                        onClick={() => setSquadPicker({ shooter: s, type: 'assignCupOnly' })}
-                        color="blue"
-                      />
                     </div>
                   ))}
                 </div>
@@ -633,7 +674,16 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
         <div ref={squadsRef} className="scroll-mt-16">
           <SectionHeader icon="👥" title="Squadit" count={squadGroups.length} color="blue" />
           {squadGroups.map(group => (
-            <SquadCard key={group.number} group={group} matchLabels={matchLabels} />
+            <SquadCard
+              key={group.number}
+              group={group}
+              matchLabels={matchLabels}
+              actionLoading={actionLoading}
+              onMoveSquad={handleMoveSquad}
+              onSetDns={handleSetDns}
+              onUndoDns={handleUndoDns}
+              onTogglePaid={handleTogglePaid}
+            />
           ))}
         </div>
       </div>
@@ -646,6 +696,38 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
           onSelect={(sqNum) => handleAssignSquad(squadPicker.shooter, sqNum)}
           onClose={() => setSquadPicker(null)}
         />
+      )}
+
+      {/* ── DNS Confirmation Dialog ── */}
+      {dnsConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setDnsConfirm(null)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div className="relative bg-white rounded-2xl shadow-xl p-6 mx-4 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+            <p className="text-gray-800 font-medium text-center text-base mb-4">
+              {dnsConfirm.action === 'set'
+                ? fi.dnsConfirm(dnsConfirm.shooter.name)
+                : fi.undoDnsConfirm(dnsConfirm.shooter.name)}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDnsConfirm(null)}
+                className="flex-1 py-2.5 text-center text-gray-500 font-medium text-sm rounded-xl bg-gray-100 active:bg-gray-200 transition-colors"
+              >
+                {fi.cancel}
+              </button>
+              <button
+                onClick={confirmDns}
+                className={`flex-1 py-2.5 text-center font-medium text-sm rounded-xl transition-colors ${
+                  dnsConfirm.action === 'set'
+                    ? 'bg-red-500 text-white active:bg-red-600'
+                    : 'bg-green-500 text-white active:bg-green-600'
+                }`}
+              >
+                {dnsConfirm.action === 'set' ? fi.setDns : fi.undoDns}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -673,6 +755,45 @@ function ActionButton({ label, loading, onClick, color = 'blue' }) {
     >
       {label}
     </button>
+  )
+}
+
+// ── Inline DNS + Paid buttons for a shooter (CUP2/CUP3) ──
+function ShooterActions({ shooter, actionLoading, onSetDns, onUndoDns, onTogglePaid }) {
+  const isDnsLoading = actionLoading?.shooterName === shooter.name && (actionLoading?.action === 'dns' || actionLoading?.action === 'undoDns')
+  const isPaidLoading = actionLoading?.shooterName === shooter.name && actionLoading?.action === 'paid'
+
+  return (
+    <div className="flex items-center gap-1 mt-1">
+      {/* Paid toggle */}
+      {shooter.cupParticipantId && (
+        <button
+          onClick={() => onTogglePaid(shooter)}
+          disabled={isPaidLoading}
+          className={`px-2 py-0.5 text-[10px] font-medium rounded transition-colors ${
+            shooter.paid
+              ? 'bg-green-100 text-green-700 active:bg-green-200'
+              : 'bg-gray-100 text-gray-400 active:bg-gray-200'
+          }`}
+        >
+          {isPaidLoading ? '...' : (shooter.paid ? '€ ✓' : '€')}
+        </button>
+      )}
+      {/* DNS toggle */}
+      {shooter.cupParticipantId && (
+        <button
+          onClick={() => shooter.didNotShow ? onUndoDns(shooter) : onSetDns(shooter)}
+          disabled={isDnsLoading}
+          className={`px-2 py-0.5 text-[10px] font-medium rounded transition-colors ${
+            shooter.didNotShow
+              ? 'bg-red-100 text-red-700 active:bg-red-200'
+              : 'bg-gray-100 text-gray-400 active:bg-gray-200'
+          }`}
+        >
+          {isDnsLoading ? '...' : (shooter.didNotShow ? 'DNS ✗' : 'DNS')}
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -745,7 +866,7 @@ function SectionHeader({ icon, title, count, color }) {
 }
 
 // ── Squad card with expandable shooter list ──
-function SquadCard({ group, matchLabels }) {
+function SquadCard({ group, matchLabels, actionLoading, onMoveSquad, onSetDns, onUndoDns, onTogglePaid }) {
   const [expanded, setExpanded] = useState(false)
   const shooterCount = group.total
   const hasIssues = group.issueShooters.length > 0
@@ -777,31 +898,39 @@ function SquadCard({ group, matchLabels }) {
           ) : (
             <div className="divide-y">
               {group.okShooters.map((s, i) => (
-                <div key={`ok-${i}`} className="px-4 py-2.5">
+                <div key={`ok-${i}`} className={`px-4 py-2.5 ${s.didNotShow ? 'opacity-50' : ''}`}>
                   <div className="flex items-center gap-2">
                     <span className="text-green-500 text-sm shrink-0">✓</span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm text-gray-800 truncate">{s.name}</div>
+                      <div className={`text-sm text-gray-800 truncate ${s.didNotShow ? 'line-through' : ''}`}>{s.name}</div>
                       {s.email ? (
                         <div className="text-xs text-gray-500 truncate">{s.email}</div>
                       ) : (
                         <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
                       )}
+                      <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={onSetDns} onUndoDns={onUndoDns} onTogglePaid={onTogglePaid} />
                     </div>
+                    <ActionButton
+                      label="→ S?"
+                      loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'assign'}
+                      onClick={() => onMoveSquad(s)}
+                      color="blue"
+                    />
                   </div>
                 </div>
               ))}
               {group.issueShooters.map((s, i) => (
-                <div key={`issue-${i}`} className="px-4 py-2.5 bg-amber-50">
+                <div key={`issue-${i}`} className={`px-4 py-2.5 bg-amber-50 ${s.didNotShow ? 'opacity-50' : ''}`}>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-amber-500 text-sm shrink-0">⚠</span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm text-gray-800 truncate">{s.name}</div>
+                      <div className={`text-sm text-gray-800 truncate ${s.didNotShow ? 'line-through' : ''}`}>{s.name}</div>
                       {s.email ? (
                         <div className="text-xs text-gray-500 truncate">{s.email}</div>
                       ) : (
                         <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
                       )}
+                      <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={onSetDns} onUndoDns={onUndoDns} onTogglePaid={onTogglePaid} />
                     </div>
                   </div>
                   <div className="flex gap-1 mt-1 ml-6">

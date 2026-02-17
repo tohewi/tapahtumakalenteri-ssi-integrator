@@ -1485,6 +1485,141 @@ export async function ssiFindParticipantInEvent(eventContentType, eventId, shoot
 }
 
 // ============================================================
+// CUP Management: Set "Did Not Show" (DNS) on a participant
+// GET /event/participant/{ct}/{participantId}/set-did-not-show/?next=...
+// SSI redirects (302) on success.
+// ct: 137 for CUP participants, 93 for Nordic match participants
+// ============================================================
+
+export async function ssiSetDidNotShow(participantContentType, participantId, cookies, nextUrl = '') {
+  const debug = process.env.NODE_ENV !== 'production'
+  const url = `${SSI_BASE_URL}/event/participant/${participantContentType}/${participantId}/set-did-not-show/`
+  const fullUrl = nextUrl ? `${url}?next=${nextUrl}` : url
+
+  if (debug) console.log(`[dns-set] GET ${fullUrl}`)
+  const resp = await fetch(fullUrl, {
+    headers: { 'Cookie': formatCookies(cookies) },
+    redirect: 'follow',
+  })
+
+  if (debug) console.log(`[dns-set] Response: ${resp.status}`)
+
+  if (resp.ok || resp.status === 302 || resp.status === 301) {
+    return { success: true, message: 'Did Not Show set' }
+  }
+  throw new Error(`Set Did Not Show failed HTTP ${resp.status}`)
+}
+
+// ============================================================
+// CUP Management: Undo "Did Not Show" (DNS) on a participant
+// GET /event/participant/{ct}/{participantId}/undo-did-not-show/?next=...
+// SSI redirects (302) on success.
+// ct: 137 for CUP participants, 93 for Nordic match participants
+// ============================================================
+
+export async function ssiUndoDidNotShow(participantContentType, participantId, cookies, nextUrl = '') {
+  const debug = process.env.NODE_ENV !== 'production'
+  const url = `${SSI_BASE_URL}/event/participant/${participantContentType}/${participantId}/undo-did-not-show/`
+  const fullUrl = nextUrl ? `${url}?next=${nextUrl}` : url
+
+  if (debug) console.log(`[dns-undo] GET ${fullUrl}`)
+  const resp = await fetch(fullUrl, {
+    headers: { 'Cookie': formatCookies(cookies) },
+    redirect: 'follow',
+  })
+
+  if (debug) console.log(`[dns-undo] Response: ${resp.status}`)
+
+  if (resp.ok || resp.status === 302 || resp.status === 301) {
+    return { success: true, message: 'Did Not Show undone' }
+  }
+  throw new Error(`Undo Did Not Show failed HTTP ${resp.status}`)
+}
+
+// ============================================================
+// CUP Management: Toggle paid status on a participant
+// GET /event/participant/{ct}/{participantId}/toggle-paid/?next=...
+// SSI redirects (302) on success.
+// ct: 137 for CUP participants
+// ============================================================
+
+export async function ssiTogglePaid(participantContentType, participantId, cookies, nextUrl = '') {
+  const debug = process.env.NODE_ENV !== 'production'
+  const url = `${SSI_BASE_URL}/event/participant/${participantContentType}/${participantId}/toggle-paid/`
+  const fullUrl = nextUrl ? `${url}?next=${nextUrl}` : url
+
+  if (debug) console.log(`[toggle-paid] GET ${fullUrl}`)
+  const resp = await fetch(fullUrl, {
+    headers: { 'Cookie': formatCookies(cookies) },
+    redirect: 'follow',
+  })
+
+  if (debug) console.log(`[toggle-paid] Response: ${resp.status}`)
+
+  if (resp.ok || resp.status === 302 || resp.status === 301) {
+    return { success: true, message: 'Paid status toggled' }
+  }
+  throw new Error(`Toggle paid failed HTTP ${resp.status}`)
+}
+
+// ============================================================
+// CUP Management: Scrape CUP participants page for paid + DNS status
+// GET /event/136/{cupId}/participants/
+// Returns Map<participantId, { paid: bool, didNotShow: bool }>
+//
+// SSI participants page shows:
+//   - Paid icon: <i class="fa fa-money text-success"> (paid) or text-danger (unpaid)
+//   - DNS: participant row may contain "Did not show" text or a specific CSS class
+//   - Participant links: <a href="/event/participant/137/{id}/">Name</a>
+//   - Toggle links: /event/participant/137/{id}/toggle-paid/
+//                    /event/participant/137/{id}/set-did-not-show/
+//                    /event/participant/137/{id}/undo-did-not-show/
+// ============================================================
+
+export async function ssiGetCupParticipantStatuses(cupId, cookies) {
+  const debug = process.env.NODE_ENV !== 'production'
+  const url = `${SSI_BASE_URL}/event/136/${cupId}/participants/`
+
+  if (debug) console.log(`[cup-status] GET ${url}`)
+  const resp = await fetch(url, {
+    headers: { 'Cookie': formatCookies(cookies) },
+    redirect: 'follow',
+  })
+  if (!resp.ok) throw new Error(`CUP participants page HTTP ${resp.status}`)
+  const html = await resp.text()
+
+  const statuses = new Map()
+
+  // Parse each table row to extract participant ID, paid status, and DNS status
+  // Each row contains: participant link, toggle-paid link, set-did-not-show or undo-did-not-show link
+  const rows = html.split(/<tr[\s>]/i).slice(1) // split by <tr> tags
+
+  for (const row of rows) {
+    // Extract participant ID from link: /event/participant/137/{id}/
+    const partMatch = row.match(/\/event\/participant\/137\/(\d+)\//)
+    if (!partMatch) continue
+    const partId = partMatch[1]
+
+    // Paid status: look for toggle-paid link context
+    // SSI shows a green money icon for paid, red for unpaid
+    // Pattern: <a href="...toggle-paid/..."><i class="fa fa-money text-success"></i></a> (paid)
+    //          <a href="...toggle-paid/..."><i class="fa fa-money text-danger"></i></a> (unpaid)
+    const paidMatch = row.match(/toggle-paid[\s\S]*?text-(success|danger)/i)
+    const paid = paidMatch ? paidMatch[1] === 'success' : false
+
+    // DNS status: if undo-did-not-show link exists, shooter IS marked DNS
+    // If set-did-not-show link exists, shooter is NOT DNS
+    const hasUndoDns = row.includes(`/${partId}/undo-did-not-show/`)
+    const didNotShow = hasUndoDns
+
+    statuses.set(partId, { paid, didNotShow })
+  }
+
+  if (debug) console.log(`[cup-status] Found ${statuses.size} participants with status data`)
+  return statuses
+}
+
+// ============================================================
 // Fetch any authenticated SSI web page (HTML scraping)
 // ============================================================
 
