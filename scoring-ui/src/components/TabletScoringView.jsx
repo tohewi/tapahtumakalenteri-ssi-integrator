@@ -395,12 +395,12 @@ export default function TabletScoringView({
   const xCount = currentShooterScores ? getXCount(currentShooterScores) : 0
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Breadcrumb Navigation Header */}
-      <div className="bg-blue-600 text-white px-4 py-3 shadow-md">
+    <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
+      {/* Breadcrumb Navigation Header - Compact */}
+      <div className="bg-blue-600 text-white px-3 py-2 shadow-md flex-shrink-0">
         <div className="flex items-center justify-between">
           {/* Breadcrumb Trail */}
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-2 text-xs">
             <button
               onClick={onBackToCup}
               className="hover:underline focus:outline-none focus:underline"
@@ -423,29 +423,31 @@ export default function TabletScoringView({
             </button>
           </div>
 
-          {/* Logout Button */}
-          <button
-            onClick={onLogout}
-            className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded text-sm font-medium transition-colors"
-          >
-            {t.logout}
-          </button>
+          {/* User Info & Logout */}
+          <div className="flex items-center gap-3 text-xs">
+            {userEmail && (
+              <div className="opacity-90">
+                Kirjautunut: <span className="font-medium">{userName || userEmail.split('@')[0]}</span>
+              </div>
+            )}
+            <button
+              onClick={onLogout}
+              className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-xs font-medium transition-colors"
+            >
+              {t.logout}
+            </button>
+          </div>
         </div>
 
-        {/* Match Date and User Info */}
-        <div className="mt-2 flex items-center justify-between text-sm opacity-90">
-          <div>{match.date}</div>
-          {userEmail && (
-            <div>
-              Kirjautunut: <span className="font-medium">{userName || userEmail.split('@')[0]}</span> (<span className="text-xs">{userEmail}</span>)
-            </div>
-          )}
+        {/* Match Date */}
+        <div className="mt-1 text-xs opacity-80">
+          {match.date}
         </div>
       </div>
 
-      {/* Top bar with scoring stats */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4 text-sm">
+      {/* Top bar with scoring stats - Compact */}
+      <div className="bg-white border-b border-gray-200 px-3 py-1.5 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-3 text-xs">
           <div>
             <span className="text-gray-500">{t.shotsFired}: </span>
             <span className="font-bold text-blue-600">{shotsFired}</span>
@@ -463,14 +465,14 @@ export default function TabletScoringView({
       </div>
 
       {/* Main content area - 3 columns on desktop, stacked on mobile */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
         {/* Left: Shooter list */}
-        <div className="w-full lg:w-64 xl:w-80 bg-white border-b lg:border-b-0 lg:border-r border-gray-200 flex-shrink-0 overflow-y-auto">
-          <div className="p-3 border-b border-gray-200">
-            <h3 className="font-semibold text-gray-700 text-sm">{squad.name}</h3>
+        <div className="w-full lg:w-56 xl:w-64 bg-white border-b lg:border-b-0 lg:border-r border-gray-200 flex-shrink-0 flex flex-col overflow-hidden">
+          <div className="p-2 border-b border-gray-200 flex-shrink-0">
+            <h3 className="font-semibold text-gray-700 text-xs">{squad.name}</h3>
             <p className="text-xs text-gray-500">{squad.shooters.length} {t.shooters}</p>
           </div>
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-gray-100 overflow-y-auto flex-1">
             {squad.shooters.map((shooter) => {
               const isSelected = selectedShooter?.id === shooter.id
               const shooterScores = allScores[shooter.id]
@@ -486,7 +488,7 @@ export default function TabletScoringView({
                   onDrop={(e) => handleDrop(e, shooter)}
                   onDragEnd={handleDragEnd}
                   onClick={() => handleShooterSelect(shooter)}
-                  className={`p-3 cursor-pointer transition-colors ${
+                  className={`p-2 cursor-pointer transition-colors ${
                     isSelected
                       ? 'bg-blue-50 border-l-4 border-blue-600'
                       : 'hover:bg-gray-50 border-l-4 border-transparent'
@@ -494,7 +496,7 @@ export default function TabletScoringView({
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
-                      <div className={`text-sm font-medium truncate ${
+                      <div className={`text-xs font-medium truncate ${
                         isSelected ? 'text-blue-900' : 'text-gray-900'
                       }`}>
                         {shooter.number}. {shooter.name}
@@ -519,20 +521,19 @@ export default function TabletScoringView({
         </div>
 
         {/* Center: Score track */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-gray-50">
-          <div className="p-3 bg-white border-b border-gray-200">
-            <h3 className="font-semibold text-gray-700 text-sm">{t.scoreTrack}</h3>
-            <p className="text-xs text-gray-500">{t.reenterScore}</p>
+        <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 min-w-0">
+          <div className="p-2 bg-white border-b border-gray-200 flex-shrink-0">
+            <h3 className="font-semibold text-gray-700 text-xs">{t.scoreTrack}</h3>
           </div>
           
           {/* Save error message */}
           {saveError && (
-            <div className="mx-3 mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-              <p className="text-sm text-amber-700 font-medium">{t.saveFailed}</p>
-              <p className="text-xs text-amber-600 mt-1">{saveError}</p>
+            <div className="mx-2 mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs flex-shrink-0">
+              <p className="text-amber-700 font-medium">{t.saveFailed}</p>
+              <p className="text-amber-600 mt-1">{saveError}</p>
               <button
                 onClick={handleSaveScores}
-                className="mt-2 text-xs font-medium text-amber-700 hover:text-amber-800"
+                className="mt-1 font-medium text-amber-700 hover:text-amber-800"
               >
                 {t.retryAction}
               </button>
@@ -540,20 +541,20 @@ export default function TabletScoringView({
           )}
 
           {/* Score track */}
-          <div ref={scoreTrackRef} className="flex-1 overflow-y-auto p-3">
+          <div ref={scoreTrackRef} className="flex-1 overflow-y-auto p-2 min-h-0">
             {!selectedShooter ? (
-              <div className="h-full flex items-center justify-center text-gray-400">
+              <div className="h-full flex items-center justify-center text-gray-400 text-xs">
                 <p>{t.selectShooter}</p>
               </div>
             ) : scoreTrack.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-gray-400">
+              <div className="h-full flex items-center justify-center text-gray-400 text-xs">
                 <p>{t.noShootersFound}</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-2">
+              <div className="grid grid-cols-1 gap-1.5">
                 {scoreTrack.map((track, idx) => (
-                  <div key={idx} className={`rounded-lg p-3 ${track.color} min-h-[120px]`}>
-                    <div className="flex items-center justify-between mb-2">
+                  <div key={idx} className={`rounded p-2 ${track.color} min-h-[90px]`}>
+                    <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-semibold text-gray-700">
                         {t.string} {idx + 1}
                       </span>
@@ -561,7 +562,7 @@ export default function TabletScoringView({
                         {track.hits.length} / {MAX_HITS_PER_SERIES}
                       </span>
                     </div>
-                    <div className="grid grid-cols-5 gap-2 min-h-[80px] lg:min-h-[72px] xl:min-h-[80px]">
+                    <div className="grid grid-cols-5 gap-1.5 min-h-[60px]">
                       {track.hits.map((zone, hitIdx) => {
                         const isSelected = 
                           selectedScoreIndex?.seriesIdx === idx &&
@@ -592,7 +593,7 @@ export default function TabletScoringView({
                             onMouseDown={() => handleLongPressStart(idx, zone, hitIdx)}
                             onMouseUp={handleLongPressEnd}
                             onMouseLeave={handleLongPressEnd}
-                            className={`relative w-14 h-14 lg:w-12 lg:h-12 xl:w-14 xl:h-14 rounded-lg font-bold text-lg transition-all touch-manipulation ${
+                            className={`relative w-12 h-12 rounded font-bold text-base transition-all touch-manipulation ${
                               isSelected
                                 ? 'bg-white border-2 border-blue-600 text-blue-600 shadow-md scale-110'
                                 : zone === 'X' || zone === '10'
@@ -624,11 +625,11 @@ export default function TabletScoringView({
           </div>
 
           {/* Save button */}
-          <div className="p-3 bg-white border-t border-gray-200">
+          <div className="p-2 bg-white border-t border-gray-200 flex-shrink-0">
             <button
               onClick={handleSaveScores}
               disabled={saving || !selectedShooter}
-              className={`w-full py-3 rounded-xl font-semibold transition-colors ${
+              className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors ${
                 saving
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
@@ -640,12 +641,12 @@ export default function TabletScoringView({
         </div>
 
         {/* Right: Number pad */}
-        <div className="w-full lg:w-80 xl:w-96 bg-white border-t lg:border-t-0 lg:border-l border-gray-200 flex-shrink-0">
-          <div className="p-3 border-b border-gray-200">
-            <h3 className="font-semibold text-gray-700 text-sm">Score Pad</h3>
+        <div className="w-full lg:w-64 xl:w-72 bg-white border-t lg:border-t-0 lg:border-l border-gray-200 flex-shrink-0 flex flex-col overflow-hidden">
+          <div className="p-2 border-b border-gray-200 flex-shrink-0">
+            <h3 className="font-semibold text-gray-700 text-xs">Score Pad</h3>
           </div>
-          <div className="p-4">
-            <div className="grid grid-cols-3 gap-3">
+          <div className="p-2 flex-1 overflow-y-auto">
+            <div className="grid grid-cols-3 gap-2">
               {SCORE_ZONES.map((zone) => {
                 const variant = zone === 'X' || zone === '10' ? 'high' : zone === 'M' ? 'miss' : 'low'
                 const colors = {
@@ -659,7 +660,7 @@ export default function TabletScoringView({
                     key={zone}
                     onClick={() => handleScoreAdd(zone)}
                     disabled={!selectedShooter}
-                    className={`min-h-[88px] lg:min-h-[80px] xl:min-h-[88px] rounded-xl font-bold text-2xl lg:text-xl xl:text-2xl transition-all disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation ${colors[variant]}`}
+                    className={`h-16 lg:h-14 xl:h-16 rounded-lg font-bold text-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation ${colors[variant]}`}
                   >
                     {zone}
                   </button>
