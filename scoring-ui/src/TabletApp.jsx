@@ -112,15 +112,22 @@ function TabletApp() {
     await api.login(email, password, apiKey, 'scoring')
     setUserEmail(email) // Store the logged-in user's email
     
-    // Fetch user info from SSI
-    try {
-      const userInfo = await api.getUserInfo()
-      const fullName = `${userInfo.firstName} ${userInfo.lastName}`.trim()
-      setUserName(fullName || email.split('@')[0]) // Fallback to email prefix if no name
-    } catch (err) {
-      console.warn('Could not fetch user info:', err)
-      setUserName(email.split('@')[0]) // Fallback to email prefix
-    }
+    // Set fallback username immediately (email prefix) so login doesn't block
+    const emailPrefix = email.split('@')[0]
+    setUserName(emailPrefix)
+    
+    // Fetch user info from SSI in background (non-blocking)
+    api.getUserInfo()
+      .then(userInfo => {
+        const fullName = `${userInfo.firstName} ${userInfo.lastName}`.trim()
+        if (fullName) {
+          setUserName(fullName) // Update with real name when available
+        }
+      })
+      .catch(err => {
+        console.warn('Could not fetch user info:', err)
+        // Keep the email prefix fallback we already set
+      })
     
     await handleRememberMe(email, password, apiKey, rememberMe)
     await restoreNavState()
