@@ -1613,20 +1613,15 @@ export async function ssiGetCupParticipantStatuses(cupId, cookies) {
       firstRowLogged = true
     }
 
-    // Paid status: look for toggle-paid link context
-    // SSI shows a green money icon for paid, red for unpaid
-    // Multiple possible patterns:
-    //   <a href="...toggle-paid/..."><i class="fa fa-money text-success"></i></a> (paid)
-    //   <a href="...toggle-paid/..."><i class="fa fa-money text-danger"></i></a> (unpaid)
-    //   Or: class="...text-success..." anywhere near toggle-paid in the same row
-    const paidMatch = row.match(/toggle-paid[\s\S]*?text-(success|danger)/i)
-      || row.match(/text-(success|danger)[\s\S]*?toggle-paid/i)
-    const paid = paidMatch ? paidMatch[1] === 'success' : false
+    // Paid status: SSI shows text content inside the toggle-paid link
+    // Pattern: <a href="...toggle-paid/">all</a> (paid) or <a href="...toggle-paid/">no</a> (unpaid)
+    const paidMatch = row.match(/toggle-paid\/?"?>(\w+)<\/a>/i)
+    const paid = paidMatch ? paidMatch[1].toLowerCase() === 'all' : false
 
-    // DNS status: if undo-did-not-show link exists, shooter IS marked DNS
-    // If set-did-not-show link exists, shooter is NOT DNS
-    const hasUndoDns = row.includes(`/${partId}/undo-did-not-show/`)
-    const didNotShow = hasUndoDns
+    // DNS status: CUP participants page does not contain set-did-not-show/undo-did-not-show links.
+    // DNS detection requires a different approach (e.g. checking participant status field).
+    // For now, check if row contains "Did not show" or similar text indicator
+    const didNotShow = /did.not.show/i.test(row) || row.includes(`/${partId}/undo-did-not-show/`)
 
     statuses.set(partId, { paid, didNotShow })
   }
