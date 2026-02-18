@@ -777,6 +777,7 @@ function ShooterActions({ shooter, actionLoading, onSetDns, onUndoDns, onToggleP
         <button
           onClick={() => onTogglePaid(shooter)}
           disabled={isPaidLoading}
+          aria-label={shooter.paid ? `${shooter.name}: maksettu` : `${shooter.name}: ei maksettu`}
           className={`px-2 py-0.5 text-[10px] font-medium rounded transition-colors ${
             shooter.paid
               ? 'bg-green-500 text-white active:bg-green-600'
@@ -791,6 +792,7 @@ function ShooterActions({ shooter, actionLoading, onSetDns, onUndoDns, onToggleP
         <button
           onClick={() => shooter.didNotShow ? onUndoDns(shooter) : onSetDns(shooter)}
           disabled={isDnsLoading}
+          aria-label={shooter.didNotShow ? `${shooter.name}: peru DNS` : `${shooter.name}: aseta DNS`}
           className={`px-2 py-0.5 text-[10px] font-medium rounded transition-colors ${
             shooter.didNotShow
               ? 'bg-red-100 text-red-700 active:bg-red-200'
