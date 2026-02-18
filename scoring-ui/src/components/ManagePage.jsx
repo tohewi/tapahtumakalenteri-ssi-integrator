@@ -772,7 +772,7 @@ function ShooterActions({ shooter, actionLoading, onSetDns, onUndoDns, onToggleP
           disabled={isPaidLoading}
           className={`px-2 py-0.5 text-[10px] font-medium rounded transition-colors ${
             shooter.paid
-              ? 'bg-green-100 text-green-700 active:bg-green-200'
+              ? 'bg-green-500 text-white active:bg-green-600'
               : 'bg-gray-100 text-gray-400 active:bg-gray-200'
           }`}
         >
