@@ -509,7 +509,7 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                       <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={handleSetDns} onUndoDns={handleUndoDns} onTogglePaid={handleTogglePaid} />
                     </div>
                     <ActionButton
-                      label="→ S?"
+                      label={fi.moveSquad}
                       loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'assign'}
                       onClick={() => setSquadPicker({ shooter: s, type: 'assign' })}
                       color="blue"
@@ -584,7 +584,7 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
                           <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={handleSetDns} onUndoDns={handleUndoDns} onTogglePaid={handleTogglePaid} />
                         </div>
                         <ActionButton
-                          label="→ S?"
+                          label={fi.moveSquad}
                           loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'assign'}
                           onClick={() => setSquadPicker({ shooter: s, type: 'assignCupOnly' })}
                           color="blue"
@@ -920,7 +920,7 @@ function SquadCard({ group, matchLabels, actionLoading, onMoveSquad, onSetDns, o
                       <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={onSetDns} onUndoDns={onUndoDns} onTogglePaid={onTogglePaid} />
                     </div>
                     <ActionButton
-                      label="→ S?"
+                      label={fi.moveSquad}
                       loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'assign'}
                       onClick={() => onMoveSquad(s)}
                       color="blue"
