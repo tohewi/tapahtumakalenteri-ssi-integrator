@@ -1400,13 +1400,16 @@ export async function ssiRegisterToTrainerSquad(eventContentType, eventId, email
 // Admin: find competitor ID in a match by scraping participants page
 // GET /event/91/{matchId}/participants/
 // Returns the participant ID if found, or null
+// Optional email parameter is used for disambiguation if multiple
+// participants match the same shooter name.
 // ============================================================
 
-export async function ssiFindCompetitorInMatch(matchId, shooterName, cookies) {
+export async function ssiFindCompetitorInMatch(matchId, shooterName, cookies, email = null) {
   const debug = process.env.NODE_ENV !== 'production'
   const url = `${SSI_BASE_URL}/event/91/${matchId}/participants/`
 
-  if (debug) console.log(`[find-competitor] GET ${url} (looking for "${shooterName}")`)
+  const searchDesc = email ? `"${shooterName}" (${email})` : `"${shooterName}"`
+  if (debug) console.log(`[find-competitor] GET ${url} (looking for ${searchDesc})`)
   const resp = await fetch(url, {
     headers: { 'Cookie': formatCookies(cookies) },
     redirect: 'follow',
@@ -1414,28 +1417,61 @@ export async function ssiFindCompetitorInMatch(matchId, shooterName, cookies) {
   if (!resp.ok) throw new Error(`Participants page HTTP ${resp.status} for match ${matchId}`)
   const html = await resp.text()
 
-  // Participant links: <a href="/event/participant/93/{id}/">Name</a>
-  // or: <a href="/event/participant/93/{id}/" class="...">Name</a>
-  const pattern = /<a[^>]*href="\/event\/participant\/93\/(\d+)\/"[^>]*>([^<]*)<\/a>/gi
-
   // Normalize search: split into words for flexible matching (handles double spaces etc.)
   // Keep single-char digits (e.g. "2") to distinguish "Tuloskone 1" from "Tuloskone 2"
   const searchWords = shooterName.toLowerCase().split(/\s+/).filter(w => w.length > 1 || /\d/.test(w))
   if (debug) console.log(`[find-competitor] Search words: ${JSON.stringify(searchWords)}`)
 
-  for (const m of html.matchAll(pattern)) {
-    const compId = m[1]
-    const name = m[2].trim()
+  // Parse by table row so we can use row text (e.g. email) for disambiguation
+  const rows = html.split(/<tr[\s>]/i).slice(1)
+  const matches = []
+
+  for (const row of rows) {
+    // Participant link pattern: <a href="/event/participant/93/{id}/">Name</a>
+    // (can include additional attributes)
+    const participantMatch = row.match(/<a[^>]*href="\/event\/participant\/93\/(\d+)\/"[^>]*>([^<]*)<\/a>/i)
+    if (!participantMatch) continue
+
+    const compId = participantMatch[1]
+    const name = participantMatch[2].trim()
     const nameLower = name.toLowerCase()
-    // Match if all search words appear in the name
+
+    // Match if all search words appear in the participant name
     if (searchWords.length > 0 && searchWords.every(w => nameLower.includes(w))) {
-      if (debug) console.log(`[find-competitor] Found: ${name} → participant ${compId}`)
-      return compId
+      matches.push({ id: compId, name, row })
     }
   }
 
-  if (debug) console.log(`[find-competitor] "${shooterName}" not found in match ${matchId}`)
-  return null
+  if (matches.length === 0) {
+    if (debug) console.log(`[find-competitor] ${searchDesc} not found in match ${matchId}`)
+    return null
+  }
+
+  if (matches.length === 1) {
+    if (debug) console.log(`[find-competitor] Found: ${matches[0].name} → participant ${matches[0].id}`)
+    return matches[0].id
+  }
+
+  // Multiple name matches found — try to disambiguate by email from row text.
+  console.warn(`[find-competitor] WARNING: Multiple name matches found for "${shooterName}" in match ${matchId}:`, matches.map(m => m.name))
+  if (email) {
+    const emailLower = email.toLowerCase()
+    const emailMatches = matches.filter(m => m.row.toLowerCase().includes(emailLower))
+
+    if (emailMatches.length === 1) {
+      if (debug) console.log(`[find-competitor] Email-disambiguated: ${emailMatches[0].name} (${email}) → participant ${emailMatches[0].id}`)
+      return emailMatches[0].id
+    }
+
+    if (emailMatches.length > 1) {
+      console.warn(`[find-competitor] WARNING: Multiple email matches for ${email} in match ${matchId}; using first match`)
+      return emailMatches[0].id
+    }
+
+    console.warn(`[find-competitor] WARNING: Email ${email} not found in matched rows for match ${matchId}; using first name match`)
+  }
+
+  return matches[0].id
 }
 
 // ============================================================
@@ -1482,6 +1518,152 @@ export async function ssiFindParticipantInEvent(eventContentType, eventId, shoot
   }
 
   return null
+}
+
+// ============================================================
+// CUP Management: Set "Did Not Show" (DNS) on a participant
+// GET /event/participant/{ct}/{participantId}/set-did-not-show/?next=...
+// SSI redirects (302) on success.
+// ct: 137 for CUP participants, 93 for Nordic match participants
+// ============================================================
+
+export async function ssiSetDidNotShow(participantContentType, participantId, cookies, nextUrl = '') {
+  const debug = process.env.NODE_ENV !== 'production'
+  const url = `${SSI_BASE_URL}/event/participant/${participantContentType}/${participantId}/set-did-not-show/`
+  const fullUrl = nextUrl ? `${url}?next=${nextUrl}` : url
+
+  if (debug) console.log(`[dns-set] GET ${fullUrl}`)
+  const resp = await fetch(fullUrl, {
+    headers: { 'Cookie': formatCookies(cookies) },
+    redirect: 'manual',
+  })
+
+  if (debug) console.log(`[dns-set] Response: ${resp.status}`)
+
+  // SSI redirects (302/301) on success. A 200 likely means redirect to login/error page.
+  if (resp.status === 302 || resp.status === 301) {
+    return { success: true, message: 'Did Not Show set' }
+  }
+  throw new Error(`Set Did Not Show failed HTTP ${resp.status}`)
+}
+
+// ============================================================
+// CUP Management: Undo "Did Not Show" (DNS) on a participant
+// GET /event/participant/{ct}/{participantId}/undo-did-not-show/?next=...
+// SSI redirects (302) on success.
+// ct: 137 for CUP participants, 93 for Nordic match participants
+// ============================================================
+
+export async function ssiUndoDidNotShow(participantContentType, participantId, cookies, nextUrl = '') {
+  const debug = process.env.NODE_ENV !== 'production'
+  const url = `${SSI_BASE_URL}/event/participant/${participantContentType}/${participantId}/undo-did-not-show/`
+  const fullUrl = nextUrl ? `${url}?next=${nextUrl}` : url
+
+  if (debug) console.log(`[dns-undo] GET ${fullUrl}`)
+  const resp = await fetch(fullUrl, {
+    headers: { 'Cookie': formatCookies(cookies) },
+    redirect: 'manual',
+  })
+
+  if (debug) console.log(`[dns-undo] Response: ${resp.status}`)
+
+  // SSI redirects (302/301) on success. A 200 likely means redirect to login/error page.
+  if (resp.status === 302 || resp.status === 301) {
+    return { success: true, message: 'Did Not Show undone' }
+  }
+  throw new Error(`Undo Did Not Show failed HTTP ${resp.status}`)
+}
+
+// ============================================================
+// CUP Management: Toggle paid status on a participant
+// GET /event/participant/{ct}/{participantId}/toggle-paid/?next=...
+// SSI redirects (302) on success.
+// ct: 137 for CUP participants
+// ============================================================
+
+export async function ssiTogglePaid(participantContentType, participantId, cookies, nextUrl = '') {
+  const debug = process.env.NODE_ENV !== 'production'
+  const url = `${SSI_BASE_URL}/event/participant/${participantContentType}/${participantId}/toggle-paid/`
+  const fullUrl = nextUrl ? `${url}?next=${nextUrl}` : url
+
+  if (debug) console.log(`[toggle-paid] GET ${fullUrl}`)
+  const resp = await fetch(fullUrl, {
+    headers: { 'Cookie': formatCookies(cookies) },
+    redirect: 'manual',
+  })
+
+  if (debug) console.log(`[toggle-paid] Response: ${resp.status}`)
+
+  // SSI redirects (302/301) on success
+  if (resp.status === 302 || resp.status === 301) {
+    return { success: true, message: 'Paid status toggled' }
+  }
+  throw new Error(`Toggle paid failed HTTP ${resp.status}`)
+}
+
+// ============================================================
+// CUP Management: Scrape CUP participants page for paid + DNS status
+// GET /event/136/{cupId}/participants/
+// Returns Map<participantId, { paid: bool, didNotShow: bool }>
+//
+// SSI participants page shows:
+//   - Paid icon: <i class="fa fa-money text-success"> (paid) or text-danger (unpaid)
+//   - DNS: participant row may contain "Did not show" text or a specific CSS class
+//   - Participant links: <a href="/event/participant/137/{id}/">Name</a>
+//   - Toggle links: /event/participant/137/{id}/toggle-paid/
+//                    /event/participant/137/{id}/set-did-not-show/
+//                    /event/participant/137/{id}/undo-did-not-show/
+// ============================================================
+
+export async function ssiGetCupParticipantStatuses(cupId, cookies) {
+  const debug = process.env.NODE_ENV !== 'production'
+  const url = `${SSI_BASE_URL}/event/136/${cupId}/participants/`
+
+  console.log(`[cup-status] GET ${url}`)
+  const resp = await fetch(url, {
+    headers: { 'Cookie': formatCookies(cookies) },
+    redirect: 'follow',
+  })
+  if (!resp.ok) throw new Error(`CUP participants page HTTP ${resp.status}`)
+  const html = await resp.text()
+
+  const statuses = new Map()
+
+  // Parse each table row to extract participant ID, paid status, and DNS status
+  // Each row contains: participant link, toggle-paid link, set-did-not-show or undo-did-not-show link
+  const rows = html.split(/<tr[\s>]/i).slice(1) // split by <tr> tags
+
+  let firstRowLogged = false
+  for (const row of rows) {
+    // Extract participant ID from link: /event/participant/137/{id}/
+    const partMatch = row.match(/\/event\/participant\/137\/(\d+)\//)
+    if (!partMatch) continue
+    const partId = partMatch[1]
+
+    // Log first row's toggle-paid context to understand SSI HTML structure
+    if (!firstRowLogged) {
+      const toggleContext = row.match(/toggle-paid[\s\S]{0,200}/i)
+      console.log(`[cup-status] Sample row toggle-paid context: ${toggleContext ? toggleContext[0].substring(0, 200) : 'NOT FOUND'}`)
+      const dnsContext = row.match(/(set-did-not-show|undo-did-not-show)[\s\S]{0,100}/i)
+      console.log(`[cup-status] Sample row DNS context: ${dnsContext ? dnsContext[0].substring(0, 100) : 'NOT FOUND'}`)
+      firstRowLogged = true
+    }
+
+    // Paid status: SSI shows text content inside the toggle-paid link
+    // Pattern: <a href="...toggle-paid/">all</a> (paid) or <a href="...toggle-paid/">no</a> (unpaid)
+    const paidMatch = row.match(/toggle-paid\/?"?>(\w+)<\/a>/i)
+    const paid = paidMatch ? paidMatch[1].toLowerCase() === 'all' : false
+
+    // DNS status: CUP participants page does not contain set-did-not-show/undo-did-not-show links.
+    // DNS detection requires a different approach (e.g. checking participant status field).
+    // For now, check if row contains "Did not show" or similar text indicator
+    const didNotShow = /did.not.show/i.test(row) || row.includes(`/${partId}/undo-did-not-show/`)
+
+    statuses.set(partId, { paid, didNotShow })
+  }
+
+  console.log(`[cup-status] Found ${statuses.size} participants with status data`)
+  return statuses
 }
 
 // ============================================================

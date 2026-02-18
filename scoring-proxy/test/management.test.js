@@ -8,7 +8,23 @@
 // mocked adminGraphQL to avoid requiring actual SSI credentials.
 // ============================================================
 
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest'
+
+const ssiClientMocks = vi.hoisted(() => ({
+  ssiSearchAndAddParticipant: vi.fn(),
+  ssiFindCompetitorInMatch: vi.fn(),
+  ssiSetParticipantSquad: vi.fn(),
+  ssiFindAndApproveCupParticipant: vi.fn(),
+  ssiFindAndDeleteCupParticipant: vi.fn(),
+  ssiDeleteMatchParticipant: vi.fn(),
+  ssiSetDidNotShow: vi.fn(),
+  ssiUndoDidNotShow: vi.fn(),
+  ssiTogglePaid: vi.fn(),
+  ssiGetCupParticipantStatuses: vi.fn(),
+}))
+
+vi.mock('../lib/ssi-client.js', () => ssiClientMocks)
+
 import express from 'express'
 import cookieParser from 'cookie-parser'
 import { initRedis, closeRedis } from '../lib/session/redis.js'
@@ -29,48 +45,59 @@ beforeAll(async () => {
   app.use(cookieParser())
   
   // Encapsulated mock state factory
-  const createMockState = () => {
+  const createMockState = (defaultResponse) => {
+    let hasMockResponse = false
     let mockResponse = null
     let mockError = null
     
     return {
       setResponse: (response) => {
         mockResponse = response
+        hasMockResponse = true
         mockError = null
       },
       setError: (error) => {
         mockError = error
-        mockResponse = null
+        hasMockResponse = false
       },
       clear: () => {
         mockResponse = null
+        hasMockResponse = false
         mockError = null
       },
       execute: async (query, variables) => {
         if (mockError) {
           throw mockError
         }
-        if (mockResponse) {
+        if (hasMockResponse) {
           return mockResponse
         }
-        // Default empty response
-        return { events: [] }
+        return defaultResponse
       }
     }
   }
   
-  const mockState = createMockState()
+  const mockState = createMockState({ events: [] })
+  const graphState = createMockState({ event: null })
+  const adminSessionState = createMockState({ cookies: { sessionid: 'admin-cookie' } })
   
   // Expose mock control methods on app for test access
   app.setMockResponse = mockState.setResponse
   app.setMockError = mockState.setError
   app.clearMock = mockState.clear
+  app.setGraphqlResponse = graphState.setResponse
+  app.setGraphqlError = graphState.setError
+  app.clearGraphqlMock = graphState.clear
+  app.setAdminSession = adminSessionState.setResponse
+  app.setAdminSessionError = adminSessionState.setError
+  app.clearAdminSessionMock = adminSessionState.clear
   
   // Create management router with mocked dependencies
   const managementRouter = createManagementRouter({
     requireAuth: requireAuthV7,
-    graphqlWithRefresh: null, // Not used by /cups endpoint
+    graphqlWithRefresh: graphState.execute,
     adminGraphQL: mockState.execute,
+    getAdminSession: adminSessionState.execute,
     IS_PROD: false,
   })
   
@@ -114,6 +141,19 @@ async function request(method, path, body = null, ip = null, cookies = {}) {
   const data = await resp.json().catch(() => null)
   return { status: resp.status, data, headers: Object.fromEntries(resp.headers.entries()) }
 }
+
+async function createManageSessionCookie() {
+  const { sessionId } = await createSession(createMockSessionInput({ scope: 'manage' }))
+  return { ssi_session: sessionId }
+}
+
+beforeEach(() => {
+  for (const fn of Object.values(ssiClientMocks)) {
+    fn.mockReset()
+  }
+  if (app?.clearGraphqlMock) app.clearGraphqlMock()
+  if (app?.clearAdminSessionMock) app.clearAdminSessionMock()
+})
 
 // ============================================================
 // GET /api/manage/cups
@@ -548,5 +588,169 @@ describe('GET /api/manage/cups', () => {
     expect(res.data.cups[0].maxCompetitors).toBe(5)
     expect(res.data.cups[0].full).toBe(false) // 1 < 5
     expect(res.data.cups[0].registrationOpen).toBe(true) // open and has space
+  })
+})
+
+// ============================================================
+// POST /api/manage/cup/:id/set-dns
+// ============================================================
+
+describe('POST /api/manage/cup/:id/set-dns', () => {
+  it('returns 400 when shooterName is missing', async () => {
+    const ip = uniqueIp()
+    const cookies = await createManageSessionCookie()
+
+    const res = await request('POST', '/api/manage/cup/123/set-dns', {
+      email: 'shooter@example.com',
+      cupParticipantId: 'cup-1'
+    }, ip, cookies)
+
+    expect(res.status).toBe(400)
+    expect(res.data.error).toBe('shooterName required')
+  })
+
+  it('returns 500 when admin session cookies are unavailable', async () => {
+    const ip = uniqueIp()
+    const cookies = await createManageSessionCookie()
+    app.setAdminSession({ cookies: null })
+
+    const res = await request('POST', '/api/manage/cup/123/set-dns', {
+      shooterName: 'Test Shooter',
+      email: 'test@example.com',
+      cupParticipantId: 'cup-1'
+    }, ip, cookies)
+
+    expect(res.status).toBe(500)
+    expect(res.data.error).toBe('Admin session not available')
+  })
+
+  it('sets DNS on cup and matches, returning partial success if one match participant is missing', async () => {
+    const ip = uniqueIp()
+    const cookies = await createManageSessionCookie()
+
+    app.setGraphqlResponse({
+      event: {
+        id: '123',
+        component_matches: [
+          { number: 1, included: true, match: { id: 'm1', name: 'Match One' } },
+          { number: 2, included: true, match: { id: 'm2', name: 'Match Two' } },
+          { number: 3, included: false, match: { id: 'm3', name: 'Excluded Match' } }
+        ]
+      }
+    })
+
+    ssiClientMocks.ssiFindCompetitorInMatch
+      .mockResolvedValueOnce('match-participant-1')
+      .mockResolvedValueOnce(null)
+
+    ssiClientMocks.ssiSetDidNotShow
+      .mockResolvedValueOnce({ success: true, message: 'CUP updated' })
+      .mockResolvedValueOnce({ success: true, message: 'Match updated' })
+
+    const res = await request('POST', '/api/manage/cup/123/set-dns', {
+      shooterName: 'Test Shooter',
+      email: 'test@example.com',
+      cupParticipantId: 'cup-77'
+    }, ip, cookies)
+
+    expect(res.status).toBe(200)
+    expect(res.data.success).toBe(true)
+    expect(res.data.results).toEqual([
+      { location: 'CUP', success: true, message: 'CUP updated' },
+      { location: 'Match One', success: true, message: 'Match updated' },
+      { location: 'Match Two', success: false, message: 'Participant not found' }
+    ])
+
+    expect(ssiClientMocks.ssiSetDidNotShow).toHaveBeenCalledTimes(2)
+    expect(ssiClientMocks.ssiSetDidNotShow).toHaveBeenNthCalledWith(1, 137, 'cup-77', expect.any(Object))
+    expect(ssiClientMocks.ssiSetDidNotShow).toHaveBeenNthCalledWith(2, 93, 'match-participant-1', expect.any(Object))
+
+    expect(ssiClientMocks.ssiFindCompetitorInMatch).toHaveBeenCalledTimes(2)
+    expect(ssiClientMocks.ssiFindCompetitorInMatch).toHaveBeenNthCalledWith(1, 'm1', 'Test Shooter', expect.any(Object), 'test@example.com')
+    expect(ssiClientMocks.ssiFindCompetitorInMatch).toHaveBeenNthCalledWith(2, 'm2', 'Test Shooter', expect.any(Object), 'test@example.com')
+  })
+})
+
+// ============================================================
+// POST /api/manage/cup/:id/undo-dns
+// ============================================================
+
+describe('POST /api/manage/cup/:id/undo-dns', () => {
+  it('undoes DNS on cup and included matches', async () => {
+    const ip = uniqueIp()
+    const cookies = await createManageSessionCookie()
+
+    app.setGraphqlResponse({
+      event: {
+        id: '123',
+        component_matches: [
+          { number: 1, included: true, match: { id: 'm1', name: 'Match One' } },
+          { number: 2, included: true, match: { id: 'm2', name: 'Match Two' } }
+        ]
+      }
+    })
+
+    ssiClientMocks.ssiFindCompetitorInMatch
+      .mockResolvedValueOnce('match-participant-1')
+      .mockResolvedValueOnce('match-participant-2')
+
+    ssiClientMocks.ssiUndoDidNotShow
+      .mockResolvedValueOnce({ success: true, message: 'CUP reverted' })
+      .mockResolvedValueOnce({ success: true, message: 'Match one reverted' })
+      .mockResolvedValueOnce({ success: true, message: 'Match two reverted' })
+
+    const res = await request('POST', '/api/manage/cup/123/undo-dns', {
+      shooterName: 'Test Shooter',
+      email: 'test@example.com',
+      cupParticipantId: 'cup-77'
+    }, ip, cookies)
+
+    expect(res.status).toBe(200)
+    expect(res.data.success).toBe(true)
+    expect(res.data.results).toEqual([
+      { location: 'CUP', success: true, message: 'CUP reverted' },
+      { location: 'Match One', success: true, message: 'Match one reverted' },
+      { location: 'Match Two', success: true, message: 'Match two reverted' }
+    ])
+
+    expect(ssiClientMocks.ssiUndoDidNotShow).toHaveBeenCalledTimes(3)
+    expect(ssiClientMocks.ssiUndoDidNotShow).toHaveBeenNthCalledWith(1, 137, 'cup-77', expect.any(Object))
+    expect(ssiClientMocks.ssiUndoDidNotShow).toHaveBeenNthCalledWith(2, 93, 'match-participant-1', expect.any(Object))
+    expect(ssiClientMocks.ssiUndoDidNotShow).toHaveBeenNthCalledWith(3, 93, 'match-participant-2', expect.any(Object))
+  })
+})
+
+// ============================================================
+// POST /api/manage/cup/:id/toggle-paid
+// ============================================================
+
+describe('POST /api/manage/cup/:id/toggle-paid', () => {
+  it('returns 400 when required fields are missing', async () => {
+    const ip = uniqueIp()
+    const cookies = await createManageSessionCookie()
+
+    const res = await request('POST', '/api/manage/cup/123/toggle-paid', {
+      shooterName: 'Test Shooter'
+    }, ip, cookies)
+
+    expect(res.status).toBe(400)
+    expect(res.data.error).toBe('shooterName and cupParticipantId required')
+  })
+
+  it('toggles paid status at cup level', async () => {
+    const ip = uniqueIp()
+    const cookies = await createManageSessionCookie()
+
+    ssiClientMocks.ssiTogglePaid.mockResolvedValue({ success: true, message: 'Marked as paid' })
+
+    const res = await request('POST', '/api/manage/cup/123/toggle-paid', {
+      shooterName: 'Test Shooter',
+      cupParticipantId: 'cup-88'
+    }, ip, cookies)
+
+    expect(res.status).toBe(200)
+    expect(res.data).toEqual({ success: true, message: 'Marked as paid' })
+    expect(ssiClientMocks.ssiTogglePaid).toHaveBeenCalledTimes(1)
+    expect(ssiClientMocks.ssiTogglePaid).toHaveBeenCalledWith(137, 'cup-88', expect.any(Object))
   })
 })

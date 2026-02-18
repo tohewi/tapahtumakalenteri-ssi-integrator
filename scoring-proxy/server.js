@@ -339,6 +339,7 @@ const managementRouter = createManagementRouter({
   requireAuth,
   graphqlWithRefresh,
   adminGraphQL,
+  getAdminSession,
   IS_PROD,
 })
 app.use('/api/manage', managementRouter)
