@@ -173,6 +173,29 @@ export default function ManagePage() {
     setLoading(false)
   }, [withSessionCheck]) // withSessionCheck is stable, but included for clarity
 
+  // Patch CUP shooter status in local state so CUP2/CUP3 can update UI
+  // without forcing a full overview reload.
+  const patchShooterStatus = useCallback((cupParticipantId, patch) => {
+    if (!cupParticipantId) return
+    setData(prev => {
+      if (!prev) return prev
+
+      const targetId = String(cupParticipantId)
+      const applyPatch = (list = []) => list.map((shooter) => {
+        if (String(shooter?.cupParticipantId || '') !== targetId) return shooter
+        const nextPatch = typeof patch === 'function' ? patch(shooter) : patch
+        return { ...shooter, ...nextPatch }
+      })
+
+      return {
+        ...prev,
+        shooters: applyPatch(prev.shooters || []),
+        cupOnly: applyPatch(prev.cupOnly || []),
+        pendingShooters: applyPatch(prev.pendingShooters || []),
+      }
+    })
+  }, [])
+
   // Login screen
   if (!authed) {
     return (
@@ -245,7 +268,12 @@ export default function ManagePage() {
 
       {/* Squadding overview */}
       {view === 'overview' && data && !loading && (
-        <SquaddingOverview data={data} cupId={selectedCup.id} onRefresh={() => handleSelectCup(selectedCup)} />
+        <SquaddingOverview
+          data={data}
+          cupId={selectedCup.id}
+          onRefresh={() => handleSelectCup(selectedCup)}
+          onPatchShooterStatus={patchShooterStatus}
+        />
       )}
     </div>
   )
@@ -255,7 +283,7 @@ export default function ManagePage() {
 // Squadding Overview — Mobile-first management UI
 // ============================================================
 
-function SquaddingOverview({ data, cupId, onRefresh }) {
+function SquaddingOverview({ data, cupId, onRefresh, onPatchShooterStatus }) {
   const { matches, shooters, cupOnly, matchOnly, pendingShooters = [] } = data
   const matchIds = matches.map(m => m.id)
   const totalMatches = matches.length
@@ -346,12 +374,14 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
   const scrollTo = (ref) => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   // ── Action handlers ──
-  const runAction = async (actionFn, shooterName, action) => {
+  const runAction = async (actionFn, shooterName, action, options = {}) => {
+    const { refresh = true, afterSuccess } = options
     setActionLoading({ shooterName, action })
     setActionError(null)
     try {
       await actionFn()
-      await onRefresh()
+      if (typeof afterSuccess === 'function') afterSuccess()
+      if (refresh) await onRefresh()
     } catch (err) {
       setActionError(`${shooterName}: ${err.message}`)
     }
@@ -396,16 +426,40 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
     const { shooter, action } = dnsConfirm
     setDnsConfirm(null)
     if (action === 'set') {
-      runAction(() => api.manageSetDns(cupId, shooter.name, shooter.email, shooter.cupParticipantId), shooter.name, 'dns')
+      runAction(
+        () => api.manageSetDns(cupId, shooter.name, shooter.email, shooter.cupParticipantId),
+        shooter.name,
+        'dns',
+        {
+          refresh: false,
+          afterSuccess: () => onPatchShooterStatus?.(shooter.cupParticipantId, { didNotShow: true }),
+        }
+      )
     } else {
-      runAction(() => api.manageUndoDns(cupId, shooter.name, shooter.email, shooter.cupParticipantId), shooter.name, 'undoDns')
+      runAction(
+        () => api.manageUndoDns(cupId, shooter.name, shooter.email, shooter.cupParticipantId),
+        shooter.name,
+        'undoDns',
+        {
+          refresh: false,
+          afterSuccess: () => onPatchShooterStatus?.(shooter.cupParticipantId, { didNotShow: false }),
+        }
+      )
     }
   }
 
   // CUP3: Paid toggle handler
   const handleTogglePaid = (shooter) => {
     if (!shooter.cupParticipantId) return
-    runAction(() => api.manageTogglePaid(cupId, shooter.name, shooter.cupParticipantId), shooter.name, 'paid')
+    runAction(
+      () => api.manageTogglePaid(cupId, shooter.name, shooter.cupParticipantId),
+      shooter.name,
+      'paid',
+      {
+        refresh: false,
+        afterSuccess: () => onPatchShooterStatus?.(shooter.cupParticipantId, s => ({ paid: !s.paid })),
+      }
+    )
   }
 
   // CUP1: Move squad handler (for shooters already in a squad)
@@ -786,6 +840,7 @@ function ShooterActions({ shooter, actionLoading, onSetDns, onUndoDns, onToggleP
           onClick={() => onTogglePaid(shooter)}
           disabled={isPaidLoading}
           aria-label={shooter.paid ? `${shooter.name}: maksettu` : `${shooter.name}: ei maksettu`}
+          title={shooter.paid ? `${shooter.name}: maksettu` : `${shooter.name}: ei maksettu`}
           className={`px-2 py-0.5 text-[10px] font-medium rounded transition-colors ${
             shooter.paid
               ? 'bg-green-500 text-white active:bg-green-600'

@@ -1400,13 +1400,16 @@ export async function ssiRegisterToTrainerSquad(eventContentType, eventId, email
 // Admin: find competitor ID in a match by scraping participants page
 // GET /event/91/{matchId}/participants/
 // Returns the participant ID if found, or null
+// Optional email parameter is used for disambiguation if multiple
+// participants match the same shooter name.
 // ============================================================
 
-export async function ssiFindCompetitorInMatch(matchId, shooterName, cookies) {
+export async function ssiFindCompetitorInMatch(matchId, shooterName, cookies, email = null) {
   const debug = process.env.NODE_ENV !== 'production'
   const url = `${SSI_BASE_URL}/event/91/${matchId}/participants/`
 
-  if (debug) console.log(`[find-competitor] GET ${url} (looking for "${shooterName}")`)
+  const searchDesc = email ? `"${shooterName}" (${email})` : `"${shooterName}"`
+  if (debug) console.log(`[find-competitor] GET ${url} (looking for ${searchDesc})`)
   const resp = await fetch(url, {
     headers: { 'Cookie': formatCookies(cookies) },
     redirect: 'follow',
@@ -1414,28 +1417,61 @@ export async function ssiFindCompetitorInMatch(matchId, shooterName, cookies) {
   if (!resp.ok) throw new Error(`Participants page HTTP ${resp.status} for match ${matchId}`)
   const html = await resp.text()
 
-  // Participant links: <a href="/event/participant/93/{id}/">Name</a>
-  // or: <a href="/event/participant/93/{id}/" class="...">Name</a>
-  const pattern = /<a[^>]*href="\/event\/participant\/93\/(\d+)\/"[^>]*>([^<]*)<\/a>/gi
-
   // Normalize search: split into words for flexible matching (handles double spaces etc.)
   // Keep single-char digits (e.g. "2") to distinguish "Tuloskone 1" from "Tuloskone 2"
   const searchWords = shooterName.toLowerCase().split(/\s+/).filter(w => w.length > 1 || /\d/.test(w))
   if (debug) console.log(`[find-competitor] Search words: ${JSON.stringify(searchWords)}`)
 
-  for (const m of html.matchAll(pattern)) {
-    const compId = m[1]
-    const name = m[2].trim()
+  // Parse by table row so we can use row text (e.g. email) for disambiguation
+  const rows = html.split(/<tr[\s>]/i).slice(1)
+  const matches = []
+
+  for (const row of rows) {
+    // Participant link pattern: <a href="/event/participant/93/{id}/">Name</a>
+    // (can include additional attributes)
+    const participantMatch = row.match(/<a[^>]*href="\/event\/participant\/93\/(\d+)\/"[^>]*>([^<]*)<\/a>/i)
+    if (!participantMatch) continue
+
+    const compId = participantMatch[1]
+    const name = participantMatch[2].trim()
     const nameLower = name.toLowerCase()
-    // Match if all search words appear in the name
+
+    // Match if all search words appear in the participant name
     if (searchWords.length > 0 && searchWords.every(w => nameLower.includes(w))) {
-      if (debug) console.log(`[find-competitor] Found: ${name} → participant ${compId}`)
-      return compId
+      matches.push({ id: compId, name, row })
     }
   }
 
-  if (debug) console.log(`[find-competitor] "${shooterName}" not found in match ${matchId}`)
-  return null
+  if (matches.length === 0) {
+    if (debug) console.log(`[find-competitor] ${searchDesc} not found in match ${matchId}`)
+    return null
+  }
+
+  if (matches.length === 1) {
+    if (debug) console.log(`[find-competitor] Found: ${matches[0].name} → participant ${matches[0].id}`)
+    return matches[0].id
+  }
+
+  // Multiple name matches found — try to disambiguate by email from row text.
+  console.warn(`[find-competitor] WARNING: Multiple name matches found for "${shooterName}" in match ${matchId}:`, matches.map(m => m.name))
+  if (email) {
+    const emailLower = email.toLowerCase()
+    const emailMatches = matches.filter(m => m.row.toLowerCase().includes(emailLower))
+
+    if (emailMatches.length === 1) {
+      if (debug) console.log(`[find-competitor] Email-disambiguated: ${emailMatches[0].name} (${email}) → participant ${emailMatches[0].id}`)
+      return emailMatches[0].id
+    }
+
+    if (emailMatches.length > 1) {
+      console.warn(`[find-competitor] WARNING: Multiple email matches for ${email} in match ${matchId}; using first match`)
+      return emailMatches[0].id
+    }
+
+    console.warn(`[find-competitor] WARNING: Email ${email} not found in matched rows for match ${matchId}; using first name match`)
+  }
+
+  return matches[0].id
 }
 
 // ============================================================
