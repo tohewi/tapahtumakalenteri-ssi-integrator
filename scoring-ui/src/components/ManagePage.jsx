@@ -409,7 +409,7 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
 
   // CUP1: Move squad handler (for shooters already in a squad)
   const handleMoveSquad = (shooter) => {
-    setSquadPicker({ shooter, type: 'assign' })
+    setSquadPicker({ shooter, type: 'move' })
   }
 
   return (
@@ -693,7 +693,14 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
         <SquadPickerSheet
           shooter={squadPicker.shooter}
           squads={squadOptions}
-          onSelect={(sqNum) => handleAssignSquad(squadPicker.shooter, sqNum)}
+          onSelect={(sqNum) => {
+            if (squadPicker.type === 'move') {
+              setSquadPicker(null)
+              handleFixSquad(squadPicker.shooter, sqNum)
+            } else {
+              handleAssignSquad(squadPicker.shooter, sqNum)
+            }
+          }}
           onClose={() => setSquadPicker(null)}
         />
       )}
