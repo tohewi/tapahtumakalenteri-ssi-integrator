@@ -445,12 +445,19 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       let cupParticipantStatuses = new Map()
       try {
         const adminSess = getAdminSession ? await getAdminSession() : null
+        console.log(`[manage] Admin session available: ${!!adminSess}, has cookies: ${!!adminSess?.cookies}`)
         if (adminSess?.cookies) {
           cupParticipantStatuses = await ssiGetCupParticipantStatuses(req.params.id, adminSess.cookies)
-          if (!IS_PROD) console.log(`[manage] Scraped paid/DNS status for ${cupParticipantStatuses.size} CUP participants`)
+          console.log(`[manage] Scraped paid/DNS status for ${cupParticipantStatuses.size} CUP participants`)
+          // Log first few entries to verify scraping
+          let i = 0
+          for (const [id, status] of cupParticipantStatuses) {
+            if (i++ >= 3) break
+            console.log(`[manage]   participant ${id}: paid=${status.paid}, didNotShow=${status.didNotShow}`)
+          }
         }
       } catch (err) {
-        console.warn(`[manage] Failed to scrape paid/DNS status: ${err.message}`)
+        console.error(`[manage] Failed to scrape paid/DNS status: ${err.message}`)
       }
 
       // Build cupParticipantId map: name → participantId (from CUP competitors)
@@ -978,8 +985,9 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       const cookies = adminSess?.cookies
       if (!cookies) return res.status(500).json({ error: 'Admin session not available' })
 
-      if (!IS_PROD) console.log(`[manage] Toggling paid for CUP participant ${cupParticipantId} ("${shooterName}")`)
+      console.log(`[manage] Toggling paid for CUP participant ${cupParticipantId} ("${shooterName}")`)
       const result = await ssiTogglePaid(137, cupParticipantId, cookies)
+      console.log(`[manage] Toggle paid result: ${result.message}`)
 
       res.json({ success: result.success, message: result.message })
     } catch (err) {

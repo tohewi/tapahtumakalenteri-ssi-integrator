@@ -1583,7 +1583,7 @@ export async function ssiGetCupParticipantStatuses(cupId, cookies) {
   const debug = process.env.NODE_ENV !== 'production'
   const url = `${SSI_BASE_URL}/event/136/${cupId}/participants/`
 
-  if (debug) console.log(`[cup-status] GET ${url}`)
+  console.log(`[cup-status] GET ${url}`)
   const resp = await fetch(url, {
     headers: { 'Cookie': formatCookies(cookies) },
     redirect: 'follow',
@@ -1604,8 +1604,8 @@ export async function ssiGetCupParticipantStatuses(cupId, cookies) {
     if (!partMatch) continue
     const partId = partMatch[1]
 
-    // Debug: log first row's toggle-paid context to understand SSI HTML structure
-    if (debug && !firstRowLogged) {
+    // Log first row's toggle-paid context to understand SSI HTML structure
+    if (!firstRowLogged) {
       const toggleContext = row.match(/toggle-paid[\s\S]{0,200}/i)
       console.log(`[cup-status] Sample row toggle-paid context: ${toggleContext ? toggleContext[0].substring(0, 200) : 'NOT FOUND'}`)
       const dnsContext = row.match(/(set-did-not-show|undo-did-not-show)[\s\S]{0,100}/i)
@@ -1631,7 +1631,7 @@ export async function ssiGetCupParticipantStatuses(cupId, cookies) {
     statuses.set(partId, { paid, didNotShow })
   }
 
-  if (debug) console.log(`[cup-status] Found ${statuses.size} participants with status data`)
+  console.log(`[cup-status] Found ${statuses.size} participants with status data`)
   return statuses
 }
 
