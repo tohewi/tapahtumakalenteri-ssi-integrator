@@ -271,6 +271,7 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
   const [actionLoading, setActionLoading] = useState(null) // { shooterName, action } being acted on
   const [actionError, setActionError] = useState(null)
   const [squadPicker, setSquadPicker] = useState(null) // { shooterName, type: 'assign'|'assignCupOnly' }
+  const [expandedSquads, setExpandedSquads] = useState(new Set()) // persists across refreshes
 
   // Short match labels (last word: Tarkkuus, Pika, Kuvio)
   const matchLabels = matches.map(m => {
@@ -683,6 +684,13 @@ function SquaddingOverview({ data, cupId, onRefresh }) {
               onSetDns={handleSetDns}
               onUndoDns={handleUndoDns}
               onTogglePaid={handleTogglePaid}
+              expanded={expandedSquads.has(group.number)}
+              onToggleExpand={() => setExpandedSquads(prev => {
+                const next = new Set(prev)
+                if (next.has(group.number)) next.delete(group.number)
+                else next.add(group.number)
+                return next
+              })}
             />
           ))}
         </div>
@@ -875,15 +883,14 @@ function SectionHeader({ icon, title, count, color }) {
 }
 
 // ── Squad card with expandable shooter list ──
-function SquadCard({ group, matchLabels, actionLoading, onMoveSquad, onSetDns, onUndoDns, onTogglePaid }) {
-  const [expanded, setExpanded] = useState(false)
+function SquadCard({ group, matchLabels, actionLoading, onMoveSquad, onSetDns, onUndoDns, onTogglePaid, expanded, onToggleExpand }) {
   const shooterCount = group.total
   const hasIssues = group.issueShooters.length > 0
 
   return (
     <div className={`bg-white rounded-xl border mb-2 overflow-hidden ${hasIssues ? 'border-amber-200' : 'border-gray-200'}`}>
       <button
-        onClick={() => setExpanded(!expanded)}
+        onClick={onToggleExpand}
         className="w-full px-4 py-3 flex items-center justify-between active:bg-gray-50 transition-colors"
       >
         <div className="flex items-center gap-2">

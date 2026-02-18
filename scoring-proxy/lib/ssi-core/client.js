@@ -1558,7 +1558,7 @@ export async function ssiTogglePaid(participantContentType, participantId, cooki
 
   if (debug) console.log(`[toggle-paid] Response: ${resp.status}`)
 
-  // SSI redirects (302/301) on success. A 200 likely means redirect to login/error page.
+  // SSI redirects (302/301) on success
   if (resp.status === 302 || resp.status === 301) {
     return { success: true, message: 'Paid status toggled' }
   }
@@ -1597,17 +1597,30 @@ export async function ssiGetCupParticipantStatuses(cupId, cookies) {
   // Each row contains: participant link, toggle-paid link, set-did-not-show or undo-did-not-show link
   const rows = html.split(/<tr[\s>]/i).slice(1) // split by <tr> tags
 
+  let firstRowLogged = false
   for (const row of rows) {
     // Extract participant ID from link: /event/participant/137/{id}/
     const partMatch = row.match(/\/event\/participant\/137\/(\d+)\//)
     if (!partMatch) continue
     const partId = partMatch[1]
 
+    // Debug: log first row's toggle-paid context to understand SSI HTML structure
+    if (debug && !firstRowLogged) {
+      const toggleContext = row.match(/toggle-paid[\s\S]{0,200}/i)
+      console.log(`[cup-status] Sample row toggle-paid context: ${toggleContext ? toggleContext[0].substring(0, 200) : 'NOT FOUND'}`)
+      const dnsContext = row.match(/(set-did-not-show|undo-did-not-show)[\s\S]{0,100}/i)
+      console.log(`[cup-status] Sample row DNS context: ${dnsContext ? dnsContext[0].substring(0, 100) : 'NOT FOUND'}`)
+      firstRowLogged = true
+    }
+
     // Paid status: look for toggle-paid link context
     // SSI shows a green money icon for paid, red for unpaid
-    // Pattern: <a href="...toggle-paid/..."><i class="fa fa-money text-success"></i></a> (paid)
-    //          <a href="...toggle-paid/..."><i class="fa fa-money text-danger"></i></a> (unpaid)
+    // Multiple possible patterns:
+    //   <a href="...toggle-paid/..."><i class="fa fa-money text-success"></i></a> (paid)
+    //   <a href="...toggle-paid/..."><i class="fa fa-money text-danger"></i></a> (unpaid)
+    //   Or: class="...text-success..." anywhere near toggle-paid in the same row
     const paidMatch = row.match(/toggle-paid[\s\S]*?text-(success|danger)/i)
+      || row.match(/text-(success|danger)[\s\S]*?toggle-paid/i)
     const paid = paidMatch ? paidMatch[1] === 'success' : false
 
     // DNS status: if undo-did-not-show link exists, shooter IS marked DNS
