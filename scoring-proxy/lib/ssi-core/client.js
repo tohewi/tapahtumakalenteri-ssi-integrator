@@ -253,11 +253,7 @@ async function _followRegisterLink(url, referer, cookies, debug) {
 
   if (resp.status === 200) {
     const html = await resp.text()
-    if (debug) {
-      const fs = await import('fs')
-      fs.writeFileSync('test-harness/debug-register-participant-response.html', html)
-      console.log(`[search-and-add] Saved register response (${html.length} chars)`)
-    }
+    if (debug) console.log(`[search-and-add] Response: ${html.length} chars`)
     return await _handleRegisterResponse(html, url, cookies, debug)
   }
 
@@ -490,12 +486,8 @@ export async function ssiSearchAndAddParticipant(eventContentType, eventId, emai
     return result
   }
 
-  // Save debug HTML for investigation
-  if (debug) {
-    const fs = await import('fs')
-    fs.writeFileSync('test-harness/debug-search-and-add-result.html', searchHtml)
-    console.log('[search-and-add] No action links found. Saved debug HTML.')
-  }
+  // No action links found
+  if (debug) console.log('[search-and-add] No action links found in search response.')
 
   return { success: false, message: 'user_not_found' }
 }
