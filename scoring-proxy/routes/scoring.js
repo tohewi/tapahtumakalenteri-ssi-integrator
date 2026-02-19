@@ -1,9 +1,10 @@
 import express from 'express'
 import { ssiGetScoringPage, ssiSubmitScore } from '../lib/ssi-client.js'
+import { log } from '../lib/logger.js'
 
 const router = express.Router()
 
-export function createScoringRouter({ requireAuth, graphqlWithRefresh, IS_PROD }) {
+export function createScoringRouter({ requireAuth, graphqlWithRefresh }) {
   // ============================================================
   // GET /api/cups?search=Kupittaa — Search for cups by name
   // Uses SSI events(search:) query, filters to CT=136 (cups)
@@ -310,7 +311,7 @@ export function createScoringRouter({ requireAuth, graphqlWithRefresh, IS_PROD }
             after: w.after,
             before: w.before,
           }).catch(err => {
-            if (!IS_PROD) console.log(`[search] Window ${w.after}→${w.before} failed: ${err.message}`)
+            log.debug(`[search] Window ${w.after}→${w.before} failed: ${err.message}`)
             return { events: [] }
           })
         )
@@ -354,7 +355,7 @@ export function createScoringRouter({ requireAuth, graphqlWithRefresh, IS_PROD }
       // Sort by date descending (newest first)
       matches.sort((a, b) => new Date(b.starts) - new Date(a.starts))
 
-      if (!IS_PROD) console.log(`[search] "${search}": ${windows.length} windows → ${matches.length} events`)
+      log.debug(`[search] "${search}": ${windows.length} windows → ${matches.length} events`)
 
       res.json({ matches })
     } catch (err) {

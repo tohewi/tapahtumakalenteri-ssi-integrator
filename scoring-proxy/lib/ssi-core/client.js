@@ -1,4 +1,5 @@
 import { SSI_BASE_URL, SSI_GRAPHQL } from './constants.js'
+import { log } from '../logger.js'
 
 // ============================================================
 // GraphQL client (JWT auth for reads)
@@ -116,20 +117,21 @@ export async function ssiLogin(email, password) {
   const loginSetCookies = loginResp.headers.getSetCookie?.() || []
   const loginCookies = parseCookies(loginSetCookies)
   const allCookies = { ...cookies, ...loginCookies }
+  const debug = log.isEnabled('debug')
 
-  if (process.env.NODE_ENV !== 'production') {
+  if (debug) {
     console.log('Login response status:', loginResp.status, 'Cookies:', Object.keys(allCookies))
   }
 
   // 302 redirect = success
   if (loginResp.status === 302 || loginResp.status === 301) {
-    if (process.env.NODE_ENV !== 'production') console.log('SSI web login successful')
+    if (debug) console.log('SSI web login successful')
     return allCookies
   }
 
   // 200 with sessionid cookie = success (some configs)
   if (allCookies.sessionid) {
-    if (process.env.NODE_ENV !== 'production') console.log('SSI web login successful (no redirect)')
+    if (debug) console.log('SSI web login successful (no redirect)')
     return allCookies
   }
 
@@ -251,11 +253,7 @@ async function _followRegisterLink(url, referer, cookies, debug) {
 
   if (resp.status === 200) {
     const html = await resp.text()
-    if (debug) {
-      const fs = await import('fs')
-      fs.writeFileSync('test-harness/debug-register-participant-response.html', html)
-      console.log(`[search-and-add] Saved register response (${html.length} chars)`)
-    }
+    if (debug) console.log(`[search-and-add] Response: ${html.length} chars`)
     return await _handleRegisterResponse(html, url, cookies, debug)
   }
 
@@ -386,7 +384,7 @@ async function _handleRegisterResponse(html, url, cookies, debug) {
 
 export async function ssiSearchAndAddParticipant(eventContentType, eventId, email, cookies, { firstName, lastName } = {}) {
   const pageUrl = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/participant-search-and-add/`
-  const debug = process.env.NODE_ENV !== 'production'
+  const debug = log.isEnabled('debug')
 
   // SSI search-and-add is a two-step form (NO CSRF tokens — SSI doesn't use them):
   // Step 1: POST search (last_name, first_name, email, submit=Search) → returns result table
@@ -488,12 +486,8 @@ export async function ssiSearchAndAddParticipant(eventContentType, eventId, emai
     return result
   }
 
-  // Save debug HTML for investigation
-  if (debug) {
-    const fs = await import('fs')
-    fs.writeFileSync('test-harness/debug-search-and-add-result.html', searchHtml)
-    console.log('[search-and-add] No action links found. Saved debug HTML.')
-  }
+  // No action links found
+  if (debug) console.log('[search-and-add] No action links found in search response.')
 
   return { success: false, message: 'user_not_found' }
 }
@@ -507,7 +501,7 @@ export async function ssiSearchAndAddParticipant(eventContentType, eventId, emai
 // ============================================================
 
 export async function ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies, email = null, participantId = null) {
-  const debug = process.env.NODE_ENV !== 'production'
+  const debug = log.isEnabled('debug')
 
   const partUrl = `${SSI_BASE_URL}/event/136/${cupId}/participants/`
 
@@ -644,7 +638,7 @@ export async function ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies
 // ============================================================
 
 export async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookies, email = null, participantId = null) {
-  const debug = process.env.NODE_ENV !== 'production'
+  const debug = log.isEnabled('debug')
 
   const partUrl = `${SSI_BASE_URL}/event/136/${cupId}/participants/`
 
@@ -762,7 +756,7 @@ export async function ssiFindAndApproveCupParticipant(cupId, shooterName, cookie
 // ============================================================
 
 export async function ssiSetParticipantSquad(participantId, squadNumber, cookies, statusOverride = 'a', participantContentType = 93) {
-  const debug = process.env.NODE_ENV !== 'production'
+  const debug = log.isEnabled('debug')
   const url = `${SSI_BASE_URL}/event/participant/${participantContentType}/${participantId}/edit/`
 
   // 1. GET the edit form
@@ -853,7 +847,7 @@ export async function ssiSetParticipantSquad(participantId, squadNumber, cookies
 // ============================================================
 
 export async function ssiSetMatchParticipantStatus(participantId, status, cookies, participantContentType = 93) {
-  const debug = process.env.NODE_ENV !== 'production'
+  const debug = log.isEnabled('debug')
   const url = `${SSI_BASE_URL}/event/participant/${participantContentType}/${participantId}/edit/`
 
   // 1. GET the edit form
@@ -915,7 +909,7 @@ export async function ssiSetMatchParticipantStatus(participantId, status, cookie
 // ============================================================
 
 export async function ssiDeleteMatchParticipant(matchId, participantId, shooterName, cookies, participantContentType = 93) {
-  const debug = process.env.NODE_ENV !== 'production'
+  const debug = log.isEnabled('debug')
 
   if (debug) console.log(`[match-delete] Deleting "${shooterName}" (ID ${participantId}) from match ${matchId}, participantCT=${participantContentType}`)
 
@@ -936,7 +930,7 @@ export async function ssiDeleteMatchParticipant(matchId, participantId, shooterN
 // ============================================================
 
 export async function ssiGetMatchGroupId(eventContentType, eventId, cookies) {
-  const debug = process.env.NODE_ENV !== 'production'
+  const debug = log.isEnabled('debug')
   const url = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/staff/`
 
   if (debug) console.log(`[mgmt-group] GET ${url}`)
@@ -962,7 +956,7 @@ export async function ssiGetMatchGroupId(eventContentType, eventId, cookies) {
 // ============================================================
 
 export async function ssiGetMatchOfficials(eventContentType, eventId, cookies) {
-  const debug = process.env.NODE_ENV !== 'production'
+  const debug = log.isEnabled('debug')
   const url = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/staff/`
 
   if (debug) console.log(`[mgmt-read] GET ${url}`)
@@ -1015,7 +1009,7 @@ export async function ssiGetMatchOfficials(eventContentType, eventId, cookies) {
 // ============================================================
 
 export async function ssiAddToMatchManagement(groupId, eventContentType, eventId, email, role, officials, cookies) {
-  const debug = process.env.NODE_ENV !== 'production'
+  const debug = log.isEnabled('debug')
   const nextUrl = `/event/${eventContentType}/${eventId}/staff/`
   const searchUrl = `${SSI_BASE_URL}/groups/${groupId}/role/search/?next=${nextUrl}`
 
@@ -1100,7 +1094,7 @@ export async function ssiAddToMatchManagement(groupId, eventContentType, eventId
 // ============================================================
 
 export async function ssiRemoveFromMatchManagement(groupId, eventContentType, eventId, email, cookies) {
-  const debug = process.env.NODE_ENV !== 'production'
+  const debug = log.isEnabled('debug')
   const nextUrl = `/event/${eventContentType}/${eventId}/staff/`
   let ssiUserId = null
   let usedFallback = false
@@ -1235,7 +1229,7 @@ export async function ssiRemoveFromMatchManagement(groupId, eventContentType, ev
 // ============================================================
 
 export async function ssiRegisterToTrainerSquad(eventContentType, eventId, email, trainerSquadName, cookies) {
-  const debug = process.env.NODE_ENV !== 'production'
+  const debug = log.isEnabled('debug')
   const pageUrl = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/participant-search-and-add/`
 
   // Step 1: Search by email
@@ -1312,10 +1306,11 @@ export async function ssiRegisterToTrainerSquad(eventContentType, eventId, email
   if (squadSelect) {
     const opts = [...squadSelect[1].matchAll(/<option\s+value="([^"]*)"[^>]*>([^<]*)<\/option>/gi)]
     for (const opt of opts) {
+      const val = opt[1]
       const label = opt[2].trim()
+      // Match "Squad N" label or the Nth non-empty option
       if (label.toLowerCase().includes(trainerSquadName.toLowerCase().replace(/\./g, '').trim())) {
-        squadValue = opt[1]
-        if (debug) console.log(`[trainer-squad] Matched squad: "${label}" → value ${squadValue}`)
+        squadValue = val
         break
       }
     }
@@ -1326,7 +1321,6 @@ export async function ssiRegisterToTrainerSquad(eventContentType, eventId, email
         for (const opt of opts) {
           if (opt[2].trim().match(new RegExp(`\\b${numMatch[0]}\\b`)) && opt[1]) {
             squadValue = opt[1]
-            if (debug) console.log(`[trainer-squad] Fallback matched squad: "${opt[2].trim()}" → value ${squadValue}`)
             break
           }
         }
@@ -1405,7 +1399,7 @@ export async function ssiRegisterToTrainerSquad(eventContentType, eventId, email
 // ============================================================
 
 export async function ssiFindCompetitorInMatch(matchId, shooterName, cookies, email = null) {
-  const debug = process.env.NODE_ENV !== 'production'
+  const debug = log.isEnabled('debug')
   const url = `${SSI_BASE_URL}/event/91/${matchId}/participants/`
 
   const searchDesc = email ? `"${shooterName}" (${email})` : `"${shooterName}"`
@@ -1528,7 +1522,7 @@ export async function ssiFindParticipantInEvent(eventContentType, eventId, shoot
 // ============================================================
 
 export async function ssiSetDidNotShow(participantContentType, participantId, cookies, nextUrl = '') {
-  const debug = process.env.NODE_ENV !== 'production'
+  const debug = log.isEnabled('debug')
   const url = `${SSI_BASE_URL}/event/participant/${participantContentType}/${participantId}/set-did-not-show/`
   const fullUrl = nextUrl ? `${url}?next=${nextUrl}` : url
 
@@ -1555,7 +1549,7 @@ export async function ssiSetDidNotShow(participantContentType, participantId, co
 // ============================================================
 
 export async function ssiUndoDidNotShow(participantContentType, participantId, cookies, nextUrl = '') {
-  const debug = process.env.NODE_ENV !== 'production'
+  const debug = log.isEnabled('debug')
   const url = `${SSI_BASE_URL}/event/participant/${participantContentType}/${participantId}/undo-did-not-show/`
   const fullUrl = nextUrl ? `${url}?next=${nextUrl}` : url
 
@@ -1582,7 +1576,7 @@ export async function ssiUndoDidNotShow(participantContentType, participantId, c
 // ============================================================
 
 export async function ssiTogglePaid(participantContentType, participantId, cookies, nextUrl = '') {
-  const debug = process.env.NODE_ENV !== 'production'
+  const debug = log.isEnabled('debug')
   const url = `${SSI_BASE_URL}/event/participant/${participantContentType}/${participantId}/toggle-paid/`
   const fullUrl = nextUrl ? `${url}?next=${nextUrl}` : url
 
@@ -1616,10 +1610,10 @@ export async function ssiTogglePaid(participantContentType, participantId, cooki
 // ============================================================
 
 export async function ssiGetCupParticipantStatuses(cupId, cookies) {
-  const debug = process.env.NODE_ENV !== 'production'
+  const debug = log.isEnabled('debug')
   const url = `${SSI_BASE_URL}/event/136/${cupId}/participants/`
 
-  console.log(`[cup-status] GET ${url}`)
+  if (debug) console.log(`[cup-status] GET ${url}`)
   const resp = await fetch(url, {
     headers: { 'Cookie': formatCookies(cookies) },
     redirect: 'follow',
@@ -1643,9 +1637,9 @@ export async function ssiGetCupParticipantStatuses(cupId, cookies) {
     // Log first row's toggle-paid context to understand SSI HTML structure
     if (!firstRowLogged) {
       const toggleContext = row.match(/toggle-paid[\s\S]{0,200}/i)
-      console.log(`[cup-status] Sample row toggle-paid context: ${toggleContext ? toggleContext[0].substring(0, 200) : 'NOT FOUND'}`)
+      if (debug) console.log(`[cup-status] Sample row toggle-paid context: ${toggleContext ? toggleContext[0].substring(0, 200) : 'NOT FOUND'}`)
       const dnsContext = row.match(/(set-did-not-show|undo-did-not-show)[\s\S]{0,100}/i)
-      console.log(`[cup-status] Sample row DNS context: ${dnsContext ? dnsContext[0].substring(0, 100) : 'NOT FOUND'}`)
+      if (debug) console.log(`[cup-status] Sample row DNS context: ${dnsContext ? dnsContext[0].substring(0, 100) : 'NOT FOUND'}`)
       firstRowLogged = true
     }
 
@@ -1662,7 +1656,7 @@ export async function ssiGetCupParticipantStatuses(cupId, cookies) {
     statuses.set(partId, { paid, didNotShow })
   }
 
-  console.log(`[cup-status] Found ${statuses.size} participants with status data`)
+  if (debug) console.log(`[cup-status] Found ${statuses.size} participants with status data`)
   return statuses
 }
 

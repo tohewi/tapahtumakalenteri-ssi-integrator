@@ -2,6 +2,7 @@ import express from 'express'
 import crypto from 'node:crypto'
 import { ssiGraphQL, ssiRefreshJWT, ssiLogin, ssiSearchAndAddParticipant, ssiFindAndApproveCupParticipant, ssiFindCompetitorInMatch, ssiSetParticipantSquad } from '../lib/ssi-client.js'
 import { sendRegistrationConfirmation } from '../lib/email.js'
+import { log } from '../lib/logger.js'
 
 const router = express.Router()
 
@@ -319,7 +320,7 @@ export function createRegistrationRouter({ captchaChallenges, CAPTCHA_TTL, captc
       }
 
       // 2. Add participant to Cup via web scraping
-      if (!IS_PROD) console.log(`[register] Adding ${email} to cup ${cupId}`)
+      log.debug(`[register] Adding ${email} to cup ${cupId}`)
       const addResult = await ssiSearchAndAddParticipant(136, cupId, email, admin.cookies)
 
       const isReRegistration = addResult.success && addResult.message === 'Already registered'
@@ -339,7 +340,7 @@ export function createRegistrationRouter({ captchaChallenges, CAPTCHA_TTL, captc
       //    _handleRegisterResponse extracts it from the shooter select element.
       //    Fallback to email prefix if not available.
       const shooterName = addResult.shooterName || email.split('@')[0].replace(/[+._-]/g, ' ')
-      if (!IS_PROD) console.log(`[register] ${isReRegistration ? 'Re-registration' : 'New registration'} (${addResult.message}), shooter: "${shooterName}"`)
+      log.debug(`[register] ${isReRegistration ? 'Re-registration' : 'New registration'} (${addResult.message}), shooter: "${shooterName}"`)
 
       // 4. Approve the CUP participant (default state is Pending)
       //    Switch to streaming (NDJSON) so the frontend can show progress
@@ -351,9 +352,9 @@ export function createRegistrationRouter({ captchaChallenges, CAPTCHA_TTL, captc
       const totalMatches = componentMatches.length
       sendProgress({ type: 'progress', step: 'approve', current: 0, total: totalMatches, message: 'Cup-hyväksyntä...' })
 
-      if (!IS_PROD) console.log(`[register] Approving CUP participant...`)
+      log.debug('[register] Approving CUP participant...')
       const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, admin.cookies, email)
-      if (!IS_PROD) console.log(`[register] Approve result: ${approveResult.message}`)
+      log.debug(`[register] Approve result: ${approveResult.message}`)
       if (!approveResult.success) {
         sendProgress({ type: 'result', success: false, message: `Ilmoittautuminen onnistui mutta hyväksyntä epäonnistui: ${approveResult.message}` })
         return res.end()
@@ -368,22 +369,22 @@ export function createRegistrationRouter({ captchaChallenges, CAPTCHA_TTL, captc
         const matchId = cm.match.id
         sendProgress({ type: 'progress', step: 'match', current: i + 1, total: totalMatches, message: `Osakilpailu ${i + 1}/${totalMatches}...` })
 
-        if (!IS_PROD) console.log(`[register] Adding ${email} to match ${matchId}`)
+        log.debug(`[register] Adding ${email} to match ${matchId}`)
 
         // 5a. Register to match (search-and-add with contentType=91)
         const matchAddResult = await ssiSearchAndAddParticipant(91, matchId, email, admin.cookies)
-        if (!IS_PROD) console.log(`[register] Match ${matchId} add result: ${matchAddResult.message}`)
+        log.debug(`[register] Match ${matchId} add result: ${matchAddResult.message}`)
 
         // 5b. Find competitor in the match
         const participantId = await ssiFindCompetitorInMatch(matchId, shooterName, admin.cookies, email)
         if (!participantId) {
-          if (!IS_PROD) console.log(`[register] Competitor not found in match ${matchId}`)
+          log.debug(`[register] Competitor not found in match ${matchId}`)
           squadResults.push({ matchId, matchName: cm.match.name, success: false, message: 'Competitor not found in match' })
           continue
         }
 
         // 5c. Assign squad + set status to approved via edit form
-        if (!IS_PROD) console.log(`[register] Assigning squad ${squadNumber} to participant ${participantId} in match ${matchId}`)
+        log.debug(`[register] Assigning squad ${squadNumber} to participant ${participantId} in match ${matchId}`)
         const editResult = await ssiSetParticipantSquad(participantId, squadNumber, admin.cookies)
 
         // Find squad label (comment) for the email

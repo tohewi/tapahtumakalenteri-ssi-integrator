@@ -1,9 +1,10 @@
 import express from 'express'
 import { ssiSearchAndAddParticipant, ssiFindCompetitorInMatch, ssiSetParticipantSquad, ssiFindAndApproveCupParticipant, ssiFindAndDeleteCupParticipant, ssiDeleteMatchParticipant, ssiSetDidNotShow, ssiUndoDidNotShow, ssiTogglePaid, ssiGetCupParticipantStatuses } from '../lib/ssi-client.js'
+import { log } from '../lib/logger.js'
 
 const router = express.Router()
 
-export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminGraphQL, getAdminSession, IS_PROD }) {
+export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminGraphQL, getAdminSession }) {
   // ============================================================
   // GET /api/manage/cups — List cups available for management
   // Returns cups that haven't ended yet, regardless of registration status.
@@ -208,8 +209,8 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       for (const match of matches) {
         for (const participant of match.allParticipants) {
           const key = makeShooterKey(participant.firstName, participant.lastName, participant.email)
-          if (!IS_PROD && participant.email) {
-            console.log(`[manage] Match participant: ${participant.firstName} ${participant.lastName} (${participant.email}) -> key: ${key}`)
+          if (participant.email) {
+            log.debug(`[manage] Match participant: ${participant.firstName} ${participant.lastName} (${participant.email}) -> key: ${key}`)
           }
           if (!shooterMap.has(key)) {
             shooterMap.set(key, {
@@ -257,18 +258,16 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
           const lastName = c.shooter?.last_name || ''
 
           // Debug logging
-          if (!IS_PROD) {
-            console.log(`[manage] CUP competitor raw:`, {
-              competitorEmail: c.email,
-              shooterEmail: c.shooter?.email,
-              resolvedEmail: email,
-              firstName,
-              lastName,
-              emailType: typeof email,
-              emailLength: email?.length,
-              hasEmail: !!email
-            })
-          }
+          log.debug('[manage] CUP competitor raw:', {
+            competitorEmail: c.email,
+            shooterEmail: c.shooter?.email,
+            resolvedEmail: email,
+            firstName,
+            lastName,
+            emailType: typeof email,
+            emailLength: email?.length,
+            hasEmail: !!email
+          })
 
           return {
             firstName,
@@ -299,9 +298,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
         })
         .filter(p => p.firstName || p.lastName)
 
-      if (!IS_PROD) {
-        console.log(`[manage] CUP participants: ${cupParticipants.length}, CUP pending: ${cupPending.length}, Match participants: ${shooterMap.size}`)
-      }
+      log.debug(`[manage] CUP participants: ${cupParticipants.length}, CUP pending: ${cupPending.length}, Match participants: ${shooterMap.size}`)
 
       // Find CUP participants not in any match
       // Strict matching by (firstName, lastName, email) triplet
@@ -445,15 +442,15 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       let cupParticipantStatuses = new Map()
       try {
         const adminSess = getAdminSession ? await getAdminSession() : null
-        console.log(`[manage] Admin session available: ${!!adminSess}, has cookies: ${!!adminSess?.cookies}`)
+        log.debug(`[manage] Admin session available: ${!!adminSess}, has cookies: ${!!adminSess?.cookies}`)
         if (adminSess?.cookies) {
           cupParticipantStatuses = await ssiGetCupParticipantStatuses(req.params.id, adminSess.cookies)
-          console.log(`[manage] Scraped paid/DNS status for ${cupParticipantStatuses.size} CUP participants`)
+          log.debug(`[manage] Scraped paid/DNS status for ${cupParticipantStatuses.size} CUP participants`)
           // Log first few entries to verify scraping
           let i = 0
           for (const [id, status] of cupParticipantStatuses) {
             if (i++ >= 3) break
-            console.log(`[manage]   participant ${id}: paid=${status.paid}, didNotShow=${status.didNotShow}`)
+            log.debug(`[manage]   participant ${id}: paid=${status.paid}, didNotShow=${status.didNotShow}`)
           }
         }
       } catch (err) {
@@ -555,9 +552,9 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       const results = []
       for (const matchId of matchIds) {
         // 2. Add shooter to match by name and email (email preferred for disambiguation)
-        if (!IS_PROD) console.log(`[manage] Adding "${shooterName}" (${email || 'no email'}) to match ${matchId}`)
+        log.debug(`[manage] Adding "${shooterName}" (${email || 'no email'}) to match ${matchId}`)
         const addResult = await ssiSearchAndAddParticipant(91, matchId, email, cookies, { firstName, lastName })
-        if (!IS_PROD) console.log(`[manage] Add result: ${addResult.message}`)
+        log.debug(`[manage] Add result: ${addResult.message}`)
 
         // 3. Find participant ID in the match
         const participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies, email)
@@ -626,7 +623,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
 
         // 3. If not found, add them first using email for disambiguation
         if (!participantId) {
-          if (!IS_PROD) console.log(`[manage] "${shooterName}" (${email || 'no email'}) not in match ${matchId}, adding...`)
+          log.debug(`[manage] "${shooterName}" (${email || 'no email'}) not in match ${matchId}, adding...`)
           await ssiSearchAndAddParticipant(91, matchId, email, cookies, { firstName, lastName })
           participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies, email)
         }
@@ -670,9 +667,9 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       const lastName = nameParts.slice(1).join(' ') || ''
 
       // 1. Search-and-add to CUP (CT=136) using email for disambiguation
-      if (!IS_PROD) console.log(`[manage] Adding "${shooterName}" (${email || 'no email'}) to cup ${cupId}`)
+      log.debug(`[manage] Adding "${shooterName}" (${email || 'no email'}) to cup ${cupId}`)
       const addResult = await ssiSearchAndAddParticipant(136, cupId, email, cookies, { firstName, lastName })
-      if (!IS_PROD) console.log(`[manage] Cup add result: ${addResult.message}`)
+      log.debug(`[manage] Cup add result: ${addResult.message}`)
 
       if (!addResult.success) {
         console.error(`[manage] Failed to add "${shooterName}" to cup: ${addResult.message}`)
@@ -681,7 +678,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
 
       // 2. Find and approve CUP participant
       const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies, email)
-      if (!IS_PROD) console.log(`[manage] Cup approve result: ${approveResult.message}`)
+      log.debug(`[manage] Cup approve result: ${approveResult.message}`)
 
       if (!approveResult.success) {
         console.error(`[manage] Failed to approve "${shooterName}" in cup: ${approveResult.message}`)
@@ -722,9 +719,9 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       }
 
       // Approve CUP participant (with ID-based identification)
-      if (!IS_PROD) console.log(`[manage] Approving pending shooter "${shooterName}" (${email || 'no email'}) ID=${cupParticipantId} in cup ${cupId}`)
+      log.debug(`[manage] Approving pending shooter "${shooterName}" (${email || 'no email'}) ID=${cupParticipantId} in cup ${cupId}`)
       const approveResult = await ssiFindAndApproveCupParticipant(cupId, shooterName, cookies, email, cupParticipantId)
-      if (!IS_PROD) console.log(`[manage] Cup approve result: ${approveResult.message}`)
+      log.debug(`[manage] Cup approve result: ${approveResult.message}`)
 
       if (!approveResult.success) {
         console.error(`[manage] Failed to approve "${shooterName}" in cup: ${approveResult.message}`)
@@ -760,9 +757,9 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
 
       // Delete from CUP if present
       if (cupParticipantId) {
-        if (!IS_PROD) console.log(`[manage] Removing pending shooter "${shooterName}" (${email || 'no email'}) ID=${cupParticipantId} from cup ${cupId}`)
+        log.debug(`[manage] Removing pending shooter "${shooterName}" (${email || 'no email'}) ID=${cupParticipantId} from cup ${cupId}`)
         const deleteResult = await ssiFindAndDeleteCupParticipant(cupId, shooterName, cookies, email, cupParticipantId)
-        if (!IS_PROD) console.log(`[manage] Cup delete result: ${deleteResult.message}`)
+        log.debug(`[manage] Cup delete result: ${deleteResult.message}`)
 
         if (!deleteResult.success) {
           console.error(`[manage] Failed to remove "${shooterName}" from cup: ${deleteResult.message}`)
@@ -771,12 +768,12 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
           results.push({ location: 'CUP', success: true })
         }
       } else {
-        if (!IS_PROD) console.log(`[manage] Skipping CUP delete for "${shooterName}" (not in CUP)`)
+        log.debug(`[manage] Skipping CUP delete for "${shooterName}" (not in CUP)`)
       }
 
       // Delete from all matches if present
       if (matchParticipants && matchParticipants.length > 0) {
-        if (!IS_PROD) console.log(`[manage] Removing "${shooterName}" from ${matchParticipants.length} match(es)`)
+        log.debug(`[manage] Removing "${shooterName}" from ${matchParticipants.length} match(es)`)
 
         for (const mp of matchParticipants) {
           if (!mp.participantId) {
@@ -786,7 +783,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
 
           try {
             const matchDeleteResult = await ssiDeleteMatchParticipant(mp.matchId, mp.participantId, shooterName, cookies)
-            if (!IS_PROD) console.log(`[manage] Match ${mp.matchName} delete result: ${matchDeleteResult.message}`)
+            log.debug(`[manage] Match ${mp.matchName} delete result: ${matchDeleteResult.message}`)
 
             if (!matchDeleteResult.success) {
               console.error(`[manage] Failed to remove "${shooterName}" from match ${mp.matchName}: ${matchDeleteResult.message}`)
@@ -800,7 +797,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
           }
         }
       } else {
-        if (!IS_PROD) console.log(`[manage] Skipping match deletions for "${shooterName}" (not in any matches)`)
+        log.debug(`[manage] Skipping match deletions for "${shooterName}" (not in any matches)`)
       }
 
       // Check if any deletion succeeded
@@ -854,11 +851,11 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
 
       // 1. Set DNS on CUP participant (ct=137)
       if (cupParticipantId) {
-        if (!IS_PROD) console.log(`[manage] Setting DNS on CUP participant ${cupParticipantId} ("${shooterName}")`)
+        log.debug(`[manage] Setting DNS on CUP participant ${cupParticipantId} ("${shooterName}")`)
         const cupResult = await ssiSetDidNotShow(137, cupParticipantId, cookies)
         results.push({ location: 'CUP', success: cupResult.success, message: cupResult.message })
       } else {
-        if (!IS_PROD) console.log(`[manage] No cupParticipantId for "${shooterName}", skipping CUP DNS`)
+        log.debug(`[manage] No cupParticipantId for "${shooterName}", skipping CUP DNS`)
       }
 
       // 2. Set DNS on all match participants (ct=93)
@@ -885,11 +882,11 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
         for (const match of matchIds) {
           const participantId = await ssiFindCompetitorInMatch(match.id, shooterName, cookies, email)
           if (participantId) {
-            if (!IS_PROD) console.log(`[manage] Setting DNS on match ${match.name} participant ${participantId}`)
+            log.debug(`[manage] Setting DNS on match ${match.name} participant ${participantId}`)
             const matchResult = await ssiSetDidNotShow(93, participantId, cookies)
             results.push({ location: match.name, success: matchResult.success, message: matchResult.message })
           } else {
-            if (!IS_PROD) console.log(`[manage] "${shooterName}" not found in match ${match.name}`)
+            log.debug(`[manage] "${shooterName}" not found in match ${match.name}`)
             results.push({ location: match.name, success: false, message: 'Participant not found' })
           }
         }
@@ -924,7 +921,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
 
       // 1. Undo DNS on CUP participant (ct=137)
       if (cupParticipantId) {
-        if (!IS_PROD) console.log(`[manage] Undoing DNS on CUP participant ${cupParticipantId} ("${shooterName}")`)
+        log.debug(`[manage] Undoing DNS on CUP participant ${cupParticipantId} ("${shooterName}")`)
         const cupResult = await ssiUndoDidNotShow(137, cupParticipantId, cookies)
         results.push({ location: 'CUP', success: cupResult.success, message: cupResult.message })
       }
@@ -952,7 +949,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
         for (const match of matchIds) {
           const participantId = await ssiFindCompetitorInMatch(match.id, shooterName, cookies, email)
           if (participantId) {
-            if (!IS_PROD) console.log(`[manage] Undoing DNS on match ${match.name} participant ${participantId}`)
+            log.debug(`[manage] Undoing DNS on match ${match.name} participant ${participantId}`)
             const matchResult = await ssiUndoDidNotShow(93, participantId, cookies)
             results.push({ location: match.name, success: matchResult.success, message: matchResult.message })
           } else {
@@ -985,9 +982,9 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       const cookies = adminSess?.cookies
       if (!cookies) return res.status(500).json({ error: 'Admin session not available' })
 
-      console.log(`[manage] Toggling paid for CUP participant ${cupParticipantId} ("${shooterName}")`)
+      log.debug(`[manage] Toggling paid for CUP participant ${cupParticipantId} ("${shooterName}")`)
       const result = await ssiTogglePaid(137, cupParticipantId, cookies)
-      console.log(`[manage] Toggle paid result: ${result.message}`)
+      log.debug(`[manage] Toggle paid result: ${result.message}`)
 
       res.json({ success: result.success, message: result.message })
     } catch (err) {

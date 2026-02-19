@@ -1,7 +1,9 @@
 /**
  * Simple log-level utility.
  *
- * LOG_LEVEL env var controls verbosity (default: 'info' in production, 'debug' otherwise).
+ * LOG_LEVEL env var controls verbosity.
+ * If LOG_LEVEL is not set, default is 'debug'.
+ * Invalid LOG_LEVEL values fall back to 'info'.
  * Levels: error < warn < info < debug < verbose
  *
  * Usage:
@@ -12,22 +14,24 @@
  */
 
 const LEVELS = { error: 0, warn: 1, info: 2, debug: 3, verbose: 4 }
-const IS_PROD = process.env.NODE_ENV === 'production'
+const DEFAULT_LEVEL = 'debug'
+const FALLBACK_LEVEL = 'info'
 
-// Default: 'info' in prod, 'debug' in dev — override with LOG_LEVEL env var
-const configuredLevel = (process.env.LOG_LEVEL || (IS_PROD ? 'info' : 'debug')).toLowerCase()
-const threshold = LEVELS[configuredLevel] ?? LEVELS.info
+const requestedLevel = (process.env.LOG_LEVEL || DEFAULT_LEVEL).toLowerCase()
+const configuredLevel = LEVELS[requestedLevel] !== undefined ? requestedLevel : FALLBACK_LEVEL
+const threshold = LEVELS[configuredLevel]
 
-function shouldLog(level) {
+function isEnabled(level) {
   return (LEVELS[level] ?? LEVELS.info) <= threshold
 }
 
 export const log = {
-  error:   (...args) => shouldLog('error')   && console.error(...args),
-  warn:    (...args) => shouldLog('warn')     && console.warn(...args),
-  info:    (...args) => shouldLog('info')     && console.log(...args),
-  debug:   (...args) => shouldLog('debug')    && console.log(...args),
-  verbose: (...args) => shouldLog('verbose')  && console.log(...args),
+  error:   (...args) => isEnabled('error')   && console.error(...args),
+  warn:    (...args) => isEnabled('warn')     && console.warn(...args),
+  info:    (...args) => isEnabled('info')     && console.log(...args),
+  debug:   (...args) => isEnabled('debug')    && console.log(...args),
+  verbose: (...args) => isEnabled('verbose')  && console.log(...args),
+  isEnabled,
   /** Current effective level */
   level: configuredLevel,
 }
