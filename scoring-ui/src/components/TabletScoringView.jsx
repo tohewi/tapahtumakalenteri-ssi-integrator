@@ -589,7 +589,7 @@ export default function TabletScoringView({
           )}
 
           {/* Score track */}
-          <div ref={scoreTrackRef} className="flex-1 overflow-y-auto p-2 min-h-0" onKeyDown={handleScoreTrackKeyDown}>
+          <div ref={scoreTrackRef} className="flex-1 overflow-hidden p-2 min-h-0" onKeyDown={handleScoreTrackKeyDown}>
             {!selectedShooter ? (
               <div className="h-full flex items-center justify-center text-gray-400 text-xs">
                 <p>{t.selectShooter}</p>
@@ -599,9 +599,9 @@ export default function TabletScoringView({
                 <p>{t.noShootersFound}</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-1.5">
+              <div className="flex flex-col gap-1 h-full">
                 {scoreTrack.map((track, idx) => (
-                  <div key={idx} className={`rounded p-2 ${track.color} min-h-[90px]`}>
+                  <div key={idx} className={`rounded px-2 py-1 ${track.color} flex-1 flex flex-col min-h-0`}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-semibold text-gray-700">
                         {t.string} {idx + 1}
@@ -610,12 +610,12 @@ export default function TabletScoringView({
                         {track.hits.length} / {MAX_HITS_PER_SERIES}
                       </span>
                     </div>
-                    <div className="grid grid-cols-5 gap-1.5">
+                    <div className="grid grid-cols-5 gap-1.5 flex-1">
                       {Array.from({ length: MAX_HITS_PER_SERIES }, (_, hitIdx) => {
                         const zone = track.hits[hitIdx]
                         if (!zone) {
                           // Empty placeholder cell — keeps grid uniform
-                          return <div key={hitIdx} className="aspect-square rounded bg-black/5" />
+                          return <div key={hitIdx} className="rounded bg-black/5" />
                         }
                         const isSelected =
                           selectedScoreIndex?.seriesIdx === idx &&
@@ -627,7 +627,7 @@ export default function TabletScoringView({
                             key={hitIdx}
                             onClick={() => handleScoreTap(idx, zone, hitIdx)}
                             aria-label={`${t.string} ${idx + 1}, ${zone === 'M' ? 'Miss' : zone} ${t.pts}${isSelected ? ' (selected — Delete to remove)' : ''}`}
-                            className={`aspect-square rounded font-bold text-base transition-all touch-manipulation ${
+                            className={`rounded font-bold text-base transition-all touch-manipulation ${
                               isSelected
                                 ? 'bg-white border-2 border-blue-600 text-blue-600 shadow-md scale-110'
                                 : zone === 'X' || zone === '10'
