@@ -41,6 +41,7 @@ const LS_KEYS = {
   CUP: 'ssi_last_cup',
   SCORES: 'ssi_tablet_scores',
   NAV: 'ssi_tablet_nav_state',
+  SHOOTER_ORDER: 'ssi_tablet_shooter_order', // { cupId: [name1, name2, ...] }
 }
 
 function lsGet(key) {
@@ -169,12 +170,13 @@ function TabletApp() {
         if (nav.squadId && nav.view === 'scoring') {
           const squad = transformed.squads.find(s => s.id === nav.squadId)
           if (squad) {
-            setSelectedSquad(squad)
+            const orderedSquad = applyShooterOrder(squad, cupData.id)
+            setSelectedSquad(orderedSquad)
             const scoreKey = `${nav.matchId}_${nav.squadId}`
             const savedScores = lsGet(LS_KEYS.SCORES)
             const restored = savedScores?.[scoreKey]
             const scores = {}
-            for (const s of squad.shooters) {
+            for (const s of orderedSquad.shooters) {
               scores[s.id] = restored?.[s.id] || api.buildScoresFromSSI(s, SERIES_COUNT)
             }
             setAllScores(scores)
@@ -239,17 +241,37 @@ function TabletApp() {
     }
   }
 
+  // Apply saved shooter order from cup-level localStorage
+  // cupId param allows use during nav restoration before selectedCup state is committed
+  const applyShooterOrder = (squad, cupId = selectedCup?.id) => {
+    if (!cupId) return squad
+    const allOrders = lsGet(LS_KEYS.SHOOTER_ORDER) || {}
+    const savedOrder = allOrders[cupId]
+    if (!savedOrder || savedOrder.length === 0) return squad
+
+    // Sort shooters by their position in the saved order.
+    // Shooters not in the saved order go to the end (preserving original relative order).
+    const orderMap = new Map(savedOrder.map((name, idx) => [name, idx]))
+    const sorted = [...squad.shooters].sort((a, b) => {
+      const posA = orderMap.has(a.name) ? orderMap.get(a.name) : 9999
+      const posB = orderMap.has(b.name) ? orderMap.get(b.name) : 9999
+      return posA - posB
+    })
+    return { ...squad, shooters: sorted }
+  }
+
   const handleSquadSelected = async (squad) => {
     setError(null)
     setLoading(true)
     try {
-      setSelectedSquad(squad)
+      const orderedSquad = applyShooterOrder(squad)
+      setSelectedSquad(orderedSquad)
       // Load saved scores or build from SSI
       const scoreKey = `${selectedMatch.id}_${squad.id}`
       const savedScores = lsGet(LS_KEYS.SCORES)
       const restored = savedScores?.[scoreKey]
       const scores = {}
-      for (const s of squad.shooters) {
+      for (const s of orderedSquad.shooters) {
         scores[s.id] = restored?.[s.id] || api.buildScoresFromSSI(s, SERIES_COUNT)
       }
       setAllScores(scores)
@@ -281,6 +303,12 @@ function TabletApp() {
       ...prev,
       shooters: reorderedShooters,
     }))
+    // Persist shooter order at cup level so it survives squad/match changes
+    if (selectedCup) {
+      const allOrders = lsGet(LS_KEYS.SHOOTER_ORDER) || {}
+      allOrders[selectedCup.id] = reorderedShooters.map(s => s.name)
+      lsSet(LS_KEYS.SHOOTER_ORDER, allOrders)
+    }
   }
 
   // Navigation handlers for breadcrumbs
