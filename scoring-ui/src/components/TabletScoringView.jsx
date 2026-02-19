@@ -610,8 +610,13 @@ export default function TabletScoringView({
                         {track.hits.length} / {MAX_HITS_PER_SERIES}
                       </span>
                     </div>
-                    <div className="flex flex-wrap gap-1.5 min-h-[60px]">
-                      {track.hits.map((zone, hitIdx) => {
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {Array.from({ length: MAX_HITS_PER_SERIES }, (_, hitIdx) => {
+                        const zone = track.hits[hitIdx]
+                        if (!zone) {
+                          // Empty placeholder cell — keeps grid uniform
+                          return <div key={hitIdx} className="aspect-square rounded bg-black/5" />
+                        }
                         const isSelected =
                           selectedScoreIndex?.seriesIdx === idx &&
                           selectedScoreIndex?.zone === zone &&
@@ -622,7 +627,7 @@ export default function TabletScoringView({
                             key={hitIdx}
                             onClick={() => handleScoreTap(idx, zone, hitIdx)}
                             aria-label={`${t.string} ${idx + 1}, ${zone === 'M' ? 'Miss' : zone} ${t.pts}${isSelected ? ' (selected — Delete to remove)' : ''}`}
-                            className={`relative min-w-[56px] min-h-[56px] flex-1 rounded font-bold text-base transition-all touch-manipulation ${
+                            className={`aspect-square rounded font-bold text-base transition-all touch-manipulation ${
                               isSelected
                                 ? 'bg-white border-2 border-blue-600 text-blue-600 shadow-md scale-110'
                                 : zone === 'X' || zone === '10'
