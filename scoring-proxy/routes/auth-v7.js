@@ -187,6 +187,7 @@ export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth,
 
   // ============================================================
   // GET /api/auth/me — Get current user info from SSI
+  // No scope restriction — all authenticated users can fetch their own info
   // ============================================================
   router.get('/me', requireAuth, async (req, res) => {
     try {
