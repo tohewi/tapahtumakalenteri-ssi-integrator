@@ -264,11 +264,11 @@ The frontend's `handleResponse` function catches these HTTP 400 errors and throw
 
 ### With Debug Logging
 
-Enable debug logging (see [debug-logging.md](./debug-logging.md)) and observe console output during the operation:
+Enable debug logging (see [Debug Logging](../instructions/debug-logging.md)) and observe console output during the operation:
 
 ```bash
 cd scoring-proxy
-NODE_ENV=development node server.js
+LOG_LEVEL=debug node server.js
 ```
 
 Then perform the operation and check terminal output for detailed flow.
@@ -285,5 +285,6 @@ Then perform the operation and check terminal output for detailed flow.
 
 ## Related Documentation
 
-- [Debug Logging](./debug-logging.md) - How to enable detailed logging
+- [Debug Logging](../instructions/debug-logging.md) - How to enable detailed logging
+- [Log Design](../design/log-design.md) - Log level policy and environment defaults
 - [Session Handling](./session-handling.md) - Authentication and session management

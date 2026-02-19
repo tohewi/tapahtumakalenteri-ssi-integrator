@@ -330,7 +330,6 @@ app.use('/api/auth', authRouter)
 const scoringRouter = createScoringRouter({
   requireAuth,
   graphqlWithRefresh,
-  IS_PROD,
 })
 app.use('/api', scoringRouter)
 
@@ -340,7 +339,6 @@ const managementRouter = createManagementRouter({
   graphqlWithRefresh,
   adminGraphQL,
   getAdminSession,
-  IS_PROD,
 })
 app.use('/api/manage', managementRouter)
 
@@ -362,7 +360,6 @@ app.use('/api/register', registrationRouter)
 const reportsRouter = createReportsRouter({
   requireAuth,
   graphqlWithRefresh,
-  IS_PROD,
 })
 app.use('/api/report', reportsRouter)
 

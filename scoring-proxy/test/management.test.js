@@ -98,7 +98,6 @@ beforeAll(async () => {
     graphqlWithRefresh: graphState.execute,
     adminGraphQL: mockState.execute,
     getAdminSession: adminSessionState.execute,
-    IS_PROD: false,
   })
   
   app.use('/api/manage', managementRouter)

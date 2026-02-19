@@ -7,6 +7,7 @@
 
 import express from 'express'
 import { ssiGraphQL, ssiLogin } from '../lib/ssi-client.js'
+import { log } from '../lib/logger.js'
 import { isAdminEmail } from '../lib/staffing/config-loader.js'
 import {
   createSession,
@@ -19,7 +20,6 @@ import {
 } from '../lib/session/index.js'
 
 const SESSION_COOKIE = sessionConfig.session.cookieName
-const IS_PROD = process.env.NODE_ENV === 'production'
 
 // SSI GraphQL auth mutation
 const AUTH_MUTATION = `
@@ -80,7 +80,7 @@ export function createAuthV7Router({ loginLimiter, getAdminSession }) {
         }
       } catch (err) {
         // Admin session optional for some scopes — log but don't fail
-        if (!IS_PROD) console.warn('[auth-v7] Admin session not available:', err.message)
+        log.debug('[auth-v7] Admin session not available:', err.message)
       }
 
       // 4. Create V7 dual session
@@ -113,9 +113,9 @@ export function createAuthV7Router({ loginLimiter, getAdminSession }) {
 
       auditLogin(email, req.ip, true)
 
-      if (!IS_PROD) {
+      if (log.isEnabled('debug')) {
         const count = await getActiveSessionCount()
-        console.log(`[auth-v7] New ${sessionScope} session created. Active: ${count}`)
+        log.debug(`[auth-v7] New ${sessionScope} session created. Active: ${count}`)
       }
 
       res.json({

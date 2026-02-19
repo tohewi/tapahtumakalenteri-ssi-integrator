@@ -17,7 +17,7 @@ The following risks were identified in v1.0.0 and resolved in v1.1.0:
 | **Single-user server state** | 🔴 High | ✅ Fixed | Per-session isolation via `ssi_session` HttpOnly cookie |
 | **Credentials in transit to proxy** | 🟡 Medium | ✅ Mitigated | HTTPS in production (Render), credentials never logged |
 | **No token expiry handling** | 🟡 Medium | ✅ Fixed | `graphqlWithRefresh()` auto-refreshes JWT on 401/expiry |
-| **Proxy logs credentials context** | 🟢 Low | ✅ Fixed | Production logs sanitized (gated behind `NODE_ENV !== 'production'`) |
+| **Proxy logs credentials context** | 🟢 Low | ✅ Fixed | Production logs sanitized via log levels (`LOG_LEVEL=info` in production) |
 | **CORS wide open** | 🟡 Medium | ✅ Fixed | Locked to `APP_URL` origin in production |
 | **No rate limiting** | 🟡 Medium | ✅ Fixed | Login endpoint: max 10 attempts per 15 min per IP |
 
@@ -90,7 +90,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => { ... })
 
 **Problem**: `console.log` outputs operational details.
 
-**Solution**: Use a log-level system (e.g., `pino`). Set `info` in dev, `warn` in production. Never log cookie values or tokens.
+**Solution**: Use centralized `LOG_LEVEL`-based logging (`scoring-proxy/lib/logger.js`). Keep production default at `LOG_LEVEL=info` (Render config), while local development defaults to `debug` when `LOG_LEVEL` is unset. Never log cookie values or tokens.
 
 #### S-7: Helmet security headers (Low Priority)
 

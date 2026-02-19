@@ -1,7 +1,8 @@
 import express from 'express'
 import { ssiGetEventStaff } from '../lib/ssi-client.js'
+import { log } from '../lib/logger.js'
 
-export function createReportsRouter({ requireAuth, graphqlWithRefresh, IS_PROD }) {
+export function createReportsRouter({ requireAuth, graphqlWithRefresh }) {
   const router = express.Router()
   // ============================================================
   // POST /api/report/summary — Summary report for selected matches
@@ -73,7 +74,7 @@ export function createReportsRouter({ requireAuth, graphqlWithRefresh, IS_PROD }
             }
           }
         } catch (staffErr) {
-          if (!IS_PROD) console.log(`[summary] Could not fetch staff for event ${ct}/${matchId}: ${staffErr.message}`)
+          log.debug(`[summary] Could not fetch staff for event ${ct}/${matchId}: ${staffErr.message}`)
         }
 
         // Build per-squad details with shooter count and admin count
@@ -192,7 +193,7 @@ export function createReportsRouter({ requireAuth, graphqlWithRefresh, IS_PROD }
             }
           }
         } catch (staffErr) {
-          if (!IS_PROD) console.log(`[report] Could not fetch staff for event ${ct}/${matchId}: ${staffErr.message}`)
+          log.debug(`[report] Could not fetch staff for event ${ct}/${matchId}: ${staffErr.message}`)
         }
 
         for (const squad of (match.squads || [])) {

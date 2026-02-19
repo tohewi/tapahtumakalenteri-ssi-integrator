@@ -4,13 +4,31 @@ This document explains how to enable and use debug logging in the SSI Scoring ap
 
 ## Overview
 
-The application includes extensive debug logging that helps diagnose issues with SSI API integration, authentication, and data processing. Debug logging is controlled by the `NODE_ENV` environment variable.
+The application includes extensive debug logging that helps diagnose issues with SSI API integration, authentication, and data processing. Log verbosity is controlled by the `LOG_LEVEL` environment variable.
+
+`NODE_ENV` is **not** used to decide whether debug logs are emitted.
+
+## Log Level Model
+
+Supported levels:
+
+- `error`
+- `warn`
+- `info`
+- `debug`
+- `verbose`
+
+Default behavior:
+
+- If `LOG_LEVEL` is unset, runtime default is `debug`
+- If `LOG_LEVEL` is invalid, runtime fallback is `info`
+- Production deployment default is `info` via Render environment configuration (`render.yaml`)
 
 ## Enabling Debug Logging
 
 ### Local Development
 
-Debug logging is **automatically enabled** in development mode (when `NODE_ENV` is not set to `'production'`).
+Debug logging is enabled by default locally (runtime default `LOG_LEVEL=debug` when not explicitly set).
 
 To run the server in development mode:
 
@@ -19,10 +37,10 @@ cd scoring-proxy
 node server.js
 ```
 
-Or explicitly set NODE_ENV:
+Or explicitly set `LOG_LEVEL`:
 
 ```bash
-NODE_ENV=development node server.js
+LOG_LEVEL=debug node server.js
 ```
 
 ### Production Environment (Render)
@@ -33,8 +51,8 @@ To enable debug logging in production:
 2. Navigate to the `ssi-scoring` service
 3. Go to **Environment** tab
 4. Add or modify the environment variable:
-   - Key: `NODE_ENV`
-   - Value: `development` (or remove it entirely)
+   - Key: `LOG_LEVEL`
+   - Value: `debug`
 5. Click **Save Changes**
 6. The service will redeploy with debug logging enabled
 
@@ -100,11 +118,11 @@ A successful operation looks like:
 
 To disable debug logging:
 
-1. Set `NODE_ENV=production`
+1. Set `LOG_LEVEL=info` (or stricter, e.g. `warn`)
 2. Restart the server
 
 In Render:
-1. Set `NODE_ENV` environment variable to `production`
+1. Set `LOG_LEVEL` environment variable to `info`
 2. Redeploy the service
 
 ## Log Retention
@@ -117,9 +135,10 @@ In Render:
 1. **Only enable debug logging when troubleshooting** - it adds overhead and may expose sensitive information
 2. **Monitor log volume** - debug logging can significantly increase log output
 3. **Use log search** - in Render Dashboard, use the search box to filter logs by keywords like `[manage]`, error messages, or user names
-4. **Temporary debugging** - re-enable production mode (`NODE_ENV=production`) after troubleshooting
+4. **Temporary debugging** - restore production log level (`LOG_LEVEL=info`) after troubleshooting
 
 ## Related Documentation
 
+- [Log Design](../design/log-design.md) - Log level policy and environment defaults
 - [Session Handling](./session-handling.md) - Understanding authentication flows
 - [Management API](./management-api.md) - API endpoints for Cup and Squad management (if exists)
