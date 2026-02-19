@@ -79,7 +79,6 @@ export default function TabletScoringView({
   withSessionCheck,
 }) {
   const [selectedShooter, setSelectedShooter] = useState(null)
-  const [selectedScoreIndex, setSelectedScoreIndex] = useState(null) // { seriesIdx, hitIdx }
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
   const [lastSaveStatus, setLastSaveStatus] = useState(null) // aria-live announcements
@@ -229,40 +228,14 @@ export default function TabletScoringView({
     }
   }, [selectedShooter, allScores, onScoresUpdate, handleSaveScores])
 
-  // Add score to current series or replace selected score
+  // Add score to the first series with space
   const handleScoreAdd = (zone) => {
     if (!selectedShooter || isMatchCompleted) return
 
     const shooterScores = allScores[selectedShooter.id]
     if (!shooterScores) return
 
-    // If a score is selected, replace it
-    if (selectedScoreIndex) {
-      const { seriesIdx, zone: oldZone } = selectedScoreIndex
-      
-      // Check current count
-      const currentCount = shooterScores[seriesIdx][oldZone] || 0
-      if (currentCount > 0) {
-        // Calculate if replacement would exceed max (if zones are in different series, this shouldn't happen
-        // but if the same series, we're just swapping zones which is always safe)
-        const currentHits = hitsInSeries(shooterScores[seriesIdx])
-        
-        // If old and new zones are different, check we're not at max before allowing
-        // Actually, replacement is same series so hits stay the same - just zone changes
-        // This is always safe
-        const newScores = { ...shooterScores }
-        newScores[seriesIdx] = {
-          ...newScores[seriesIdx],
-          [oldZone]: currentCount - 1,
-          [zone]: (newScores[seriesIdx][zone] || 0) + 1,
-        }
-        onScoresUpdate(selectedShooter.id, newScores)
-        setSelectedScoreIndex(null)
-        return
-      }
-    }
-
-    // Otherwise, find first series with space
+    // Find first series with space
     let targetSeries = 0
     for (let i = 0; i < SERIES_COUNT; i++) {
       const hits = hitsInSeries(shooterScores[i])
@@ -298,52 +271,24 @@ export default function TabletScoringView({
     }, 50)
   }
 
-  // Remove selected score
-  // Note: Scores are stored as counts per zone, not individual hits.
-  // When a user clicks on a specific hit button, we decrement the count for that zone.
-  // This is simpler than tracking individual hit IDs and matches the underlying data model.
-  const handleScoreRemove = () => {
-    if (!selectedShooter || !selectedScoreIndex) return
-
-    const { seriesIdx, zone } = selectedScoreIndex
-    const shooterScores = allScores[selectedShooter.id]
-    if (!shooterScores) return
-
-    const currentCount = shooterScores[seriesIdx][zone] || 0
-    if (currentCount <= 0) return
-
-    const newScores = { ...shooterScores }
-    newScores[seriesIdx] = {
-      ...newScores[seriesIdx],
-      [zone]: currentCount - 1,
-    }
-
-    onScoresUpdate(selectedShooter.id, newScores)
-    setSelectedScoreIndex(null)
-  }
-
-  // Double-tap handler for touch-friendly deletion
+  // Double-tap handler for score deletion
   const handleScoreTap = (seriesIdx, zone, hitIdx) => {
-    if (isMatchCompleted) return // Don't allow deletion in completed matches
+    if (isMatchCompleted) return
     
     const now = Date.now()
     const targetKey = `${seriesIdx}-${zone}-${hitIdx}`
     
-    // Check if this is a double-tap
     if (
       lastTapTime &&
       lastTapTarget === targetKey &&
       now - lastTapTime < DOUBLE_TAP_DELAY
     ) {
-      // Double-tap detected - delete the score
+      // Double-tap detected — delete the score
       handleScoreDelete(seriesIdx, zone, hitIdx)
-      // Reset tap tracking
       setLastTapTime(null)
       setLastTapTarget(null)
     } else {
-      // Single tap - select the score for replacement
-      setSelectedScoreIndex({ seriesIdx, zone, hitIdx })
-      // Track this tap for double-tap detection
+      // First tap — track for double-tap detection
       setLastTapTime(now)
       setLastTapTarget(targetKey)
     }
@@ -381,15 +326,6 @@ export default function TabletScoringView({
     onShootersReorder(newShooters)
   }
 
-  // Keyboard handler for score track: Delete/Backspace removes selected score
-  const handleScoreTrackKeyDown = (e) => {
-    if (isMatchCompleted) return
-    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedScoreIndex) {
-      e.preventDefault()
-      handleScoreDelete(selectedScoreIndex.seriesIdx, selectedScoreIndex.zone, selectedScoreIndex.hitIdx)
-      setSelectedScoreIndex(null)
-    }
-  }
 
   // Build score track data
   const scoreTrack = []
@@ -589,7 +525,7 @@ export default function TabletScoringView({
           )}
 
           {/* Score track */}
-          <div ref={scoreTrackRef} className="flex-1 overflow-hidden p-2 min-h-0" onKeyDown={handleScoreTrackKeyDown}>
+          <div ref={scoreTrackRef} className="flex-1 overflow-hidden p-2 min-h-0">
             {!selectedShooter ? (
               <div className="h-full flex items-center justify-center text-gray-400 text-xs">
                 <p>{t.selectShooter}</p>
@@ -617,24 +553,17 @@ export default function TabletScoringView({
                           // Empty placeholder cell — keeps grid uniform
                           return <div key={hitIdx} className="rounded bg-black/5" />
                         }
-                        const isSelected =
-                          selectedScoreIndex?.seriesIdx === idx &&
-                          selectedScoreIndex?.zone === zone &&
-                          selectedScoreIndex?.hitIdx === hitIdx
-                        
                         return (
                           <button
                             key={hitIdx}
                             onClick={() => handleScoreTap(idx, zone, hitIdx)}
-                            aria-label={`${t.string} ${idx + 1}, ${zone === 'M' ? 'Miss' : zone} ${t.pts}${isSelected ? ' (selected — Delete to remove)' : ''}`}
+                            aria-label={`${t.string} ${idx + 1}, ${zone === 'M' ? 'Miss' : zone} ${t.pts}, double-tap to delete`}
                             className={`rounded font-bold text-base transition-all touch-manipulation ${
-                              isSelected
-                                ? 'bg-white border-2 border-blue-600 text-blue-600 shadow-md scale-110'
-                                : zone === 'X' || zone === '10'
-                                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                              zone === 'X' || zone === '10'
+                                ? 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'
                                 : zone === 'M'
-                                ? 'bg-red-500 text-white hover:bg-red-600'
-                                : 'bg-gray-600 text-white hover:bg-gray-700'
+                                ? 'bg-red-500 text-white hover:bg-red-600 active:bg-red-700'
+                                : 'bg-gray-600 text-white hover:bg-gray-700 active:bg-gray-800'
                             }`}
                           >
                             {zone}
