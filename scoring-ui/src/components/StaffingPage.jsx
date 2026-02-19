@@ -5,9 +5,9 @@ import LoginScreen from './LoginScreen'
 import { AppHeader } from './shared'
 import t from '../i18n'
 import { fetchStaffingEvents, staffSignup, staffResign } from '../staffing-api'
+import { log } from '../log.js'
 
 const LS_CREDS = 'ssi_credentials'
-const isDev = import.meta.env.DEV
 
 const ROLE_LABELS = {
   leadInstructor: t.leadInstructor,
@@ -236,8 +236,8 @@ function EventCard({ event, isAdmin, userEmail, onUpdate }) {
       setBanner(null)
       const result = await staffSignup(event.eventId, role)
 
-      if (isDev && result.ssi) {
-        console.log('[staffing] SSI signup result:', JSON.stringify(result.ssi, null, 2))
+      if (result.ssi) {
+        log.debug('[staffing] SSI signup result:', JSON.stringify(result.ssi, null, 2))
       }
 
       setBanner({ message: t.registered, type: 'success' })
@@ -256,11 +256,11 @@ function EventCard({ event, isAdmin, userEmail, onUpdate }) {
       setBanner(null)
       const result = await staffResign(event.eventId)
 
-      if (isDev && result.ssi) {
-        console.log('[staffing] SSI resign result:', JSON.stringify(result.ssi, null, 2))
+      if (result.ssi) {
+        log.debug('[staffing] SSI resign result:', JSON.stringify(result.ssi, null, 2))
       }
-      if (isDev && result.warning) {
-        console.warn('[staffing] SSI warning:', result.warning)
+      if (result.warning) {
+        log.warn('[staffing] SSI warning:', result.warning)
       }
 
       setBanner({ message: t.resigned, type: 'success' })

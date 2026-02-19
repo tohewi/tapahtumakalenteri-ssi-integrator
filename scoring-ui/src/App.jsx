@@ -8,6 +8,7 @@ import LoginScreen from './components/LoginScreen'
 import CupSearch from './components/CupSearch'
 import * as api from './api'
 import fi from './i18n'
+import { log } from './log.js'
 
 // ============================================================
 // Scoring constants
@@ -373,7 +374,7 @@ function App() {
       await withSessionCheck(async () => {
         const shooterScores = allScores[selectedShooterId]
         const result = await api.submitScore(selectedShooterId, shooterScores)
-        console.log('Score saved:', result)
+        log.debug('[scoring] Score saved:', result)
       })
     } catch (err) {
       if (!(err instanceof api.SessionExpiredError) && !(err instanceof api.ScopeMismatchError)) {

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { AppHeader } from './shared'
 import * as api from '../api'
 import t from '../i18n'
+import { log } from '../log.js'
 
 // ============================================================
 // Constants
@@ -81,7 +82,7 @@ export default function TabletScoringView({
   const [selectedScoreIndex, setSelectedScoreIndex] = useState(null) // { seriesIdx, hitIdx }
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
-  const [draggedShooter, setDraggedShooter] = useState(null)
+  const [lastSaveStatus, setLastSaveStatus] = useState(null) // aria-live announcements
   const [lastTapTime, setLastTapTime] = useState(null)
   const [lastTapTarget, setLastTapTarget] = useState(null)
   const DOUBLE_TAP_DELAY = 300 // ms
@@ -104,7 +105,7 @@ export default function TabletScoringView({
     try {
       const shooterScores = allScores[selectedShooter.id]
       if (!shooterScores) {
-        console.error('No scores found for shooter:', selectedShooter.id)
+        log.error('[tablet] No scores found for shooter:', selectedShooter.id)
         return
       }
 
@@ -126,11 +127,12 @@ export default function TabletScoringView({
       // The API expects scores in the same format as mobile UI:
       // { 0: { X: 0, '10': 5, ... }, 1: { ... }, ... }
       // NOT as pre-formatted strings like { s1: "0,5,0,0,..." }
-      console.log('Saving scores for shooter:', selectedShooter.id, shooterScores)
+      log.debug('[tablet] Saving scores for shooter:', selectedShooter.id, shooterScores)
       await withSessionCheck(() => api.submitScore(selectedShooter.id, shooterScores))
-      console.log('Scores saved successfully')
+      log.debug('[tablet] Scores saved successfully')
+      setLastSaveStatus(`${selectedShooter.name}: scores saved`)
     } catch (err) {
-      console.error('Save error:', err)
+      log.error('[tablet] Save error:', err)
       if (!(err instanceof api.SessionExpiredError) && !(err instanceof api.ScopeMismatchError)) {
         // Parse SSI validation errors if available
         let errorMessage = 'Failed to save scores to SSI'
@@ -153,7 +155,7 @@ export default function TabletScoringView({
   useEffect(() => {
     if (!selectedShooter && squad.shooters.length > 0) {
       // Clear all local scores when starting fresh from first shooter
-      console.log('Starting fresh: clearing all local scores and loading from SSI')
+      log.debug('[tablet] Starting fresh: clearing all local scores and loading from SSI')
       const freshScores = {}
       
       squad.shooters.forEach(shooter => {
@@ -162,7 +164,7 @@ export default function TabletScoringView({
           const ssiScores = api.buildScoresFromSSI(shooter, SERIES_COUNT)
           freshScores[shooter.id] = ssiScores
         } catch (err) {
-          console.error('Error loading SSI scores for shooter:', shooter.id, err)
+          log.error('[tablet] Error loading SSI scores for shooter:', shooter.id, err)
           // Initialize with empty scores if SSI load fails
           const emptyScores = {}
           for (let i = 0; i < SERIES_COUNT; i++) {
@@ -182,7 +184,7 @@ export default function TabletScoringView({
       setSelectedScoreIndex(null)
       setSaveError(null)
       
-      console.log('Loaded SSI scores for all shooters, starting with:', firstShooter.id)
+      log.debug('[tablet] Loaded SSI scores for all shooters, starting with:', firstShooter.id)
     }
   }, [squad.shooters, selectedShooter, onScoresUpdate])
 
@@ -192,7 +194,7 @@ export default function TabletScoringView({
     
     // Auto-save current shooter's scores before switching
     if (selectedShooter) {
-      console.log('Auto-saving before switch from', selectedShooter.id, 'to', shooter.id)
+      log.debug('[tablet] Auto-saving before switch from', selectedShooter.id, 'to', shooter.id)
       await handleSaveScores()
     }
     
@@ -207,23 +209,23 @@ export default function TabletScoringView({
     if (!hasLocalScores) {
       // Load from SSI since no local data
       try {
-        console.log('Loading SSI scores for shooter:', shooter.id)
+        log.debug('[tablet] Loading SSI scores for shooter:', shooter.id)
         const ssiScores = api.buildScoresFromSSI(shooter, SERIES_COUNT)
         
         if (getTotalHits(ssiScores) > 0) {
-          console.log('Loaded SSI scores with', getTotalHits(ssiScores), 'hits')
+          log.debug('[tablet] Loaded SSI scores with', getTotalHits(ssiScores), 'hits')
           onScoresUpdate(shooter.id, ssiScores)
         } else {
-          console.log('No SSI scores found (zero data is not an error)')
+          log.debug('[tablet] No SSI scores found (zero data is not an error)')
         }
       } catch (err) {
-        console.error('Error loading SSI scores:', err)
+        log.error('[tablet] Error loading SSI scores:', err)
         if (!(err instanceof api.SessionExpiredError) && !(err instanceof api.ScopeMismatchError)) {
           setSaveError('Failed to load scores from SSI: ' + err.message)
         }
       }
     } else {
-      console.log('Using local scores for shooter:', shooter.id)
+      log.debug('[tablet] Using local scores for shooter:', shooter.id)
     }
   }, [selectedShooter, allScores, onScoresUpdate, handleSaveScores])
 
@@ -364,37 +366,29 @@ export default function TabletScoringView({
 
     onScoresUpdate(selectedShooter.id, newScores)
     
-    console.log(`Deleted score: ${zone} from string ${seriesIdx + 1}`)
+    log.debug(`[tablet] Deleted score: ${zone} from string ${seriesIdx + 1}`)
   }
 
-  // Drag and drop handlers
-  const handleDragStart = (e, shooter) => {
-    setDraggedShooter(shooter)
-    e.dataTransfer.effectAllowed = 'move'
-  }
-
-  const handleDragOver = (e) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-  }
-
-  const handleDrop = (e, targetShooter) => {
-    e.preventDefault()
-    if (!draggedShooter || draggedShooter.id === targetShooter.id) return
-
-    const currentIndex = squad.shooters.findIndex(s => s.id === draggedShooter.id)
-    const targetIndex = squad.shooters.findIndex(s => s.id === targetShooter.id)
-
+  // Accessible reorder: move shooter up/down in list
+  const handleMoveShooter = (shooter, direction) => {
+    const idx = squad.shooters.findIndex(s => s.id === shooter.id)
+    if (idx < 0) return
+    const targetIdx = idx + direction
+    if (targetIdx < 0 || targetIdx >= squad.shooters.length) return
     const newShooters = [...squad.shooters]
-    newShooters.splice(currentIndex, 1)
-    newShooters.splice(targetIndex, 0, draggedShooter)
-
+    newShooters.splice(idx, 1)
+    newShooters.splice(targetIdx, 0, shooter)
     onShootersReorder(newShooters)
-    setDraggedShooter(null)
   }
 
-  const handleDragEnd = () => {
-    setDraggedShooter(null)
+  // Keyboard handler for score track: Delete/Backspace removes selected score
+  const handleScoreTrackKeyDown = (e) => {
+    if (isMatchCompleted) return
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedScoreIndex) {
+      e.preventDefault()
+      handleScoreDelete(selectedScoreIndex.seriesIdx, selectedScoreIndex.zone, selectedScoreIndex.hitIdx)
+      setSelectedScoreIndex(null)
+    }
   }
 
   // Build score track data
@@ -435,14 +429,16 @@ export default function TabletScoringView({
           <div className="flex items-center gap-2 text-xs">
             <button
               onClick={onBackToCup}
-              className="hover:underline focus:outline-none focus:underline"
+              aria-label={`${t.back}: ${cup?.name || t.cups}`}
+              className="hover:underline focus:outline-none focus:ring-2 focus:ring-white/50 focus:ring-offset-1 focus:ring-offset-blue-600 rounded"
             >
               {cup?.name || t.cups}
             </button>
             <span className="opacity-70">›</span>
             <button
               onClick={onBackToMatch}
-              className="hover:underline focus:outline-none focus:underline"
+              aria-label={`${t.back}: ${match.name}`}
+              className="hover:underline focus:outline-none focus:ring-2 focus:ring-white/50 focus:ring-offset-1 focus:ring-offset-blue-600 rounded"
             >
               {match.name}
             </button>
@@ -454,7 +450,8 @@ export default function TabletScoringView({
             <span className="opacity-70">›</span>
             <button
               onClick={onBack}
-              className="hover:underline focus:outline-none focus:underline font-semibold"
+              aria-label={`${t.back}: ${squad.name}`}
+              className="hover:underline focus:outline-none focus:ring-2 focus:ring-white/50 focus:ring-offset-1 focus:ring-offset-blue-600 rounded font-semibold"
             >
               {squad.name}
             </button>
@@ -509,8 +506,8 @@ export default function TabletScoringView({
             <h3 className="font-semibold text-gray-700 text-xs">{squad.name}</h3>
             <p className="text-xs text-gray-500">{squad.shooters.length} {t.shooters}</p>
           </div>
-          <div className="divide-y divide-gray-100 overflow-y-auto flex-1">
-            {squad.shooters.map((shooter) => {
+          <div role="listbox" aria-label={t.selectShooter} className="divide-y divide-gray-100 overflow-y-auto flex-1">
+            {squad.shooters.map((shooter, shooterIdx) => {
               const isSelected = selectedShooter?.id === shooter.id
               const shooterScores = allScores[shooter.id]
               const shooterHits = shooterScores ? getTotalHits(shooterScores) : 0
@@ -519,12 +516,12 @@ export default function TabletScoringView({
               return (
                 <div
                   key={shooter.id}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, shooter)}
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, shooter)}
-                  onDragEnd={handleDragEnd}
+                  role="option"
+                  aria-selected={isSelected}
+                  aria-label={`${shooter.number}. ${shooter.name}, ${shooterPoints} ${t.pts}, ${shooterHits}/${totalShotsInMatch}`}
+                  tabIndex={0}
                   onClick={() => handleShooterSelect(shooter)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleShooterSelect(shooter) } }}
                   className={`p-2 cursor-pointer transition-colors ${
                     isSelected
                       ? 'bg-blue-50 border-l-4 border-blue-600'
@@ -532,7 +529,21 @@ export default function TabletScoringView({
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        aria-label={`Move ${shooter.name} up`}
+                        disabled={shooterIdx === 0}
+                        onClick={(e) => { e.stopPropagation(); handleMoveShooter(shooter, -1) }}
+                        className="text-gray-400 hover:text-gray-600 disabled:opacity-20 text-xs p-0.5"
+                      >▲</button>
+                      <button
+                        aria-label={`Move ${shooter.name} down`}
+                        disabled={shooterIdx === squad.shooters.length - 1}
+                        onClick={(e) => { e.stopPropagation(); handleMoveShooter(shooter, 1) }}
+                        className="text-gray-400 hover:text-gray-600 disabled:opacity-20 text-xs p-0.5"
+                      >▼</button>
+                    </div>
+                    <div className="flex-1 min-w-0 ml-1">
                       <div className={`text-xs font-medium truncate ${
                         isSelected ? 'text-blue-900' : 'text-gray-900'
                       }`}>
@@ -578,7 +589,7 @@ export default function TabletScoringView({
           )}
 
           {/* Score track */}
-          <div ref={scoreTrackRef} className="flex-1 overflow-y-auto p-2 min-h-0">
+          <div ref={scoreTrackRef} className="flex-1 overflow-y-auto p-2 min-h-0" onKeyDown={handleScoreTrackKeyDown}>
             {!selectedShooter ? (
               <div className="h-full flex items-center justify-center text-gray-400 text-xs">
                 <p>{t.selectShooter}</p>
@@ -599,7 +610,7 @@ export default function TabletScoringView({
                         {track.hits.length} / {MAX_HITS_PER_SERIES}
                       </span>
                     </div>
-                    <div className="grid grid-cols-5 gap-1.5 min-h-[60px]">
+                    <div className="flex flex-wrap gap-1.5 min-h-[60px]">
                       {track.hits.map((zone, hitIdx) => {
                         const isSelected =
                           selectedScoreIndex?.seriesIdx === idx &&
@@ -610,7 +621,8 @@ export default function TabletScoringView({
                           <button
                             key={hitIdx}
                             onClick={() => handleScoreTap(idx, zone, hitIdx)}
-                            className={`relative w-12 h-12 rounded font-bold text-base transition-all touch-manipulation ${
+                            aria-label={`${t.string} ${idx + 1}, ${zone === 'M' ? 'Miss' : zone} ${t.pts}${isSelected ? ' (selected — Delete to remove)' : ''}`}
+                            className={`relative min-w-[56px] min-h-[56px] flex-1 rounded font-bold text-base transition-all touch-manipulation ${
                               isSelected
                                 ? 'bg-white border-2 border-blue-600 text-blue-600 shadow-md scale-110'
                                 : zone === 'X' || zone === '10'
@@ -636,6 +648,7 @@ export default function TabletScoringView({
             <button
               onClick={handleSaveScores}
               disabled={saving || !selectedShooter || isMatchCompleted}
+              aria-label={saving ? t.saving : isMatchCompleted ? t.matchCompleted : `${t.saveToSSI}: ${selectedShooter?.name || ''}`}
               className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors ${
                 saving || isMatchCompleted
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
@@ -644,6 +657,11 @@ export default function TabletScoringView({
             >
               {saving ? t.saving : isMatchCompleted ? t.matchCompleted : t.saveScores}
             </button>
+          </div>
+
+          {/* Aria-live region for score update announcements */}
+          <div aria-live="polite" aria-atomic="true" className="sr-only">
+            {lastSaveStatus}
           </div>
         </div>
 
@@ -667,6 +685,7 @@ export default function TabletScoringView({
                     key={zone}
                     onClick={() => handleScoreAdd(zone)}
                     disabled={!selectedShooter || isMatchCompleted}
+                    aria-label={`${zone === 'M' ? 'Miss' : `Score ${zone}`}`}
                     className={`h-16 lg:h-14 xl:h-16 rounded-lg font-bold text-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation ${colors[variant]}`}
                   >
                     {zone}

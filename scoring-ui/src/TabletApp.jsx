@@ -7,6 +7,7 @@ import CupSearch from './components/CupSearch'
 import TabletScoringView from './components/TabletScoringView'
 import * as api from './api'
 import t from './i18n'
+import { log } from './log.js'
 
 // ============================================================
 // Scoring constants
@@ -120,18 +121,18 @@ function TabletApp() {
     // Fetch user info from SSI in background (non-blocking)
     api.getUserInfo()
       .then(userInfo => {
-        console.log('[TabletApp] User info received:', userInfo)
+        log.debug('[TabletApp] User info received:', userInfo)
         const fullName = `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim()
-        console.log('[TabletApp] Full name constructed:', fullName, 'isEmpty:', !fullName)
+        log.debug('[TabletApp] Full name constructed:', fullName)
         if (fullName) {
-          console.log('[TabletApp] Setting userName to:', fullName)
+          log.debug('[TabletApp] Setting userName to:', fullName)
           setUserName(fullName) // Update with real name when available
         } else {
-          console.warn('[TabletApp] User info has no name, keeping email prefix')
+          log.warn('[TabletApp] User info has no name, keeping email prefix')
         }
       })
       .catch(err => {
-        console.warn('[TabletApp] Could not fetch user info:', err)
+        log.warn('[TabletApp] Could not fetch user info:', err)
         // Keep the email prefix fallback we already set
       })
     

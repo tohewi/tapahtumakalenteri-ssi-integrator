@@ -192,13 +192,7 @@ export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth,
     try {
       const meData = await graphqlWithRefresh(req.ssiSession, '{ me { email first_name last_name } }')
       const me = meData.me
-      console.log('[auth-v7] /me: SSI returned:', { 
-        email: me?.email, 
-        first_name: me?.first_name, 
-        last_name: me?.last_name 
-      })
       if (!me?.email) {
-        console.warn('[auth-v7] /me: No email in response')
         return res.status(401).json({ error: 'Could not get user info' })
       }
       const responseData = {
@@ -206,7 +200,6 @@ export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth,
         firstName: me.first_name || '',
         lastName: me.last_name || '',
       }
-      console.log('[auth-v7] /me: Sending response:', responseData)
       res.json(responseData)
     } catch (err) {
       console.error('[auth-v7] /me error:', err)
