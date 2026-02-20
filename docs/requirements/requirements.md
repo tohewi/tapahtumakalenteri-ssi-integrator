@@ -246,6 +246,12 @@
 |---|-------------|--------|---------------|
 | MGMT1 | **Management Independent of Registration**: Kupittaa Cup Hallinta must keep cups available for management independent of registration status, once registration start date has passed and while the cup is still active. Management is available until the cup's end date and time (`ends`), or `starts + 24h` fallback. Cups with no `registration_starts` are excluded. Uses dedicated `/api/manage/cups` endpoint. | ✅ Implemented | ~14,000 |
 
+## Release 7.3 — Refactor for maintainability
+
+| # | Requirement | Status | Tokens (est.) |
+|---|-------------|--------|---------------|
+| rfr1 | Review IMMEDIATE-DEVELOPMENT-NEEDS.md and architecture-review.md and prepare refactoring plan | ⬚ Pending |
+
 ## Release 8.0 — Tablet Scoring UI
 
 ### Tablet Scoring Requirements
@@ -293,19 +299,63 @@
 - **CUP3**: Paid status is read from and written to SSI at **cup level only**. No local persistence — SSI is the source of truth.
 - **SSI integration**: CUP2 and CUP3 use **web scraping** (admin cookies) for both reading and writing state. SSI GraphQL does not support write operations reliably. Endpoints: `set-did-not-show`, `undo-did-not-show`, `toggle-paid` via `GET /event/participant/{ct}/{id}/...`. Reading paid/DNS status also requires scraping the participant page since GraphQL does not expose these fields.
 
+## Release 7.9 — GraphQL Cup Management
+
+Migrate Cup creation and maintenance from web scraping to SSI GraphQL API. The legacy `New-KupittaaCup.ps1` script uses web scraping (CSRF tokens, form POSTs, HTML parsing) which is fragile and breaks when SSI updates their UI. The GraphQL `create_event` mutation is now confirmed working (Feb 2026) and should be the primary method.
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| GQL1 | **Update SSI-GraphQL.psm1**: Fix `New-SSIResulCup` and `New-SSIResulMatch` to use correct `form_input` fields (`count` not `match_count`, `reg_start_date`/`reg_start_time`, `has_accepted_event_data_ass_agreement`, `weapon_groups`/`categories`/`competence_classes` arrays). Update `New-SSIEvent` to pass array fields correctly in JSON | ⬚ Pending |
+| GQL2 | **Update GraphQL Tests**: Fix `SSI-GraphQL.Tests.ps1` Event Creation tests to use correct form fields and valid enum values. All tests must pass including cup creation, match creation, cup-match linking, and squad creation | ⬚ Pending |
+| GQL3 | **GraphQL Cup Creation Script**: Create `New-KupittaaCup-GraphQL.ps1` that replaces web scraping with GraphQL for Cup creation, Match creation, and Cup-Match linking. Squads may still require web scraping if GraphQL squad creation is not available. Load settings from `config/kupittaa-cup-config.yml` | ⬚ Pending |
+| GQL4 | **GraphQL Batch Creation**: Create `New-KupittaaCupBatch-GraphQL.ps1` for batch Cup creation from date list file, replacing the web scraping batch script | ⬚ Pending |
+| GQL5 | **Form Field Discovery Automation**: Create a PowerShell function `Get-SSIFormFields` that logs in via web scraping, fetches a create-event form, and returns all field names, required status, and valid enum values. Use this to detect SSI form changes proactively | ⬚ Pending |
+| GQL6 | **Deprecate Web Scraping Scripts**: Mark `archive/scripts-legacy/New-KupittaaCup.ps1` and `New-KupittaaCupBatch.ps1` as deprecated once GraphQL equivalents are validated. Keep in archive for reference | ⬚ Pending |
+
+### Design Decisions (GQL1–GQL6)
+
+- **GraphQL is primary, web scraping is fallback**: Use GraphQL for all operations where it works. Fall back to web scraping only for operations not yet supported (e.g., squad creation if `create_squad` mutation doesn't exist).
+- **Form field discovery**: SSI's `form_input` is an opaque `JSON` scalar — required fields are not in the GraphQL schema. Use web scraping to discover fields (see AGENTS.md § "SSI GraphQL — Discovering Form Fields").
+- **Config compatibility**: GraphQL scripts must use the same `kupittaa-cup-config.yml` as the legacy scripts. Field name mapping (e.g., `matchCount` → `count`) is handled in the script, not in the config.
+- **WordPress integration**: Calendar event creation (Tapahtumakalenteri) remains web scraping — WordPress REST API requires separate auth. This is out of scope for R7.9.
+
+## Release 8.1 — Match Management Platform (Roadmap)
+
+Vision: Transform the current "link collection" home page into a structured match management platform. This requires significant UI design and architecture work before implementation.
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| MP1 | **UI Architecture Design**: Design the overall application navigation and information architecture. Replace the current static link collection with a structured app shell supporting the functional areas below. Mobile-first, responsive design. Define navigation patterns, page hierarchy, and user flows | ⬚ Design |
+| MP2 | **Training Type Definitions**: Define and manage training types (e.g., Kupittaa CUP, SRA Training) — how they map to SSI event structures (Cup/Match/Squad hierarchy) and to Tapahtumakalenteri calendar events. Configuration-driven, not hardcoded | ⬚ Design |
+| MP3 | **Match Personnel Management**: Extend the existing staffing MVP (SRA Training staffing) into a general-purpose match personnel system. Define roles per training type, manage availability, handle signup/resign workflows. Personnel assignments visible in match event context | ⬚ Design |
+| MP4 | **Match Event Management**: Unified interface for creating, viewing, and managing match events. Covers the full lifecycle: create Cup+Matches+Squads → open registration → manage registrations and squadding → run scoring → close and report. Integrates with SSI (GraphQL + web scraping) and Tapahtumakalenteri | ⬚ Design |
+| MP5 | **Registration Management**: Consolidate the existing registration helper (`#/register`) into the match event context. View registrations, manage squad assignments, handle re-registrations and withdrawals — all within the match event view | ⬚ Design |
+| MP6 | **Scoring Integration**: Integrate tablet scoring (`#/scoring-tablet`) and mobile scoring (`#/scoring`) into the match event context. Scoring is launched from within a match event, not as a separate top-level feature | ⬚ Design |
+| MP7 | **Reporting**: Post-match reporting — results summary, statistics (shots fired, participation), export for Tapahtumakalenteri update. Consolidate the existing summary report functionality | ⬚ Design |
+
+### Design Principles (v8.1)
+
+- **Event-centric navigation**: Everything revolves around match events. Users navigate to an event and access all related functions (personnel, registration, scoring, reporting) from there.
+- **Training type as template**: Training types define the structure (how many matches, what disciplines, squad configuration, personnel roles). Creating a new event from a training type pre-fills all settings.
+- **Progressive disclosure**: Show simple views by default, reveal complexity on demand. A range officer sees different things than an administrator.
+- **Offline-capable**: Design for intermittent connectivity at shooting ranges. Critical paths (scoring) must work offline with sync.
+
 ## Summary
 
 - **Release 1.0** (SSI Cup Automation): 37 requirements — 35 ✅, 2 on hold (35, 36)
 - **Release 2.0** (WordPress Integration): 9 requirements — 6 ✅, 1 on hold (41), 2 pending (39, 42)
-- **Release 3.1** (Data Integrity): 2 requirements — 2 pending (47, 48)
 - **Release 3.0** (Scoring Application): 21 requirements — 20 ✅, 1 pending (SEC11)
+- **Release 3.1** (Data Integrity): 2 requirements — 2 pending (47, 48)
 - **Release 4.0** (Kupittaa Cup Registration Frontend): 25 requirements — 25 ✅
-- **Release 5.0** (SRA Training Staffing) - requirements are in document sra-training-staffing-requirements.md
+- **Release 5.0** (SRA Training Staffing) — requirements in `sra-training-staffing-requirements.md`
 - **Release 6.0** (Match Management & UI Consolidation): 5 requirements — 1 ✅, 4 pending (MG2–MG5)
 - **Release 7.0** (Authentication & Session Handling): 25 requirements — 0 ✅, 25 pending (AUTH1–10, SES1–7, SEC1–7, TEST1–8)
 - **Release 7.1** (Management Availability): 1 requirement — 1 ✅
-- **Release 8.0** (Tablet Scoring UI): 9 requirements — 9 ✅ (TS1–TS9)
 - **Release 7.2** (Kupittaa Cup Management): 3 requirements — 1 ✅, 2 📋 Specified (CUP1–CUP3)
+- **Release 7.3** (Refactor for Maintainability): 1 requirement — 1 pending (rfr1)
+- **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6)
+- **Release 8.0** (Tablet Scoring UI): 9 requirements — 9 ✅ (TS1–TS9)
+- **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
 
 
 ## Configuration Files

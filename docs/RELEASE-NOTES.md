@@ -1,12 +1,19 @@
 # Release Notes
 
-## Version 5.0 (2026-02-20)
+> **Version numbering**: Release numbers align with `requirements.md` release definitions.
+> Git tags may differ for historical reasons (see version mapping at the bottom).
+
+---
+
+## Release 8.0 — Tablet Scoring UI (2026-02-20)
+
+**Git tag:** `v7.0.0` → HEAD | **Requirements:** TS1–TS9 ✅
 
 ### Overview
 
 Tablet scoring UI for range officers — enter competition scores on a tablet or desktop during Kupittaa CUP events. Includes session reliability fixes that benefit all scoring modes.
 
-### New: Tablet Scoring (`#/tablet`)
+### New: Tablet Scoring (`#/scoring-tablet`)
 
 - **3-column layout**: Shooter list (left), score card (center), number pad (right) — optimized for landscape tablets
 - **Score card**: 5×6 grid (5 shots × 6 series) that scales dynamically to fit the screen without scrolling
@@ -32,28 +39,27 @@ Tablet scoring UI for range officers — enter competition scores on a tablet or
 - **Fix**: Added the required parameter. JWT now refreshes silently in the background
 - **Impact**: All scoring sessions (mobile + tablet) now run uninterrupted for the full cup duration (typically 9:20–12:00, ~2.5 hours)
 
+### Bug Fix: Blank Tablet Scoring Page (R80 Hotfix)
+
+- **Root cause**: `setSelectedScoreIndex(null)` called in `TabletScoringView` but the state variable was removed during score interaction simplification — caused `ReferenceError` on mount
+- **Symptom**: Blank page after login when stale localStorage restored the scoring view
+- **Fix**: Removed leftover `setSelectedScoreIndex(null)` calls, added `ErrorBoundary` to `main.jsx`, fixed `LoginScreen` props in `TabletApp`, added defensive `restoreNavState`
+
 ### Accessibility (WCAG 2.1 AA)
 
 - `role="listbox"` / `role="option"` on shooter list with `aria-selected`
 - `aria-label` on all interactive buttons (score pad, score card, breadcrumbs, save)
 - `aria-live="polite"` region announces save status to screen readers
 - Keyboard support: Enter/Space to select shooters, Tab navigation
-- Visible focus indicators on breadcrumb buttons (replaced invisible `focus:outline-none`)
-- Accessible reorder buttons (▲/▼) replacing HTML5 drag-and-drop (which doesn't work on touch)
+- Visible focus indicators on breadcrumb buttons
+- Accessible reorder buttons (▲/▼) replacing HTML5 drag-and-drop
 
 ### Other Improvements
 
 - **Translation fixes**: Tulosrata → Tuloskortti, Sarake → Sarja, Score Track → Score Card
 - **Touch targets**: Score card buttons meet 56px minimum (TS6 requirement)
-- **`/me` endpoint**: Removed PII debug logging, documented intentional no-scope access
+- **`/me` endpoint**: Removed PII debug logging
 - **Test fix**: Timezone-dependent `isToday` assertion now works in all timezones
-- **Removed `isDev` pattern**: StaffingPage.jsx debug logging now uses centralized `log.js`
-
-### Infrastructure
-
-- No new services or dependencies
-- Frontend: new `scoring-ui/src/log.js` (51 lines)
-- All changes on existing Render deployment
 
 ### Test Status
 
@@ -64,7 +70,98 @@ Tablet scoring UI for range officers — enter competition scores on a tablet or
 
 ---
 
-## Version 4.0 (2026-02-07)
+## Release 7.2 — Kupittaa Cup Management (2026-02-18)
+
+**Requirements:** CUP1 📋, CUP2 📋, CUP3 ✅
+
+### New Features
+
+- **Mark Payment Received** (CUP3): Per-competitor paid toggle at the cup level. Solid green button for paid shooters — immediately visible when scanning the list. State stored in SSI via `toggle-paid` endpoint
+- **Management site enhancements**: Improved logging architecture, backend logging with `LOG_LEVEL` env var
+
+### Specified (Not Yet Implemented)
+
+- **CUP1**: Move shooter between squads within a match
+- **CUP2**: Set shooter as DNS (Did Not Start) at cup + all matches, with undo
+
+---
+
+## Release 7.1 — Management Availability (2026-02-14)
+
+**Requirements:** MGMT1 ✅
+
+### New Features
+
+- **Management Independent of Registration**: Kupittaa Cup Hallinta keeps cups available for management independent of registration status. Management available from registration start date until cup end date (or starts + 24h fallback). Dedicated `/api/manage/cups` endpoint
+
+---
+
+## Release 7.0 — Authentication & Session Handling (2026-02-12)
+
+**Git tag:** `v7.0.0` | **Requirements:** Partial implementation of AUTH/SES/SEC requirements
+
+### Overview
+
+Major infrastructure overhaul replacing in-memory session handling with Redis-backed dual sessions. Includes service rename and EU infrastructure compliance.
+
+### New Features
+
+- **Redis-backed sessions**: `express-session` with `connect-redis` for persistent session storage surviving server restarts
+- **Dual-session architecture**: User session + admin SSI delegation with impersonation security
+- **Audit logging**: All SSI operations logged with user context, timestamp, and success/failure
+- **Proactive admin JWT refresh**: Separate cookie TTL (4h) from JWT TTL (14min)
+- **Configurable log verbosity**: `LOG_LEVEL` env var (debug/info/warn/error)
+- **Service rename**: `ssi-scoring` → `turres-ssi-tools`
+- **UI rename**: "Kupittaa Cup" → "SSI apurit/SSI Helpers"
+
+### Bug Fixes
+
+- Fix StaffingPage 'Remember me' never clearing credentials when unchecked
+- Fix squad query using user session instead of admin JWT
+- Fix web scraping for squad removal (GraphQL doesn't support it)
+- Fix startup race condition: await `initRedis()` before `app.listen`
+
+### Infrastructure
+
+- Redis Key Value added to `render.yaml`
+- All services deployed in EU (Frankfurt region)
+- Preview environment support via GitHub Actions
+
+---
+
+## Release 6.0 — Match Management & UI Consolidation (2026-02-12)
+
+**Git tag:** `v6.0.0` | **Requirements:** MG1 ✅, MG-ID1–MG-ID5 ✅
+
+### Overview
+
+Match management UI for Kupittaa CUP administration — consolidated squadding overview, shooter identification by email, and management operations.
+
+### New Features
+
+- **Match Management UI** (`#/manage`): Password-protected. Pick an active cup, see consolidated squadding overview — per-squad cross-match table, unsquadded shooters, CUP/match membership mismatches
+- **Email-first identification**: Email as primary identifier for all shooter operations. Eliminates ambiguity from SSI wildcard name searches
+- **Exact match enforcement**: Operations require explicit participant IDs — no silent fallback to name-based matching
+- **Shooter state management**: Approve, remove, and manage pending shooters with proper CUP + match state handling
+
+### SRA Training Staffing (Release 5.0)
+
+- **Staffing system** (`#/staffing`): SRA Training match personnel signup/resign with SSI integration
+- **Role-based signup**: Define roles per training type, manage availability
+- **SSI sync**: Staffing changes synced to SSI squad assignments
+- **Email notifications**: Signup/resign confirmation emails via Resend
+
+### Other Improvements
+
+- Development modularity guidelines and shared component process
+- PR preview environments via GitHub Actions
+- Remember me hook refactored for role-specific storage
+
+---
+
+## Release 4.0 — Registration Frontend & Scoring Application (2026-02-07)
+
+**Git tag:** `v4.0.0` | **Requirements:** R1–R14 ✅, RSEC1–RSEC11 ✅, S1–S10 ✅, P1–P4 ✅, M1–M3 ✅, B1–B4 ✅, SEC1–SEC10 ✅
 
 ### Overview
 
@@ -86,6 +183,9 @@ Registration frontend and scoring application — shooters can self-register for
 - **Per-user sessions**: Multi-user JWT + cookie isolation with 8h TTL
 - **Remember me**: AES-GCM encrypted credential storage with auto-login
 - **Navigation persistence**: Cup/match/squad/series state survives app restarts
+- **Read-back verification**: Submitted scores verified via GraphQL query
+- **Double-series mode**: Navigate 6 series per shooter for efficiency
+- **Component order**: Match list preserves SSI component order (1-Tarkkuus, 2-Pika, 3-Kuvio)
 
 ### Security (RSEC1–RSEC11)
 
@@ -106,37 +206,24 @@ All 11 registration security requirements implemented:
 - **GitHub Actions**: CI pipeline — install → test → audit → build → deploy
 - **Resend**: Transactional email from `no-reply@ssi.towi.me`
 
-### Requirements Met
-
-- R1–R14: Registration functional requirements ✅
-- RSEC1–RSEC11: Registration security requirements ✅
-- S1–S10, P1–P4, M1–M3, B1–B4, SEC1–SEC10: Scoring requirements ✅
-
 ---
 
-## Version 2.0 (2026-02-01)
+## Release 2.0 — WordPress Integration (2026-02-01)
+
+**Requirements:** Req 38 ✅, 40 ✅, 43 ✅, 44 ✅, 45 ✅, 46 ✅
 
 ### Overview
 
-Major release adding WordPress Tapahtumakalenteri integration and batch processing capabilities.
+WordPress Tapahtumakalenteri integration and batch processing capabilities.
 
 ### New Features
 
-#### WordPress Integration
 - **Calendar Event Creation**: Automatically creates events in Turun Reservilaiset WordPress calendar
 - **Auto-Publish**: Validates SSI and WordPress URLs, then publishes calendar event
-- **Statistics Update**: Updates shots fired count after Cup completion (`Update-TapahtumakalenteriEvent.ps1`)
+- **Statistics Update**: Updates shots fired count after Cup completion
 - **2FA Support**: Handles email-based OTP authentication for WordPress
-
-#### Batch Processing
-- **Batch Creation**: Create multiple events from a date list file (`New-KupittaaCupBatch.ps1`)
-- **Single Authentication**: One OTP prompt for entire batch - sessions reused
-- **Skip Existing**: Dates marked with `!` prefix are skipped
-- **Error Handling**: Stops on first error with clear status output
-
-#### Session Management
-- **PreAuth Parameter Set**: Pass pre-authenticated sessions to scripts
-- **Session Reuse**: SSI and WordPress sessions retained across batch operations
+- **Batch Creation**: Create multiple events from a date list file
+- **Single Authentication**: One OTP prompt for entire batch — sessions reused
 
 ### New Scripts
 
@@ -147,58 +234,32 @@ Major release adding WordPress Tapahtumakalenteri integration and batch processi
 | `Update-TapahtumakalenteriEvent.ps1` | Statistics update |
 | `New-KupittaaCupBatch.ps1` | Batch creation from date list |
 
-### New Configuration
-
-- `config/kupittaa-cup-dates.txt` - Date list for batch creation
-
-### Usage
-
-```powershell
-# Single event with calendar
-.\scripts\New-KupittaaCup.ps1 -Date "14-02-2026" `
-    -Username "ssi-email" -Password "ssi-password" `
-    -CreateCalendarEvent `
-    -WpUsername "wp-user" -WpPassword "wp-password"
-
-# Batch creation
-.\scripts\New-KupittaaCupBatch.ps1 `
-    -DateListFile "config\kupittaa-cup-dates.txt" `
-    -SsiUsername "ssi-email" -SsiPassword "ssi-password" `
-    -WpUsername "wp-user" -WpPassword "wp-password"
-```
-
-### Requirements Met
-
-- Req 38: Tapahtumakalenteri Integration ✅
-- Req 40: Upfront authentication ✅
-- Req 43: Statistics update ✅
-- Req 44: Auto-publish calendar event ✅
-- Req 45: Batch creation ✅
-- Req 46: Single authentication with session reuse ✅
-
 ---
 
-## Version 1.0 (2026-01-25)
+## Release 1.0 — SSI Cup Automation (2026-01-25)
+
+**Git tag:** `v1.0` | **Requirements:** Req 1–34 ✅, 37 ✅
 
 ### Overview
 
-First release with full SSI Cup automation.
+First release with full SSI Cup automation via PowerShell web scraping.
 
 ### Features
 
-- **Cup Creation**: Automated RESUL CUP event creation
+- **Cup Creation**: Automated RESUL CUP event creation on shootnscoreit.com
 - **Match Creation**: Creates 3 child matches (Tarkkuus, Pika, Kuvio)
 - **Match Linking**: Links matches to parent Cup as components
-- **Squad Creation**: Creates 3 squads per match
+- **Squad Creation**: Creates 3 squads per match (Oma ase 1, Oma ase 2, Laina-ase)
 - **YAML Configuration**: All settings in `kupittaa-cup-config.yml`
 - **Duplicate Check**: Prevents duplicate event names
-- **Test Mode**: `-TestMode` flag for testing
+- **Test Mode**: `-TestMode` flag for safe testing
 - **Username/Password Auth**: Login without manual session ID
 
-### Requirements Met
+### Architecture
 
-- Requirements 1-34: SSI Cup automation ✅
-- Requirement 37: Username/password authentication ✅
+- **Frontend**: React 19 + Tailwind CSS 4, built with Vite 7
+- **Backend**: Express 5 proxy (JWT for GraphQL reads, session cookies for score writes)
+- **Deployment**: Single Node.js process serves both API and built UI
 
 ### Known Limitations
 
@@ -207,5 +268,19 @@ First release with full SSI Cup automation.
 
 ---
 
-*Version 2.0 Released: 2026-02-01*
-*Version 1.0 Released: 2026-01-25*
+## Version Mapping
+
+Historical git tags don't always match requirements release numbers. This table maps them:
+
+| Requirements Release | Git Tag | Date | Key Feature |
+|---------------------|---------|------|-------------|
+| Release 1.0 | `v1.0` | 2026-01-25 | SSI Cup Automation |
+| Release 2.0 | *(no tag)* | 2026-02-01 | WordPress Integration |
+| Release 4.0 | `v4.0.0` | 2026-02-07 | Scoring + Registration |
+| Release 5.0 + 6.0 | `v6.0.0` | 2026-02-12 | SRA Staffing + Management |
+| Release 7.0 | `v7.0.0` | 2026-02-12 | Redis Sessions |
+| Release 7.1 | *(post v7.0.0)* | 2026-02-14 | Management Availability |
+| Release 7.2 | *(post v7.0.0)* | 2026-02-18 | Cup Management |
+| Release 8.0 | *(post v7.0.0)* | 2026-02-20 | Tablet Scoring |
+
+> **Note:** Release 3.0 (Scoring) and Release 5.0 (SRA Staffing) were never released independently — they shipped as part of Release 4.0 and Release 6.0 respectively. Package.json versions (`1.0.0`, `1.1.0`) track the scoring-ui/scoring-proxy components specifically, not the overall project releases.
