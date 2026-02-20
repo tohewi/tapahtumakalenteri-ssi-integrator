@@ -7,6 +7,7 @@
   - Example: `R12-feature-staffing-filters` or `R07-hotfix-squad-sync`.
 - **Commit messages:** explain how the commit advances the requirement toward completion. Include the requirement number in the subject or body.
 - When a requirement is completed and tests pass, **update the requirements document** to mark it ✅ **Implemented/Ready**.
+- **Keep release notes in sync with requirements:** When completing a release or significant feature, update `docs/RELEASE-NOTES.md` with a new section. Release numbers in release notes **must match** the release numbers in `docs/requirements/requirements.md`. Do not invent new version numbers — use the requirement release number (e.g., "Release 7.2" not "Version 5.0"). Include: overview, new features, bug fixes, requirements met, and test status.
 - **Keep instructions in sync:** if you modify these agent instructions, update **both** `AGENTS.md` and `.github/copilot-instructions.md` with the same changes.
 - **Track token usage:** At the end of each session (or when asked), provide a rough token usage summary per requirement. Count words read (file reads, search results, command output) and words written (edits, new files, commands) during the session. Summarize in a table like:
 
