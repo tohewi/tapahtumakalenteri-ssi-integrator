@@ -180,7 +180,6 @@ export default function TabletScoringView({
       
       const firstShooter = squad.shooters[0]
       setSelectedShooter(firstShooter)
-      setSelectedScoreIndex(null)
       setSaveError(null)
       
       log.debug('[tablet] Loaded SSI scores for all shooters, starting with:', firstShooter.id)
@@ -198,7 +197,6 @@ export default function TabletScoringView({
     }
     
     setSelectedShooter(shooter)
-    setSelectedScoreIndex(null)
     setSaveError(null)
 
     // Load SSI scores from squad data (only if no local scores exist)
