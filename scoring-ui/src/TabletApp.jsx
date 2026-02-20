@@ -138,12 +138,18 @@ function TabletApp() {
       })
     
     await handleRememberMe(email, password, apiKey, rememberMe)
-    await restoreNavState()
+    try {
+      await restoreNavState()
+    } catch (err) {
+      console.error('[TabletApp] restoreNavState failed, falling back to cup view:', err)
+      setView('cup')
+    }
   }
 
   const restoreNavState = async () => {
     const nav = lsGet(LS_KEYS.NAV)
     const savedCup = lsGet(LS_KEYS.CUP)
+    log.debug('[TabletApp] restoreNavState: nav=', nav, 'savedCup=', savedCup?.id)
 
     // Restore cup + matches
     let cupData = null
@@ -152,11 +158,16 @@ function TabletApp() {
         cupData = await api.getCup(savedCup.id)
         setSelectedCup(cupData)
         setMatches((cupData.matches || []).map(api.transformMatchListItem))
-      } catch { /* cup load failed */ }
+        log.debug('[TabletApp] restoreNavState: cup restored, matches=', cupData.matches?.length)
+      } catch (err) {
+        log.warn('[TabletApp] restoreNavState: cup load failed:', err.message)
+      }
     }
 
     if (!nav || !cupData) {
-      setView(cupData ? 'match' : 'cup')
+      const target = cupData ? 'match' : 'cup'
+      log.debug('[TabletApp] restoreNavState: navigating to', target)
+      setView(target)
       return
     }
 
@@ -180,13 +191,17 @@ function TabletApp() {
               scores[s.id] = restored?.[s.id] || api.buildScoresFromSSI(s, SERIES_COUNT)
             }
             setAllScores(scores)
+            log.debug('[TabletApp] restoreNavState: restored scoring view')
             setView('scoring')
             return
           }
         }
+        log.debug('[TabletApp] restoreNavState: navigating to squad')
         setView('squad')
         return
-      } catch { /* match load failed, fall back */ }
+      } catch (err) {
+        log.warn('[TabletApp] restoreNavState: match load failed:', err.message)
+      }
     }
 
     setView(nav.view === 'cup' ? 'cup' : 'match')
@@ -327,11 +342,21 @@ function TabletApp() {
   // Render appropriate view
   if (view === 'login') {
     return (
-      <LoginScreen
-        onLogin={handleLogin}
-        savedCreds={savedCreds}
-        sessionExpiredMessage={sessionExpiredMessage}
-      />
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        {sessionExpiredMessage && (
+          <div className="mx-4 mt-4 bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-center">
+            <p className="text-yellow-800 text-sm font-medium">{sessionExpiredMessage}</p>
+          </div>
+        )}
+        <LoginScreen
+          onLogin={handleLogin}
+          initialEmail={savedCreds?.email}
+          initialPassword={savedCreds?.password}
+          initialApiKey={savedCreds?.apiKey}
+          title={t.tabletScoringTitle}
+          subtitle={t.tabletScoringDescription}
+        />
+      </div>
     )
   }
 
