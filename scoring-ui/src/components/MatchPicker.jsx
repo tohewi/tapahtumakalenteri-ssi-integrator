@@ -1,6 +1,28 @@
 import fi from '../i18n'
 import { AppHeader } from './shared'
 
+// Map status codes and translated text to localized status text
+// SSI can return either codes ('cp', 'on') or translated text depending on context
+function getStatusText(status) {
+  // Map codes to translation keys
+  const codeToKey = {
+    'cp': 'completed',
+    'on': 'active',
+  }
+  
+  // Map translated text (from SSI) to translation keys for consistency
+  const textToKey = {
+    'Completed': 'completed',
+    'Valmis': 'completed',
+    'Active': 'active',
+    'Aktiivinen': 'active',
+  }
+  
+  // Try code mapping first, then text mapping, fallback to original
+  const key = codeToKey[status] || textToKey[status]
+  return key ? fi[key] : status
+}
+
 export default function MatchPicker({ matches, onSelect, cupName, onBack }) {
   const now = new Date()
   const year = now.getFullYear()
@@ -81,7 +103,7 @@ function MatchCard({ match, onSelect, highlight }) {
       {/* Match info */}
       <div className="flex-1 min-w-0">
         <div className="font-semibold text-gray-800 truncate">{match.name}</div>
-        <div className="text-xs text-gray-400">{match.status === 'on' ? fi.active : match.status} · {match.type}</div>
+        <div className="text-xs text-gray-400">{getStatusText(match.status)} · {match.type}</div>
       </div>
 
       {/* Arrow */}

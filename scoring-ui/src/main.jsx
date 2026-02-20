@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import HomePage from './components/HomePage.jsx'
 import App from './App.jsx'
+import TabletApp from './TabletApp.jsx'
 import RegisterPage from './components/RegisterPage.jsx'
 import ManagePage from './components/ManagePage.jsx'
 import ReportPage from './components/ReportPage.jsx'
@@ -20,6 +21,9 @@ function Router() {
 
   if (route === '#/scoring') {
     return <App />
+  }
+  if (route === '#/scoring-tablet') {
+    return <TabletApp />
   }
   if (route === '#/register') {
     return <RegisterPage />

@@ -21,10 +21,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
 const PORT = process.env.PORT || 3001
 const IS_PROD = process.env.NODE_ENV === 'production'
+const IS_RENDER = process.env.RENDER === 'true' // Render platform (production or preview)
 
 // Trust exactly one reverse proxy (Render). Without this, req.ip is always
 // the Render proxy IP, making all rate limiters share a single counter.
-if (IS_PROD) app.set('trust proxy', 1)
+// This applies to both production and preview environments on Render.
+if (IS_RENDER) app.set('trust proxy', 1)
 
 // ============================================================
 // Security middleware
@@ -232,7 +234,7 @@ async function getAdminSession() {
         log.debug('[admin] JWT refreshed via re-auth')
       }
     } catch (err) {
-      console.error('[admin] JWT refresh failed, doing full re-login:', err.message)
+      log.error('[admin] JWT refresh failed, doing full re-login:', err.message)
       // Full re-login as fallback
       adminCookies = await ssiLogin(email, password)
       adminCookieTime = now
@@ -323,7 +325,12 @@ const registerBodyLimit = express.json({ limit: '1kb' })
 // ============================================================
 
 // Auth routes (V7 — Redis/memory backed dual sessions)
-const authRouter = createAuthV7Router({ loginLimiter, getAdminSession })
+const authRouter = createAuthV7Router({ 
+  loginLimiter, 
+  getAdminSession,
+  requireAuth,
+  graphqlWithRefresh,
+})
 app.use('/api/auth', authRouter)
 
 // Scoring routes

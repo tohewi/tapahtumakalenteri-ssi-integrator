@@ -1,5 +1,69 @@
 # Release Notes
 
+## Version 5.0 (2026-02-20)
+
+### Overview
+
+Tablet scoring UI for range officers — enter competition scores on a tablet or desktop during Kupittaa CUP events. Includes session reliability fixes that benefit all scoring modes.
+
+### New: Tablet Scoring (`#/tablet`)
+
+- **3-column layout**: Shooter list (left), score card (center), number pad (right) — optimized for landscape tablets
+- **Score card**: 5×6 grid (5 shots × 6 series) that scales dynamically to fit the screen without scrolling
+- **Number pad**: Tap zone buttons (X, 10–1, M) to add scores to the first available series
+- **Double-tap delete**: Double-tap any score on the card to remove it
+- **Auto-save on switch**: Scores are automatically saved to SSI when switching between shooters
+- **Persistent shooter order**: Reorder shooters once (▲/▼ buttons) and the order persists across all squads and matches within the same cup
+- **Read-only mode**: Completed matches (status `cp`) are displayed but cannot be edited
+- **Real user name**: Fetches and displays the scorer's full name from SSI (non-blocking)
+- **Breadcrumb navigation**: Cup › Match › Squad with back-navigation at each level
+- **Remember me**: Encrypted credential storage with auto-login (shared with mobile scoring)
+
+### New: Frontend Logging Utility
+
+- **`log.js`**: localStorage-gated debug logging — silent in production, enable with `localStorage.setItem('LOG_LEVEL', 'debug')`
+- All 22 debug `console.log` calls across 5 UI files converted to `log.debug`/`log.warn`
+- Mirrors the backend `LOG_LEVEL` pattern for consistent debugging
+
+### Bug Fix: SSI JWT Token Refresh
+
+- **Root cause**: The SSI GraphQL `refresh_token` mutation requires `revoke_refresh_token: Boolean!` but we weren't providing it
+- **Symptom**: Every ~14 minutes the JWT expired, refresh failed, and the system fell back to a full re-login — causing brief interruptions during scoring
+- **Fix**: Added the required parameter. JWT now refreshes silently in the background
+- **Impact**: All scoring sessions (mobile + tablet) now run uninterrupted for the full cup duration (typically 9:20–12:00, ~2.5 hours)
+
+### Accessibility (WCAG 2.1 AA)
+
+- `role="listbox"` / `role="option"` on shooter list with `aria-selected`
+- `aria-label` on all interactive buttons (score pad, score card, breadcrumbs, save)
+- `aria-live="polite"` region announces save status to screen readers
+- Keyboard support: Enter/Space to select shooters, Tab navigation
+- Visible focus indicators on breadcrumb buttons (replaced invisible `focus:outline-none`)
+- Accessible reorder buttons (▲/▼) replacing HTML5 drag-and-drop (which doesn't work on touch)
+
+### Other Improvements
+
+- **Translation fixes**: Tulosrata → Tuloskortti, Sarake → Sarja, Score Track → Score Card
+- **Touch targets**: Score card buttons meet 56px minimum (TS6 requirement)
+- **`/me` endpoint**: Removed PII debug logging, documented intentional no-scope access
+- **Test fix**: Timezone-dependent `isToday` assertion now works in all timezones
+- **Removed `isDev` pattern**: StaffingPage.jsx debug logging now uses centralized `log.js`
+
+### Infrastructure
+
+- No new services or dependencies
+- Frontend: new `scoring-ui/src/log.js` (51 lines)
+- All changes on existing Render deployment
+
+### Test Status
+
+| Suite | Passing | Notes |
+|-------|--------:|-------|
+| Backend (scoring-proxy) | 134 | All green |
+| Frontend (scoring-ui) | 160 | All green |
+
+---
+
 ## Version 4.0 (2026-02-07)
 
 ### Overview

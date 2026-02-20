@@ -14,6 +14,17 @@ const features = [
     color: 'blue',
   },
   {
+    href: '#/scoring-tablet',
+    titleKey: 'tabletScoringTitle',
+    descriptionKey: 'tabletScoringDescription',
+    icon: (
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+      </svg>
+    ),
+    color: 'indigo',
+  },
+  {
     href: '#/register',
     titleKey: 'registrationTitle',
     descriptionKey: 'registrationDescription',
@@ -73,6 +84,7 @@ const features = [
 
 const colorMap = {
   blue: { bg: 'bg-blue-50', icon: 'text-blue-600', border: 'border-blue-200', hover: 'active:bg-blue-100' },
+  indigo: { bg: 'bg-indigo-50', icon: 'text-indigo-600', border: 'border-indigo-200', hover: 'active:bg-indigo-100' },
   green: { bg: 'bg-green-50', icon: 'text-green-600', border: 'border-green-200', hover: 'active:bg-green-100' },
   purple: { bg: 'bg-purple-50', icon: 'text-purple-600', border: 'border-purple-200', hover: 'active:bg-purple-100' },
   amber: { bg: 'bg-amber-50', icon: 'text-amber-600', border: 'border-amber-200', hover: 'active:bg-amber-100' },

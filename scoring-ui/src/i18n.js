@@ -129,6 +129,30 @@ export const fi = {
   unpaid: 'Ei maksettu',
   didNotShow: 'DNS',
   moveSquad: '→ S?',
+
+  // Tablet scoring
+  tabletScoringTitle: 'Kupittaa Cup tulosten syöttö (Tabletti)',
+  tabletScoringDescription: 'Syötä kilpailutulokset tabletilla tai tietokoneella',
+  selectShooter: 'Valitse ampuja',
+  shotsFired: 'laukausta',
+  shotsTotal: 'yhteensä',
+  scoreTrack: 'Tuloskortti',
+  reenterScore: 'Valitse tulos muokataksesi sitä',
+  loadingShooterData: 'Ladataan ampujan tietoja...',
+  loadFromSSIFailed: 'SSI:n lataus epäonnistui',
+  retryLoad: 'Yritä uudelleen',
+  mergeConflict: 'Tietojen yhdistäminen',
+  mergeConflictMessage: 'Paikalliset tulokset eroavat SSI:stä. Valitse kumpi pidetään:',
+  keepLocal: 'Pidä paikalliset',
+  keepSSI: 'Pidä SSI:n',
+  string: 'Sarja',
+  saveFailed: 'Tallennus epäonnistui',
+  retryAction: 'Yritä uudelleen',
+  scoresSavedLocally: 'Tulokset tallennettu paikallisesti',
+  loggedInAs: 'Kirjautunut',
+  saveToSSI: 'Tallenna SSI:hin',
+  completed: 'Valmis',
+  matchCompleted: 'Ottelu valmis',
 }
 
 // English UI strings
@@ -262,6 +286,30 @@ export const en = {
   unpaid: 'Unpaid',
   didNotShow: 'DNS',
   moveSquad: '→ S?',
+
+  // Tablet scoring
+  tabletScoringTitle: 'Kupittaa Cup Scoring (Tablet)',
+  tabletScoringDescription: 'Enter competition scores on tablet or computer',
+  selectShooter: 'Select shooter',
+  shotsFired: 'shots',
+  shotsTotal: 'total',
+  scoreTrack: 'Score Card',
+  reenterScore: 'Select score to edit it',
+  loadingShooterData: 'Loading shooter data...',
+  loadFromSSIFailed: 'Failed to load from SSI',
+  retryLoad: 'Retry',
+  mergeConflict: 'Data Merge',
+  mergeConflictMessage: 'Local scores differ from SSI. Choose which to keep:',
+  keepLocal: 'Keep Local',
+  keepSSI: 'Keep SSI',
+  string: 'String',
+  saveFailed: 'Save failed',
+  retryAction: 'Retry',
+  scoresSavedLocally: 'Scores saved locally',
+  loggedInAs: 'Logged in',
+  saveToSSI: 'Save to SSI',
+  completed: 'Completed',
+  matchCompleted: 'Match Completed',
 }
 
 // Detect browser language and return appropriate translations

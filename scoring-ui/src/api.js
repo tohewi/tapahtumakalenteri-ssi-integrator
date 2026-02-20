@@ -1,3 +1,5 @@
+import { log } from './log.js'
+
 const API_BASE = '/api'
 
 // Custom error for session expiry
@@ -50,6 +52,11 @@ export async function logout() {
 export async function getAuthStatus() {
   const resp = await fetch(`${API_BASE}/auth/status`, { credentials: 'include' })
   return resp.json()
+}
+
+export async function getUserInfo() {
+  const resp = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' })
+  return handleResponse(resp)
 }
 
 export async function searchCups(search) {
@@ -268,10 +275,15 @@ export function transformMatchListItem(ssiMatch) {
 
 // Build scores object from SSI competitor data for all 6 strings
 export function buildScoresFromSSI(shooter, seriesCount = 6) {
+  log.debug('[buildScoresFromSSI] Input shooter:', shooter)
   const scores = {}
   for (let i = 0; i < seriesCount; i++) {
     const sKey = `s${i + 1}`
-    scores[i] = parseStringScore(shooter?.ssiScores?.[sKey])
+    // Support both shooter.ssiScores.s1 (transformed squad data) and shooter.s1 (direct from SSI API)
+    const scoreString = shooter?.ssiScores?.[sKey] || shooter?.[sKey]
+    log.debug(`[buildScoresFromSSI] ${sKey}:`, scoreString)
+    scores[i] = parseStringScore(scoreString)
   }
+  log.debug('[buildScoresFromSSI] Result scores:', scores)
   return scores
 }

@@ -246,6 +246,37 @@
 |---|-------------|--------|---------------|
 | MGMT1 | **Management Independent of Registration**: Kupittaa Cup Hallinta must keep cups available for management independent of registration status, once registration start date has passed and while the cup is still active. Management is available until the cup's end date and time (`ends`), or `starts + 24h` fallback. Cups with no `registration_starts` are excluded. Uses dedicated `/api/manage/cups` endpoint. | ✅ Implemented | ~14,000 |
 
+## Release 8.0 — Tablet Scoring UI
+
+### Tablet Scoring Requirements
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| TS1 | **Tablet UI Mode**: Tablet-optimized scoring interface with all elements visible simultaneously (shooters, score track, number pad) accessible via `#/scoring-tablet` route | ✅ Implemented |
+| TS2 | **Breadcrumb Navigation**: Clickable breadcrumb trail (Cup › Match › Squad) in header for navigating back to any level | ✅ Implemented |
+| TS3 | **User Identity Display**: Display logged-in SSI user name (first + last) and email in header, fetched from GraphQL `{ me { email first_name last_name } }` | ✅ Implemented |
+| TS4 | **Fixed-Height Score Bars**: Score track uses CSS Grid with fixed min-height (120px per string card) to prevent layout shifts when scores are added | ✅ Implemented |
+| TS5 | **Long-Press Score Deletion**: Single-gesture score removal via 750ms long-press with visual progress feedback (red border animation). Supports both touch and mouse input | ✅ Implemented |
+| TS6 | **Touch Target Compliance**: All interactive elements meet accessibility standards (56×56px score buttons, 88px number pad buttons, exceeding 44×44px minimum) | ✅ Implemented |
+| TS7 | **Viewport-Fitted Layout**: UI scales to fit within screen bounds (`h-screen` with `overflow-hidden`) without requiring page-level scrolling. Individual panels scroll internally as needed | ✅ Implemented |
+| TS8 | **Responsive Breakpoints**: Adaptive sizing for mobile (<1024px), tablet landscape (≥1024px), and desktop (≥1280px) using Tailwind breakpoints | ✅ Implemented |
+| TS9 | **Read-Only for Completed Matches**: When match status is 'cp' (completed), scoring UI becomes read-only: number pad buttons disabled, save button shows "Match Completed" (Finnish: "Ottelu valmis"), long-press deletion disabled, green "Completed" (Finnish: "Valmis") badge shown in header. Users can browse scores but cannot edit or save | ✅ Implemented |
+
+### Rationale for TS9 (Completed Match Protection)
+
+**Business Rule**: Completed matches ('cp' status) indicate scoring is finalized and approved by shooters with no protests. Once a match reaches 'cp' status, scores become official competition results that must be protected from accidental or unauthorized modification.
+
+**Finnish Translation**: "Completed" = "Valmis" (indicating scoring is completed and approved)
+
+**UI Behavior**:
+- Number pad buttons: Greyed out (`disabled` state) when match is completed
+- Save button: Shows "Ottelu valmis" / "Match Completed" instead of "Tallenna tulokset" / "Save Scores"
+- Long-press deletion: Disabled (event handlers return early if `isMatchCompleted`)
+- Header badge: Green "Valmis" / "Completed" badge appears next to match name in breadcrumb trail
+- Browsing: Users can still navigate, view scores, and switch between shooters
+
+**Implementation**: Check `match.status === 'cp'` and disable all score modification operations while preserving read-only browsing capability.
+
 ## Release 7.2 — Kupittaa Cup Management
 
 | # | Requirement | Status |
@@ -272,7 +303,8 @@
 - **Release 5.0** (SRA Training Staffing) - requirements are in document sra-training-staffing-requirements.md
 - **Release 6.0** (Match Management & UI Consolidation): 5 requirements — 1 ✅, 4 pending (MG2–MG5)
 - **Release 7.0** (Authentication & Session Handling): 25 requirements — 0 ✅, 25 pending (AUTH1–10, SES1–7, SEC1–7, TEST1–8)
-- **Release 7.1** (Staffing Multi-Site Management Site): 15 requirements — 4 ✅, 11 🧪 PoC
+- **Release 7.1** (Management Availability): 1 requirement — 1 ✅
+- **Release 8.0** (Tablet Scoring UI): 9 requirements — 9 ✅ (TS1–TS9)
 - **Release 7.2** (Kupittaa Cup Management): 3 requirements — 1 ✅, 2 📋 Specified (CUP1–CUP3)
 
 

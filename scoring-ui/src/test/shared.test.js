@@ -373,10 +373,11 @@ describe('isToday', () => {
       }
     }
 
-    // In UTC it's Feb 15, but in some timezones (like PST -8) it might still be Feb 14
-    // However, isToday uses the local date extraction, so it should correctly identify
+    // isToday compares local calendar dates, so results depend on the runner's timezone.
+    // 2026-02-15T02:00Z is Feb 15 in UTC and UTC+N, so '2026-02-15' is always today.
     expect(isToday('2026-02-15')).toBe(true)
-    expect(isToday('2026-02-14T23:00:00Z')).toBe(false)
+    // Use a date that is unambiguously yesterday in every timezone (>24h behind mock)
+    expect(isToday('2026-02-13T12:00:00Z')).toBe(false)
   })
 })
 
