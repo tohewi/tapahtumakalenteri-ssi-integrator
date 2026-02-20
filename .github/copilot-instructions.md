@@ -190,6 +190,50 @@ Use these to check deploy status, view logs, monitor service performance, and ma
 | Add/update translations | `scoring-ui/src/i18n.js` |
 | Modify authentication | `scoring-proxy/routes/auth.js` |
 
+## SSI GraphQL — Discovering Form Fields
+
+The SSI GraphQL `create_event` mutation accepts a `form_input: JSON!` parameter whose required fields are **not documented** and **not discoverable via schema introspection** (it's an opaque `JSON` scalar). SSI's error messages only say "This field is required" without naming the field.
+
+**To discover required form fields**, log in to SSI via web scraping and fetch the HTML create-event form. Parse the `<input>`, `<select>`, and `<textarea>` elements to find field names, valid values, and which are marked `required`.
+
+### How to scrape form fields
+
+```powershell
+# 1. Log in via web scraping (credentials in scripts-graphql/config/api-key.yml)
+$session = & .\archive\scripts-legacy\Connect-SSI.ps1 -Username $email -Password $password
+
+# 2. Fetch the create form page (example: RESUL Cup)
+$formPage = Invoke-WebRequest -Uri "https://shootnscoreit.com/series/nordic/create-resul-cup/" -WebSession $session
+
+# 3. Extract field names and required status
+$inputs = [regex]::Matches($formPage.Content, '<input[^>]+name="([^"]+)"[^>]*>')
+$selects = [regex]::Matches($formPage.Content, '<select[^>]+name="([^"]+)"[^>]*>')
+$textareas = [regex]::Matches($formPage.Content, '<textarea[^>]+name="([^"]+)"[^>]*>')
+
+# 4. For checkbox/radio fields, extract valid values
+$values = [regex]::Matches($formPage.Content, '<input[^>]+name="weapon_groups"[^>]+value="([^"]+)"[^>]*>')
+```
+
+### Key form URLs
+
+| Event Type | Create Form URL |
+|-----------|----------------|
+| RESUL Cup | `/series/nordic/create-resul-cup/` |
+| RESUL Match | `/match/nordic/create-resul-p2p/` (sub-rule varies) |
+| Squads | `/event/{typeId}/{eventId}/add-squads/` |
+
+### Known required fields for Cup creation (as of Feb 2026)
+
+`name`, `starts_date`, `starts_time`, `max_competitors`, `visibility`, `status`, `results`, `registration`, `region`, `scoring_mode`, `match_registration_mode`, `count`, `timezone`, `currency`, `reg_start_date`, `reg_start_time`, `has_accepted_event_data_ass_agreement`, `weapon_groups` (array), `categories` (array), `competence_classes` (array)
+
+### Common pitfalls
+
+- **`count` not `match_count`** — the cup match count field is `count`
+- **`reg_start_date`/`reg_start_time`** — registration dates use `reg_start_*` prefix, not `registration_starts_*`
+- **Array fields** (`weapon_groups`, `categories`, `competence_classes`) must be present with valid enum values scraped from the form
+- **`has_accepted_event_data_ass_agreement`** must be `"on"`
+- **`group`** and `ends_date`/`ends_time` are accepted but not required
+
 ## Important Constraints
 
 - **All infrastructure must be deployed in Europe** (Render region: `frankfurt`). This applies to all services, databases, and Key Value instances — both in `render.yaml` and in GitHub Actions preview workflows. Never deploy to US or other non-EU regions.
