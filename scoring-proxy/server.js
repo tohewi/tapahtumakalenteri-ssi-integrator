@@ -234,7 +234,7 @@ async function getAdminSession() {
         log.debug('[admin] JWT refreshed via re-auth')
       }
     } catch (err) {
-      console.error('[admin] JWT refresh failed, doing full re-login:', err.message)
+      log.error('[admin] JWT refresh failed, doing full re-login:', err.message)
       // Full re-login as fallback
       adminCookies = await ssiLogin(email, password)
       adminCookieTime = now

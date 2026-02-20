@@ -44,13 +44,13 @@ export async function ssiGraphQL(jwtToken, query, variables = {}, apiKey = null)
 
 export async function ssiRefreshJWT(refreshToken) {
   const result = await ssiGraphQL(null, `
-    mutation Refresh($refreshToken: String!) {
-      refresh_token(refresh_token: $refreshToken) {
+    mutation Refresh($refreshToken: String!, $revokeRefreshToken: Boolean!) {
+      refresh_token(refresh_token: $refreshToken, revoke_refresh_token: $revokeRefreshToken) {
         token { token }
         refresh_token { token }
       }
     }
-  `, { refreshToken })
+  `, { refreshToken, revokeRefreshToken: true })
 
   if (!result.refresh_token?.token?.token) {
     throw new Error('Token refresh failed')
