@@ -327,11 +327,21 @@ function TabletApp() {
   // Render appropriate view
   if (view === 'login') {
     return (
-      <LoginScreen
-        onLogin={handleLogin}
-        savedCreds={savedCreds}
-        sessionExpiredMessage={sessionExpiredMessage}
-      />
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        {sessionExpiredMessage && (
+          <div className="mx-4 mt-4 bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-center">
+            <p className="text-yellow-800 text-sm font-medium">{sessionExpiredMessage}</p>
+          </div>
+        )}
+        <LoginScreen
+          onLogin={handleLogin}
+          initialEmail={savedCreds?.email}
+          initialPassword={savedCreds?.password}
+          initialApiKey={savedCreds?.apiKey}
+          title={t.tabletScoringTitle}
+          subtitle={t.tabletScoringDescription}
+        />
+      </div>
     )
   }
 
