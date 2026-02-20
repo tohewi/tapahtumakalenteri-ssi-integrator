@@ -246,11 +246,69 @@
 |---|-------------|--------|---------------|
 | MGMT1 | **Management Independent of Registration**: Kupittaa Cup Hallinta must keep cups available for management independent of registration status, once registration start date has passed and while the cup is still active. Management is available until the cup's end date and time (`ends`), or `starts + 24h` fallback. Cups with no `registration_starts` are excluded. Uses dedicated `/api/manage/cups` endpoint. | ✅ Implemented | ~14,000 |
 
-## Release 7.3 — Refactor for maintainability
+## Release 7.3 — Refactor for Maintainability
 
-| # | Requirement | Status | Tokens (est.) |
-|---|-------------|--------|---------------|
-| rfr1 | Review IMMEDIATE-DEVELOPMENT-NEEDS.md and architecture-review.md and prepare refactoring plan | ⬚ Pending |
+Analysis completed 2026-02-20. Reviewed `docs/design/architecture-review.md` (2026-02-19), five outdated refactoring docs from `docs/Implementation/` (2026-02-08), and the current codebase. The old refactoring docs (`refactoring-plan.md`, `refactoring-executive-summary.md`, `refactoring-visual-summary.md`, `remediation-plan.md`, `test-refactoring-plan.md`) were removed — their Phase 1 recommendations (route splitting, scripts archival, Redis sessions) are already implemented. The architecture review remains the authoritative reference.
+
+### Codebase Snapshot (Feb 2026)
+
+| Area | File | Lines | Issue |
+|------|------|------:|-------|
+| Backend | `lib/ssi-core/client.js` | 1,474 | **#1 risk**: 29 functions, all domains in one file |
+| Backend | `routes/management.js` | 890 | Inline business logic in 9 route handlers |
+| Backend | `routes/staffing.js` | 430 | No unit tests |
+| Backend | `routes/scoring.js` | 332 | No unit tests |
+| Backend | `routes/reports.js` | 206 | No unit tests |
+| Frontend | `ManagePage.jsx` | 959 | 8 inline sub-components |
+| Frontend | `App.jsx` | 645 | Entire scoring flow as single state machine |
+| Frontend | `TabletScoringView.jsx` | 586 | Large but well-structured |
+| Tests | Backend | 134 | Good coverage for management, auth, sessions |
+| Tests | Frontend | 160 | Good coverage for API, shared, register-api |
+| Tests | SSI client | 3 | **Critical gap**: 1,474-line core has ~3 tests |
+
+### What's Already Done (from old refactoring plan Phase 1)
+
+- ✅ `server.js` split into route modules (387 lines, was 900)
+- ✅ `scripts/` archived to `archive/scripts-legacy/`
+- ✅ `lib/ssi-core/` created with barrel export
+- ✅ `lib/ssi-client.js` backward-compat shim in place
+- ✅ Redis-backed session store (`lib/session/`)
+- ✅ Dual-session architecture (user + admin)
+- ✅ Audit logging for SSI operations
+- ✅ Configurable log verbosity (`LOG_LEVEL`)
+
+### What's Still Needed
+
+| # | Requirement | Priority | Status |
+|---|-------------|----------|--------|
+| RFR1 | **Split `ssi-core/client.js` by domain**: Extract into `graphql.js` (~80 lines), `scoring.js` (~100 lines), `participants.js` (~700 lines), `management.js` (~300 lines), `http-helpers.js` (~80 lines). Keep `index.js` barrel export for backward compat. Each route file imports only its domain module | HIGH | ⬚ Pending |
+| RFR2 | **Add SSI client unit tests with HTML fixtures**: Save real SSI HTML pages as test fixtures. Test all scraping/parsing functions against fixtures. Target: ~60 unit tests for the SSI client layer | HIGH | ⬚ Pending |
+| RFR3 | **Migrate route imports from compat shim**: All 6 route files currently import from `lib/ssi-client.js`. Update to import from specific `lib/ssi-core/` domain modules. Then remove the compat shim | MEDIUM | ⬚ Pending |
+| RFR4 | **Extract management route business logic**: Move orchestration from `routes/management.js` (890 lines) into `lib/services/cup-manage.js`. Route handlers become thin dispatchers (validation + response). Business logic independently testable | MEDIUM | ⬚ Pending |
+| RFR5 | **Add missing route tests**: Add unit tests for `routes/scoring.js`, `routes/reports.js`, `routes/staffing.js`. Follow existing pattern from `management.test.js` (mock SSI client, test HTTP contract) | MEDIUM | ⬚ Pending |
+| RFR6 | **Extract `useAuthenticatedPage` hook**: 5 page components duplicate the same auth/session pattern (~50 lines each): `useRememberMe`, `authed`/`view`/`loading`/`error` state, login→content transition, session expiry. Extract into shared hook | MEDIUM | ⬚ Pending |
+| RFR7 | **Split `ManagePage.jsx`**: Extract 8 inline sub-components into `components/manage/` directory. Target: ManagePage shell ~300 lines, sub-components ~100-150 lines each | LOW | ⬚ Pending |
+| RFR8 | **Add file size guidelines to AGENTS.md**: Hard limit 500 lines per source file. Soft target <300 lines. Route files: HTTP handlers only. UI components: one exported component per file | LOW | ⬚ Pending |
+
+### Refactoring Phases
+
+| Phase | Work | Effort | Impact |
+|-------|------|--------|--------|
+| **Phase 1** | RFR1: Split `ssi-core/client.js` into domain modules | 2-3 h | HIGH — eliminates #1 conflict hotspot |
+| **Phase 2** | RFR2: Add SSI client unit tests with HTML fixtures | 3-4 h | HIGH — catches SSI HTML changes |
+| **Phase 3** | RFR3 + RFR4: Migrate imports, extract management service layer | 2-3 h | MEDIUM — reduces route file sizes |
+| **Phase 4** | RFR5: Add missing route tests (scoring, reports, staffing) | 3-4 h | MEDIUM — closes coverage gaps |
+| **Phase 5** | RFR6 + RFR7: Extract auth hook, split ManagePage | 2-3 h | MEDIUM — reduces UI duplication |
+| **Phase 6** | RFR8: Add file size guidelines | 0.5 h | LOW — prevents future growth |
+
+**Total estimated effort:** ~15 hours across 6 phases.
+
+### Design Decisions
+
+- **No microservices**: The Feb 2026 refactoring plan evaluated microservices (Alternative 2) and rejected it — overkill for current scale, adds Docker/K8s complexity. Monolithic consolidation is the right approach.
+- **Barrel export for backward compat**: Keep `ssi-core/index.js` re-exporting all domain modules so existing imports don't break during migration. Remove compat shim (`lib/ssi-client.js`) only after all routes are migrated.
+- **Fixture-based testing**: SSI HTML parsing is the highest-risk untested code. HTML fixtures (saved SSI page snapshots) enable fast, deterministic tests that catch SSI UI changes immediately.
+- **No shared constants package**: Score zones are duplicated in UI and proxy but they're small (12 values). A shared NPM package adds build complexity. Keep them in sync manually until R8.1 restructures the app.
 
 ## Release 8.0 — Tablet Scoring UI
 
@@ -352,7 +410,7 @@ Vision: Transform the current "link collection" home page into a structured matc
 - **Release 7.0** (Authentication & Session Handling): 25 requirements — 0 ✅, 25 pending (AUTH1–10, SES1–7, SEC1–7, TEST1–8)
 - **Release 7.1** (Management Availability): 1 requirement — 1 ✅
 - **Release 7.2** (Kupittaa Cup Management): 3 requirements — 1 ✅, 2 📋 Specified (CUP1–CUP3)
-- **Release 7.3** (Refactor for Maintainability): 1 requirement — 1 pending (rfr1)
+- **Release 7.3** (Refactor for Maintainability): 8 requirements — 0 ✅, 8 pending (RFR1–RFR8). Analysis complete, 5 outdated docs removed
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6)
 - **Release 8.0** (Tablet Scoring UI): 9 requirements — 9 ✅ (TS1–TS9)
 - **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
