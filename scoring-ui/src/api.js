@@ -226,7 +226,8 @@ export function parseStringScore(ssiString, options = {}) {
   }
 
   // Prefer comma format, but tolerate slash-separated debug/export variants.
-  const parts = String(ssiString)
+  const rawScore = String(ssiString)
+  const parts = rawScore
     .split(/[\s,\/]+/)
     .filter(Boolean)
     .map(Number)
@@ -242,7 +243,9 @@ export function parseStringScore(ssiString, options = {}) {
   // Compact SSI variant: X..1,max_hits (M omitted).
   // In this case the 12th value is max_hits, not misses.
   const trailingValue = parts[parts.length - 1] || 0
+  const hasSlashDelimiter = rawScore.includes('/')
   const hasCompactMaxHitsTail = parts.length === SCORE_ZONES.length
+    && !hasSlashDelimiter
     && trailingValue === normalizedMaxHits
   // Some SSI responses are even shorter and omit both M and max_hits (X..1 only).
   const hasCompactNoMissNoTail = parts.length === SCORE_ZONES.length - 1

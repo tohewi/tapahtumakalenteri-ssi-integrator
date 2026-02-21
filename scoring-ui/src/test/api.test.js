@@ -74,6 +74,15 @@ describe('parseStringScore', () => {
     expect(result.M).toBe(3)
   })
 
+  it('keeps explicit misses for slash-delimited SSI strings', () => {
+    const result = parseStringScore('0 / 0 / 0 / 1 / 0 / 2 / 0 / 0 / 0 / 0 / 0 / 2', {
+      maxHitsPerSeries: 2,
+    })
+    expect(result['8']).toBe(1)
+    expect(result['6']).toBe(2)
+    expect(result.M).toBe(2)
+  })
+
   it('does not treat compact all-zero X..1,max_hits as explicit misses unless inferred', () => {
     const rawResult = parseStringScore('0,0,0,0,0,0,0,0,0,0,0,5')
     expect(rawResult.M).toBe(0)

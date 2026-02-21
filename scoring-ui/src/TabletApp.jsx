@@ -189,7 +189,7 @@ function TabletApp() {
             const inferMissingMisses = transformed.status === 'cp'
             const ssiParseOptions = {
               inferMissingMisses,
-              maxHitsPerSeries: transformed.roundsPerString || MAX_HITS_PER_SERIES,
+              maxHitsPerSeries: MAX_HITS_PER_SERIES,
             }
             const scores = {}
             for (const s of orderedSquad.shooters) {
@@ -296,7 +296,7 @@ function TabletApp() {
       const inferMissingMisses = selectedMatch?.status === 'cp'
       const ssiParseOptions = {
         inferMissingMisses,
-        maxHitsPerSeries: selectedMatch?.roundsPerString || MAX_HITS_PER_SERIES,
+        maxHitsPerSeries: MAX_HITS_PER_SERIES,
       }
       const scores = {}
       for (const s of orderedSquad.shooters) {

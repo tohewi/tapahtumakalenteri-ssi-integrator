@@ -178,7 +178,7 @@ function App() {
             const inferMissingMisses = transformed.status === 'cp'
             const ssiParseOptions = {
               inferMissingMisses,
-              maxHitsPerSeries: transformed.roundsPerString || MAX_HITS_PER_SERIES,
+              maxHitsPerSeries: MAX_HITS_PER_SERIES,
             }
             const scores = {}
             for (const s of squad.shooters) {
@@ -274,7 +274,7 @@ function App() {
     const inferMissingMisses = selectedMatch?.status === 'cp'
     const ssiParseOptions = {
       inferMissingMisses,
-      maxHitsPerSeries: selectedMatch?.roundsPerString || MAX_HITS_PER_SERIES,
+      maxHitsPerSeries: MAX_HITS_PER_SERIES,
     }
     setAllScores(prev => {
       const next = { ...prev }

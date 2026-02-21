@@ -92,7 +92,7 @@ export default function TabletScoringView({
   const isMatchCompleted = match?.status === 'cp'
   const ssiParseOptions = {
     inferMissingMisses: isMatchCompleted,
-    maxHitsPerSeries: match?.roundsPerString || MAX_HITS_PER_SERIES,
+    maxHitsPerSeries: MAX_HITS_PER_SERIES,
   }
   
   // Calculate total shots for the match
