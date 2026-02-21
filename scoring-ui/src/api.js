@@ -247,11 +247,22 @@ export function parseStringScore(ssiString, options = {}) {
   const hasCompactMaxHitsTail = parts.length === SCORE_ZONES.length
     && !hasSlashDelimiter
     && trailingValue === normalizedMaxHits
+  // Some SSI payloads use a 13-part variant where the trailing value is misses,
+  // while the penultimate M slot is always 0.
+  const hasTrailingMissVariant = parts.length === SCORE_ZONES.length + 1
+    && (parts[SCORE_ZONES.length - 1] || 0) === 0
+    && trailingValue >= 0
+    && trailingValue <= normalizedMaxHits
+    && (nonMissHits + trailingValue) <= normalizedMaxHits
   // Some SSI responses are even shorter and omit both M and max_hits (X..1 only).
   const hasCompactNoMissNoTail = parts.length === SCORE_ZONES.length - 1
 
   if (hasCompactMaxHitsTail) {
     scores.M = 0
+  }
+
+  if (hasTrailingMissVariant) {
+    scores.M = trailingValue
   }
 
   // If SSI returns compact X..1,max_hits and there are already hits,

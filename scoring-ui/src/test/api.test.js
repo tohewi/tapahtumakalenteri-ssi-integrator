@@ -83,6 +83,16 @@ describe('parseStringScore', () => {
     expect(result.M).toBe(2)
   })
 
+  it('reads misses from trailing value for SSI 13-part variant', () => {
+    const result = parseStringScore('0,0,2,0,1,1,0,0,0,0,0,0,1', {
+      maxHitsPerSeries: 5,
+    })
+    expect(result['9']).toBe(2)
+    expect(result['7']).toBe(1)
+    expect(result['6']).toBe(1)
+    expect(result.M).toBe(1)
+  })
+
   it('does not treat compact all-zero X..1,max_hits as explicit misses unless inferred', () => {
     const rawResult = parseStringScore('0,0,0,0,0,0,0,0,0,0,0,5')
     expect(rawResult.M).toBe(0)
