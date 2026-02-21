@@ -90,6 +90,10 @@ export default function TabletScoringView({
 
   // Check if match is completed (status: 'cp')
   const isMatchCompleted = match?.status === 'cp'
+  const ssiParseOptions = {
+    inferMissingMisses: isMatchCompleted,
+    maxHitsPerSeries: match?.roundsPerString || MAX_HITS_PER_SERIES,
+  }
   
   // Calculate total shots for the match
   const totalShotsInMatch = SERIES_COUNT * MAX_HITS_PER_SERIES
@@ -173,7 +177,7 @@ export default function TabletScoringView({
       squad.shooters.forEach(shooter => {
         // Load SSI scores for each shooter
         try {
-          const ssiScores = api.buildScoresFromSSI(shooter, SERIES_COUNT)
+          const ssiScores = api.buildScoresFromSSI(shooter, SERIES_COUNT, ssiParseOptions)
           freshScores[shooter.id] = ssiScores
         } catch (err) {
           log.error('[tablet] Error loading SSI scores for shooter:', shooter.id, err)
@@ -220,7 +224,7 @@ export default function TabletScoringView({
       // Load from SSI since no local data
       try {
         log.debug('[tablet] Loading SSI scores for shooter:', shooter.id)
-        const ssiScores = api.buildScoresFromSSI(shooter, SERIES_COUNT)
+        const ssiScores = api.buildScoresFromSSI(shooter, SERIES_COUNT, ssiParseOptions)
         
         if (getTotalHits(ssiScores) > 0) {
           log.debug('[tablet] Loaded SSI scores with', getTotalHits(ssiScores), 'hits')
@@ -237,7 +241,7 @@ export default function TabletScoringView({
     } else {
       log.debug('[tablet] Using local scores for shooter:', shooter.id)
     }
-  }, [selectedShooter, allScores, onScoresUpdate, handleSaveScores])
+  }, [selectedShooter, allScores, onScoresUpdate, handleSaveScores, ssiParseOptions])
 
   // Add score to the first series with space
   const handleScoreAdd = (zone) => {

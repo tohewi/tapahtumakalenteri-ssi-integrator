@@ -214,14 +214,46 @@ export async function manageTogglePaid(cupId, shooterName, cupParticipantId) {
 const SCORE_ZONES = ['X', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'M']
 
 // Parse SSI string "X,10,9,8,7,6,5,4,3,2,1,M,max_hits" → {X: n, '10': n, ...}
-export function parseStringScore(ssiString) {
+export function parseStringScore(ssiString, options = {}) {
+  const {
+    inferMissingMisses = false,
+    maxHitsPerSeries = 5,
+  } = options
+
   if (!ssiString || ssiString === '0,0,0,0,0,0,0,0,0,0,0,0,0') {
     return Object.fromEntries(SCORE_ZONES.map(z => [z, 0]))
   }
-  const parts = ssiString.split(',').map(Number)
+
+  // Prefer comma format, but tolerate slash-separated debug/export variants.
+  const parts = String(ssiString)
+    .split(/[\s,\/]+/)
+    .filter(Boolean)
+    .map(Number)
+
   // SSI format: X, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, M, max_hits
   const scores = {}
   SCORE_ZONES.forEach((z, i) => { scores[z] = parts[i] || 0 })
+
+  const nonMissHits = SCORE_ZONES
+    .filter(z => z !== 'M')
+    .reduce((sum, z) => sum + (scores[z] || 0), 0)
+
+  // Compact SSI variant: X..1,max_hits (M omitted).
+  // In this case the 12th value is max_hits, not misses.
+  const trailingValue = parts[parts.length - 1] || 0
+  const hasCompactMaxHitsTail = parts.length === SCORE_ZONES.length
+    && trailingValue === maxHitsPerSeries
+
+  if (hasCompactMaxHitsTail) {
+    scores.M = 0
+  }
+
+  // Some SSI responses omit explicit "M" and only return X..1 counts.
+  // For completed matches we can safely infer misses from max hits per string.
+  if (inferMissingMisses && (parts.length < SCORE_ZONES.length || hasCompactMaxHitsTail)) {
+    scores.M = Math.max(0, maxHitsPerSeries - nonMissHits)
+  }
+
   return scores
 }
 
@@ -274,7 +306,7 @@ export function transformMatchListItem(ssiMatch) {
 }
 
 // Build scores object from SSI competitor data for all 6 strings
-export function buildScoresFromSSI(shooter, seriesCount = 6) {
+export function buildScoresFromSSI(shooter, seriesCount = 6, options = {}) {
   log.debug('[buildScoresFromSSI] Input shooter:', shooter)
   const scores = {}
   for (let i = 0; i < seriesCount; i++) {
@@ -282,7 +314,7 @@ export function buildScoresFromSSI(shooter, seriesCount = 6) {
     // Support both shooter.ssiScores.s1 (transformed squad data) and shooter.s1 (direct from SSI API)
     const scoreString = shooter?.ssiScores?.[sKey] || shooter?.[sKey]
     log.debug(`[buildScoresFromSSI] ${sKey}:`, scoreString)
-    scores[i] = parseStringScore(scoreString)
+    scores[i] = parseStringScore(scoreString, options)
   }
   log.debug('[buildScoresFromSSI] Result scores:', scores)
   return scores

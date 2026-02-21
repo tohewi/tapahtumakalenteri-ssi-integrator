@@ -175,9 +175,17 @@ function App() {
             const scoreKey = `${nav.matchId}_${nav.squadId}`
             const savedScores = lsGet(LS_KEYS.SCORES)
             const restored = savedScores?.[scoreKey]
+            const inferMissingMisses = transformed.status === 'cp'
+            const ssiParseOptions = {
+              inferMissingMisses,
+              maxHitsPerSeries: transformed.roundsPerString || MAX_HITS_PER_SERIES,
+            }
             const scores = {}
             for (const s of squad.shooters) {
-              scores[s.id] = restored?.[s.id] || api.buildScoresFromSSI(s, SERIES_COUNT)
+              const restoredScores = restored?.[s.id]
+              scores[s.id] = (!inferMissingMisses && restoredScores)
+                ? restoredScores
+                : api.buildScoresFromSSI(s, SERIES_COUNT, ssiParseOptions)
             }
             setAllScores(scores)
 
@@ -263,13 +271,19 @@ function App() {
     const scoreKey = `${selectedMatch?.id}_${squad.id}`
     const savedScores = lsGet(LS_KEYS.SCORES)
     const restored = savedScores?.[scoreKey]
+    const inferMissingMisses = selectedMatch?.status === 'cp'
+    const ssiParseOptions = {
+      inferMissingMisses,
+      maxHitsPerSeries: selectedMatch?.roundsPerString || MAX_HITS_PER_SERIES,
+    }
     setAllScores(prev => {
       const next = { ...prev }
       for (const s of squad.shooters) {
-        if (restored?.[s.id]) {
-          next[s.id] = restored[s.id]
-        } else if (!next[s.id]) {
-          next[s.id] = api.buildScoresFromSSI(s, SERIES_COUNT)
+        const restoredScores = restored?.[s.id]
+        if (!inferMissingMisses && restoredScores) {
+          next[s.id] = restoredScores
+        } else if (!next[s.id] || inferMissingMisses) {
+          next[s.id] = api.buildScoresFromSSI(s, SERIES_COUNT, ssiParseOptions)
         }
       }
       return next

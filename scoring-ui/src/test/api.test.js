@@ -43,6 +43,34 @@ describe('parseStringScore', () => {
     expect(result.X).toBe(0)
   })
 
+  it('infers missing misses for compact X..1,max_hits strings when enabled', () => {
+    const result = parseStringScore('0,0,1,0,0,0,1,0,0,0,0,5', {
+      inferMissingMisses: true,
+      maxHitsPerSeries: 5,
+    })
+    expect(result['9']).toBe(1)
+    expect(result['5']).toBe(1)
+    expect(result.M).toBe(3)
+  })
+
+  it('keeps misses at zero for compact X..1,max_hits strings when inference is disabled', () => {
+    const result = parseStringScore('0,0,1,0,0,0,1,0,0,0,0,5')
+    expect(result['9']).toBe(1)
+    expect(result['5']).toBe(1)
+    expect(result.M).toBe(0)
+  })
+
+  it('does not treat compact all-zero X..1,max_hits as explicit misses unless inferred', () => {
+    const rawResult = parseStringScore('0,0,0,0,0,0,0,0,0,0,0,5')
+    expect(rawResult.M).toBe(0)
+
+    const inferredResult = parseStringScore('0,0,0,0,0,0,0,0,0,0,0,5', {
+      inferMissingMisses: true,
+      maxHitsPerSeries: 5,
+    })
+    expect(inferredResult.M).toBe(5)
+  })
+
   it('handles perfect score string', () => {
     const result = parseStringScore('5,0,0,0,0,0,0,0,0,0,0,0,5')
     expect(result.X).toBe(5)
@@ -422,6 +450,21 @@ describe('buildScoresFromSSI', () => {
     expect(scores[0]['10']).toBe(2)
     expect(scores[1].M).toBe(5)
     expect(scores[2].X).toBe(0)
+  })
+
+  it('forwards parser options so misses can be inferred for completed matches', () => {
+    const shooter = {
+      ssiScores: {
+        s1: '0,0,1,0,0,0,1,0,0,0,0,5',
+      },
+    }
+    const scores = buildScoresFromSSI(shooter, 6, {
+      inferMissingMisses: true,
+      maxHitsPerSeries: 5,
+    })
+    expect(scores[0]['9']).toBe(1)
+    expect(scores[0]['5']).toBe(1)
+    expect(scores[0].M).toBe(3)
   })
 
   it('respects custom series count', () => {

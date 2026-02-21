@@ -186,9 +186,17 @@ function TabletApp() {
             const scoreKey = `${nav.matchId}_${nav.squadId}`
             const savedScores = lsGet(LS_KEYS.SCORES)
             const restored = savedScores?.[scoreKey]
+            const inferMissingMisses = transformed.status === 'cp'
+            const ssiParseOptions = {
+              inferMissingMisses,
+              maxHitsPerSeries: transformed.roundsPerString || MAX_HITS_PER_SERIES,
+            }
             const scores = {}
             for (const s of orderedSquad.shooters) {
-              scores[s.id] = restored?.[s.id] || api.buildScoresFromSSI(s, SERIES_COUNT)
+              const restoredScores = restored?.[s.id]
+              scores[s.id] = (!inferMissingMisses && restoredScores)
+                ? restoredScores
+                : api.buildScoresFromSSI(s, SERIES_COUNT, ssiParseOptions)
             }
             setAllScores(scores)
             log.debug('[TabletApp] restoreNavState: restored scoring view')
@@ -285,9 +293,17 @@ function TabletApp() {
       const scoreKey = `${selectedMatch.id}_${squad.id}`
       const savedScores = lsGet(LS_KEYS.SCORES)
       const restored = savedScores?.[scoreKey]
+      const inferMissingMisses = selectedMatch?.status === 'cp'
+      const ssiParseOptions = {
+        inferMissingMisses,
+        maxHitsPerSeries: selectedMatch?.roundsPerString || MAX_HITS_PER_SERIES,
+      }
       const scores = {}
       for (const s of orderedSquad.shooters) {
-        scores[s.id] = restored?.[s.id] || api.buildScoresFromSSI(s, SERIES_COUNT)
+        const restoredScores = restored?.[s.id]
+        scores[s.id] = (!inferMissingMisses && restoredScores)
+          ? restoredScores
+          : api.buildScoresFromSSI(s, SERIES_COUNT, ssiParseOptions)
       }
       setAllScores(scores)
       setView('scoring')
