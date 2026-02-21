@@ -1,6 +1,12 @@
 import express from 'express'
 import crypto from 'node:crypto'
-import { ssiGraphQL, ssiRefreshJWT, ssiLogin, ssiSearchAndAddParticipant, ssiFindAndApproveCupParticipant, ssiFindCompetitorInMatch, ssiSetParticipantSquad } from '../lib/ssi-client.js'
+import { ssiGraphQL, ssiRefreshJWT, ssiLogin } from '../lib/ssi-core/graphql.js'
+import {
+  ssiSearchAndAddParticipant,
+  ssiFindAndApproveCupParticipant,
+  ssiFindCompetitorInMatch,
+  ssiSetParticipantSquad,
+} from '../lib/ssi-core/participants.js'
 import { sendRegistrationConfirmation } from '../lib/email.js'
 import { log } from '../lib/logger.js'
 

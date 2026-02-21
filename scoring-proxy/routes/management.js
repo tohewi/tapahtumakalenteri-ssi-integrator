@@ -1,5 +1,22 @@
 import express from 'express'
-import { ssiSearchAndAddParticipant, ssiFindCompetitorInMatch, ssiSetParticipantSquad, ssiFindAndApproveCupParticipant, ssiFindAndDeleteCupParticipant, ssiDeleteMatchParticipant, ssiSetDidNotShow, ssiUndoDidNotShow, ssiTogglePaid, ssiGetCupParticipantStatuses } from '../lib/ssi-client.js'
+import {
+  ssiSearchAndAddParticipant,
+  ssiFindCompetitorInMatch,
+  ssiSetParticipantSquad,
+  ssiFindAndApproveCupParticipant,
+  ssiFindAndDeleteCupParticipant,
+  ssiDeleteMatchParticipant,
+  ssiSetDidNotShow,
+  ssiUndoDidNotShow,
+  ssiTogglePaid,
+  ssiGetCupParticipantStatuses,
+} from '../lib/ssi-core/participants.js'
+import {
+  buildSquaddingOverview,
+  attachCupStatuses,
+  getIncludedMatchIds,
+  filterManageableCups,
+} from '../lib/services/cup-manage.js'
 import { log } from '../lib/logger.js'
 
 const router = express.Router()
@@ -37,53 +54,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
         }
       `)
 
-      const now = new Date()
-      const cups = (result.events || [])
-        .filter(e => e.get_content_type_key === 136)
-        .filter(e => e.status === 'on')         // active only
-        .filter(e => {
-          // Only show cups where registration has already started
-          // (cups still being set up with no registration date are excluded)
-          const regStarts = e.registration_starts ? new Date(e.registration_starts) : null
-          if (!regStarts || regStarts > now) return false
-          // Keep cups until their end date/time (or starts + 24h fallback if no ends)
-          const ends = e.ends ? new Date(e.ends) : null
-          const fallbackEnd = new Date(new Date(e.starts).getTime() + 24 * 60 * 60 * 1000)
-          const effectiveEnd = ends || fallbackEnd
-          return effectiveEnd > now
-        })
-        .map(c => {
-          // Count approved competitors from the first component match's squads
-          const firstMatch = (c.component_matches || []).find(cm => cm.included && cm.match)
-          const approvedIds = new Set()
-          if (firstMatch?.match?.squads) {
-            for (const s of firstMatch.match.squads) {
-              for (const comp of (s.competitors || [])) {
-                if (comp.status === 'a') approvedIds.add(comp.id)
-              }
-            }
-          }
-          const registered = approvedIds.size
-          const maxCompetitors = c.max_competitors || 25
-          const full = registered >= maxCompetitors
-          const regStarts = c.registration_starts ? new Date(c.registration_starts) : null
-          const regCloses = c.registration_closes ? new Date(c.registration_closes) : null
-          const registrationOpen = (c.registration === 'op' || c.registration === 'aa')
-            && (!regStarts || now >= regStarts)
-            && (!regCloses || now <= regCloses)
-            && !full
-          return {
-            id: c.id,
-            name: c.name,
-            starts: c.starts,
-            ends: c.ends || null,
-            maxCompetitors,
-            registered,
-            full,
-            registrationOpen,
-          }
-        })
-        .sort((a, b) => new Date(a.starts) - new Date(b.starts))
+      const cups = filterManageableCups(result.events)
 
       res.json({ cups })
     } catch (err) {
@@ -134,309 +105,9 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       }
 
       const cup = result.event
-      const componentMatches = (cup.component_matches || [])
-        .filter(cm => cm.included && cm.match)
-        .sort((a, b) => a.number - b.number)
 
-      // Build match info with squads, match-level competitors, and squad-level competitors
-      const matches = componentMatches.map(cm => {
-        const m = cm.match
-        const squads = (m.squads || []).map(sq => ({
-          number: sq.number,
-          name: sq.comment || `Squad ${sq.number}`,
-          max: sq.max_competitors || 0,
-          shooters: (sq.competitors || [])
-            .filter(c => c.status === 'a')
-            .map(c => ({
-              id: c.id,
-              firstName: c.first_name || '',
-              lastName: c.last_name || '',
-              email: c.email || '',
-              hasEmailError: !c.email, // Flag for missing email
-              name: `${c.first_name} ${c.last_name}`.trim()
-            })),
-        }))
-
-        // All approved match-level participants (includes both squadded and unsquadded)
-        const allParticipants = (m.competitors || [])
-          .filter(c => c.status === 'a')
-          .map(c => ({
-            id: c.id,
-            firstName: c.first_name || '',
-            lastName: c.last_name || '',
-            email: c.email || '',
-            hasEmailError: !c.email, // Flag for missing email
-            name: `${c.first_name} ${c.last_name}`.trim()
-          }))
-
-        // Pending match-level participants
-        const pendingParticipants = (m.competitors || [])
-          .filter(c => c.status === 'p')
-          .map(c => ({
-            id: c.id,
-            firstName: c.first_name || '',
-            lastName: c.last_name || '',
-            email: c.email || '',
-            hasEmailError: !c.email,
-            name: `${c.first_name} ${c.last_name}`.trim(),
-            status: 'p'
-          }))
-
-        return {
-          id: m.id,
-          name: m.name,
-          componentNumber: cm.number,
-          squads,
-          allParticipants,
-          pendingParticipants,
-        }
-      })
-
-      // Collect all shooters across all matches
-      // Track: which matches they're IN (as participant) and which squad (if any)
-      // Use (firstName, lastName, email) triplet as key for unique identification
-      // Note: shooters with missing email get a unique error key to prevent false matches
-      const shooterMap = new Map() // key → { firstName, lastName, email, hasEmailError, name, matches: { matchId: squadNumber|null } }
-      const makeShooterKey = (firstName, lastName, email) => {
-        // If email is missing, create a unique error key to prevent false matches
-        if (!email) {
-          return `${firstName}|||${lastName}|||ERROR_NO_EMAIL_${Math.random()}`
-        }
-        return `${firstName}|||${lastName}|||${email}`
-      }
-
-      // First: add all match-level participants (squadNumber = null means unsquadded)
-      for (const match of matches) {
-        for (const participant of match.allParticipants) {
-          const key = makeShooterKey(participant.firstName, participant.lastName, participant.email)
-          if (participant.email) {
-            log.debug(`[manage] Match participant: ${participant.firstName} ${participant.lastName} (${participant.email}) -> key: ${key}`)
-          }
-          if (!shooterMap.has(key)) {
-            shooterMap.set(key, {
-              firstName: participant.firstName,
-              lastName: participant.lastName,
-              email: participant.email,
-              hasEmailError: participant.hasEmailError,
-              name: participant.name,
-              matches: {}
-            })
-          }
-          // Mark as in-match but unsquadded (null)
-          shooterMap.get(key).matches[match.id] = null
-        }
-      }
-
-      // Then: overlay squad assignments (overwrite null with squad number)
-      for (const match of matches) {
-        for (const squad of match.squads) {
-          for (const shooter of squad.shooters) {
-            const key = makeShooterKey(shooter.firstName, shooter.lastName, shooter.email)
-            if (!shooterMap.has(key)) {
-              shooterMap.set(key, {
-                firstName: shooter.firstName,
-                lastName: shooter.lastName,
-                email: shooter.email,
-                hasEmailError: shooter.hasEmailError,
-                name: shooter.name,
-                matches: {}
-              })
-            }
-            shooterMap.get(key).matches[match.id] = squad.number
-          }
-        }
-      }
-
-      // CUP-level participants (approved) - store as keys for comparison
-      // Note: CUP competitors can have email at competitor level OR nested in shooter object
-      const cupParticipants = (cup.competitors || [])
-        .filter(c => c.status === 'a')
-        .map(c => {
-          // Try email from competitor level first, then from shooter
-          const email = c.email || c.shooter?.email || ''
-          const firstName = c.shooter?.first_name || ''
-          const lastName = c.shooter?.last_name || ''
-
-          // Debug logging
-          log.debug('[manage] CUP competitor raw:', {
-            competitorEmail: c.email,
-            shooterEmail: c.shooter?.email,
-            resolvedEmail: email,
-            firstName,
-            lastName,
-            emailType: typeof email,
-            emailLength: email?.length,
-            hasEmail: !!email
-          })
-
-          return {
-            firstName,
-            lastName,
-            email,
-            hasEmailError: !email, // Flag for missing email
-          }
-        })
-        .filter(p => p.firstName || p.lastName) // filter out completely empty entries
-
-      // CUP-level participants (pending) - track separately
-      const cupPending = (cup.competitors || [])
-        .filter(c => c.status === 'p')
-        .map(c => {
-          const email = c.email || c.shooter?.email || ''
-          const firstName = c.shooter?.first_name || ''
-          const lastName = c.shooter?.last_name || ''
-          return {
-            id: c.id,
-            firstName,
-            lastName,
-            email,
-            hasEmailError: !email,
-            name: `${firstName} ${lastName}`.trim(),
-            status: 'p',
-            location: 'cup'
-          }
-        })
-        .filter(p => p.firstName || p.lastName)
-
-      log.debug(`[manage] CUP participants: ${cupParticipants.length}, CUP pending: ${cupPending.length}, Match participants: ${shooterMap.size}`)
-
-      // Find CUP participants not in any match
-      // Strict matching by (firstName, lastName, email) triplet
-      // Exclude pending shooters from this comparison
-      const cupOnly = []
-      const cupKeySet = new Set(cupParticipants.map(p => makeShooterKey(p.firstName, p.lastName, p.email)))
-      const pendingKeySet = new Set()
-
-      // First, collect all pending shooter keys from CUP
-      for (const p of cupPending) {
-        const key = makeShooterKey(p.firstName, p.lastName, p.email)
-        pendingKeySet.add(key)
-      }
-
-      // Also collect pending shooter keys from matches
-      for (const match of matches) {
-        for (const p of match.pendingParticipants) {
-          const key = makeShooterKey(p.firstName, p.lastName, p.email)
-          pendingKeySet.add(key)
-        }
-      }
-
-      for (const cupP of cupParticipants) {
-        const cupKey = makeShooterKey(cupP.firstName, cupP.lastName, cupP.email)
-
-        // Defensive check: warn if email is missing (should never happen per SSI requirements)
-        if (!cupP.email) {
-          console.warn(`[manage] WARNING: CUP participant missing email: ${cupP.firstName} ${cupP.lastName}`)
-        }
-
-        // Only add to cupOnly if not in matches AND not pending
-        if (!shooterMap.has(cupKey) && !pendingKeySet.has(cupKey)) {
-          cupOnly.push({
-            firstName: cupP.firstName,
-            lastName: cupP.lastName,
-            email: cupP.email,
-            hasEmailError: cupP.hasEmailError,
-            name: `${cupP.firstName} ${cupP.lastName}`.trim()
-          })
-        }
-      }
-
-      // Find match participants not in CUP
-      // Strict matching by (firstName, lastName, email) triplet
-      // Exclude pending shooters from this comparison
-      const matchOnly = []
-      for (const [key, shooter] of shooterMap) {
-        // Defensive check: warn if email is missing (should never happen per SSI requirements)
-        if (!shooter.email) {
-          console.warn(`[manage] WARNING: Match participant missing email: ${shooter.firstName} ${shooter.lastName}`)
-        }
-
-        // Only add to matchOnly if not in CUP AND not pending
-        if (!cupKeySet.has(key) && !pendingKeySet.has(key)) {
-          matchOnly.push({
-            firstName: shooter.firstName,
-            lastName: shooter.lastName,
-            email: shooter.email,
-            hasEmailError: shooter.hasEmailError,
-            name: shooter.name
-          })
-        }
-      }
-
-      // Consolidate pending shooters from CUP and matches
-      // Group by shooter (email triplet) and track where they're pending
-      const pendingMap = new Map()
-
-      // Add CUP pending shooters
-      for (const p of cupPending) {
-        const key = makeShooterKey(p.firstName, p.lastName, p.email)
-        if (!pendingMap.has(key)) {
-          pendingMap.set(key, {
-            firstName: p.firstName,
-            lastName: p.lastName,
-            email: p.email,
-            hasEmailError: p.hasEmailError,
-            name: p.name,
-            inCup: true,
-            cupParticipantId: p.id, // Include CUP participant ID for email-based identification
-            inMatches: []
-          })
-        }
-      }
-
-      // Add match pending shooters
-      for (const match of matches) {
-        for (const p of match.pendingParticipants) {
-          const key = makeShooterKey(p.firstName, p.lastName, p.email)
-          if (!pendingMap.has(key)) {
-            pendingMap.set(key, {
-              firstName: p.firstName,
-              lastName: p.lastName,
-              email: p.email,
-              hasEmailError: p.hasEmailError,
-              name: p.name,
-              inCup: false,
-              inMatches: []
-            })
-          }
-          pendingMap.get(key).inMatches.push({
-            matchId: match.id,
-            matchName: match.name,
-            componentNumber: match.componentNumber,
-            participantId: p.id // Include participant ID for deletion
-          })
-        }
-      }
-
-      // IMPORTANT: Also check if CUP pending shooters are approved in matches
-      // This handles the case where shooter is pending in CUP but already approved in matches
-      // When clicking "poista", we need to delete from all matches regardless of their status
-      for (const [key, pending] of pendingMap.entries()) {
-        if (pending.inCup) {
-          // This shooter is pending in CUP - check all matches for their participation
-          for (const match of matches) {
-            // Check if they're in allParticipants (approved, but not yet in inMatches)
-            for (const p of match.allParticipants) {
-              const matchKey = makeShooterKey(p.firstName, p.lastName, p.email)
-              if (matchKey === key) {
-                // Found the same shooter in this match - add if not already tracked
-                const alreadyTracked = pending.inMatches.some(m => m.matchId === match.id)
-                if (!alreadyTracked) {
-                  pending.inMatches.push({
-                    matchId: match.id,
-                    matchName: match.name,
-                    componentNumber: match.componentNumber,
-                    participantId: p.id // Include participant ID for deletion
-                  })
-                }
-                break
-              }
-            }
-          }
-        }
-      }
-
-      const pendingShooters = [...pendingMap.values()]
+      // Build consolidated squadding overview (pure data transformation)
+      const { matches, shooters, cupOnly, matchOnly, pendingShooters } = buildSquaddingOverview(cup)
 
       // Scrape paid/DNS status from CUP participants page (admin cookies)
       let cupParticipantStatuses = new Map()
@@ -446,7 +117,6 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
         if (adminSess?.cookies) {
           cupParticipantStatuses = await ssiGetCupParticipantStatuses(req.params.id, adminSess.cookies)
           log.debug(`[manage] Scraped paid/DNS status for ${cupParticipantStatuses.size} CUP participants`)
-          // Log first few entries to verify scraping
           let i = 0
           for (const [id, status] of cupParticipantStatuses) {
             if (i++ >= 3) break
@@ -457,42 +127,10 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
         console.error(`[manage] Failed to scrape paid/DNS status: ${err.message}`)
       }
 
-      // Build cupParticipantId map: name → participantId (from CUP competitors)
-      // This is needed for DNS/paid operations which require the CUP participant ID (ct=137)
-      const cupParticipantIdMap = new Map()
-      for (const c of (cup.competitors || [])) {
-        if (c.status !== 'a') continue
-        const firstName = c.shooter?.first_name || ''
-        const lastName = c.shooter?.last_name || ''
-        const name = `${firstName} ${lastName}`.trim()
-        if (name) cupParticipantIdMap.set(name.toLowerCase(), { id: c.id, firstName, lastName })
-      }
-
-      // Attach paid/DNS status and cupParticipantId to shooters
-      const shootersWithStatus = [...shooterMap.values()].map(s => {
-        const cupPartInfo = cupParticipantIdMap.get(s.name.toLowerCase())
-        const cupPartId = cupPartInfo?.id || null
-        const statusInfo = cupPartId ? cupParticipantStatuses.get(String(cupPartId)) : null
-        return {
-          ...s,
-          cupParticipantId: cupPartId,
-          paid: statusInfo?.paid ?? false,
-          didNotShow: statusInfo?.didNotShow ?? false,
-        }
-      })
-
-      // Attach paid/DNS to cupOnly shooters
-      const cupOnlyWithStatus = cupOnly.map(s => {
-        const cupPartInfo = cupParticipantIdMap.get(s.name.toLowerCase())
-        const cupPartId = cupPartInfo?.id || null
-        const statusInfo = cupPartId ? cupParticipantStatuses.get(String(cupPartId)) : null
-        return {
-          ...s,
-          cupParticipantId: cupPartId,
-          paid: statusInfo?.paid ?? false,
-          didNotShow: statusInfo?.didNotShow ?? false,
-        }
-      })
+      // Attach paid/DNS status to shooters
+      const { shootersWithStatus, cupOnlyWithStatus } = attachCupStatuses(
+        shooters, cupOnly, cup.competitors, cupParticipantStatuses
+      )
 
       res.json({
         cup: { id: cup.id, name: cup.name, starts: cup.starts },
@@ -540,9 +178,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
 
       if (!cupData.event) return res.status(404).json({ error: 'Cup not found' })
 
-      const matchIds = (cupData.event.component_matches || [])
-        .filter(cm => cm.included && cm.match)
-        .map(cm => cm.match.id)
+      const matchIds = getIncludedMatchIds(cupData.event).map(m => m.id)
 
       // Split name into first/last
       const nameParts = shooterName.trim().split(/\s+/)
@@ -608,9 +244,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
 
       if (!cupData.event) return res.status(404).json({ error: 'Cup not found' })
 
-      const matchIds = (cupData.event.component_matches || [])
-        .filter(cm => cm.included && cm.match)
-        .map(cm => cm.match.id)
+      const matchIds = getIncludedMatchIds(cupData.event).map(m => m.id)
 
       const nameParts = shooterName.trim().split(/\s+/)
       const firstName = nameParts[0] || ''
@@ -875,11 +509,9 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       `, { id: cupId })
 
       if (cupData.event) {
-        const matchIds = (cupData.event.component_matches || [])
-          .filter(cm => cm.included && cm.match)
-          .map(cm => ({ id: cm.match.id, name: cm.match.name }))
+        const matchList = getIncludedMatchIds(cupData.event)
 
-        for (const match of matchIds) {
+        for (const match of matchList) {
           const participantId = await ssiFindCompetitorInMatch(match.id, shooterName, cookies, email)
           if (participantId) {
             log.debug(`[manage] Setting DNS on match ${match.name} participant ${participantId}`)
@@ -942,11 +574,9 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       `, { id: cupId })
 
       if (cupData.event) {
-        const matchIds = (cupData.event.component_matches || [])
-          .filter(cm => cm.included && cm.match)
-          .map(cm => ({ id: cm.match.id, name: cm.match.name }))
+        const matchList = getIncludedMatchIds(cupData.event)
 
-        for (const match of matchIds) {
+        for (const match of matchList) {
           const participantId = await ssiFindCompetitorInMatch(match.id, shooterName, cookies, email)
           if (participantId) {
             log.debug(`[manage] Undoing DNS on match ${match.name} participant ${participantId}`)

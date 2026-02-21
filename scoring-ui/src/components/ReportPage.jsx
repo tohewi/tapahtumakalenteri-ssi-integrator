@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import * as api from '../api'
-import { useRememberMe } from '../hooks/useRememberMe'
+import { useAuthenticatedPage } from '../hooks/useAuthenticatedPage'
 import LoginScreen from './LoginScreen'
 import { AppHeader, ErrorBanner, Spinner, formatDateShort } from './shared'
 import fi from '../i18n'
@@ -8,14 +8,6 @@ import fi from '../i18n'
 const LS_REPORT_STATE = 'ssi_report_state'
 
 export default function ReportPage() {
-  const { savedCreds, handleRememberMe } = useRememberMe('ssi_credentials_report')
-  
-  const [authed, setAuthed] = useState(false)
-  const [view, setView] = useState('login') // login | search | report
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
-
   // Search
   const [searchText, setSearchText] = useState('')
   const [allResults, setAllResults] = useState([]) // raw results from API
@@ -33,6 +25,31 @@ export default function ReportPage() {
   // Report data
   const [reportRows, setReportRows] = useState([])
 
+  const {
+    authed, view, setView, loading, setLoading, error, setError,
+    sessionExpiredMessage, savedCreds,
+    handleLogin, handleLogout: baseLogout, withSessionCheck,
+  } = useAuthenticatedPage({
+    scope: 'reporting',
+    credsKey: 'ssi_credentials_report',
+    stateKey: LS_REPORT_STATE,
+    defaultView: 'search',
+    restoreState: (state) => {
+      if (state.searchText) setSearchText(state.searchText)
+      return state.view || 'search'
+    },
+    onLogout: () => {
+      setSearchText('')
+      setAllResults([])
+      setSearched(false)
+      setSelected(new Set())
+      setReportRows([])
+    },
+  })
+
+  // Wrap logout to include page-specific cleanup
+  const handleLogout = baseLogout
+
   // --- Save navigation state on changes ---
   useEffect(() => {
     if (!authed || view === 'login') return
@@ -41,76 +58,6 @@ export default function ReportPage() {
       searchText: view === 'search' || view === 'report' ? searchText : '',
     }))
   }, [authed, view, searchText])
-
-  // --- Helper to handle session expiry ---
-  const handleSessionExpired = useCallback(() => {
-    setSessionExpiredMessage('Session expired. Please login again.')
-    // Navigation state is already saved in localStorage
-    // It will be restored after successful re-login
-    setAuthed(false)
-    setView('login')
-  }, [])
-
-  // --- Helper to handle scope mismatch ---
-  const handleScopeMismatch = useCallback(() => {
-    setSessionExpiredMessage('Please login to access this feature.')
-    setAuthed(false)
-    setView('login')
-  }, [])
-
-  // --- Wrapper to catch SessionExpiredError and ScopeMismatchError ---
-  const withSessionCheck = useCallback(async (fn) => {
-    try {
-      return await fn()
-    } catch (err) {
-      if (err instanceof api.SessionExpiredError) {
-        handleSessionExpired()
-        throw err
-      }
-      if (err instanceof api.ScopeMismatchError) {
-        handleScopeMismatch()
-        throw err
-      }
-      throw err
-    }
-  }, [handleSessionExpired, handleScopeMismatch])
-
-  // Login handler
-  const handleLogin = async (email, password, apiKey, rememberMe) => {
-    setSessionExpiredMessage(null)
-    await api.login(email, password, apiKey, 'reporting')
-    await handleRememberMe(email, password, apiKey, rememberMe)
-    setAuthed(true)
-    
-    // Restore previous state if available
-    const savedState = localStorage.getItem(LS_REPORT_STATE)
-    if (savedState) {
-      try {
-        const state = JSON.parse(savedState)
-        if (state.searchText) {
-          setSearchText(state.searchText)
-        }
-        setView(state.view || 'search')
-      } catch {
-        setView('search')
-      }
-    } else {
-      setView('search')
-    }
-  }
-
-  // Logout handler
-  const handleLogout = async () => {
-    try { await api.logout() } catch { /* ignore */ }
-    setAuthed(false)
-    setView('login')
-    setSearchText('')
-    setAllResults([])
-    setSearched(false)
-    setSelected(new Set())
-    setReportRows([])
-    setError(null)
-  }
 
   // Search — fetches all results, filtering is client-side
   const handleSearch = useCallback(async (e) => {

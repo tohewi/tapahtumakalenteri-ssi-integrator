@@ -1,28 +1,49 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import * as api from '../api'
 // register-api no longer needed — cups loaded from /api/manage/cups
-import { useRememberMe } from '../hooks/useRememberMe'
+import { useAuthenticatedPage } from '../hooks/useAuthenticatedPage'
 import LoginScreen from './LoginScreen'
 import { AppHeader, ErrorBanner, Spinner, CupList } from './shared'
+import { ActionButton, ShooterActions, SquadPickerSheet, SectionHeader, SquadCard } from './manage'
 import fi from '../i18n'
 
 const LS_MANAGE_STATE = 'ssi_manage_state'
 
 export default function ManagePage() {
-  const { savedCreds, handleRememberMe } = useRememberMe('ssi_credentials_manage')
-  
-  const [authed, setAuthed] = useState(false)
-  const [view, setView] = useState('login') // login | cups | overview
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
-
   // Cup selection
   const [cups, setCups] = useState([])
   const [selectedCup, setSelectedCup] = useState(null)
 
   // Management data
   const [data, setData] = useState(null)
+
+  const clearPageState = useCallback(() => {
+    setCups([])
+    setSelectedCup(null)
+    setData(null)
+  }, [])
+
+  const {
+    authed, view, setView, loading, setLoading, error, setError,
+    sessionExpiredMessage, savedCreds,
+    handleLogin, handleLogout, withSessionCheck,
+  } = useAuthenticatedPage({
+    scope: 'manage',
+    credsKey: 'ssi_credentials_manage',
+    stateKey: LS_MANAGE_STATE,
+    defaultView: 'cups',
+    restoreState: (state) => {
+      if (state.cupId && state.view === 'overview') {
+        // Try to restore to the overview page
+        setSelectedCup({ id: state.cupId, name: state.cupName })
+        return 'overview'
+        // The data will be loaded by the useEffect that watches selectedCup
+      }
+      return 'cups'
+    },
+    onLogout: clearPageState,
+    onSessionExpired: clearPageState,
+  })
 
   // --- Save navigation state on changes ---
   useEffect(() => {
@@ -33,86 +54,6 @@ export default function ManagePage() {
       cupName: selectedCup?.name,
     }))
   }, [authed, view, selectedCup])
-
-  // --- Helper to handle session expiry ---
-  const handleSessionExpired = useCallback(() => {
-    setSessionExpiredMessage('Session expired. Please login again.')
-    // Navigation state is already saved in localStorage
-    // It will be restored after successful re-login
-    setAuthed(false)
-    setView('login')
-    setCups([])
-    setSelectedCup(null)
-    setData(null)
-    setError(null)
-  }, [])
-
-  // --- Helper to handle scope mismatch ---
-  const handleScopeMismatch = useCallback(() => {
-    setSessionExpiredMessage('Please login to access this feature.')
-    setAuthed(false)
-    setView('login')
-    setCups([])
-    setSelectedCup(null)
-    setData(null)
-    setError(null)
-  }, [])
-
-  // --- Wrapper to catch SessionExpiredError and ScopeMismatchError ---
-  const withSessionCheck = useCallback(async (fn) => {
-    try {
-      return await fn()
-    } catch (err) {
-      if (err instanceof api.SessionExpiredError) {
-        handleSessionExpired()
-        throw err
-      }
-      if (err instanceof api.ScopeMismatchError) {
-        handleScopeMismatch()
-        throw err
-      }
-      throw err
-    }
-  }, [handleSessionExpired, handleScopeMismatch])
-
-  // Login handler
-  const handleLogin = async (email, password, apiKey, rememberMe) => {
-    setSessionExpiredMessage(null)
-    await api.login(email, password, apiKey, 'manage')
-    await handleRememberMe(email, password, apiKey, rememberMe)
-    setAuthed(true)
-    
-    // Restore previous state if available
-    const savedState = localStorage.getItem(LS_MANAGE_STATE)
-    if (savedState) {
-      try {
-        const state = JSON.parse(savedState)
-        if (state.cupId && state.view === 'overview') {
-          // Try to restore to the overview page
-          setSelectedCup({ id: state.cupId, name: state.cupName })
-          setView('overview')
-          // The data will be loaded by the useEffect that watches selectedCup
-        } else {
-          setView('cups')
-        }
-      } catch {
-        setView('cups')
-      }
-    } else {
-      setView('cups')
-    }
-  }
-
-  // Logout handler
-  const handleLogout = async () => {
-    try { await api.logout() } catch { /* ignore */ }
-    setAuthed(false)
-    setView('login')
-    setCups([])
-    setSelectedCup(null)
-    setData(null)
-    setError(null)
-  }
 
   // Load cups from management API (shows cups until end date, regardless of registration status)
   useEffect(() => {
@@ -802,225 +743,3 @@ function SquaddingOverview({ data, cupId, onRefresh, onPatchShooterStatus }) {
   )
 }
 
-// ── Action button with loading spinner ──
-function ActionButton({ label, loading, onClick, color = 'blue' }) {
-  const colorClasses = {
-    blue: 'bg-blue-100 text-blue-700 active:bg-blue-200',
-    amber: 'bg-amber-100 text-amber-700 active:bg-amber-200',
-    purple: 'bg-purple-100 text-purple-700 active:bg-purple-200',
-    red: 'bg-red-100 text-red-700 active:bg-red-200',
-  }
-  if (loading) {
-    return (
-      <span className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 text-gray-400 flex items-center gap-1">
-        <span className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-      </span>
-    )
-  }
-  return (
-    <button
-      onClick={onClick}
-      className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors shrink-0 ${colorClasses[color] || colorClasses.blue}`}
-    >
-      {label}
-    </button>
-  )
-}
-
-// ── Inline DNS + Paid buttons for a shooter (CUP2/CUP3) ──
-function ShooterActions({ shooter, actionLoading, onSetDns, onUndoDns, onTogglePaid }) {
-  const isDnsLoading = actionLoading?.shooterName === shooter.name && (actionLoading?.action === 'dns' || actionLoading?.action === 'undoDns')
-  const isPaidLoading = actionLoading?.shooterName === shooter.name && actionLoading?.action === 'paid'
-
-  return (
-    <div className="flex items-center gap-1 mt-1">
-      {/* Paid toggle */}
-      {shooter.cupParticipantId && (
-        <button
-          onClick={() => onTogglePaid(shooter)}
-          disabled={isPaidLoading}
-          aria-label={shooter.paid ? `${shooter.name}: maksettu` : `${shooter.name}: ei maksettu`}
-          title={shooter.paid ? `${shooter.name}: maksettu` : `${shooter.name}: ei maksettu`}
-          className={`px-2 py-0.5 text-[10px] font-medium rounded transition-colors ${
-            shooter.paid
-              ? 'bg-green-500 text-white active:bg-green-600'
-              : 'bg-gray-100 text-gray-400 active:bg-gray-200'
-          }`}
-        >
-          {isPaidLoading ? '...' : (shooter.paid ? '€ ✓' : '€')}
-        </button>
-      )}
-      {/* DNS toggle */}
-      {shooter.cupParticipantId && (
-        <button
-          onClick={() => shooter.didNotShow ? onUndoDns(shooter) : onSetDns(shooter)}
-          disabled={isDnsLoading}
-          aria-label={shooter.didNotShow ? `${shooter.name}: peru DNS` : `${shooter.name}: aseta DNS`}
-          className={`px-2 py-0.5 text-[10px] font-medium rounded transition-colors ${
-            shooter.didNotShow
-              ? 'bg-red-100 text-red-700 active:bg-red-200'
-              : 'bg-gray-100 text-gray-400 active:bg-gray-200'
-          }`}
-        >
-          {isDnsLoading ? '...' : (shooter.didNotShow ? 'DNS ✗' : 'DNS')}
-        </button>
-      )}
-    </div>
-  )
-}
-
-// ── Bottom sheet squad picker (mobile-friendly) ──
-function SquadPickerSheet({ shooter, squads, onSelect, onClose }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/40" />
-      <div
-        className="relative w-full max-w-md bg-white rounded-t-2xl shadow-xl animate-slide-up"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="px-4 pt-4 pb-2">
-          <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
-          <h3 className="font-semibold text-gray-800">Valitse squad</h3>
-          <p className="text-sm text-gray-800 mt-0.5">{shooter.name}</p>
-          {shooter.email ? (
-            <p className="text-xs text-gray-500 truncate">{shooter.email}</p>
-          ) : (
-            <p className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</p>
-          )}
-        </div>
-        <div className="px-4 pb-4 space-y-2 max-h-[50vh] overflow-y-auto">
-          {squads.map(sq => (
-            <button
-              key={sq.number}
-              onClick={() => onSelect(sq.number)}
-              className="w-full flex items-center justify-between p-3 rounded-xl border border-gray-200 active:bg-blue-50 active:border-blue-300 transition-colors"
-            >
-              <div>
-                <div className="font-medium text-gray-800 text-sm">{sq.name}</div>
-              </div>
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                sq.count >= sq.max && sq.max > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-              }`}>
-                {sq.count}/{sq.max}
-              </span>
-            </button>
-          ))}
-        </div>
-        <div className="px-4 pb-6">
-          <button
-            onClick={onClose}
-            className="w-full py-3 text-center text-gray-500 font-medium text-sm rounded-xl bg-gray-100 active:bg-gray-200 transition-colors"
-          >
-            Peruuta
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Section header ──
-function SectionHeader({ icon, title, count, color }) {
-  const colors = {
-    red: 'text-red-700',
-    amber: 'text-amber-700',
-    purple: 'text-purple-700',
-    blue: 'text-blue-700',
-    green: 'text-green-700',
-  }
-  return (
-    <h2 className={`text-sm font-semibold uppercase tracking-wide mb-2 px-1 flex items-center gap-2 ${colors[color] || 'text-gray-700'}`}>
-      <span>{icon}</span>
-      <span>{title}</span>
-      <span className="text-xs font-normal opacity-70">({count})</span>
-    </h2>
-  )
-}
-
-// ── Squad card with expandable shooter list ──
-function SquadCard({ group, matchLabels, actionLoading, onMoveSquad, onSetDns, onUndoDns, onTogglePaid, expanded, onToggleExpand }) {
-  const shooterCount = group.total
-  const hasIssues = group.issueShooters.length > 0
-
-  return (
-    <div className={`bg-white rounded-xl border mb-2 overflow-hidden ${hasIssues ? 'border-amber-200' : 'border-gray-200'}`}>
-      <button
-        onClick={onToggleExpand}
-        className="w-full px-4 py-3 flex items-center justify-between active:bg-gray-50 transition-colors"
-      >
-        <div className="flex items-center gap-2">
-          <svg className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-          <h3 className="font-semibold text-gray-800 text-sm">{group.name}</h3>
-          {hasIssues && <span className="text-amber-500 text-xs">⚠</span>}
-        </div>
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-          shooterCount >= group.max && group.max > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-        }`}>
-          {shooterCount}/{group.max}
-        </span>
-      </button>
-
-      {expanded && (
-        <div className="border-t">
-          {shooterCount === 0 ? (
-            <p className="px-4 py-3 text-gray-400 text-sm">Ei ampujia</p>
-          ) : (
-            <div className="divide-y">
-              {group.okShooters.map((s, i) => (
-                <div key={`ok-${i}`} className={`px-4 py-2.5 ${s.didNotShow ? 'opacity-50' : ''}`}>
-                  <div className="flex items-center gap-2">
-                    <span className="text-green-500 text-sm shrink-0">✓</span>
-                    <div className="flex-1 min-w-0">
-                      <div className={`text-sm text-gray-800 truncate ${s.didNotShow ? 'line-through' : ''}`}>{s.name}</div>
-                      {s.email ? (
-                        <div className="text-xs text-gray-500 truncate">{s.email}</div>
-                      ) : (
-                        <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
-                      )}
-                      <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={onSetDns} onUndoDns={onUndoDns} onTogglePaid={onTogglePaid} />
-                    </div>
-                    <ActionButton
-                      label={fi.moveSquad}
-                      loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'assign'}
-                      onClick={() => onMoveSquad(s)}
-                      color="blue"
-                    />
-                  </div>
-                </div>
-              ))}
-              {group.issueShooters.map((s, i) => (
-                <div key={`issue-${i}`} className={`px-4 py-2.5 bg-amber-50 ${s.didNotShow ? 'opacity-50' : ''}`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-amber-500 text-sm shrink-0">⚠</span>
-                    <div className="flex-1 min-w-0">
-                      <div className={`text-sm text-gray-800 truncate ${s.didNotShow ? 'line-through' : ''}`}>{s.name}</div>
-                      {s.email ? (
-                        <div className="text-xs text-gray-500 truncate">{s.email}</div>
-                      ) : (
-                        <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
-                      )}
-                      <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={onSetDns} onUndoDns={onUndoDns} onTogglePaid={onTogglePaid} />
-                    </div>
-                  </div>
-                  <div className="flex gap-1 mt-1 ml-6">
-                    {s.assignments.map((sq, mi) => (
-                      <span key={mi} className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
-                        sq === null ? 'bg-red-100 text-red-600'
-                          : sq === s.suggestedSquad ? 'bg-green-100 text-green-700'
-                          : 'bg-amber-100 text-amber-700'
-                      }`}>
-                        {matchLabels[mi]}: {sq === null ? '✗' : `S${sq}`}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}

@@ -23,7 +23,7 @@ const ssiClientMocks = vi.hoisted(() => ({
   ssiGetCupParticipantStatuses: vi.fn(),
 }))
 
-vi.mock('../lib/ssi-client.js', () => ssiClientMocks)
+vi.mock('../lib/ssi-core/participants.js', () => ssiClientMocks)
 
 import express from 'express'
 import cookieParser from 'cookie-parser'
