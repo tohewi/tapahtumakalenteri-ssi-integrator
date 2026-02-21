@@ -24,15 +24,15 @@ The preview deployment system uses GitHub Actions (`.github/workflows/pr-preview
 
 ### Preview Service Naming
 
-Preview services follow this pattern: `ssi-scoring-pr-{NUMBER}`
+Preview services follow this pattern: `turres-ssi-tools-pr-{NUMBER}`
 
-Example: PR #42 → `ssi-scoring-pr-42`
+Example: PR #42 → `turres-ssi-tools-pr-42`
 
 ### Preview URLs
 
-Format: `https://ssi-scoring-pr-{NUMBER}.onrender.com`
+Format: `https://turres-ssi-tools-pr-{NUMBER}.onrender.com`
 
-Example: `https://ssi-scoring-pr-42.onrender.com`
+Example: `https://turres-ssi-tools-pr-42.onrender.com`
 
 ## Using Preview Environments
 
@@ -68,19 +68,25 @@ Preview services are configured with:
 - **Runtime:** Node.js
 - **Plan:** Starter (same as production)
 - **Region:** Frankfurt (same as production)
-- **Build:** `cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install`
+- **Build:** `cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm ci`
 - **Start:** `cd scoring-proxy && node server.js`
 - **Auto-deploy:** Yes (on every commit to PR branch)
-- **Environment Variables:** `NODE_ENV=production` (PORT is set by Render to 10000)
+- **Environment Variables (always set):** `NODE_ENV`, `SESSION_SECRET`, `LOG_LEVEL`, `APP_URL`
+- **Environment Variables (copied when GitHub secrets exist):**
+  - `SSI_ADMIN_EMAIL`
+  - `SSI_ADMIN_PASSWORD`
+  - `SSI_ADMIN_API_KEY`
+  - `RESEND_API_KEY`
+  - `EMAIL_FROM`
+  - `SSI_BASE_URL`
+  - `STAFFING_CRON_SECRET`
+  - `STAFFING_API_URL`
 
 ### Environment Variables
 
-Preview services use the same environment variables as production:
+Preview services are created from workflow payload. Core vars are always set, and optional feature vars are injected from GitHub repository secrets when they are configured.
 
-- `NODE_ENV=production`
-- `PORT=3001`
-
-Additional service-specific secrets (SSI credentials, email API keys, etc.) should be configured manually in Render Dashboard for each preview service if needed, or inherited from the main service environment.
+If an optional secret is missing, workflow continues and emits a warning in Actions logs. Related feature flows may not work in the preview environment until that secret is added.
 
 ## Implementation Details
 
@@ -91,7 +97,7 @@ The workflow (`.github/workflows/pr-preview.yml`) handles three scenarios:
 #### 1. PR Opened or Reopened
 
 ```yaml
-- Generates unique service name (ssi-scoring-pr-{NUMBER})
+- Generates unique service name (turres-ssi-tools-pr-{NUMBER})
 - Checks if service already exists
 - Creates new service via Render API if needed
 - Posts preview URL as PR comment
@@ -211,11 +217,11 @@ Create additional Render services manually for specific branches that need testi
 
 ### Environment Variables Not Working
 
-**Cause:** Preview services are created with minimal environment variables
+**Cause:** One or more optional GitHub secrets used for preview env sync are missing
 
 **Solution:**
-- Manually add required secrets in Render Dashboard
-- Or update workflow to copy environment variables from main service
+- Add missing repository secrets in GitHub: Settings → Secrets and variables → Actions
+- Re-run the PR preview workflow (or push a new commit) to recreate/sync service config
 - Consider using separate test credentials for preview environments
 
 ### PR Comment Not Posted

@@ -109,8 +109,26 @@ app.use(express.static(uiDist))
 // Legacy session Map removed — all state in Redis/memory store
 // ============================================================
 
-// Auth middleware — used by all protected routes
-const requireAuth = requireAuthV7
+// Auth middleware — used by all protected routes.
+// Adds per-request token refresh hooks used by requireAuthV7.
+function requireAuth(allowedScopes = null) {
+  // Compatibility: some routes pass requireAuth directly as middleware.
+  if (arguments.length === 3) {
+    const req = arguments[0]
+    const res = arguments[1]
+    const next = arguments[2]
+    req._ssiRefreshUserToken = ssiRefreshJWT
+    req._ssiRefreshAdminToken = ssiRefreshJWT
+    return requireAuthV7()(req, res, next)
+  }
+
+  const middleware = requireAuthV7(allowedScopes)
+  return async (req, res, next) => {
+    req._ssiRefreshUserToken = ssiRefreshJWT
+    req._ssiRefreshAdminToken = ssiRefreshJWT
+    return middleware(req, res, next)
+  }
+}
 
 // Execute GraphQL with automatic JWT refresh on auth failure.
 // Works with the legacy-compatible session view from toLegacySession:

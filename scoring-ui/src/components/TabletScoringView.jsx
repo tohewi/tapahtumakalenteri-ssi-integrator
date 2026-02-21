@@ -33,6 +33,14 @@ function getTotalHits(allSeriesScores) {
   return total
 }
 
+function getTotalMisses(allSeriesScores) {
+  let total = 0
+  for (let i = 0; i < SERIES_COUNT; i++) {
+    total += allSeriesScores[i].M || 0
+  }
+  return total
+}
+
 function getTotalPoints(allSeriesScores) {
   let total = 0
   for (let i = 0; i < SERIES_COUNT; i++) {
@@ -90,6 +98,10 @@ export default function TabletScoringView({
 
   // Check if match is completed (status: 'cp')
   const isMatchCompleted = match?.status === 'cp'
+  const ssiParseOptions = {
+    inferMissingMisses: isMatchCompleted,
+    maxHitsPerSeries: MAX_HITS_PER_SERIES,
+  }
   
   // Calculate total shots for the match
   const totalShotsInMatch = SERIES_COUNT * MAX_HITS_PER_SERIES
@@ -153,14 +165,27 @@ export default function TabletScoringView({
   // Select first shooter by default
   useEffect(() => {
     if (!selectedShooter && squad.shooters.length > 0) {
-      // Clear all local scores when starting fresh from first shooter
-      log.debug('[tablet] Starting fresh: clearing all local scores and loading from SSI')
+      // Keep restored local scores (e.g. after re-login) and avoid clobbering them with SSI.
+      const shooterWithLocalScores = squad.shooters.find(shooter => {
+        const shooterScores = allScores[shooter.id]
+        return shooterScores && getTotalHits(shooterScores) > 0
+      })
+
+      if (shooterWithLocalScores) {
+        setSelectedShooter(shooterWithLocalScores)
+        setSaveError(null)
+        log.debug('[tablet] Using restored local scores, keeping local state for shooter:', shooterWithLocalScores.id)
+        return
+      }
+
+      // No local work in progress found — initialize from SSI.
+      log.debug('[tablet] No local scores found: loading initial scores from SSI')
       const freshScores = {}
       
       squad.shooters.forEach(shooter => {
         // Load SSI scores for each shooter
         try {
-          const ssiScores = api.buildScoresFromSSI(shooter, SERIES_COUNT)
+          const ssiScores = api.buildScoresFromSSI(shooter, SERIES_COUNT, ssiParseOptions)
           freshScores[shooter.id] = ssiScores
         } catch (err) {
           log.error('[tablet] Error loading SSI scores for shooter:', shooter.id, err)
@@ -184,7 +209,7 @@ export default function TabletScoringView({
       
       log.debug('[tablet] Loaded SSI scores for all shooters, starting with:', firstShooter.id)
     }
-  }, [squad.shooters, selectedShooter, onScoresUpdate])
+  }, [squad.shooters, selectedShooter, onScoresUpdate, allScores])
 
   // Handle shooter selection
   const handleShooterSelect = useCallback(async (shooter) => {
@@ -207,7 +232,7 @@ export default function TabletScoringView({
       // Load from SSI since no local data
       try {
         log.debug('[tablet] Loading SSI scores for shooter:', shooter.id)
-        const ssiScores = api.buildScoresFromSSI(shooter, SERIES_COUNT)
+        const ssiScores = api.buildScoresFromSSI(shooter, SERIES_COUNT, ssiParseOptions)
         
         if (getTotalHits(ssiScores) > 0) {
           log.debug('[tablet] Loaded SSI scores with', getTotalHits(ssiScores), 'hits')
@@ -224,7 +249,7 @@ export default function TabletScoringView({
     } else {
       log.debug('[tablet] Using local scores for shooter:', shooter.id)
     }
-  }, [selectedShooter, allScores, onScoresUpdate, handleSaveScores])
+  }, [selectedShooter, allScores, onScoresUpdate, handleSaveScores, ssiParseOptions])
 
   // Add score to the first series with space
   const handleScoreAdd = (zone) => {
@@ -350,7 +375,9 @@ export default function TabletScoringView({
   }
 
   const currentShooterScores = selectedShooter ? allScores[selectedShooter.id] : null
-  const shotsFired = currentShooterScores ? getTotalHits(currentShooterScores) : 0
+  const totalShots = currentShooterScores ? getTotalHits(currentShooterScores) : 0
+  const totalMisses = currentShooterScores ? getTotalMisses(currentShooterScores) : 0
+  const scoredHits = Math.max(0, totalShots - totalMisses)
   const totalPoints = currentShooterScores ? getTotalPoints(currentShooterScores) : 0
   const xCount = currentShooterScores ? getXCount(currentShooterScores) : 0
 
@@ -418,7 +445,7 @@ export default function TabletScoringView({
         <div className="flex items-center gap-3 text-xs">
           <div>
             <span className="text-gray-500">{t.shotsFired}: </span>
-            <span className="font-bold text-blue-600">{shotsFired}</span>
+            <span className="font-bold text-blue-600">{scoredHits}</span>
             <span className="text-gray-400"> / {totalShotsInMatch}</span>
           </div>
           <div>
@@ -444,7 +471,9 @@ export default function TabletScoringView({
             {squad.shooters.map((shooter, shooterIdx) => {
               const isSelected = selectedShooter?.id === shooter.id
               const shooterScores = allScores[shooter.id]
-              const shooterHits = shooterScores ? getTotalHits(shooterScores) : 0
+              const shooterShots = shooterScores ? getTotalHits(shooterScores) : 0
+              const shooterMisses = shooterScores ? getTotalMisses(shooterScores) : 0
+              const shooterHits = Math.max(0, shooterShots - shooterMisses)
               const shooterPoints = shooterScores ? getTotalPoints(shooterScores) : 0
               
               return (

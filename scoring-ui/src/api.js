@@ -214,14 +214,68 @@ export async function manageTogglePaid(cupId, shooterName, cupParticipantId) {
 const SCORE_ZONES = ['X', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'M']
 
 // Parse SSI string "X,10,9,8,7,6,5,4,3,2,1,M,max_hits" → {X: n, '10': n, ...}
-export function parseStringScore(ssiString) {
+export function parseStringScore(ssiString, options = {}) {
+  const {
+    inferMissingMisses = false,
+    maxHitsPerSeries = 5,
+  } = options
+  const normalizedMaxHits = Number(maxHitsPerSeries) || 5
+
   if (!ssiString || ssiString === '0,0,0,0,0,0,0,0,0,0,0,0,0') {
     return Object.fromEntries(SCORE_ZONES.map(z => [z, 0]))
   }
-  const parts = ssiString.split(',').map(Number)
+
+  // Prefer comma format, but tolerate slash-separated debug/export variants.
+  const rawScore = String(ssiString)
+  const parts = rawScore
+    .split(/[\s,\/]+/)
+    .filter(Boolean)
+    .map(Number)
+
   // SSI format: X, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, M, max_hits
   const scores = {}
   SCORE_ZONES.forEach((z, i) => { scores[z] = parts[i] || 0 })
+
+  const nonMissHits = SCORE_ZONES
+    .filter(z => z !== 'M')
+    .reduce((sum, z) => sum + (scores[z] || 0), 0)
+
+  // Compact SSI variant: X..1,max_hits (M omitted).
+  // In this case the 12th value is max_hits, not misses.
+  const trailingValue = parts[parts.length - 1] || 0
+  const hasSlashDelimiter = rawScore.includes('/')
+  const hasCompactMaxHitsTail = parts.length === SCORE_ZONES.length
+    && !hasSlashDelimiter
+    && trailingValue === normalizedMaxHits
+  // Some SSI payloads use a 13-part variant where the trailing value is misses,
+  // while the penultimate M slot is always 0.
+  const hasTrailingMissVariant = parts.length === SCORE_ZONES.length + 1
+    && (parts[SCORE_ZONES.length - 1] || 0) === 0
+    && trailingValue >= 0
+    && trailingValue <= normalizedMaxHits
+    && (nonMissHits + trailingValue) <= normalizedMaxHits
+  // Some SSI responses are even shorter and omit both M and max_hits (X..1 only).
+  const hasCompactNoMissNoTail = parts.length === SCORE_ZONES.length - 1
+
+  if (hasCompactMaxHitsTail) {
+    scores.M = 0
+  }
+
+  if (hasTrailingMissVariant) {
+    scores.M = trailingValue
+  }
+
+  // If SSI returns compact X..1,max_hits and there are already hits,
+  // the missing slots are misses in saved scorecards (our UI only saves full strings or empty).
+  const shouldInferForCompactString = (hasCompactMaxHitsTail || hasCompactNoMissNoTail)
+    && (inferMissingMisses || nonMissHits > 0)
+
+  // Some SSI responses omit explicit "M" and only return X..1 counts.
+  // For completed matches we can safely infer misses from max hits per string.
+  if ((inferMissingMisses && parts.length < SCORE_ZONES.length) || shouldInferForCompactString) {
+    scores.M = Math.max(0, normalizedMaxHits - nonMissHits)
+  }
+
   return scores
 }
 
@@ -274,7 +328,7 @@ export function transformMatchListItem(ssiMatch) {
 }
 
 // Build scores object from SSI competitor data for all 6 strings
-export function buildScoresFromSSI(shooter, seriesCount = 6) {
+export function buildScoresFromSSI(shooter, seriesCount = 6, options = {}) {
   log.debug('[buildScoresFromSSI] Input shooter:', shooter)
   const scores = {}
   for (let i = 0; i < seriesCount; i++) {
@@ -282,7 +336,7 @@ export function buildScoresFromSSI(shooter, seriesCount = 6) {
     // Support both shooter.ssiScores.s1 (transformed squad data) and shooter.s1 (direct from SSI API)
     const scoreString = shooter?.ssiScores?.[sKey] || shooter?.[sKey]
     log.debug(`[buildScoresFromSSI] ${sKey}:`, scoreString)
-    scores[i] = parseStringScore(scoreString)
+    scores[i] = parseStringScore(scoreString, options)
   }
   log.debug('[buildScoresFromSSI] Result scores:', scores)
   return scores

@@ -7,7 +7,7 @@
 
 ## Release 8.0 — Tablet Scoring UI (2026-02-20)
 
-**Git tag:** `v7.0.0` → HEAD | **Requirements:** TS1–TS9 ✅
+**Git tag:** `v7.0.0` → HEAD | **Requirements:** TS1–TS12 ✅
 
 ### Overview
 
@@ -45,6 +45,27 @@ Tablet scoring UI for range officers — enter competition scores on a tablet or
 - **Symptom**: Blank page after login when stale localStorage restored the scoring view
 - **Fix**: Removed leftover `setSelectedScoreIndex(null)` calls, added `ErrorBoundary` to `main.jsx`, fixed `LoginScreen` props in `TabletApp`, added defensive `restoreNavState`
 
+### Hotfix: Tablet Session Stability & Score Preservation (TS10–TS12)
+
+- **Root cause #1 (forced re-login):** auth middleware validated user SSI JWT expiry before any refresh attempt, so ~15 minute JWT rollover returned 401 during active scoring requests
+- **Root cause #2 (score loss):** tablet scoring mount logic always replaced restored local `ssi_scores` with SSI baseline data, which dropped unsaved local edits after re-login/remount
+- **Fix (backend):**
+  - `requireAuthV7` now attempts user token refresh before rejecting expired token requests
+  - `server.js` now wires `req._ssiRefreshUserToken` and `req._ssiRefreshAdminToken` hooks for all protected routes
+- **Fix (frontend):** `TabletScoringView` now preserves restored local scores and only initializes from SSI when local score state is empty
+- **Miss score impact:** `M` values were not a parsing/mapping bug — they were overwritten with other unsaved local edits. Preserving local state fixes this symptom too
+
+### Regression Test Coverage Added
+
+- **Backend:** auth middleware tests now cover
+  - expired token + refresh callback succeeds (session continues)
+  - expired token + refresh callback fails (401)
+  - simulated ~3 hour active scoring flow with repeated refresh cycles
+- **Frontend:** new tablet session persistence tests cover
+  - restored local scores are not overwritten by SSI on mount
+  - SSI bootstrap still works when no local scores exist
+  - simulated 3-hour remount/re-login flow keeps local miss scores (`M`)
+
 ### Accessibility (WCAG 2.1 AA)
 
 - `role="listbox"` / `role="option"` on shooter list with `aria-selected`
@@ -65,8 +86,8 @@ Tablet scoring UI for range officers — enter competition scores on a tablet or
 
 | Suite | Passing | Notes |
 |-------|--------:|-------|
-| Backend (scoring-proxy) | 134 | All green |
-| Frontend (scoring-ui) | 160 | All green |
+| Backend (scoring-proxy) | 137 | All green |
+| Frontend (scoring-ui) | 163 | All green |
 
 ---
 

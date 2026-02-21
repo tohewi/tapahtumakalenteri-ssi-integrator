@@ -48,6 +48,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.useRealTimers()
   await closeRedis()
 })
 
@@ -85,6 +86,86 @@ describe('requireAuthV7 — Authentication', () => {
     expect(next).not.toHaveBeenCalled()
     expect(res.statusCode).toBe(401)
     expect(res.body.sessionExpired).toBe(true)
+  })
+
+  it('should refresh an expired user SSI token when refresh callback is available', async () => {
+    const { sessionId } = await createSession(
+      createMockSessionInput({ userSSI: createExpiredUserSSI() })
+    )
+    const refreshUserToken = vi.fn().mockResolvedValue({
+      token: 'refreshed-user-jwt-token',
+      refreshToken: 'refreshed-user-refresh-token',
+    })
+
+    const req = mockReq(
+      { ssi_session: sessionId },
+      { _ssiRefreshUserToken: refreshUserToken }
+    )
+    const res = mockRes()
+    const next = mockNext()
+
+    const middleware = requireAuthV7()
+    await middleware(req, res, next)
+
+    expect(refreshUserToken).toHaveBeenCalledWith('mock-user-refresh-token')
+    expect(next).toHaveBeenCalledOnce()
+    expect(req.ssiSession.jwt).toBe('refreshed-user-jwt-token')
+  })
+
+  it('should reject an expired user SSI token when refresh callback fails', async () => {
+    const { sessionId } = await createSession(
+      createMockSessionInput({ userSSI: createExpiredUserSSI() })
+    )
+    const refreshUserToken = vi.fn().mockRejectedValue(new Error('refresh failed'))
+
+    const req = mockReq(
+      { ssi_session: sessionId },
+      { _ssiRefreshUserToken: refreshUserToken }
+    )
+    const res = mockRes()
+    const next = mockNext()
+
+    const middleware = requireAuthV7()
+    await middleware(req, res, next)
+
+    expect(refreshUserToken).toHaveBeenCalledWith('mock-user-refresh-token')
+    expect(next).not.toHaveBeenCalled()
+    expect(res.statusCode).toBe(401)
+    expect(res.body.sessionExpired).toBe(true)
+  })
+
+  it('should keep session authenticated for three hours with repeated user token refreshes', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-02-21T09:00:00Z'))
+
+    const { sessionId } = await createSession(createMockSessionInput())
+    const refreshUserToken = vi.fn().mockImplementation(async () => ({
+      token: `refreshed-user-jwt-${refreshUserToken.mock.calls.length + 1}`,
+      refreshToken: `refreshed-user-refresh-${refreshUserToken.mock.calls.length + 1}`,
+    }))
+
+    const middleware = requireAuthV7()
+
+    // Simulate active scoring requests every 16 minutes for ~3 hours.
+    // Without refresh-before-reject logic, these calls would hit expired JWTs.
+    for (let i = 0; i < 12; i++) {
+      vi.advanceTimersByTime(16 * 60 * 1000)
+
+      const req = mockReq(
+        { ssi_session: sessionId },
+        { _ssiRefreshUserToken: refreshUserToken }
+      )
+      const res = mockRes()
+      const next = mockNext()
+
+      await middleware(req, res, next)
+
+      expect(next).toHaveBeenCalledOnce()
+      expect(res.statusCode).toBeNull()
+      expect(req.ssiSession.jwt).toContain('refreshed-user-jwt-')
+    }
+
+    expect(refreshUserToken).toHaveBeenCalledTimes(12)
   })
 
   it('should reject with non-existent session ID', async () => {

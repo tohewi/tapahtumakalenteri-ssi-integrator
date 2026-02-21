@@ -46,8 +46,45 @@ export function requireAuthV7(allowedScopes = null) {
         })
       }
 
+      // Build token updates if refresh is needed
+      const tokenUpdates = {}
+
+      // Attempt refresh before rejecting an expired token.
+      // This keeps long-running scoring sessions alive when SSI JWTs roll over.
+      const userTokenInvalid = !isUserTokenValid(session)
+      const canRefreshUserToken = !!(req._ssiRefreshUserToken && session.userSSI?.refreshToken)
+      if ((userTokenInvalid || userTokenNeedsRefresh(session)) && canRefreshUserToken) {
+        try {
+          const refreshed = await req._ssiRefreshUserToken(session.userSSI.refreshToken)
+          tokenUpdates.userSSI = {
+            jwt: refreshed.token,
+            refreshToken: refreshed.refreshToken,
+            expiresAt: Date.now() + 15 * 60 * 1000,
+            lastRefreshed: Date.now(),
+          }
+        } catch {
+          console.warn('[auth-v7] User SSI token refresh failed')
+          if (userTokenInvalid) {
+            return res.status(401).json({
+              error: 'SSI token expired. Please login again.',
+              sessionExpired: true,
+            })
+          }
+        }
+      }
+
+      const effectiveSession = tokenUpdates.userSSI
+        ? {
+            ...session,
+            userSSI: {
+              ...session.userSSI,
+              ...tokenUpdates.userSSI,
+            },
+          }
+        : session
+
       // Validate user SSI token — this is the core security gate
-      if (!isUserTokenValid(session)) {
+      if (!isUserTokenValid(effectiveSession)) {
         return res.status(401).json({
           error: 'SSI token expired. Please login again.',
           sessionExpired: true,
@@ -64,23 +101,6 @@ export function requireAuthV7(allowedScopes = null) {
             requiredScope: scopes,
             currentScope: session.scope,
           })
-        }
-      }
-
-      // Build token updates if refresh is needed
-      const tokenUpdates = {}
-      if (userTokenNeedsRefresh(session) && req._ssiRefreshUserToken) {
-        try {
-          const refreshed = await req._ssiRefreshUserToken(session.userSSI.refreshToken)
-          tokenUpdates.userSSI = {
-            jwt: refreshed.token,
-            refreshToken: refreshed.refreshToken,
-            expiresAt: Date.now() + 15 * 60 * 1000,
-            lastRefreshed: Date.now(),
-          }
-        } catch {
-          // Token refresh failed — let it expire naturally
-          console.warn('[auth-v7] User SSI token refresh failed')
         }
       }
 

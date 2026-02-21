@@ -1,5 +1,5 @@
 projects:
-  - name: My project
+  - name: turres-ssi-tools
     environments:
       - name: production
         services:
@@ -20,17 +20,17 @@ projects:
             plan: starter
             branch: main
             repo: https://github.com/tohewi/tapahtumakalenteri-ssi-integrator
-            previews:
-              plan: starter
+            # PR previews are managed by .github/workflows/pr-preview.yml
+            # to support all Render plans and deterministic naming.
             buildCommand: cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm ci
             startCommand: cd scoring-proxy && node server.js
             envVars:
               - key: NODE_ENV
                 value: production
-              - key: PORT
-                value: 3001
               - key: LOG_LEVEL
                 value: info
+              - key: APP_URL
+                value: https://turres-ssi-tools.onrender.com
               - key: SESSION_SECRET
                 generateValue: true
               - key: REDIS_URL

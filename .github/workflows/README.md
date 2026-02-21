@@ -35,7 +35,7 @@ This directory contains the CI/CD workflows for the tapahtumakalenteri-ssi-integ
 **How It Works:**
 
 1. **Service Creation (PR opened):**
-   - Generates unique service name: `ssi-scoring-pr-{NUMBER}`
+   - Generates unique service name: `turres-ssi-tools-pr-{NUMBER}`
    - Creates Render service via API with same config as production
    - Posts preview URL as PR comment
 
@@ -61,14 +61,23 @@ This directory contains the CI/CD workflows for the tapahtumakalenteri-ssi-integ
 - **Runtime:** Node.js
 - **Plan:** Starter (same as production)
 - **Region:** Frankfurt (same as production)
-- **Build Command:** `cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install`
+- **Build Command:** `cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm ci`
 - **Start Command:** `cd scoring-proxy && node server.js`
 - **Auto-deploy:** Yes (on every commit to PR branch)
-- **Environment Variables:** `NODE_ENV=production` (PORT is automatically set by Render to 10000)
+- **Environment Variables (always set):** `NODE_ENV`, `SESSION_SECRET`, `LOG_LEVEL`, `APP_URL`
+- **Environment Variables (copied when GitHub secrets exist):**
+  - `SSI_ADMIN_EMAIL`
+  - `SSI_ADMIN_PASSWORD`
+  - `SSI_ADMIN_API_KEY`
+  - `RESEND_API_KEY`
+  - `EMAIL_FROM`
+  - `SSI_BASE_URL`
+  - `STAFFING_CRON_SECRET`
+  - `STAFFING_API_URL`
 
 **Preview URLs:**
-- Format: `https://ssi-scoring-pr-{NUMBER}.onrender.com`
-- Example: PR #42 → `https://ssi-scoring-pr-42.onrender.com`
+- Format: `https://turres-ssi-tools-pr-{NUMBER}.onrender.com`
+- Example: PR #42 → `https://turres-ssi-tools-pr-42.onrender.com`
 
 ## Setting Up Required Secrets
 
