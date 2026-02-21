@@ -12,6 +12,7 @@ This directory contains comprehensive documentation for the tapahtumakalenteri-s
 
 ### Technical Documentation
 - **[Scoring Architecture](../design/scoring-architecture.md)** - Proxy architecture, session management, scoring flow
+- **[Scoring Data Model](../design/scoring-data-model.md)** - Canonical score payload formats, IDs, and facts-first debugging workflow
 - **[Session Handling](../design/session-handling.md)** - Inactivity timeout, feature isolation, explicit auth, state restoration
 - **[Session Lifecycle](../design/session-lifecycle.md)** - State charts and flow analysis for session management
 - **[Registration Flow](../design/registration-flow.md)** - Backend sequence diagrams and SSI state machine
