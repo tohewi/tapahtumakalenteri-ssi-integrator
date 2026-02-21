@@ -1,0 +1,16 @@
+<!-- SSI scoring page fixture — /nordic/competitor/{id}/score-in-match/ -->
+<html>
+<body>
+<h2>Score</h2>
+<form method="post" action="/nordic/competitor/12345/score-in-match/">
+  <input type="hidden" name="stage" value="99" />
+  <select name="zone_1">
+    <option value="A" selected>A</option>
+    <option value="C">C</option>
+    <option value="D">D</option>
+  </select>
+  <input type="number" name="time" value="" />
+  <input type="submit" value="Save" />
+</form>
+</body>
+</html>

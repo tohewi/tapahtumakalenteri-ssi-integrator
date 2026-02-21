@@ -288,7 +288,7 @@ Analysis completed 2026-02-20. Reviewed `docs/design/architecture-review.md` (20
 | # | Requirement | Priority | Status |
 |---|-------------|----------|--------|
 | RFR1 | **Split `ssi-core/client.js` by domain**: Created `graphql.js`, `scoring.js`, `participants.js`, `management.js`, `http-helpers.js` as domain re-export modules. Updated `index.js` barrel to export from domain modules instead of monolithic `client.js`. Actual code movement deferred to Phase 2 | HIGH | ✅ Implemented |
-| RFR2 | **Add SSI client unit tests with HTML fixtures**: Save real SSI HTML pages as test fixtures. Test all scraping/parsing functions against fixtures. Target: ~60 unit tests for the SSI client layer | HIGH | ⬚ Pending |
+| RFR2 | **Add SSI client unit tests with HTML fixtures**: 26 tests across 10 describe blocks covering staff page parsing, participant page parsing, cup status parsing, scoring page extraction, and redirect-based actions. 5 HTML fixture files. Kept lightweight — SSI moving to GraphQL, scraping will be phased out | HIGH | ✅ Implemented |
 | RFR3 | **Migrate route imports from compat shim**: All 6 route files + `server.js` migrated from `lib/ssi-client.js` to domain-specific imports (`graphql.js`, `scoring.js`, `participants.js`, `management.js`, `http-helpers.js`). Test mock updated. Compat shim retained for any external consumers | MEDIUM | ✅ Implemented |
 | RFR4 | **Extract management route business logic**: Move orchestration from `routes/management.js` (890 lines) into `lib/services/cup-manage.js`. Route handlers become thin dispatchers (validation + response). Business logic independently testable | MEDIUM | ⬚ Pending |
 | RFR5 | **Add missing route tests**: Add unit tests for `routes/scoring.js`, `routes/reports.js`, `routes/staffing.js`. Follow existing pattern from `management.test.js` (mock SSI client, test HTTP contract) | MEDIUM | ⬚ Pending |
@@ -417,7 +417,7 @@ Vision: Transform the current "link collection" home page into a structured matc
 - **Release 7.1** (Management Availability): 1 requirement — 1 ✅
 - **Release 7.2** (Kupittaa Cup Management): 3 requirements — 1 ✅, 2 📋 Specified (CUP1–CUP3)
 - **Release 7.3** (Refactoring Analysis): 1 requirement — 1 ✅ (RFA1). 5 outdated docs removed
-- **Release 7.4** (Refactoring Implementation): 8 requirements — 2 ✅ (RFR1, RFR3), 6 pending (RFR2, RFR4–RFR8)
+- **Release 7.4** (Refactoring Implementation): 8 requirements — 3 ✅ (RFR1–RFR3), 5 pending (RFR4–RFR8)
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6)
 - **Release 8.0** (Tablet Scoring UI): 9 requirements — 9 ✅ (TS1–TS9)
 - **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
