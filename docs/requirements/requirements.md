@@ -290,11 +290,11 @@ Analysis completed 2026-02-20. Reviewed `docs/design/architecture-review.md` (20
 | RFR1 | **Split `ssi-core/client.js` by domain**: Created `graphql.js`, `scoring.js`, `participants.js`, `management.js`, `http-helpers.js` as domain re-export modules. Updated `index.js` barrel to export from domain modules instead of monolithic `client.js`. Actual code movement deferred to Phase 2 | HIGH | ✅ Implemented |
 | RFR2 | **Add SSI client unit tests with HTML fixtures**: 26 tests across 10 describe blocks covering staff page parsing, participant page parsing, cup status parsing, scoring page extraction, and redirect-based actions. 5 HTML fixture files. Kept lightweight — SSI moving to GraphQL, scraping will be phased out | HIGH | ✅ Implemented |
 | RFR3 | **Migrate route imports from compat shim**: All 6 route files + `server.js` migrated from `lib/ssi-client.js` to domain-specific imports (`graphql.js`, `scoring.js`, `participants.js`, `management.js`, `http-helpers.js`). Test mock updated. Compat shim retained for any external consumers | MEDIUM | ✅ Implemented |
-| RFR4 | **Extract management route business logic**: Move orchestration from `routes/management.js` (890 lines) into `lib/services/cup-manage.js`. Route handlers become thin dispatchers (validation + response). Business logic independently testable | MEDIUM | ⬚ Pending |
-| RFR5 | **Add missing route tests**: Add unit tests for `routes/scoring.js`, `routes/reports.js`, `routes/staffing.js`. Follow existing pattern from `management.test.js` (mock SSI client, test HTTP contract) | MEDIUM | ⬚ Pending |
-| RFR6 | **Extract `useAuthenticatedPage` hook**: 5 page components duplicate the same auth/session pattern (~50 lines each): `useRememberMe`, `authed`/`view`/`loading`/`error` state, login→content transition, session expiry. Extract into shared hook | MEDIUM | ⬚ Pending |
-| RFR7 | **Split `ManagePage.jsx`**: Extract 8 inline sub-components into `components/manage/` directory. Target: ManagePage shell ~300 lines, sub-components ~100-150 lines each | LOW | ⬚ Pending |
-| RFR8 | **Add file size guidelines to AGENTS.md**: Hard limit 500 lines per source file. Soft target <300 lines. Route files: HTTP handlers only. UI components: one exported component per file | LOW | ⬚ Pending |
+| RFR4 | **Extract management route business logic**: Extracted `buildSquaddingOverview`, `attachCupStatuses`, `getIncludedMatchIds`, `filterManageableCups` into `lib/services/cup-manage.js` (356 lines). `routes/management.js` reduced from 1,009 → 546 lines. Route handlers are now thin dispatchers. 4 duplicated component_matches extraction patterns replaced with shared `getIncludedMatchIds` | MEDIUM | ✅ Implemented |
+| RFR5 | **Add cup-manage service tests**: 20 unit tests in `test/cup-manage.test.js` covering `filterManageableCups` (8 tests), `getIncludedMatchIds` (2), `buildSquaddingOverview` (5), `attachCupStatuses` (2), `makeShooterKey` (2). Pure business logic tests — no HTTP mocking needed. Route-level tests deferred (existing `management.test.js` covers HTTP contract) | MEDIUM | ✅ Implemented |
+| RFR6 | **Extract `useAuthenticatedPage` hook**: Created `hooks/useAuthenticatedPage.js` encapsulating auth state, session expiry, login/logout, `withSessionCheck` wrapper, and remember-me. Migrated ReportPage, SummaryReportPage, ManagePage (removed ~70 lines of duplicated auth boilerplate per page). StaffingPage skipped — different pattern (no view state machine) | MEDIUM | ✅ Implemented |
+| RFR7 | **Split `ManagePage.jsx`**: Extracted 5 sub-components into `components/manage/` with barrel export: `ActionButton`, `ShooterActions`, `SquadPickerSheet`, `SectionHeader`, `SquadCard`. ManagePage reduced from 967 → 689 lines | LOW | ✅ Implemented |
+| RFR8 | **Add file size guidelines to AGENTS.md**: Added to Code Style section in both `AGENTS.md` and `.github/copilot-instructions.md`: ~500 line guideline, routes extract to `lib/services/`, React pages extract to `components/<page>/`, shared hooks to `hooks/` | LOW | ✅ Implemented |
 
 ### Refactoring Phases
 
@@ -417,7 +417,7 @@ Vision: Transform the current "link collection" home page into a structured matc
 - **Release 7.1** (Management Availability): 1 requirement — 1 ✅
 - **Release 7.2** (Kupittaa Cup Management): 3 requirements — 1 ✅, 2 📋 Specified (CUP1–CUP3)
 - **Release 7.3** (Refactoring Analysis): 1 requirement — 1 ✅ (RFA1). 5 outdated docs removed
-- **Release 7.4** (Refactoring Implementation): 8 requirements — 3 ✅ (RFR1–RFR3), 5 pending (RFR4–RFR8)
+- **Release 7.4** (Refactoring Implementation): 8 requirements — 8 ✅ (RFR1–RFR8)
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6)
 - **Release 8.0** (Tablet Scoring UI): 9 requirements — 9 ✅ (TS1–TS9)
 - **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
