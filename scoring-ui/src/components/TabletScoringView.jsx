@@ -33,6 +33,14 @@ function getTotalHits(allSeriesScores) {
   return total
 }
 
+function getTotalMisses(allSeriesScores) {
+  let total = 0
+  for (let i = 0; i < SERIES_COUNT; i++) {
+    total += allSeriesScores[i].M || 0
+  }
+  return total
+}
+
 function getTotalPoints(allSeriesScores) {
   let total = 0
   for (let i = 0; i < SERIES_COUNT; i++) {
@@ -367,7 +375,9 @@ export default function TabletScoringView({
   }
 
   const currentShooterScores = selectedShooter ? allScores[selectedShooter.id] : null
-  const shotsFired = currentShooterScores ? getTotalHits(currentShooterScores) : 0
+  const totalShots = currentShooterScores ? getTotalHits(currentShooterScores) : 0
+  const totalMisses = currentShooterScores ? getTotalMisses(currentShooterScores) : 0
+  const scoredHits = Math.max(0, totalShots - totalMisses)
   const totalPoints = currentShooterScores ? getTotalPoints(currentShooterScores) : 0
   const xCount = currentShooterScores ? getXCount(currentShooterScores) : 0
 
@@ -435,7 +445,7 @@ export default function TabletScoringView({
         <div className="flex items-center gap-3 text-xs">
           <div>
             <span className="text-gray-500">{t.shotsFired}: </span>
-            <span className="font-bold text-blue-600">{shotsFired}</span>
+            <span className="font-bold text-blue-600">{scoredHits}</span>
             <span className="text-gray-400"> / {totalShotsInMatch}</span>
           </div>
           <div>
@@ -461,7 +471,9 @@ export default function TabletScoringView({
             {squad.shooters.map((shooter, shooterIdx) => {
               const isSelected = selectedShooter?.id === shooter.id
               const shooterScores = allScores[shooter.id]
-              const shooterHits = shooterScores ? getTotalHits(shooterScores) : 0
+              const shooterShots = shooterScores ? getTotalHits(shooterScores) : 0
+              const shooterMisses = shooterScores ? getTotalMisses(shooterScores) : 0
+              const shooterHits = Math.max(0, shooterShots - shooterMisses)
               const shooterPoints = shooterScores ? getTotalPoints(shooterScores) : 0
               
               return (
