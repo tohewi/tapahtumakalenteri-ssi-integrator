@@ -14,14 +14,24 @@ name: PR Preview Environment
 #   Find by running: curl --request GET --url 'https://api.render.com/v1/owners?limit=20' --header 'authorization: Bearer YOUR_API_KEY' | jq '.[0].owner.id'
 #   For this repo: tea-d62r4ucoud1c73d50qg0
 #
+# Optional GitHub Secrets copied to preview envs (recommended):
+# - SSI_ADMIN_EMAIL
+# - SSI_ADMIN_PASSWORD
+# - SSI_ADMIN_API_KEY
+# - RESEND_API_KEY
+# - EMAIL_FROM
+# - SSI_BASE_URL
+# - STAFFING_CRON_SECRET
+# - STAFFING_API_URL
+#
 # Preview services are created with the same configuration as production:
 # - Runtime: Node.js
 # - Plan: Starter
 # - Region: Frankfurt
-# - Build: cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install
+# - Build: cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm ci
 # - Start: cd scoring-proxy && node server.js
 #
-# Documentation: docs/PR-PREVIEW-DEPLOYMENTS.md
+# Documentation: docs/instructions/PR-PREVIEW-DEPLOYMENTS.md
 
 on:
   pull_request:
@@ -34,6 +44,17 @@ jobs:
     permissions:
       pull-requests: write
       contents: read
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      RENDER_OWNER_ID: ${{ secrets.RENDER_OWNER_ID }}
+      PREVIEW_SSI_ADMIN_EMAIL: ${{ secrets.SSI_ADMIN_EMAIL }}
+      PREVIEW_SSI_ADMIN_PASSWORD: ${{ secrets.SSI_ADMIN_PASSWORD }}
+      PREVIEW_SSI_ADMIN_API_KEY: ${{ secrets.SSI_ADMIN_API_KEY }}
+      PREVIEW_RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      PREVIEW_EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+      PREVIEW_SSI_BASE_URL: ${{ secrets.SSI_BASE_URL }}
+      PREVIEW_STAFFING_CRON_SECRET: ${{ secrets.STAFFING_CRON_SECRET }}
+      PREVIEW_STAFFING_API_URL: ${{ secrets.STAFFING_API_URL }}
 
     steps:
       - name: Checkout code
@@ -57,7 +78,7 @@ jobs:
 
           # Query Render API to check if service exists
           RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
             "https://api.render.com/v1/services?name=${SERVICE_NAME}")
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
@@ -85,7 +106,7 @@ jobs:
 
       - name: Delete service if build command is outdated
         id: delete-if-outdated
-        if: github.event.action != 'closed' && steps.check-service.outputs.exists == 'true' && (contains(steps.check-service.outputs.build_command, 'npm ci') || !contains(steps.check-service.outputs.build_command, '--include=dev'))
+        if: github.event.action != 'closed' && steps.check-service.outputs.exists == 'true' && (!contains(steps.check-service.outputs.build_command, 'npm ci') || !contains(steps.check-service.outputs.build_command, '--include=dev'))
         run: |
           SERVICE_ID="${{ steps.check-service.outputs.service_id }}"
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
@@ -93,7 +114,7 @@ jobs:
           echo "⚠️  Service has outdated build command, deleting and will recreate..."
           
           DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
             "https://api.render.com/v1/services/${SERVICE_ID}")
           
           DELETE_HTTP_CODE=$(echo "$DELETE_RESPONSE" | tail -n1)
@@ -112,52 +133,93 @@ jobs:
         run: |
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
           BRANCH_NAME="${{ github.head_ref }}"
+          APP_URL="https://${SERVICE_NAME}.onrender.com"
 
           # Generate a random session secret (base64-encoded, 256-bit)
           SESSION_SECRET=$(openssl rand -base64 32)
 
+          OPTIONAL_SECRETS=(
+            PREVIEW_SSI_ADMIN_EMAIL
+            PREVIEW_SSI_ADMIN_PASSWORD
+            PREVIEW_SSI_ADMIN_API_KEY
+            PREVIEW_RESEND_API_KEY
+            PREVIEW_EMAIL_FROM
+            PREVIEW_SSI_BASE_URL
+            PREVIEW_STAFFING_CRON_SECRET
+            PREVIEW_STAFFING_API_URL
+          )
+          MISSING_SECRETS=()
+          for secret_name in "${OPTIONAL_SECRETS[@]}"; do
+            if [ -z "${!secret_name}" ]; then
+              MISSING_SECRETS+=("${secret_name}")
+            fi
+          done
+          if [ "${#MISSING_SECRETS[@]}" -gt 0 ]; then
+            echo "::warning::Missing optional preview secrets (${MISSING_SECRETS[*]}). Features depending on these values may not work in preview."
+          fi
+
+          ENV_VARS=$(jq -cn \
+            --arg nodeEnv "production" \
+            --arg sessionSecret "${SESSION_SECRET}" \
+            --arg logLevel "info" \
+            --arg appUrl "${APP_URL}" \
+            --arg ssiAdminEmail "${PREVIEW_SSI_ADMIN_EMAIL}" \
+            --arg ssiAdminPassword "${PREVIEW_SSI_ADMIN_PASSWORD}" \
+            --arg ssiAdminApiKey "${PREVIEW_SSI_ADMIN_API_KEY}" \
+            --arg resendApiKey "${PREVIEW_RESEND_API_KEY}" \
+            --arg emailFrom "${PREVIEW_EMAIL_FROM}" \
+            --arg ssiBaseUrl "${PREVIEW_SSI_BASE_URL}" \
+            --arg staffingCronSecret "${PREVIEW_STAFFING_CRON_SECRET}" \
+            --arg staffingApiUrl "${PREVIEW_STAFFING_API_URL}" \
+            '[
+              {"key": "NODE_ENV", "value": $nodeEnv},
+              {"key": "SESSION_SECRET", "value": $sessionSecret},
+              {"key": "LOG_LEVEL", "value": $logLevel},
+              {"key": "APP_URL", "value": $appUrl}
+            ]
+            + (if $ssiAdminEmail != "" then [{"key": "SSI_ADMIN_EMAIL", "value": $ssiAdminEmail}] else [] end)
+            + (if $ssiAdminPassword != "" then [{"key": "SSI_ADMIN_PASSWORD", "value": $ssiAdminPassword}] else [] end)
+            + (if $ssiAdminApiKey != "" then [{"key": "SSI_ADMIN_API_KEY", "value": $ssiAdminApiKey}] else [] end)
+            + (if $resendApiKey != "" then [{"key": "RESEND_API_KEY", "value": $resendApiKey}] else [] end)
+            + (if $emailFrom != "" then [{"key": "EMAIL_FROM", "value": $emailFrom}] else [] end)
+            + (if $ssiBaseUrl != "" then [{"key": "SSI_BASE_URL", "value": $ssiBaseUrl}] else [] end)
+            + (if $staffingCronSecret != "" then [{"key": "STAFFING_CRON_SECRET", "value": $staffingCronSecret}] else [] end)
+            + (if $staffingApiUrl != "" then [{"key": "STAFFING_API_URL", "value": $staffingApiUrl}] else [] end)')
+
           # Create the service using Render API
           # Note: preview services use in-memory session store (no REDIS_URL).
           # This is acceptable for short-lived test environments.
-          PAYLOAD=$(cat <<EOF
-          {
-            "type": "web_service",
-            "name": "${SERVICE_NAME}",
-            "ownerId": "${{ secrets.RENDER_OWNER_ID }}",
-            "repo": "https://github.com/${{ github.repository }}",
-            "branch": "${BRANCH_NAME}",
-            "autoDeploy": "yes",
-            "serviceDetails": {
-              "env": "node",
-              "plan": "starter",
-              "region": "frankfurt",
-              "envSpecificDetails": {
-                "buildCommand": "cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm install",
-                "startCommand": "cd scoring-proxy && node server.js"
-              }
-            },
-            "envVars": [
-              {
-                "key": "NODE_ENV",
-                "value": "production"
+          PAYLOAD=$(jq -cn \
+            --arg serviceName "${SERVICE_NAME}" \
+            --arg ownerId "${RENDER_OWNER_ID}" \
+            --arg repoUrl "https://github.com/${{ github.repository }}" \
+            --arg branchName "${BRANCH_NAME}" \
+            --arg buildCommand "cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm ci" \
+            --arg startCommand "cd scoring-proxy && node server.js" \
+            --argjson envVars "${ENV_VARS}" \
+            '{
+              "type": "web_service",
+              "name": $serviceName,
+              "ownerId": $ownerId,
+              "repo": $repoUrl,
+              "branch": $branchName,
+              "autoDeploy": "yes",
+              "serviceDetails": {
+                "env": "node",
+                "plan": "starter",
+                "region": "frankfurt",
+                "envSpecificDetails": {
+                  "buildCommand": $buildCommand,
+                  "startCommand": $startCommand
+                }
               },
-              {
-                "key": "SESSION_SECRET",
-                "value": "${SESSION_SECRET}"
-              },
-              {
-                "key": "LOG_LEVEL",
-                "value": "debug"
-              }
-            ]
-          }
-          EOF
-          )
+              "envVars": $envVars
+            }')
 
           echo "Creating preview service: ${SERVICE_NAME}"
 
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD" \
             "https://api.render.com/v1/services")
@@ -191,7 +253,7 @@ jobs:
           echo "Triggering deploy for service: ${SERVICE_ID}"
 
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD" \
             "https://api.render.com/v1/services/${SERVICE_ID}/deploys")
@@ -207,7 +269,7 @@ jobs:
 
             # Get service URL
             SERVICE_INFO=$(curl -s \
-              -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
               "https://api.render.com/v1/services/${SERVICE_ID}")
 
             SERVICE_URL=$(echo "$SERVICE_INFO" | jq -r '.serviceDetails.url')
@@ -283,7 +345,7 @@ jobs:
 
           # Query Render API to find the service
           RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
             "https://api.render.com/v1/services?name=${SERVICE_NAME}")
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
@@ -298,7 +360,7 @@ jobs:
               echo "Deleting preview service: ${SERVICE_ID}"
 
               DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
-                -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+                -H "Authorization: Bearer ${RENDER_API_KEY}" \
                 "https://api.render.com/v1/services/${SERVICE_ID}")
 
               DELETE_HTTP_CODE=$(echo "$DELETE_RESPONSE" | tail -n1)
