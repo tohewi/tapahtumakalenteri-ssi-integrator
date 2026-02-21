@@ -153,8 +153,21 @@ export default function TabletScoringView({
   // Select first shooter by default
   useEffect(() => {
     if (!selectedShooter && squad.shooters.length > 0) {
-      // Clear all local scores when starting fresh from first shooter
-      log.debug('[tablet] Starting fresh: clearing all local scores and loading from SSI')
+      // Keep restored local scores (e.g. after re-login) and avoid clobbering them with SSI.
+      const shooterWithLocalScores = squad.shooters.find(shooter => {
+        const shooterScores = allScores[shooter.id]
+        return shooterScores && getTotalHits(shooterScores) > 0
+      })
+
+      if (shooterWithLocalScores) {
+        setSelectedShooter(shooterWithLocalScores)
+        setSaveError(null)
+        log.debug('[tablet] Using restored local scores, keeping local state for shooter:', shooterWithLocalScores.id)
+        return
+      }
+
+      // No local work in progress found — initialize from SSI.
+      log.debug('[tablet] No local scores found: loading initial scores from SSI')
       const freshScores = {}
       
       squad.shooters.forEach(shooter => {
@@ -184,7 +197,7 @@ export default function TabletScoringView({
       
       log.debug('[tablet] Loaded SSI scores for all shooters, starting with:', firstShooter.id)
     }
-  }, [squad.shooters, selectedShooter, onScoresUpdate])
+  }, [squad.shooters, selectedShooter, onScoresUpdate, allScores])
 
   // Handle shooter selection
   const handleShooterSelect = useCallback(async (shooter) => {
