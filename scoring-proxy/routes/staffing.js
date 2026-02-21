@@ -19,15 +19,17 @@ import {
 import { loadConfig, isAdminEmail, isServiceAccount } from '../lib/staffing/config-loader.js'
 import {
   ssiRegisterToTrainerSquad,
+  ssiDeleteMatchParticipant,
+  ssiSetParticipantSquad,
+  ssiFindParticipantInEvent,
+} from '../lib/ssi-core/participants.js'
+import {
   ssiGetMatchGroupId,
   ssiAddToMatchManagement,
   ssiRemoveFromMatchManagement,
   ssiGetMatchOfficials,
-  ssiDeleteMatchParticipant,
-  ssiSetParticipantSquad,
-  ssiFetchPage,
-  ssiFindParticipantInEvent,
-} from '../lib/ssi-client.js'
+} from '../lib/ssi-core/management.js'
+import { ssiFetchPage } from '../lib/ssi-core/http-helpers.js'
 
 // Map staffing roles to SSI management group role + event official codes
 // role: 1=admin, 2=staff, 7=assistant

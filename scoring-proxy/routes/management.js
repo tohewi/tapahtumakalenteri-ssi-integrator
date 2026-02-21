@@ -1,5 +1,16 @@
 import express from 'express'
-import { ssiSearchAndAddParticipant, ssiFindCompetitorInMatch, ssiSetParticipantSquad, ssiFindAndApproveCupParticipant, ssiFindAndDeleteCupParticipant, ssiDeleteMatchParticipant, ssiSetDidNotShow, ssiUndoDidNotShow, ssiTogglePaid, ssiGetCupParticipantStatuses } from '../lib/ssi-client.js'
+import {
+  ssiSearchAndAddParticipant,
+  ssiFindCompetitorInMatch,
+  ssiSetParticipantSquad,
+  ssiFindAndApproveCupParticipant,
+  ssiFindAndDeleteCupParticipant,
+  ssiDeleteMatchParticipant,
+  ssiSetDidNotShow,
+  ssiUndoDidNotShow,
+  ssiTogglePaid,
+  ssiGetCupParticipantStatuses,
+} from '../lib/ssi-core/participants.js'
 import { log } from '../lib/logger.js'
 
 const router = express.Router()

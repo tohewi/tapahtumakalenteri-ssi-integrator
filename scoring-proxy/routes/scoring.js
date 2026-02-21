@@ -1,5 +1,5 @@
 import express from 'express'
-import { ssiGetScoringPage, ssiSubmitScore } from '../lib/ssi-client.js'
+import { ssiGetScoringPage, ssiSubmitScore } from '../lib/ssi-core/scoring.js'
 import { log } from '../lib/logger.js'
 
 const router = express.Router()

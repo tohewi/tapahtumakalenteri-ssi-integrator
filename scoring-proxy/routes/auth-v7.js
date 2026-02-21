@@ -6,7 +6,7 @@
 // ============================================================
 
 import express from 'express'
-import { ssiGraphQL, ssiLogin } from '../lib/ssi-client.js'
+import { ssiGraphQL, ssiLogin } from '../lib/ssi-core/graphql.js'
 import { log } from '../lib/logger.js'
 import { isAdminEmail } from '../lib/staffing/config-loader.js'
 import {
