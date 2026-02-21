@@ -233,6 +233,13 @@ describe('parseDateLocal', () => {
 describe('isToday', () => {
   let originalDate
 
+  const formatLocalDate = (date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
   beforeEach(() => {
     // Save original Date
     originalDate = global.Date
@@ -250,7 +257,7 @@ describe('isToday', () => {
   })
 
   it('returns true for today\'s date in ISO format', () => {
-    const today = new Date().toISOString().split('T')[0]
+    const today = formatLocalDate(new Date())
     expect(isToday(today)).toBe(true)
   })
 
@@ -262,14 +269,14 @@ describe('isToday', () => {
   it('returns false for yesterday', () => {
     const yesterday = new Date()
     yesterday.setDate(yesterday.getDate() - 1)
-    const yesterdayISO = yesterday.toISOString().split('T')[0]
+    const yesterdayISO = formatLocalDate(yesterday)
     expect(isToday(yesterdayISO)).toBe(false)
   })
 
   it('returns false for tomorrow', () => {
     const tomorrow = new Date()
     tomorrow.setDate(tomorrow.getDate() + 1)
-    const tomorrowISO = tomorrow.toISOString().split('T')[0]
+    const tomorrowISO = formatLocalDate(tomorrow)
     expect(isToday(tomorrowISO)).toBe(false)
   })
 
