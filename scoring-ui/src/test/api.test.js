@@ -60,6 +60,20 @@ describe('parseStringScore', () => {
     expect(result.M).toBe(3)
   })
 
+  it('infers misses for compact X..1 strings when there are hits', () => {
+    const result = parseStringScore('0,0,1,0,0,0,1,0,0,0,0')
+    expect(result['9']).toBe(1)
+    expect(result['5']).toBe(1)
+    expect(result.M).toBe(3)
+  })
+
+  it('handles maxHitsPerSeries provided as string', () => {
+    const result = parseStringScore('0,0,1,0,0,0,1,0,0,0,0,5', {
+      maxHitsPerSeries: '5',
+    })
+    expect(result.M).toBe(3)
+  })
+
   it('does not treat compact all-zero X..1,max_hits as explicit misses unless inferred', () => {
     const rawResult = parseStringScore('0,0,0,0,0,0,0,0,0,0,0,5')
     expect(rawResult.M).toBe(0)
@@ -469,6 +483,18 @@ describe('buildScoresFromSSI', () => {
     const shooter = {
       ssiScores: {
         s1: '0,0,1,0,0,0,1,0,0,0,0,5',
+      },
+    }
+    const scores = buildScoresFromSSI(shooter, 6)
+    expect(scores[0]['9']).toBe(1)
+    expect(scores[0]['5']).toBe(1)
+    expect(scores[0].M).toBe(3)
+  })
+
+  it('infers misses for compact non-empty payloads without max_hits tail through buildScoresFromSSI', () => {
+    const shooter = {
+      ssiScores: {
+        s1: '0,0,1,0,0,0,1,0,0,0,0',
       },
     }
     const scores = buildScoresFromSSI(shooter, 6)
