@@ -248,9 +248,14 @@ export function parseStringScore(ssiString, options = {}) {
     scores.M = 0
   }
 
+  // If SSI returns compact X..1,max_hits and there are already hits,
+  // the missing slots are misses in saved scorecards (our UI only saves full strings or empty).
+  const shouldInferForCompactString = hasCompactMaxHitsTail
+    && (inferMissingMisses || nonMissHits > 0)
+
   // Some SSI responses omit explicit "M" and only return X..1 counts.
   // For completed matches we can safely infer misses from max hits per string.
-  if (inferMissingMisses && (parts.length < SCORE_ZONES.length || hasCompactMaxHitsTail)) {
+  if ((inferMissingMisses && parts.length < SCORE_ZONES.length) || shouldInferForCompactString) {
     scores.M = Math.max(0, maxHitsPerSeries - nonMissHits)
   }
 
