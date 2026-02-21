@@ -1,5 +1,5 @@
 import express from 'express'
-import { ssiGetEventStaff } from '../lib/ssi-client.js'
+import { ssiGetEventStaff } from '../lib/ssi-core/management.js'
 import { log } from '../lib/logger.js'
 
 export function createReportsRouter({ requireAuth, graphqlWithRefresh }) {

@@ -91,6 +91,11 @@ cd scoring-proxy && node server.js
 - Always add comments and maintain documentation up to date
 - Follow existing patterns in the codebase
 - If you want to refactor, please prepare a plan and reasoning and ask for approval before starting.
+- **File size guidelines:** Keep files under ~500 lines. When a file exceeds this:
+  - **Routes:** Extract business logic into `lib/services/` (pure functions, no Express req/res)
+  - **React pages:** Extract sub-components into a `components/<page>/` directory with barrel export
+  - **Shared hooks:** Extract duplicated hook patterns into `hooks/` (e.g. `useAuthenticatedPage`)
+  - Route files should remain thin dispatchers: validate → call service → respond
 
 ## Deployment
 
