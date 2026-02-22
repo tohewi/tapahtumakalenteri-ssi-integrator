@@ -134,6 +134,13 @@ export const fi = {
   didNotShow: 'DNS',
   moveSquad: '→ S?',
 
+  // Voice scoring
+  voiceScoring: 'Äänisyöttö',
+  voiceNotSupported: 'Puheentunnistus ei tue tätä selainta',
+  voiceListening: 'Kuuntelee...',
+  voiceStart: 'Aloita äänisyöttö',
+  voiceStop: 'Lopeta äänisyöttö',
+
   // Tablet scoring
   tabletScoringTitle: 'Kupittaa Cup tulosten syöttö (Tabletti)',
   tabletScoringDescription: 'Syötä kilpailutulokset tabletilla tai tietokoneella',
@@ -294,6 +301,13 @@ export const en = {
   unpaid: 'Unpaid',
   didNotShow: 'DNS',
   moveSquad: '→ S?',
+
+  // Voice scoring
+  voiceScoring: 'Voice Scoring',
+  voiceNotSupported: 'Speech recognition not supported in this browser',
+  voiceListening: 'Listening...',
+  voiceStart: 'Start voice scoring',
+  voiceStop: 'Stop voice scoring',
 
   // Tablet scoring
   tabletScoringTitle: 'Kupittaa Cup Scoring (Tablet)',

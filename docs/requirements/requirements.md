@@ -350,6 +350,18 @@ Analysis completed 2026-02-20. Reviewed `docs/design/architecture-review.md` (20
 
 **Implementation**: Check `match.status === 'cp'` and disable all score modification operations while preserving read-only browsing capability.
 
+## Release 7.6 — Voice Recognition Scoring
+
+Voice-driven score input for the mobile scoring app. The referee can dictate scores verbally while reading from the target; the app recognises spoken zone names in Finnish and English, speaks back the recognised zone, and announces series completion.
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| VS1 | **Voice command recognition**: Recognise spoken Finnish and English score zone names (X/napa/napakymppi, 10/kymmenen, 9/yhdeksän, 8/kahdeksan/kasi, 7/seitsemän/seiska, 6/kuusi, 5/viisi/vitonen, 4/neljä, 3/kolme/kolonen, 2/kaksi/kakonen/kakkonen, 1/yksi/ykönen/ykkönen, M/ohi/ohilaukaus) and increment the matching score zone | ✅ Implemented |
+| VS2 | **TTS confirmation**: Speak back the recognised zone name via SpeechSynthesis after each voice command, in the UI language (Finnish/English) | ✅ Implemented |
+| VS3 | **Series completion announcement**: Announce "N laukausta" (fi) / "N shots" (en) via TTS when the series becomes full | ✅ Implemented |
+| VS4 | **Microphone toggle button**: Add a microphone toggle button to the mobile scoring view that starts/stops continuous listening. Active state shows a pulsing indicator with the last recognised zone | ✅ Implemented |
+| VS5 | **Graceful degradation**: Show an informational message when the browser does not support the Web Speech API | ✅ Implemented |
+
 ## Release 7.4.1 — Authentication UX Hardening
 
 Patch release focused on authentication UX consistency across protected feature domains and documentation consolidation.
@@ -434,6 +446,7 @@ Vision: Transform the current "link collection" home page into a structured matc
 - **Release 7.3** (Refactoring Analysis): 1 requirement — 1 ✅ (RFA1). 5 outdated docs removed
 - **Release 7.4** (Refactoring Implementation): 8 requirements — 8 ✅ (RFR1–RFR8)
 - **Release 7.4.1** (Authentication UX Hardening): 5 requirements — 5 ✅ (AUTH-UX1–AUTH-UX5)
+- **Release 7.6** (Voice Recognition Scoring): 5 requirements — 5 ✅ (VS1–VS5)
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
 - **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
