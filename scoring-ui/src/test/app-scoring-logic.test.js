@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { applyScoreDeltaForShooter, selectInitialScoreCard } from '../App'
+import { applyScoreDeltaForShooter, selectInitialScoreCard, getDoubleSeriesPairShotSummary } from '../App'
 
 const SCORE_ZONES = ['X', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'M']
 
@@ -97,6 +97,42 @@ describe('applyScoreDeltaForShooter', () => {
     })
 
     expect(shooterScores[2].M).toBe(0)
+  })
+})
+
+describe('getDoubleSeriesPairShotSummary', () => {
+  it('marks pair incomplete when only first series has 5 shots in 2x mode', () => {
+    const scores = createShooterScores()
+    scores[0].X = 5
+
+    const summary = getDoubleSeriesPairShotSummary(scores, 0, 5)
+    expect(summary.totalShots).toBe(5)
+    expect(summary.requiredShots).toBe(10)
+    expect(summary.isStarted).toBe(true)
+    expect(summary.isComplete).toBe(false)
+  })
+
+  it('marks pair complete when both series have 5 shots', () => {
+    const scores = createShooterScores()
+    scores[0].X = 5
+    scores[1].M = 5
+
+    const summary = getDoubleSeriesPairShotSummary(scores, 0, 5)
+    expect(summary.totalShots).toBe(10)
+    expect(summary.firstShots).toBe(5)
+    expect(summary.secondShots).toBe(5)
+    expect(summary.isComplete).toBe(true)
+  })
+
+  it('normalizes odd series index to the same pair start', () => {
+    const scores = createShooterScores()
+    scores[2].X = 5
+    scores[3].X = 5
+
+    const summary = getDoubleSeriesPairShotSummary(scores, 3, 5)
+    expect(summary.firstSeriesIndex).toBe(2)
+    expect(summary.secondSeriesIndex).toBe(3)
+    expect(summary.isComplete).toBe(true)
   })
 })
 

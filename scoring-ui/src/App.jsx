@@ -69,6 +69,27 @@ export function selectInitialScoreCard(restoredScoreCard, ssiScoreCard, inferMis
   return ssiScoreCard
 }
 
+export function getDoubleSeriesPairShotSummary(scoreCard, seriesIdx, maxHitsPerSeries = MAX_HITS_PER_SERIES) {
+  const pairStart = Math.max(0, Math.min(seriesIdx - (seriesIdx % 2), SERIES_COUNT - 2))
+  const pairEnd = pairStart + 1
+
+  const firstShots = hitsInSeries(scoreCard?.[pairStart] || createEmptySeriesScore())
+  const secondShots = hitsInSeries(scoreCard?.[pairEnd] || createEmptySeriesScore())
+  const requiredShots = maxHitsPerSeries * 2
+  const totalShots = firstShots + secondShots
+
+  return {
+    firstSeriesIndex: pairStart,
+    secondSeriesIndex: pairEnd,
+    firstShots,
+    secondShots,
+    totalShots,
+    requiredShots,
+    isStarted: totalShots > 0,
+    isComplete: firstShots === maxHitsPerSeries && secondShots === maxHitsPerSeries,
+  }
+}
+
 export function applyScoreDeltaForShooter(shooterScores, {
   seriesIdx,
   zone,
@@ -126,6 +147,7 @@ const LS_KEYS = {
   CUP: 'ssi_last_cup',
   SCORES: 'ssi_scores',
   NAV: 'ssi_nav_state',
+  DOUBLE_SERIES_BY_MATCH: 'ssi_double_series_by_match',
 }
 
 function lsGet(key) {
@@ -136,6 +158,19 @@ function lsSet(key, val) {
 }
 function lsRemove(key) {
   try { localStorage.removeItem(key) } catch { /* ignore */ }
+}
+
+function getMatchDoubleSeriesEnabled(matchId) {
+  if (!matchId) return false
+  const byMatch = lsGet(LS_KEYS.DOUBLE_SERIES_BY_MATCH) || {}
+  return Boolean(byMatch[matchId])
+}
+
+function setMatchDoubleSeriesEnabled(matchId, enabled) {
+  if (!matchId) return
+  const byMatch = lsGet(LS_KEYS.DOUBLE_SERIES_BY_MATCH) || {}
+  byMatch[matchId] = Boolean(enabled)
+  lsSet(LS_KEYS.DOUBLE_SERIES_BY_MATCH, byMatch)
 }
 
 function App() {
@@ -237,6 +272,7 @@ function App() {
         const fullMatch = await api.getMatch(nav.matchId)
         const transformed = api.transformMatch(fullMatch)
         setSelectedMatch(transformed)
+        setDoubleSeries(getMatchDoubleSeriesEnabled(transformed.id))
 
         if (nav.squadId && ['series', 'scoring'].includes(nav.view)) {
           const squad = transformed.squads.find(s => s.id === nav.squadId)
@@ -287,6 +323,7 @@ function App() {
     setMatches([])
     setSelectedMatch(null)
     setSelectedSquad(null)
+    setDoubleSeries(false)
     setAllScores({})
     setError(null)
   }
@@ -323,6 +360,7 @@ function App() {
         const fullMatch = await api.getMatch(match.id)
         const transformed = api.transformMatch(fullMatch)
         setSelectedMatch(transformed)
+        setDoubleSeries(getMatchDoubleSeriesEnabled(transformed.id))
         setView('squad')
       })
     } catch (err) {
@@ -373,6 +411,16 @@ function App() {
   const handleSelectShooter = (shooter) => {
     setSelectedShooterId(shooter.id)
     setView('scoring')
+  }
+
+  const handleDoubleSeriesToggle = (enabled) => {
+    setDoubleSeries(enabled)
+    setMatchDoubleSeriesEnabled(selectedMatch?.id, enabled)
+
+    // Snap to valid pair start when enabling 2x mode from an odd series index.
+    if (enabled && activeSeries % 2 !== 0) {
+      setActiveSeries(activeSeries - 1)
+    }
   }
 
   // --- Score update ---
@@ -426,6 +474,24 @@ function App() {
 
   const handleSaveAndNext = async () => {
     const shooterScores = allScores[selectedShooterId]
+
+    if (doubleSeries) {
+      const pairSummary = getDoubleSeriesPairShotSummary(shooterScores, activeSeries, MAX_HITS_PER_SERIES)
+      if (pairSummary.isStarted && !pairSummary.isComplete) {
+        const pairError = fi.doubleSeriesPairIncompleteError(
+          pairSummary.firstSeriesIndex + 1,
+          pairSummary.secondSeriesIndex + 1,
+          pairSummary.totalShots,
+          pairSummary.requiredShots,
+          pairSummary.firstShots,
+          pairSummary.secondShots
+        )
+        setError(pairError)
+        window.alert(pairError)
+        return
+      }
+    }
+
     const validation = api.validateSeriesShotCounts(shooterScores, {
       seriesCount: SERIES_COUNT,
       shotsPerSeries: MAX_HITS_PER_SERIES,
@@ -640,13 +706,7 @@ function App() {
               <input
                 type="checkbox"
                 checked={doubleSeries}
-                onChange={(e) => {
-                  setDoubleSeries(e.target.checked)
-                  // Snap to valid pair start
-                  if (e.target.checked && activeSeries % 2 !== 0) {
-                    setActiveSeries(activeSeries - 1)
-                  }
-                }}
+                onChange={(e) => handleDoubleSeriesToggle(e.target.checked)}
                 className="w-5 h-5 rounded accent-blue-600"
               />
               <span className="text-[10px] text-gray-500 mt-0.5">2x</span>

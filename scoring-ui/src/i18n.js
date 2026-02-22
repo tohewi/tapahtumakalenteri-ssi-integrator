@@ -85,6 +85,8 @@ export const fi = {
   remaining: 'jäljellä',
   saveAndNext: 'Tallenna → Seuraava ampuja',
   tooManyShotsInButton: 'Liikaa laukauksia',
+  doubleSeriesPairIncompleteError: (firstSeries, secondSeries, shots, requiredShots, firstShots, secondShots) =>
+    `Tallennus estetty 2x-tilassa: sarjaparin ${firstSeries}+${secondSeries} pitää olla ${requiredShots}/${requiredShots} laukausta (5+5). Nyt ${shots}/${requiredShots} (${firstShots}+${secondShots}).`,
   incompleteSeriesSaveErrorHeader: (shotsPerSeries) => `Tallennus estetty: jokaisessa sarjassa pitää olla ${shotsPerSeries} laukausta tai sarjan pitää olla tyhjä.`,
   incompleteSeriesSaveErrorLine: (seriesNumber, shots, shotsPerSeries) => `Sarja ${seriesNumber}: ${shots}/${shotsPerSeries} laukausta`,
   
@@ -244,6 +246,8 @@ export const en = {
   remaining: 'remaining',
   saveAndNext: 'Save → Next shooter',
   tooManyShotsInButton: 'Too many shots',
+  doubleSeriesPairIncompleteError: (firstSeries, secondSeries, shots, requiredShots, firstShots, secondShots) =>
+    `Save blocked in 2x mode: pair ${firstSeries}+${secondSeries} must be ${requiredShots}/${requiredShots} shots (5+5). Current ${shots}/${requiredShots} (${firstShots}+${secondShots}).`,
   incompleteSeriesSaveErrorHeader: (shotsPerSeries) => `Save blocked: each string must have exactly ${shotsPerSeries} shots or be empty.`,
   incompleteSeriesSaveErrorLine: (seriesNumber, shots, shotsPerSeries) => `String ${seriesNumber}: ${shots}/${shotsPerSeries} shots`,
   
