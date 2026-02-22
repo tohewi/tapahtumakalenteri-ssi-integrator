@@ -248,12 +248,21 @@ useEffect(() => {
 - Now user MUST click Login button to create session
 - This ensures session timeout actually works
 
-### Mount-Time Session Bootstrap Pattern (RELOAD UX)
+### Mount-Time Session Bootstrap + Auth Gate (RELOAD UX, DEFAULT)
 
-To avoid dropping users to login on browser reload when the session cookie is still valid,
-feature entry components should run a mount-time auth bootstrap:
+This is now the **default behavior for all protected feature domains**.
+
+Known architecture names for this pattern:
+
+- **Auth Bootstrap** (SPA startup auth check)
+- **Session Rehydration** / **Silent Session Restore**
+- **Auth Gate** (temporary boot state before rendering login or app content)
+
+Goal: on browser reload, avoid flashing login when a valid session already exists.
 
 ```javascript
+const [view, setView] = useState('restoring')
+
 useEffect(() => {
   let isActive = true
 
@@ -262,26 +271,39 @@ useEffect(() => {
       const status = await api.getAuthStatus()
       if (!isActive) return
 
-      const canRestore = status?.authenticated && (!status.scope || status.scope === 'scoring')
+      const canRestore = status?.authenticated && (!status.scope || status.scope === featureScope)
       if (canRestore) {
         await restoreNavState()
+        return
       }
+
+      setView('login')
     } catch {
       // keep explicit login as fallback
+      if (isActive) setView('login')
     }
   }
 
   bootstrapFromActiveSession()
   return () => { isActive = false }
-}, [restoreNavState])
+}, [restoreNavState, featureScope])
 ```
 
-Important constraints:
+Required constraints:
 
 - This **does not call** `/api/auth/login` and therefore is **not auto-login**.
 - It only reads existing session state from `/api/auth/status` and restores local UI state.
-- Scope must match the feature (`scoring` for `App.jsx` and `TabletApp.jsx`).
-- If status check fails or scope does not match, stay on login view.
+- Scope must match the active domain.
+- While bootstrap is in progress, render a neutral **restoring/loading** screen (not login).
+- If status check fails or scope does not match, transition to login.
+
+Scope mapping by protected domain:
+
+- `scoring` -> Scoring mobile/tablet (`App.jsx`, `TabletApp.jsx`)
+- `manage` -> Management (`ManagePage.jsx`)
+- `reporting` -> Report and Summary (`ReportPage.jsx`, `SummaryReportPage.jsx`)
+
+Default rule: every new protected domain/page should implement this same auth-gate sequence.
 
 ### State Restoration Pattern (UX ENHANCEMENT)
 
@@ -345,7 +367,11 @@ When session expires, the login screen shows a yellow warning banner:
 
 ## Protected Features
 
-The following features require authentication and are subject to session timeout and scope validation:
+The following features require authentication and are subject to session timeout and scope validation.
+
+**Architecture default:** each protected feature must implement the mount-time **Auth Bootstrap + Auth Gate** flow (`restoring` -> `auth/status` -> `restore` or `login`).
+
+The current protected feature domains are:
 
 1. **Scoring** (`#/scoring`) - App.jsx
    - Scope: `'scoring'`
@@ -452,18 +478,21 @@ See `docs/session-lifecycle.md` for detailed state charts and analysis.
 
 ### Normal Flow (Happy Path)
 
-1. **User navigates to feature** (e.g., #/scoring)
-2. **Login screen displayed** - Credentials pre-filled if "remember me" was used
-3. **User clicks "Login" button** - Explicit action required
-4. **Backend creates session** with appropriate scope ('scoring', 'manage', or 'reporting')
-5. **Session cookie set** - HttpOnly, secure in production
-6. **Navigation state saved** - Continuously as user works
-7. **User works in feature** - Each API call renews session (updates lastUsed)
-8. **Session expires after 1 min inactivity** - No API calls for 60+ seconds
-9. **Next API call returns 401** - Session expired
-10. **Frontend shows message** - "Session expired. Please login again."
-11. **User clicks "Login"** - Re-authenticates with same or different credentials
-12. **State restored** - User returns to exact page with preserved data
+1. **User navigates to feature** (e.g., `#/scoring`, `#/manage`, `#/report`)
+2. **Auth gate (`restoring`) renders first** - Login is not rendered yet
+3. **Frontend calls `/api/auth/status`**
+4. **If authenticated + scope matches** -> previous UI/navigation state is restored
+5. **If not authenticated or scope mismatch** -> login is shown
+6. **User clicks "Login" button** - Explicit action required
+7. **Backend creates session** with appropriate scope (`scoring`, `manage`, or `reporting`)
+8. **Session cookie set** - HttpOnly, secure in production
+9. **Navigation state saved** - Continuously as user works
+10. **User works in feature** - Each API call renews session (updates `lastUsed`)
+11. **Session expires after inactivity** - No API calls within TTL
+12. **Next API call returns 401** - Session expired
+13. **Frontend shows message** - "Session expired. Please login again."
+14. **User clicks "Login"** - Re-authenticates with same or different credentials
+15. **State restored** - User returns to exact page with preserved data
 
 ### Cross-Feature Access (Scope Validation)
 
