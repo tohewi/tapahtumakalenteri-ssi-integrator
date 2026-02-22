@@ -29,12 +29,12 @@ export default function ScoreZoneButton({ zone, count, onIncrement, onDecrement,
   const c = colors[variant]
 
   return (
-    <div className={`${c.bg} border ${c.border} rounded-xl p-2 flex flex-col items-center`}>
+    <div className={`${c.bg} border ${c.border} rounded-xl p-2.5 flex flex-col`}>
       {/* Zone label */}
-      <span className={`text-xs font-bold ${c.label} mb-1`}>{zone}</span>
+      <span className={`w-full text-left text-base font-bold leading-none ${c.label}`}>{zone}</span>
 
       {/* Count display */}
-      <span className={`text-2xl font-bold ${c.count} mb-2 min-w-[2ch] text-center`}>
+      <span className={`text-2xl font-bold ${c.count} mt-1 mb-2 min-w-[2ch] text-center`}>
         {count}
       </span>
 

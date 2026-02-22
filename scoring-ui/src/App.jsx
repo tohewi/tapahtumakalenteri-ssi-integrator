@@ -42,8 +42,64 @@ function pointsInSeries(seriesScores) {
   return SCORE_ZONES.reduce((sum, z) => sum + seriesScores[z] * ZONE_POINTS[z], 0)
 }
 
+function missesInSeries(seriesScores) {
+  return seriesScores.M || 0
+}
+
+function scoredHitsInSeries(seriesScores) {
+  return Math.max(0, hitsInSeries(seriesScores) - missesInSeries(seriesScores))
+}
+
 function isSeriesScored(seriesScores) {
   return hitsInSeries(seriesScores) > 0
+}
+
+export function applyScoreDeltaForShooter(shooterScores, {
+  seriesIdx,
+  zone,
+  delta,
+  doubleSeries,
+  maxHitsPerSeries = MAX_HITS_PER_SERIES,
+}) {
+  const next = { ...shooterScores }
+
+  if (!doubleSeries) {
+    if (!next[seriesIdx]) next[seriesIdx] = createEmptySeriesScore()
+    next[seriesIdx] = { ...next[seriesIdx] }
+    next[seriesIdx][zone] = Math.max(0, (next[seriesIdx][zone] || 0) + delta)
+    return next
+  }
+
+  const s1Idx = seriesIdx
+  const s2Idx = seriesIdx + 1
+
+  if (!next[s1Idx]) next[s1Idx] = createEmptySeriesScore()
+  if (!next[s2Idx]) next[s2Idx] = createEmptySeriesScore()
+
+  next[s1Idx] = { ...next[s1Idx] }
+  next[s2Idx] = { ...next[s2Idx] }
+
+  const s1Shots = hitsInSeries(next[s1Idx])
+  const s2Shots = hitsInSeries(next[s2Idx])
+
+  if (delta > 0) {
+    if (s1Shots < maxHitsPerSeries) {
+      next[s1Idx][zone] = (next[s1Idx][zone] || 0) + 1
+    } else if (s2Shots < maxHitsPerSeries) {
+      next[s2Idx][zone] = (next[s2Idx][zone] || 0) + 1
+    }
+    return next
+  }
+
+  if (delta < 0) {
+    if ((next[s2Idx][zone] || 0) > 0) {
+      next[s2Idx][zone] -= 1
+    } else if ((next[s1Idx][zone] || 0) > 0) {
+      next[s1Idx][zone] -= 1
+    }
+  }
+
+  return next
 }
 
 // ============================================================
@@ -310,39 +366,13 @@ function App() {
   const updateScore = useCallback((seriesIdx, zone, delta) => {
     setAllScores(prev => {
       const next = { ...prev }
-      next[selectedShooterId] = { ...next[selectedShooterId] }
-
-      if (doubleSeries) {
-        // In double mode, scores fill first series then overflow to second
-        const s1Idx = seriesIdx // activeSeries (the even one)
-        const s2Idx = seriesIdx + 1
-        next[selectedShooterId][s1Idx] = { ...next[selectedShooterId][s1Idx] }
-        next[selectedShooterId][s2Idx] = { ...next[selectedShooterId][s2Idx] }
-
-        const s1Val = next[selectedShooterId][s1Idx][zone]
-        const s2Val = next[selectedShooterId][s2Idx][zone]
-        const combined = s1Val + s2Val
-
-        if (delta > 0) {
-          // Increment: fill s1 first, then s2
-          if (s1Val < MAX_HITS_PER_SERIES) {
-            next[selectedShooterId][s1Idx][zone] = s1Val + 1
-          } else {
-            next[selectedShooterId][s2Idx][zone] = s2Val + 1
-          }
-        } else {
-          // Decrement: remove from s2 first, then s1
-          if (s2Val > 0) {
-            next[selectedShooterId][s2Idx][zone] = s2Val - 1
-          } else if (s1Val > 0) {
-            next[selectedShooterId][s1Idx][zone] = s1Val - 1
-          }
-        }
-      } else {
-        next[selectedShooterId][seriesIdx] = { ...next[selectedShooterId][seriesIdx] }
-        const newVal = Math.max(0, next[selectedShooterId][seriesIdx][zone] + delta)
-        next[selectedShooterId][seriesIdx][zone] = newVal
-      }
+      next[selectedShooterId] = applyScoreDeltaForShooter(next[selectedShooterId], {
+        seriesIdx,
+        zone,
+        delta,
+        doubleSeries,
+        maxHitsPerSeries: MAX_HITS_PER_SERIES,
+      })
 
       return next
     })
@@ -484,6 +514,9 @@ function App() {
   // ============================================================
   if (view === 'series') {
     const shooters = selectedSquad.shooters
+    const activeSeriesLabel = doubleSeries
+      ? `${activeSeries + 1}+${activeSeries + 2}`
+      : `${activeSeries + 1}`
 
     const scoredCountForGroup = () =>
       shooters.filter(s => isGroupScored(s.id)).length
@@ -607,7 +640,7 @@ function App() {
         {/* Shooter list */}
         <div className="p-3">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">
-            {fi.series} {activeSeries + 1} — {fi.pickShooter}
+            {fi.series} {activeSeriesLabel} — {fi.pickShooter}
           </h2>
           <ShooterPicker
             shooters={shootersWithStatus}
@@ -631,9 +664,10 @@ function App() {
         seriesScores[z] + (allScores[selectedShooterId][pairedSeries]?.[z] || 0)
       ]))
     : seriesScores
-  const hits = SCORE_ZONES.reduce((sum, z) => sum + combinedScores[z], 0)
+  const totalShots = SCORE_ZONES.reduce((sum, z) => sum + combinedScores[z], 0)
+  const scoredHits = scoredHitsInSeries(combinedScores)
   const pts = SCORE_ZONES.reduce((sum, z) => sum + combinedScores[z] * ZONE_POINTS[z], 0)
-  const isOver = hits > effectiveMaxHits
+  const isOver = totalShots > effectiveMaxHits
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -656,8 +690,8 @@ function App() {
             <div className="text-xs text-blue-300">
               {doubleSeries ? `${fi.series} ${activeSeries + 1}+${activeSeries + 2}` : `${fi.series} ${activeSeries + 1}`}
             </div>
-            <div className="text-3xl font-bold">{pts}</div>
-            <div className="text-blue-200 text-xs">{hits}/{effectiveMaxHits} {fi.hits}</div>
+            <div className="text-3xl font-bold leading-tight">{pts}<span className="ml-1 text-sm font-semibold align-middle">{fi.pts}</span></div>
+            <div className="text-blue-200 text-xs">{scoredHits}/{effectiveMaxHits} {fi.hits}</div>
           </div>
         </div>
       </div>
@@ -667,11 +701,8 @@ function App() {
         scores={combinedScores}
         scoreZones={SCORE_ZONES}
         maxHits={effectiveMaxHits}
-        totalHits={hits}
-        totalPoints={pts}
+        totalShots={totalShots}
         onUpdate={updateScore}
-        onNext={null}
-        isLast={true}
       />
 
       {/* Error banner */}
@@ -696,7 +727,7 @@ function App() {
             disabled={isOver || saving}
             className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-semibold text-lg active:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500"
           >
-            {saving ? fi.saving : isOver ? `${fi.tooManyShotsInButton} (${hits}/${effectiveMaxHits})` : fi.saveAndNext}
+            {saving ? fi.saving : isOver ? `${fi.tooManyShotsInButton} (${totalShots}/${effectiveMaxHits})` : fi.saveAndNext}
           </button>
         </div>
       </div>
