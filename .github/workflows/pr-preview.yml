@@ -89,11 +89,14 @@ jobs:
             SERVICE_COUNT=$(echo "$BODY" | jq '. | length')
             if [ "$SERVICE_COUNT" -gt 0 ]; then
               SERVICE_ID=$(echo "$BODY" | jq -r '.[0].service.id')
+              SERVICE_URL=$(echo "$BODY" | jq -r '.[0].service.serviceDetails.url')
               BUILD_CMD=$(echo "$BODY" | jq -r '.[0].service.serviceDetails.envSpecificDetails.buildCommand')
               echo "exists=true" >> $GITHUB_OUTPUT
               echo "service_id=${SERVICE_ID}" >> $GITHUB_OUTPUT
+              echo "service_url=${SERVICE_URL}" >> $GITHUB_OUTPUT
               echo "build_command=${BUILD_CMD}" >> $GITHUB_OUTPUT
               echo "Service exists with ID: ${SERVICE_ID}"
+              echo "Service URL: ${SERVICE_URL}"
               echo "Current build command: ${BUILD_CMD}"
             else
               echo "exists=false" >> $GITHUB_OUTPUT
@@ -241,53 +244,13 @@ jobs:
             exit 1
           fi
 
-      - name: Trigger deploy for existing service
-        id: deploy-service
-        if: github.event.action != 'closed' && steps.check-service.outputs.exists == 'true' && steps.delete-if-outdated.outputs.deleted != 'true'
-        run: |
-          SERVICE_ID="${{ steps.check-service.outputs.service_id }}"
-
-          # Trigger a deploy for the existing service
-          PAYLOAD='{"clearCache": "do_not_clear"}'
-
-          echo "Triggering deploy for service: ${SERVICE_ID}"
-
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            -H "Authorization: Bearer ${RENDER_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d "$PAYLOAD" \
-            "https://api.render.com/v1/services/${SERVICE_ID}/deploys")
-
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-
-          if [ "$HTTP_CODE" = "201" ]; then
-            DEPLOY_ID=$(echo "$BODY" | jq -r '.id')
-            echo "deploy_id=${DEPLOY_ID}" >> $GITHUB_OUTPUT
-            echo "✅ Deploy triggered successfully"
-            echo "   Deploy ID: ${DEPLOY_ID}"
-
-            # Get service URL
-            SERVICE_INFO=$(curl -s \
-              -H "Authorization: Bearer ${RENDER_API_KEY}" \
-              "https://api.render.com/v1/services/${SERVICE_ID}")
-
-            SERVICE_URL=$(echo "$SERVICE_INFO" | jq -r '.serviceDetails.url')
-            echo "service_url=${SERVICE_URL}" >> $GITHUB_OUTPUT
-            echo "   URL: ${SERVICE_URL}"
-          else
-            echo "❌ Failed to trigger deploy (HTTP ${HTTP_CODE})"
-            echo "$BODY" | jq '.' || echo "$BODY"
-            exit 1
-          fi
-
       - name: Comment on PR with preview URL
         if: github.event.action != 'closed'
         uses: actions/github-script@v7
         with:
           script: |
             const serviceName = '${{ steps.preview-name.outputs.service_name }}';
-            const serviceUrl = '${{ steps.create-service.outputs.service_url || steps.deploy-service.outputs.service_url }}';
+            const serviceUrl = '${{ steps.create-service.outputs.service_url || steps.check-service.outputs.service_url }}';
             const serviceId = '${{ steps.create-service.outputs.service_id || steps.check-service.outputs.service_id }}';
             const isNewService = '${{ steps.check-service.outputs.exists }}' !== 'true';
 
