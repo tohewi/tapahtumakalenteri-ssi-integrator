@@ -112,17 +112,15 @@ export default function TabletScoringView({
         return
       }
 
-      // Validate score counts per string before saving
-      const validationErrors = []
-      for (let i = 0; i < SERIES_COUNT; i++) {
-        const hits = hitsInSeries(shooterScores[i])
-        if (hits !== MAX_HITS_PER_SERIES && hits !== 0) {
-          validationErrors.push(`String ${i + 1}: ${hits}/${MAX_HITS_PER_SERIES} scores`)
-        }
-      }
-
-      if (validationErrors.length > 0) {
-        const errorMsg = `Cannot save: Each string must have exactly ${MAX_HITS_PER_SERIES} scores or be empty.\n${validationErrors.join('\n')}`
+      const validation = api.validateSeriesShotCounts(shooterScores, {
+        seriesCount: SERIES_COUNT,
+        shotsPerSeries: MAX_HITS_PER_SERIES,
+      })
+      if (!validation.isValid) {
+        const errorMsg = api.buildIncompleteSeriesValidationMessage(validation, {
+          headerFormatter: t.incompleteSeriesSaveErrorHeader,
+          lineFormatter: t.incompleteSeriesSaveErrorLine,
+        })
         setSaveError(errorMsg)
         return
       }

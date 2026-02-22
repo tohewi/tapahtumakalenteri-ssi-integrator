@@ -180,6 +180,15 @@ Derived values:
 - `osumat` = `laukaukset - ohi`
 - `pisteet` = weighted sum (`X/10=10`, ..., `1=1`, `M=0`)
 
+Save-time validation rules for this profile (`resul-25-kuvio-pistol`):
+
+- Every non-empty series must contain exactly `5` shots before save.
+- Empty (not-started) series are allowed during in-progress scoring.
+- In 2x flow (`3*10` UI mode), this is still validated as two separate `5`-shot series (`5 + 5 = 10`).
+- Validation is shared between mobile and tablet in:
+  - `scoring-ui/src/api.js -> validateSeriesShotCounts()`
+  - `scoring-ui/src/api.js -> buildIncompleteSeriesValidationMessage()`
+
 ---
 
 ## 7) Facts-first bug workflow (mandatory)

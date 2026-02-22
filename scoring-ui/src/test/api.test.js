@@ -4,6 +4,8 @@ import {
   transformMatch,
   transformMatchListItem,
   buildScoresFromSSI,
+  validateSeriesShotCounts,
+  buildIncompleteSeriesValidationMessage,
   login,
   searchCups,
   getCup,
@@ -180,6 +182,64 @@ describe('parseStringScore', () => {
     const result = parseStringScore('a,b,c,d,e,f,g,h,i,j,k,l,m')
     // All become 0 due to NaN || 0
     expect(result).toEqual({ X: 0, '10': 0, '9': 0, '8': 0, '7': 0, '6': 0, '5': 0, '4': 0, '3': 0, '2': 0, '1': 0, M: 0 })
+  })
+})
+
+describe('validateSeriesShotCounts', () => {
+  it('accepts empty and fully-complete strings', () => {
+    const scoreCard = {
+      0: { X: 3, '10': 1, M: 1 }, // 5
+      1: { X: 0, '10': 0, M: 0 }, // 0
+      2: { X: 0, '10': 5, M: 0 }, // 5
+    }
+
+    const validation = validateSeriesShotCounts(scoreCard, {
+      seriesCount: 3,
+      shotsPerSeries: 5,
+    })
+
+    expect(validation.isValid).toBe(true)
+    expect(validation.invalidSeries).toEqual([])
+  })
+
+  it('flags non-empty strings that are not exactly full', () => {
+    const scoreCard = {
+      0: { X: 2, '10': 1, M: 0 }, // 3 -> invalid
+      1: { X: 0, '10': 0, M: 0 }, // 0 -> ok
+      2: { X: 0, '10': 5, M: 0 }, // 5 -> ok
+      3: { X: 1, '10': 1, M: 1 }, // 3 -> invalid
+    }
+
+    const validation = validateSeriesShotCounts(scoreCard, {
+      seriesCount: 4,
+      shotsPerSeries: 5,
+    })
+
+    expect(validation.isValid).toBe(false)
+    expect(validation.invalidSeries).toEqual([
+      { seriesIndex: 0, shots: 3 },
+      { seriesIndex: 3, shots: 3 },
+    ])
+  })
+})
+
+describe('buildIncompleteSeriesValidationMessage', () => {
+  it('builds message lines from invalid-series validation output', () => {
+    const validation = {
+      isValid: false,
+      shotsPerSeries: 5,
+      invalidSeries: [
+        { seriesIndex: 1, shots: 4 },
+        { seriesIndex: 4, shots: 2 },
+      ],
+    }
+
+    const msg = buildIncompleteSeriesValidationMessage(validation, {
+      headerFormatter: (shotsPerSeries) => `Header ${shotsPerSeries}`,
+      lineFormatter: (seriesNumber, shots, shotsPerSeries) => `S${seriesNumber}: ${shots}/${shotsPerSeries}`,
+    })
+
+    expect(msg).toBe('Header 5\nS2: 4/5\nS5: 2/5')
   })
 })
 

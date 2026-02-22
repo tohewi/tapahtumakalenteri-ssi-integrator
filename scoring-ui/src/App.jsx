@@ -425,12 +425,27 @@ function App() {
   }
 
   const handleSaveAndNext = async () => {
+    const shooterScores = allScores[selectedShooterId]
+    const validation = api.validateSeriesShotCounts(shooterScores, {
+      seriesCount: SERIES_COUNT,
+      shotsPerSeries: MAX_HITS_PER_SERIES,
+    })
+
+    if (!validation.isValid) {
+      const validationMessage = api.buildIncompleteSeriesValidationMessage(validation, {
+        headerFormatter: fi.incompleteSeriesSaveErrorHeader,
+        lineFormatter: fi.incompleteSeriesSaveErrorLine,
+      })
+      setError(validationMessage)
+      window.alert(validationMessage)
+      return
+    }
+
     // Submit scores for current shooter to SSI
     setSaving(true)
     setError(null)
     try {
       await withSessionCheck(async () => {
-        const shooterScores = allScores[selectedShooterId]
         const result = await api.submitScore(selectedShooterId, shooterScores)
         log.debug('[scoring] Score saved:', result)
       })

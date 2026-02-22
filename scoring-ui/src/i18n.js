@@ -85,6 +85,8 @@ export const fi = {
   remaining: 'jäljellä',
   saveAndNext: 'Tallenna → Seuraava ampuja',
   tooManyShotsInButton: 'Liikaa laukauksia',
+  incompleteSeriesSaveErrorHeader: (shotsPerSeries) => `Tallennus estetty: jokaisessa sarjassa pitää olla ${shotsPerSeries} laukausta tai sarjan pitää olla tyhjä.`,
+  incompleteSeriesSaveErrorLine: (seriesNumber, shots, shotsPerSeries) => `Sarja ${seriesNumber}: ${shots}/${shotsPerSeries} laukausta`,
   
   // Staffing module
   staffingTitle: 'SRA-harjoitusten vetäjähallinta',
@@ -242,6 +244,8 @@ export const en = {
   remaining: 'remaining',
   saveAndNext: 'Save → Next shooter',
   tooManyShotsInButton: 'Too many shots',
+  incompleteSeriesSaveErrorHeader: (shotsPerSeries) => `Save blocked: each string must have exactly ${shotsPerSeries} shots or be empty.`,
+  incompleteSeriesSaveErrorLine: (seriesNumber, shots, shotsPerSeries) => `String ${seriesNumber}: ${shots}/${shotsPerSeries} shots`,
   
   // Staffing module
   staffingTitle: 'SRA Training Staff Management',
