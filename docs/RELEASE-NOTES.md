@@ -5,7 +5,7 @@
 
 ---
 
-## Release 8.0.1 — Authentication UX Hardening (2026-02-22)
+## Release 7.4.1 — Authentication UX Hardening (2026-02-22)
 
 **Requirements:** AUTH-UX1–AUTH-UX5 ✅
 
