@@ -213,6 +213,47 @@ export async function manageTogglePaid(cupId, shooterName, cupParticipantId) {
 
 const SCORE_ZONES = ['X', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'M']
 
+export function validateSeriesShotCounts(scoreCard, options = {}) {
+  const {
+    seriesCount = 6,
+    shotsPerSeries = 5,
+  } = options
+
+  const invalidSeries = []
+
+  for (let i = 0; i < seriesCount; i++) {
+    const seriesScores = scoreCard?.[i] || {}
+    const shots = SCORE_ZONES.reduce((sum, zone) => sum + (Number(seriesScores[zone]) || 0), 0)
+
+    if (shots !== 0 && shots !== shotsPerSeries) {
+      invalidSeries.push({ seriesIndex: i, shots })
+    }
+  }
+
+  return {
+    isValid: invalidSeries.length === 0,
+    invalidSeries,
+    seriesCount,
+    shotsPerSeries,
+  }
+}
+
+export function buildIncompleteSeriesValidationMessage(validation, options = {}) {
+  if (!validation || validation.isValid) return ''
+
+  const {
+    headerFormatter = (shotsPerSeries) => `Cannot save: Each string must have exactly ${shotsPerSeries} shots or be empty.`,
+    lineFormatter = (seriesNumber, shots, shotsPerSeries) => `String ${seriesNumber}: ${shots}/${shotsPerSeries} shots`,
+  } = options
+
+  const header = headerFormatter(validation.shotsPerSeries)
+  const lines = validation.invalidSeries.map(({ seriesIndex, shots }) =>
+    lineFormatter(seriesIndex + 1, shots, validation.shotsPerSeries)
+  )
+
+  return [header, ...lines].join('\n')
+}
+
 // Parse SSI string "X,10,9,8,7,6,5,4,3,2,1,M,max_hits" → {X: n, '10': n, ...}
 export function parseStringScore(ssiString, options = {}) {
   const {

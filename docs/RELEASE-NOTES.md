@@ -5,6 +5,43 @@
 
 ---
 
+## Release 8.0.1 — Authentication UX Hardening (2026-02-22)
+
+**Requirements:** AUTH-UX1–AUTH-UX5 ✅
+
+### Overview
+
+Patch release focused on authentication experience and architecture consistency. Reload now restores protected feature state behind a neutral restoring gate instead of visibly flashing the login screen.
+
+### New Features
+
+- **Auth Bootstrap + Auth Gate (default pattern):** Protected feature entry now starts in a temporary `restoring` state, checks `/api/auth/status`, and then restores previous feature state or routes to login.
+- **Documentation baseline updated:** `session-handling.md` now defines this as the default startup pattern for all protected domains (`scoring`, `manage`, `reporting`).
+- **Architecture cross-reference added:** `scoring-architecture.md` links to the canonical session-handling implementation section.
+- **UAT guide added:** New short authentication UAT plan with practical use cases for login, reload, expiry, scope mismatch, and restoration.
+
+### Bug Fixes
+
+- **Login flash on reload removed (mobile + tablet scoring):** Apps no longer initialize directly to login during bootstrap when a valid session exists.
+- **Fallback behavior clarified:** If session status check fails or scope does not match, app now transitions cleanly to login after bootstrap.
+
+### Requirements Met
+
+- **AUTH-UX1:** Protected features use mount-time auth bootstrap (`/api/auth/status`) before deciding login vs restore.
+- **AUTH-UX2:** Protected features render a neutral `restoring` gate while bootstrap is in progress.
+- **AUTH-UX3:** Existing session status is restored without auto-login (`/api/auth/login` is never called on mount).
+- **AUTH-UX4:** Architecture docs define the pattern as default across protected domains.
+- **AUTH-UX5:** Authentication UAT plan exists in the implementation docs.
+
+### Test Status
+
+| Suite | Passing | Notes |
+|-------|--------:|-------|
+| Frontend (scoring-ui) | 190 | Full suite green after auth-gate updates |
+| UAT (manual) | Completed | Reload/session/authentication scenarios reported OK |
+
+---
+
 ## Release 8.0 — Tablet Scoring UI (2026-02-20)
 
 **Git tag:** `v7.0.0` → HEAD | **Requirements:** TS1–TS12 ✅

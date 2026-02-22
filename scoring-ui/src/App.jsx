@@ -42,8 +42,100 @@ function pointsInSeries(seriesScores) {
   return SCORE_ZONES.reduce((sum, z) => sum + seriesScores[z] * ZONE_POINTS[z], 0)
 }
 
+function getScoreCardShots(scoreCard) {
+  if (!scoreCard) return 0
+  let total = 0
+  for (let i = 0; i < SERIES_COUNT; i++) {
+    total += hitsInSeries(scoreCard[i] || createEmptySeriesScore())
+  }
+  return total
+}
+
 function isSeriesScored(seriesScores) {
   return hitsInSeries(seriesScores) > 0
+}
+
+export function selectInitialScoreCard(restoredScoreCard, ssiScoreCard, inferMissingMisses) {
+  if (!restoredScoreCard || inferMissingMisses) return ssiScoreCard
+
+  const restoredShots = getScoreCardShots(restoredScoreCard)
+  const ssiShots = getScoreCardShots(ssiScoreCard)
+
+  // Keep local in-progress work, but avoid stale-empty cache masking fresh SSI scores.
+  if (restoredShots > 0 || ssiShots === 0) {
+    return restoredScoreCard
+  }
+
+  return ssiScoreCard
+}
+
+export function getDoubleSeriesPairShotSummary(scoreCard, seriesIdx, maxHitsPerSeries = MAX_HITS_PER_SERIES) {
+  const pairStart = Math.max(0, Math.min(seriesIdx - (seriesIdx % 2), SERIES_COUNT - 2))
+  const pairEnd = pairStart + 1
+
+  const firstShots = hitsInSeries(scoreCard?.[pairStart] || createEmptySeriesScore())
+  const secondShots = hitsInSeries(scoreCard?.[pairEnd] || createEmptySeriesScore())
+  const requiredShots = maxHitsPerSeries * 2
+  const totalShots = firstShots + secondShots
+
+  return {
+    firstSeriesIndex: pairStart,
+    secondSeriesIndex: pairEnd,
+    firstShots,
+    secondShots,
+    totalShots,
+    requiredShots,
+    isStarted: totalShots > 0,
+    isComplete: firstShots === maxHitsPerSeries && secondShots === maxHitsPerSeries,
+  }
+}
+
+export function applyScoreDeltaForShooter(shooterScores, {
+  seriesIdx,
+  zone,
+  delta,
+  doubleSeries,
+  maxHitsPerSeries = MAX_HITS_PER_SERIES,
+}) {
+  const next = { ...shooterScores }
+
+  if (!doubleSeries) {
+    if (!next[seriesIdx]) next[seriesIdx] = createEmptySeriesScore()
+    next[seriesIdx] = { ...next[seriesIdx] }
+    next[seriesIdx][zone] = Math.max(0, (next[seriesIdx][zone] || 0) + delta)
+    return next
+  }
+
+  const s1Idx = seriesIdx
+  const s2Idx = seriesIdx + 1
+
+  if (!next[s1Idx]) next[s1Idx] = createEmptySeriesScore()
+  if (!next[s2Idx]) next[s2Idx] = createEmptySeriesScore()
+
+  next[s1Idx] = { ...next[s1Idx] }
+  next[s2Idx] = { ...next[s2Idx] }
+
+  const s1Shots = hitsInSeries(next[s1Idx])
+  const s2Shots = hitsInSeries(next[s2Idx])
+
+  if (delta > 0) {
+    if (s1Shots < maxHitsPerSeries) {
+      next[s1Idx][zone] = (next[s1Idx][zone] || 0) + 1
+    } else if (s2Shots < maxHitsPerSeries) {
+      next[s2Idx][zone] = (next[s2Idx][zone] || 0) + 1
+    }
+    return next
+  }
+
+  if (delta < 0) {
+    if ((next[s2Idx][zone] || 0) > 0) {
+      next[s2Idx][zone] -= 1
+    } else if ((next[s1Idx][zone] || 0) > 0) {
+      next[s1Idx][zone] -= 1
+    }
+  }
+
+  return next
 }
 
 // ============================================================
@@ -55,6 +147,7 @@ const LS_KEYS = {
   CUP: 'ssi_last_cup',
   SCORES: 'ssi_scores',
   NAV: 'ssi_nav_state',
+  DOUBLE_SERIES_BY_MATCH: 'ssi_double_series_by_match',
 }
 
 function lsGet(key) {
@@ -67,10 +160,23 @@ function lsRemove(key) {
   try { localStorage.removeItem(key) } catch { /* ignore */ }
 }
 
-function App() {
+function getMatchDoubleSeriesEnabled(matchId) {
+  if (!matchId) return false
+  const byMatch = lsGet(LS_KEYS.DOUBLE_SERIES_BY_MATCH) || {}
+  return Boolean(byMatch[matchId])
+}
+
+function setMatchDoubleSeriesEnabled(matchId, enabled) {
+  if (!matchId) return
+  const byMatch = lsGet(LS_KEYS.DOUBLE_SERIES_BY_MATCH) || {}
+  byMatch[matchId] = Boolean(enabled)
+  lsSet(LS_KEYS.DOUBLE_SERIES_BY_MATCH, byMatch)
+}
+
+export function App() {
   const { savedCreds, handleRememberMe } = useRememberMe('ssi_credentials_scoring')
   
-  const [view, setView] = useState('login') // 'login' | 'cup' | 'match' | 'squad' | 'series' | 'scoring'
+  const [view, setView] = useState('restoring') // 'restoring' | 'login' | 'cup' | 'match' | 'squad' | 'series' | 'scoring'
   const [selectedCup, setSelectedCup] = useState(null)
   const [matches, setMatches] = useState([])
   const [selectedMatch, setSelectedMatch] = useState(null)
@@ -141,7 +247,7 @@ function App() {
     await restoreNavState()
   }
 
-  const restoreNavState = async () => {
+  const restoreNavState = useCallback(async () => {
     const nav = lsGet(LS_KEYS.NAV)
     const savedCup = lsGet(LS_KEYS.CUP)
 
@@ -166,6 +272,7 @@ function App() {
         const fullMatch = await api.getMatch(nav.matchId)
         const transformed = api.transformMatch(fullMatch)
         setSelectedMatch(transformed)
+        setDoubleSeries(getMatchDoubleSeriesEnabled(transformed.id))
 
         if (nav.squadId && ['series', 'scoring'].includes(nav.view)) {
           const squad = transformed.squads.find(s => s.id === nav.squadId)
@@ -183,9 +290,8 @@ function App() {
             const scores = {}
             for (const s of squad.shooters) {
               const restoredScores = restored?.[s.id]
-              scores[s.id] = (!inferMissingMisses && restoredScores)
-                ? restoredScores
-                : api.buildScoresFromSSI(s, SERIES_COUNT, ssiParseOptions)
+              const ssiScores = api.buildScoresFromSSI(s, SERIES_COUNT, ssiParseOptions)
+              scores[s.id] = selectInitialScoreCard(restoredScores, ssiScores, inferMissingMisses)
             }
             setAllScores(scores)
 
@@ -204,7 +310,36 @@ function App() {
     }
 
     setView(nav.view === 'cup' ? 'cup' : 'match')
-  }
+  }, [])
+
+  // On reload, keep users in scoring flow when session cookie is still valid.
+  useEffect(() => {
+    let isActive = true
+
+    const bootstrapFromActiveSession = async () => {
+      try {
+        const status = await api.getAuthStatus()
+        if (!isActive) return
+
+        const canRestoreScoring = status?.authenticated && (!status.scope || status.scope === 'scoring')
+        if (canRestoreScoring) {
+          await restoreNavState()
+          return
+        }
+
+        setView('login')
+      } catch {
+        // Ignore bootstrap errors and keep explicit login as the fallback.
+        if (isActive) setView('login')
+      }
+    }
+
+    bootstrapFromActiveSession()
+
+    return () => {
+      isActive = false
+    }
+  }, [restoreNavState])
 
   const handleLogout = async () => {
     try { await api.logout() } catch { /* ignore */ }
@@ -217,6 +352,7 @@ function App() {
     setMatches([])
     setSelectedMatch(null)
     setSelectedSquad(null)
+    setDoubleSeries(false)
     setAllScores({})
     setError(null)
   }
@@ -253,6 +389,7 @@ function App() {
         const fullMatch = await api.getMatch(match.id)
         const transformed = api.transformMatch(fullMatch)
         setSelectedMatch(transformed)
+        setDoubleSeries(getMatchDoubleSeriesEnabled(transformed.id))
         setView('squad')
       })
     } catch (err) {
@@ -280,10 +417,10 @@ function App() {
       const next = { ...prev }
       for (const s of squad.shooters) {
         const restoredScores = restored?.[s.id]
-        if (!inferMissingMisses && restoredScores) {
-          next[s.id] = restoredScores
-        } else if (!next[s.id] || inferMissingMisses) {
-          next[s.id] = api.buildScoresFromSSI(s, SERIES_COUNT, ssiParseOptions)
+        const ssiScores = api.buildScoresFromSSI(s, SERIES_COUNT, ssiParseOptions)
+        const preferredScores = selectInitialScoreCard(restoredScores, ssiScores, inferMissingMisses)
+        if (!next[s.id] || inferMissingMisses || getScoreCardShots(next[s.id]) === 0) {
+          next[s.id] = preferredScores
         }
       }
       return next
@@ -305,44 +442,28 @@ function App() {
     setView('scoring')
   }
 
+  const handleDoubleSeriesToggle = (enabled) => {
+    setDoubleSeries(enabled)
+    setMatchDoubleSeriesEnabled(selectedMatch?.id, enabled)
+
+    // Snap to valid pair start when enabling 2x mode from an odd series index.
+    if (enabled && activeSeries % 2 !== 0) {
+      setActiveSeries(activeSeries - 1)
+    }
+  }
+
   // --- Score update ---
 
   const updateScore = useCallback((seriesIdx, zone, delta) => {
     setAllScores(prev => {
       const next = { ...prev }
-      next[selectedShooterId] = { ...next[selectedShooterId] }
-
-      if (doubleSeries) {
-        // In double mode, scores fill first series then overflow to second
-        const s1Idx = seriesIdx // activeSeries (the even one)
-        const s2Idx = seriesIdx + 1
-        next[selectedShooterId][s1Idx] = { ...next[selectedShooterId][s1Idx] }
-        next[selectedShooterId][s2Idx] = { ...next[selectedShooterId][s2Idx] }
-
-        const s1Val = next[selectedShooterId][s1Idx][zone]
-        const s2Val = next[selectedShooterId][s2Idx][zone]
-        const combined = s1Val + s2Val
-
-        if (delta > 0) {
-          // Increment: fill s1 first, then s2
-          if (s1Val < MAX_HITS_PER_SERIES) {
-            next[selectedShooterId][s1Idx][zone] = s1Val + 1
-          } else {
-            next[selectedShooterId][s2Idx][zone] = s2Val + 1
-          }
-        } else {
-          // Decrement: remove from s2 first, then s1
-          if (s2Val > 0) {
-            next[selectedShooterId][s2Idx][zone] = s2Val - 1
-          } else if (s1Val > 0) {
-            next[selectedShooterId][s1Idx][zone] = s1Val - 1
-          }
-        }
-      } else {
-        next[selectedShooterId][seriesIdx] = { ...next[selectedShooterId][seriesIdx] }
-        const newVal = Math.max(0, next[selectedShooterId][seriesIdx][zone] + delta)
-        next[selectedShooterId][seriesIdx][zone] = newVal
-      }
+      next[selectedShooterId] = applyScoreDeltaForShooter(next[selectedShooterId], {
+        seriesIdx,
+        zone,
+        delta,
+        doubleSeries,
+        maxHitsPerSeries: MAX_HITS_PER_SERIES,
+      })
 
       return next
     })
@@ -381,12 +502,45 @@ function App() {
   }
 
   const handleSaveAndNext = async () => {
+    const shooterScores = allScores[selectedShooterId]
+
+    if (doubleSeries) {
+      const pairSummary = getDoubleSeriesPairShotSummary(shooterScores, activeSeries, MAX_HITS_PER_SERIES)
+      if (pairSummary.isStarted && !pairSummary.isComplete) {
+        const pairError = fi.doubleSeriesPairIncompleteError(
+          pairSummary.firstSeriesIndex + 1,
+          pairSummary.secondSeriesIndex + 1,
+          pairSummary.totalShots,
+          pairSummary.requiredShots,
+          pairSummary.firstShots,
+          pairSummary.secondShots
+        )
+        setError(pairError)
+        window.alert(pairError)
+        return
+      }
+    }
+
+    const validation = api.validateSeriesShotCounts(shooterScores, {
+      seriesCount: SERIES_COUNT,
+      shotsPerSeries: MAX_HITS_PER_SERIES,
+    })
+
+    if (!validation.isValid) {
+      const validationMessage = api.buildIncompleteSeriesValidationMessage(validation, {
+        headerFormatter: fi.incompleteSeriesSaveErrorHeader,
+        lineFormatter: fi.incompleteSeriesSaveErrorLine,
+      })
+      setError(validationMessage)
+      window.alert(validationMessage)
+      return
+    }
+
     // Submit scores for current shooter to SSI
     setSaving(true)
     setError(null)
     try {
       await withSessionCheck(async () => {
-        const shooterScores = allScores[selectedShooterId]
         const result = await api.submitScore(selectedShooterId, shooterScores)
         log.debug('[scoring] Score saved:', result)
       })
@@ -402,6 +556,20 @@ function App() {
     // Return to shooter list so user picks who to score next
     setSelectedShooterId(null)
     setView('series')
+  }
+
+  // ============================================================
+  // VIEW: Restoring session state
+  // ============================================================
+  if (view === 'restoring') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <p className="text-gray-500 text-sm">{fi.loading}</p>
+        </div>
+      </div>
+    )
   }
 
   // ============================================================
@@ -484,6 +652,9 @@ function App() {
   // ============================================================
   if (view === 'series') {
     const shooters = selectedSquad.shooters
+    const activeSeriesLabel = doubleSeries
+      ? `${activeSeries + 1}+${activeSeries + 2}`
+      : `${activeSeries + 1}`
 
     const scoredCountForGroup = () =>
       shooters.filter(s => isGroupScored(s.id)).length
@@ -578,13 +749,7 @@ function App() {
               <input
                 type="checkbox"
                 checked={doubleSeries}
-                onChange={(e) => {
-                  setDoubleSeries(e.target.checked)
-                  // Snap to valid pair start
-                  if (e.target.checked && activeSeries % 2 !== 0) {
-                    setActiveSeries(activeSeries - 1)
-                  }
-                }}
+                onChange={(e) => handleDoubleSeriesToggle(e.target.checked)}
                 className="w-5 h-5 rounded accent-blue-600"
               />
               <span className="text-[10px] text-gray-500 mt-0.5">2x</span>
@@ -607,7 +772,7 @@ function App() {
         {/* Shooter list */}
         <div className="p-3">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">
-            {fi.series} {activeSeries + 1} — {fi.pickShooter}
+            {fi.series} {activeSeriesLabel} — {fi.pickShooter}
           </h2>
           <ShooterPicker
             shooters={shootersWithStatus}
@@ -631,9 +796,9 @@ function App() {
         seriesScores[z] + (allScores[selectedShooterId][pairedSeries]?.[z] || 0)
       ]))
     : seriesScores
-  const hits = SCORE_ZONES.reduce((sum, z) => sum + combinedScores[z], 0)
+  const totalShots = SCORE_ZONES.reduce((sum, z) => sum + combinedScores[z], 0)
   const pts = SCORE_ZONES.reduce((sum, z) => sum + combinedScores[z] * ZONE_POINTS[z], 0)
-  const isOver = hits > effectiveMaxHits
+  const isOver = totalShots > effectiveMaxHits
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -656,8 +821,8 @@ function App() {
             <div className="text-xs text-blue-300">
               {doubleSeries ? `${fi.series} ${activeSeries + 1}+${activeSeries + 2}` : `${fi.series} ${activeSeries + 1}`}
             </div>
-            <div className="text-3xl font-bold">{pts}</div>
-            <div className="text-blue-200 text-xs">{hits}/{effectiveMaxHits} {fi.hits}</div>
+            <div className="text-3xl font-bold leading-tight">{pts}<span className="ml-1 text-sm font-semibold align-middle">{fi.pts}</span></div>
+            <div className="text-blue-200 text-xs">{totalShots}/{effectiveMaxHits} {fi.hits}</div>
           </div>
         </div>
       </div>
@@ -667,11 +832,8 @@ function App() {
         scores={combinedScores}
         scoreZones={SCORE_ZONES}
         maxHits={effectiveMaxHits}
-        totalHits={hits}
-        totalPoints={pts}
+        totalShots={totalShots}
         onUpdate={updateScore}
-        onNext={null}
-        isLast={true}
       />
 
       {/* Error banner */}
@@ -696,7 +858,7 @@ function App() {
             disabled={isOver || saving}
             className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-semibold text-lg active:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500"
           >
-            {saving ? fi.saving : isOver ? `${fi.tooManyShotsInButton} (${hits}/${effectiveMaxHits})` : fi.saveAndNext}
+            {saving ? fi.saving : isOver ? `${fi.tooManyShotsInButton} (${totalShots}/${effectiveMaxHits})` : fi.saveAndNext}
           </button>
         </div>
       </div>

@@ -350,6 +350,18 @@ Analysis completed 2026-02-20. Reviewed `docs/design/architecture-review.md` (20
 
 **Implementation**: Check `match.status === 'cp'` and disable all score modification operations while preserving read-only browsing capability.
 
+## Release 8.0.1 — Authentication UX Hardening
+
+Patch release focused on authentication UX consistency across protected feature domains and documentation consolidation.
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| AUTH-UX1 | **Mount-time auth bootstrap**: Protected feature entry must call `/api/auth/status` on mount and decide between restore or login without creating a new session | ✅ Implemented |
+| AUTH-UX2 | **Restoring auth gate**: Protected features must render a neutral `restoring`/loading state while auth bootstrap runs, instead of showing login first | ✅ Implemented |
+| AUTH-UX3 | **No auto-login on mount**: Reload restoration must not call `/api/auth/login`; explicit user login remains required to create sessions | ✅ Implemented |
+| AUTH-UX4 | **Architecture baseline update**: Session handling documentation must define Auth Bootstrap + Auth Gate as the default pattern for all protected domains (`scoring`, `manage`, `reporting`) | ✅ Implemented |
+| AUTH-UX5 | **Authentication UAT coverage**: Add a concise UAT test plan covering login, reload with/without session, expiry, scope mismatch, restore-after-login, and logout persistence | ✅ Implemented |
+
 ## Release 7.2 — Kupittaa Cup Management
 
 | # | Requirement | Status |
@@ -423,6 +435,7 @@ Vision: Transform the current "link collection" home page into a structured matc
 - **Release 7.4** (Refactoring Implementation): 8 requirements — 8 ✅ (RFR1–RFR8)
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
+- **Release 8.0.1** (Authentication UX Hardening): 5 requirements — 5 ✅ (AUTH-UX1–AUTH-UX5)
 - **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
 
 

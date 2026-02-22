@@ -14,7 +14,7 @@ export default function ScoreZoneButton({ zone, count, onIncrement, onDecrement,
       label: 'text-gray-500',
       count: 'text-gray-700',
       plus: 'bg-blue-500 active:bg-blue-600',
-      minus: 'bg-red-400 active:bg-red-500',
+      minus: 'bg-red-500 active:bg-red-600',
     },
     miss: {
       bg: 'bg-red-50',
@@ -22,19 +22,19 @@ export default function ScoreZoneButton({ zone, count, onIncrement, onDecrement,
       label: 'text-red-600',
       count: 'text-red-600',
       plus: 'bg-red-600 active:bg-red-700',
-      minus: 'bg-red-400 active:bg-red-500',
+      minus: 'bg-red-500 active:bg-red-600',
     },
   }
 
   const c = colors[variant]
 
   return (
-    <div className={`${c.bg} border ${c.border} rounded-xl p-2 flex flex-col items-center`}>
+    <div className={`${c.bg} border ${c.border} rounded-xl p-2.5 flex flex-col`}>
       {/* Zone label */}
-      <span className={`text-xs font-bold ${c.label} mb-1`}>{zone}</span>
+      <span className={`w-full text-left text-lg font-extrabold leading-none ${c.label}`}>{zone}</span>
 
       {/* Count display */}
-      <span className={`text-2xl font-bold ${c.count} mb-2 min-w-[2ch] text-center`}>
+      <span className={`text-2xl font-bold ${c.count} mt-1 mb-2 min-w-[2ch] text-center`}>
         {count}
       </span>
 

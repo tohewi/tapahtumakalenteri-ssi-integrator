@@ -64,9 +64,9 @@ export const fi = {
   
   // ScoringForm
   series: 'Sarja',
-  hits: 'osumaa',
+  hits: 'laukausta',
   tooManyShots: 'Liikaa laukauksia!',
-  removeHitsBeforeSaving: 'Poista osumia ennen tallennusta',
+  removeHitsBeforeSaving: 'Poista laukauksia ennen tallennusta',
   nextSeries: 'Seuraava',
   skipToSeries: 'Ohita',
   
@@ -85,6 +85,10 @@ export const fi = {
   remaining: 'jäljellä',
   saveAndNext: 'Tallenna → Seuraava ampuja',
   tooManyShotsInButton: 'Liikaa laukauksia',
+  doubleSeriesPairIncompleteError: (firstSeries, secondSeries, shots, requiredShots, firstShots, secondShots) =>
+    `Tallennus estetty 2x-tilassa: sarjaparin ${firstSeries}+${secondSeries} pitää olla ${requiredShots}/${requiredShots} laukausta (5+5). Nyt ${shots}/${requiredShots} (${firstShots}+${secondShots}).`,
+  incompleteSeriesSaveErrorHeader: (shotsPerSeries) => `Tallennus estetty: jokaisessa sarjassa pitää olla ${shotsPerSeries} laukausta tai sarjan pitää olla tyhjä.`,
+  incompleteSeriesSaveErrorLine: (seriesNumber, shots, shotsPerSeries) => `Sarja ${seriesNumber}: ${shots}/${shotsPerSeries} laukausta`,
   
   // Staffing module
   staffingTitle: 'SRA-harjoitusten vetäjähallinta',
@@ -134,7 +138,7 @@ export const fi = {
   tabletScoringTitle: 'Kupittaa Cup tulosten syöttö (Tabletti)',
   tabletScoringDescription: 'Syötä kilpailutulokset tabletilla tai tietokoneella',
   selectShooter: 'Valitse ampuja',
-  shotsFired: 'osumia',
+  shotsFired: 'laukausta',
   shotsTotal: 'yhteensä',
   scoreTrack: 'Tuloskortti',
   reenterScore: 'Valitse tulos muokataksesi sitä',
@@ -221,9 +225,9 @@ export const en = {
   
   // ScoringForm
   series: 'Series',
-  hits: 'hits',
+  hits: 'shots',
   tooManyShots: 'Too many shots!',
-  removeHitsBeforeSaving: 'Remove hits before saving',
+  removeHitsBeforeSaving: 'Remove shots before saving',
   nextSeries: 'Next',
   skipToSeries: 'Skip',
   
@@ -242,6 +246,10 @@ export const en = {
   remaining: 'remaining',
   saveAndNext: 'Save → Next shooter',
   tooManyShotsInButton: 'Too many shots',
+  doubleSeriesPairIncompleteError: (firstSeries, secondSeries, shots, requiredShots, firstShots, secondShots) =>
+    `Save blocked in 2x mode: pair ${firstSeries}+${secondSeries} must be ${requiredShots}/${requiredShots} shots (5+5). Current ${shots}/${requiredShots} (${firstShots}+${secondShots}).`,
+  incompleteSeriesSaveErrorHeader: (shotsPerSeries) => `Save blocked: each string must have exactly ${shotsPerSeries} shots or be empty.`,
+  incompleteSeriesSaveErrorLine: (seriesNumber, shots, shotsPerSeries) => `String ${seriesNumber}: ${shots}/${shotsPerSeries} shots`,
   
   // Staffing module
   staffingTitle: 'SRA Training Staff Management',
@@ -291,7 +299,7 @@ export const en = {
   tabletScoringTitle: 'Kupittaa Cup Scoring (Tablet)',
   tabletScoringDescription: 'Enter competition scores on tablet or computer',
   selectShooter: 'Select shooter',
-  shotsFired: 'hits',
+  shotsFired: 'shots',
   shotsTotal: 'total',
   scoreTrack: 'Score Card',
   reenterScore: 'Select score to edit it',

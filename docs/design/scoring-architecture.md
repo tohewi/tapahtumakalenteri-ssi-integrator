@@ -145,6 +145,8 @@ Login → Cup Search → Match List → Squad List → Series Overview → Score
 
 All navigation state is persisted to `localStorage` and fully restored on page reload.
 
+> Cross-reference (default for all protected domains): startup authentication uses an **Auth Bootstrap + Auth Gate** pattern (also known as **session rehydration** / **silent session restore**): render a temporary `restoring` state, call `/api/auth/status`, then either restore feature navigation state or transition to login based on session + scope. See `docs/Implementation/session-handling.md` -> **Mount-Time Session Bootstrap + Auth Gate (RELOAD UX, DEFAULT)**.
+
 #### State Management
 
 All state lives in `App.jsx` via `useState` hooks:

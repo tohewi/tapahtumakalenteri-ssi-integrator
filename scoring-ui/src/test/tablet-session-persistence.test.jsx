@@ -79,7 +79,7 @@ describe('TabletScoringView — session recovery score safety', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getAllByText('1/30').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('3/30').length).toBeGreaterThan(0)
     })
 
     expect(buildScoresSpy).not.toHaveBeenCalled()
@@ -127,7 +127,7 @@ describe('TabletScoringView — session recovery score safety', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getAllByText('0/30').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('3/30').length).toBeGreaterThan(0)
     })
 
     vi.advanceTimersByTime(3 * 60 * 60 * 1000)
@@ -139,7 +139,7 @@ describe('TabletScoringView — session recovery score safety', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getAllByText('0/30').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('3/30').length).toBeGreaterThan(0)
     })
 
     expect(buildScoresSpy).not.toHaveBeenCalled()

@@ -33,14 +33,6 @@ function getTotalHits(allSeriesScores) {
   return total
 }
 
-function getTotalMisses(allSeriesScores) {
-  let total = 0
-  for (let i = 0; i < SERIES_COUNT; i++) {
-    total += allSeriesScores[i].M || 0
-  }
-  return total
-}
-
 function getTotalPoints(allSeriesScores) {
   let total = 0
   for (let i = 0; i < SERIES_COUNT; i++) {
@@ -120,17 +112,15 @@ export default function TabletScoringView({
         return
       }
 
-      // Validate score counts per string before saving
-      const validationErrors = []
-      for (let i = 0; i < SERIES_COUNT; i++) {
-        const hits = hitsInSeries(shooterScores[i])
-        if (hits !== MAX_HITS_PER_SERIES && hits !== 0) {
-          validationErrors.push(`String ${i + 1}: ${hits}/${MAX_HITS_PER_SERIES} scores`)
-        }
-      }
-
-      if (validationErrors.length > 0) {
-        const errorMsg = `Cannot save: Each string must have exactly ${MAX_HITS_PER_SERIES} scores or be empty.\n${validationErrors.join('\n')}`
+      const validation = api.validateSeriesShotCounts(shooterScores, {
+        seriesCount: SERIES_COUNT,
+        shotsPerSeries: MAX_HITS_PER_SERIES,
+      })
+      if (!validation.isValid) {
+        const errorMsg = api.buildIncompleteSeriesValidationMessage(validation, {
+          headerFormatter: t.incompleteSeriesSaveErrorHeader,
+          lineFormatter: t.incompleteSeriesSaveErrorLine,
+        })
         setSaveError(errorMsg)
         return
       }
@@ -376,8 +366,6 @@ export default function TabletScoringView({
 
   const currentShooterScores = selectedShooter ? allScores[selectedShooter.id] : null
   const totalShots = currentShooterScores ? getTotalHits(currentShooterScores) : 0
-  const totalMisses = currentShooterScores ? getTotalMisses(currentShooterScores) : 0
-  const scoredHits = Math.max(0, totalShots - totalMisses)
   const totalPoints = currentShooterScores ? getTotalPoints(currentShooterScores) : 0
   const xCount = currentShooterScores ? getXCount(currentShooterScores) : 0
 
@@ -445,7 +433,7 @@ export default function TabletScoringView({
         <div className="flex items-center gap-3 text-xs">
           <div>
             <span className="text-gray-500">{t.shotsFired}: </span>
-            <span className="font-bold text-blue-600">{scoredHits}</span>
+            <span className="font-bold text-blue-600">{totalShots}</span>
             <span className="text-gray-400"> / {totalShotsInMatch}</span>
           </div>
           <div>
@@ -472,8 +460,6 @@ export default function TabletScoringView({
               const isSelected = selectedShooter?.id === shooter.id
               const shooterScores = allScores[shooter.id]
               const shooterShots = shooterScores ? getTotalHits(shooterScores) : 0
-              const shooterMisses = shooterScores ? getTotalMisses(shooterScores) : 0
-              const shooterHits = Math.max(0, shooterShots - shooterMisses)
               const shooterPoints = shooterScores ? getTotalPoints(shooterScores) : 0
               
               return (
@@ -481,7 +467,7 @@ export default function TabletScoringView({
                   key={shooter.id}
                   role="option"
                   aria-selected={isSelected}
-                  aria-label={`${shooter.number}. ${shooter.name}, ${shooterPoints} ${t.pts}, ${shooterHits}/${totalShotsInMatch}`}
+                  aria-label={`${shooter.number}. ${shooter.name}, ${shooterPoints} ${t.pts}, ${shooterShots}/${totalShotsInMatch}`}
                   tabIndex={0}
                   onClick={() => handleShooterSelect(shooter)}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleShooterSelect(shooter) } }}
@@ -521,7 +507,7 @@ export default function TabletScoringView({
                         {shooterPoints}
                       </div>
                       <div className="text-xs text-gray-400">
-                        {shooterHits}/{totalShotsInMatch}
+                        {shooterShots}/{totalShotsInMatch}
                       </div>
                     </div>
                   </div>
