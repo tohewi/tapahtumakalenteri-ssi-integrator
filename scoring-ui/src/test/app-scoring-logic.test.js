@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { applyScoreDeltaForShooter } from '../App'
+import { applyScoreDeltaForShooter, selectInitialScoreCard } from '../App'
 
 const SCORE_ZONES = ['X', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'M']
 
@@ -97,5 +97,35 @@ describe('applyScoreDeltaForShooter', () => {
     })
 
     expect(shooterScores[2].M).toBe(0)
+  })
+})
+
+describe('selectInitialScoreCard', () => {
+  it('prefers SSI scorecard when restored local cache is empty but SSI has scores', () => {
+    const restored = createShooterScores()
+    const ssi = createShooterScores()
+    ssi[0].X = 1
+
+    const selected = selectInitialScoreCard(restored, ssi, false)
+    expect(selected).toBe(ssi)
+  })
+
+  it('keeps restored local scorecard when local has in-progress scores', () => {
+    const restored = createShooterScores()
+    restored[0].M = 1
+    const ssi = createShooterScores()
+    ssi[0].X = 1
+
+    const selected = selectInitialScoreCard(restored, ssi, false)
+    expect(selected).toBe(restored)
+  })
+
+  it('always prefers SSI scorecard for completed-match miss inference mode', () => {
+    const restored = createShooterScores()
+    restored[0].X = 1
+    const ssi = createShooterScores()
+
+    const selected = selectInitialScoreCard(restored, ssi, true)
+    expect(selected).toBe(ssi)
   })
 })

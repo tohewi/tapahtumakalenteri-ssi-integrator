@@ -42,16 +42,31 @@ function pointsInSeries(seriesScores) {
   return SCORE_ZONES.reduce((sum, z) => sum + seriesScores[z] * ZONE_POINTS[z], 0)
 }
 
-function missesInSeries(seriesScores) {
-  return seriesScores.M || 0
-}
-
-function scoredHitsInSeries(seriesScores) {
-  return Math.max(0, hitsInSeries(seriesScores) - missesInSeries(seriesScores))
+function getScoreCardShots(scoreCard) {
+  if (!scoreCard) return 0
+  let total = 0
+  for (let i = 0; i < SERIES_COUNT; i++) {
+    total += hitsInSeries(scoreCard[i] || createEmptySeriesScore())
+  }
+  return total
 }
 
 function isSeriesScored(seriesScores) {
   return hitsInSeries(seriesScores) > 0
+}
+
+export function selectInitialScoreCard(restoredScoreCard, ssiScoreCard, inferMissingMisses) {
+  if (!restoredScoreCard || inferMissingMisses) return ssiScoreCard
+
+  const restoredShots = getScoreCardShots(restoredScoreCard)
+  const ssiShots = getScoreCardShots(ssiScoreCard)
+
+  // Keep local in-progress work, but avoid stale-empty cache masking fresh SSI scores.
+  if (restoredShots > 0 || ssiShots === 0) {
+    return restoredScoreCard
+  }
+
+  return ssiScoreCard
 }
 
 export function applyScoreDeltaForShooter(shooterScores, {
@@ -239,9 +254,8 @@ function App() {
             const scores = {}
             for (const s of squad.shooters) {
               const restoredScores = restored?.[s.id]
-              scores[s.id] = (!inferMissingMisses && restoredScores)
-                ? restoredScores
-                : api.buildScoresFromSSI(s, SERIES_COUNT, ssiParseOptions)
+              const ssiScores = api.buildScoresFromSSI(s, SERIES_COUNT, ssiParseOptions)
+              scores[s.id] = selectInitialScoreCard(restoredScores, ssiScores, inferMissingMisses)
             }
             setAllScores(scores)
 
@@ -336,10 +350,10 @@ function App() {
       const next = { ...prev }
       for (const s of squad.shooters) {
         const restoredScores = restored?.[s.id]
-        if (!inferMissingMisses && restoredScores) {
-          next[s.id] = restoredScores
-        } else if (!next[s.id] || inferMissingMisses) {
-          next[s.id] = api.buildScoresFromSSI(s, SERIES_COUNT, ssiParseOptions)
+        const ssiScores = api.buildScoresFromSSI(s, SERIES_COUNT, ssiParseOptions)
+        const preferredScores = selectInitialScoreCard(restoredScores, ssiScores, inferMissingMisses)
+        if (!next[s.id] || inferMissingMisses || getScoreCardShots(next[s.id]) === 0) {
+          next[s.id] = preferredScores
         }
       }
       return next
@@ -665,7 +679,6 @@ function App() {
       ]))
     : seriesScores
   const totalShots = SCORE_ZONES.reduce((sum, z) => sum + combinedScores[z], 0)
-  const scoredHits = scoredHitsInSeries(combinedScores)
   const pts = SCORE_ZONES.reduce((sum, z) => sum + combinedScores[z] * ZONE_POINTS[z], 0)
   const isOver = totalShots > effectiveMaxHits
 
@@ -691,7 +704,7 @@ function App() {
               {doubleSeries ? `${fi.series} ${activeSeries + 1}+${activeSeries + 2}` : `${fi.series} ${activeSeries + 1}`}
             </div>
             <div className="text-3xl font-bold leading-tight">{pts}<span className="ml-1 text-sm font-semibold align-middle">{fi.pts}</span></div>
-            <div className="text-blue-200 text-xs">{scoredHits}/{effectiveMaxHits} {fi.hits}</div>
+            <div className="text-blue-200 text-xs">{totalShots}/{effectiveMaxHits} {fi.hits}</div>
           </div>
         </div>
       </div>
