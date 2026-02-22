@@ -157,6 +157,17 @@ export const fi = {
   saveToSSI: 'Tallenna SSI:hin',
   completed: 'Valmis',
   matchCompleted: 'Ottelu valmis',
+
+  // Voice recognition
+  voiceRecognition: 'Äänitunnistus',
+  voiceOn: 'Ääni päällä',
+  voiceOff: 'Ääni pois',
+  startVoice: 'Aloita äänitunnistus',
+  stopVoice: 'Pysäytä äänitunnistus',
+  voiceListening: 'Kuuntelee...',
+  voiceNotSupported: 'Äänitunnistus ei tuettu',
+  voiceMicDenied: 'Mikrofonin käyttö estetty',
+  voiceError: 'Äänitunnistusvirhe',
 }
 
 // English UI strings
@@ -318,6 +329,17 @@ export const en = {
   saveToSSI: 'Save to SSI',
   completed: 'Completed',
   matchCompleted: 'Match Completed',
+
+  // Voice recognition
+  voiceRecognition: 'Voice Recognition',
+  voiceOn: 'Voice On',
+  voiceOff: 'Voice Off',
+  startVoice: 'Start voice recognition',
+  stopVoice: 'Stop voice recognition',
+  voiceListening: 'Listening...',
+  voiceNotSupported: 'Voice recognition not supported',
+  voiceMicDenied: 'Microphone access denied',
+  voiceError: 'Voice recognition error',
 }
 
 // Detect browser language and return appropriate translations
@@ -333,4 +355,9 @@ function getLanguage() {
   return fi // Default to Finnish
 }
 
-export default getLanguage()
+const currentLanguage = getLanguage()
+export const getCurrentLanguageCode = () => {
+  return currentLanguage === en ? 'en' : 'fi'
+}
+
+export default currentLanguage

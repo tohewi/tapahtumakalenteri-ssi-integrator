@@ -362,6 +362,31 @@ Patch release focused on authentication UX consistency across protected feature 
 | AUTH-UX4 | **Architecture baseline update**: Session handling documentation must define Auth Bootstrap + Auth Gate as the default pattern for all protected domains (`scoring`, `manage`, `reporting`) | ✅ Implemented |
 | AUTH-UX5 | **Authentication UAT coverage**: Add a concise UAT test plan covering login, reload with/without session, expiry, scope mismatch, restore-after-login, and logout persistence | ✅ Implemented |
 
+## Release 7.6 — Voice Recognition Scoring
+
+Voice recognition support for mobile and tablet scoring using Web Speech API.
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| VOICE1 | **Voice Recognition Integration**: Tablet scoring UI (`#/scoring-tablet`) must support voice input for score values using Web Speech API (SpeechRecognition). Recognizes score values spoken in Finnish or English and automatically adds them to the selected shooter's score card | ✅ Implemented |
+| VOICE2 | **Finnish Score Recognition**: Support Finnish score values and common colloquial forms: `napa`/`napakymppi` (X), `kymmenen`/`kymppi` (10), `yhdeksän` (9), `kahdeksan`/`kasi` (8), `seitsemän`/`seiska` (7), `kuusi` (6), `viisi`/`vitonen` (5), `neljä` (4), `kolme`/`kolonen` (3), `kaksi`/`kakonen`/`kakkonen` (2), `yksi`/`ykönen`/`ykkönen` (1), `ohi`/`ohilaukaus` (M) | ✅ Implemented |
+| VOICE3 | **English Score Recognition**: Support English score values: `bullseye`/`bull`/`center` (X), `ten` (10), `nine` (9), `eight` (8), `seven` (7), `six` (6), `five` (5), `four` (4), `three` (3), `two` (2), `one` (1), `miss`/`missed`/`zero` (M) | ✅ Implemented |
+| VOICE4 | **Voice Feedback**: After recognizing a score, the app must repeat the score value using text-to-speech (Web Speech Synthesis API) in the same language as recognition. When all required scores for a shooter are entered, announce the total shot count: `{count} laukausta` (Finnish) or `{count} shots` (English) | ✅ Implemented |
+| VOICE5 | **Voice UI Controls**: Add a microphone button to the tablet scoring number pad. Button shows microphone icon 🎤 and current state (`Äänitunnistus` / `Voice Recognition` when off, `Kuuntelee...` / `Listening...` when active). Purple background when off, red background when active, with pulsing indicator. Display error messages for unsupported browsers or permission denials | ✅ Implemented |
+| VOICE6 | **Language Detection**: Voice recognition and feedback must automatically use the same language as the UI (Finnish or English), determined by browser language settings | ✅ Implemented |
+| VOICE7 | **Continuous Recognition**: Voice recognition runs continuously while active, allowing the referee to speak multiple scores in sequence without pressing buttons between each score | ✅ Implemented |
+| VOICE8 | **Voice Recognition State Management**: Voice recognition automatically stops when: (1) match is completed (`status='cp'`), (2) component unmounts, or (3) user manually stops it via the microphone button. No shooter is required to start voice recognition, but scores are only recorded when a shooter is selected | ✅ Implemented |
+
+### Technical Implementation (VOICE1–VOICE8)
+
+- **Web Speech API**: Uses native browser `SpeechRecognition` and `SpeechSynthesis` APIs — no external dependencies
+- **Score Mapping**: Separate mapping dictionaries for Finnish (`FINNISH_SCORE_MAP`) and English (`ENGLISH_SCORE_MAP`) with colloquial variants
+- **Recognition Configuration**: `continuous: true`, `interimResults: false`, `maxAlternatives: 3`, language set to `fi-FI` or `en-US`
+- **Partial Matching**: Supports partial transcript matches (e.g., recognizes "napa" in "napa kymmenen")
+- **Voice Module**: New `scoring-ui/src/voiceRecognition.js` module with `createVoiceRecognition()`, `speak()`, `getSpokenScore()`, `announceShotCount()` functions
+- **UI Integration**: Microphone button added to `TabletScoringView` component above the number pad, with state indicators and error display
+- **Browser Compatibility**: Graceful degradation — button shows "not supported" message if Web Speech API unavailable
+
 ## Release 7.2 — Kupittaa Cup Management
 
 | # | Requirement | Status |
@@ -434,6 +459,7 @@ Vision: Transform the current "link collection" home page into a structured matc
 - **Release 7.3** (Refactoring Analysis): 1 requirement — 1 ✅ (RFA1). 5 outdated docs removed
 - **Release 7.4** (Refactoring Implementation): 8 requirements — 8 ✅ (RFR1–RFR8)
 - **Release 7.4.1** (Authentication UX Hardening): 5 requirements — 5 ✅ (AUTH-UX1–AUTH-UX5)
+- **Release 7.6** (Voice Recognition Scoring): 8 requirements — 8 ✅ (VOICE1–VOICE8)
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
 - **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
