@@ -89,7 +89,7 @@ class ConfigurationError extends AppError {
   }
 }
 
-module.exports = {
+export {
   AppError,
   ValidationError,
   AuthenticationError,

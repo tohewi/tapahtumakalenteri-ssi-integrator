@@ -3,24 +3,11 @@
  * Current version of the API with all existing endpoints
  */
 
-const express = require('express')
+import express from 'express'
 const router = express.Router()
 
-// Import route modules (will be updated to use versioned paths)
-const authRoutes = require('../auth-v7')
-const scoringRoutes = require('../scoring')
-const registrationRoutes = require('../registration')
-const managementRoutes = require('../management')
-const reportsRoutes = require('../reports')
-const staffingRoutes = require('../staffing')
-
-// Mount routes with /v1 prefix
-router.use('/auth', authRoutes)
-router.use('/scoring', scoringRoutes)
-router.use('/register', registrationRoutes)
-router.use('/manage', managementRoutes)
-router.use('/reports', reportsRoutes)
-router.use('/staffing', staffingRoutes)
+// Note: This router is not used directly. The routes are mounted in server.js.
+// This file exists for API versioning documentation and future use.
 
 // API version info endpoint
 router.get('/', (req, res) => {
@@ -45,4 +32,4 @@ router.get('/', (req, res) => {
   })
 })
 
-module.exports = router
+export default router

@@ -3,8 +3,8 @@
  * Provides consistent error responses and logging
  */
 
-const logger = require('../logger')
-const {
+import { log } from '../lib/logger.js'
+import {
   AppError,
   ValidationError,
   AuthenticationError,
@@ -13,7 +13,7 @@ const {
   ConflictError,
   RateLimitError,
   SSIError
-} = require('./AppError')
+} from '../lib/errors/AppError.js'
 
 /**
  * Enhances error with request context
@@ -110,7 +110,7 @@ function errorHandler(err, req, res, next) {
   // Log the error
   const logLevel = err instanceof AppError && err.isOperational ? 'warn' : 'error'
   
-  logger[logLevel]('API Error', {
+  log[logLevel]('API Error', {
     error: err.message,
     code: err.code,
     statusCode: err.statusCode,
@@ -167,7 +167,7 @@ function createError(type, message, context = {}) {
   return error
 }
 
-module.exports = {
+export {
   errorHandler,
   asyncHandler,
   createError,

@@ -3,9 +3,9 @@
  * Pure functions without Express dependencies
  */
 
-const { ssiGetScoringPage, ssiSubmitScore } = require('../ssi-core/scoring')
-const { log } = require('../logger')
-const { ValidationError, NotFoundError, SSIError } = require('../errors/AppError')
+import { ssiGetScoringPage, ssiSubmitScore } from '../ssi-core/scoring.js'
+import { log } from '../logger.js'
+import { ValidationError, NotFoundError, SSIError } from '../errors/AppError.js'
 
 /**
  * Search for cups by name
@@ -296,7 +296,7 @@ async function submitScores(competitorId, scores, session, matchConfig) {
   }
 }
 
-module.exports = {
+export default {
   searchCups,
   getCupDetails,
   getMatchDetails,
