@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { AppHeader } from './shared'
 import * as api from '../api'
-import t from '../i18n'
+import t, { getCurrentLanguageCode } from '../i18n'
 import { log } from '../log.js'
+import { createVoiceRecognition, speak, getSpokenScore, announceShotCount } from '../voiceRecognition.js'
 
 // ============================================================
 // Constants
@@ -85,7 +86,12 @@ export default function TabletScoringView({
   const [lastTapTime, setLastTapTime] = useState(null)
   const [lastTapTarget, setLastTapTarget] = useState(null)
   const DOUBLE_TAP_DELAY = 300 // ms
-  
+
+  // Voice recognition state
+  const [voiceActive, setVoiceActive] = useState(false)
+  const [voiceError, setVoiceError] = useState(null)
+  const voiceRecognitionRef = useRef(null)
+
   const scoreTrackRef = useRef(null)
 
   // Check if match is completed (status: 'cp')
@@ -338,6 +344,86 @@ export default function TabletScoringView({
     newShooters.splice(targetIdx, 0, shooter)
     onShootersReorder(newShooters)
   }
+
+  // Voice recognition handlers
+  const handleVoiceScoreRecognized = useCallback((zone) => {
+    if (!selectedShooter || isMatchCompleted) {
+      log.warn('[voice] Ignoring score - no shooter selected or match completed')
+      return
+    }
+
+    // Get current language for feedback
+    const language = getCurrentLanguageCode()
+
+    // Speak the recognized score
+    const spokenScore = getSpokenScore(zone, language)
+    speak(spokenScore, language)
+
+    // Add the score
+    handleScoreAdd(zone)
+
+    // Check if all scores are now complete
+    const shooterScores = allScores[selectedShooter.id]
+    if (shooterScores) {
+      const totalShots = getTotalHits(shooterScores)
+      if (totalShots === totalShotsInMatch) {
+        // Announce completion
+        setTimeout(() => {
+          announceShotCount(totalShots, language)
+        }, 500) // Small delay after the score announcement
+      }
+    }
+  }, [selectedShooter, isMatchCompleted, allScores, totalShotsInMatch])
+
+  const handleVoiceError = useCallback((errorMessage) => {
+    log.error('[voice] Error:', errorMessage)
+    setVoiceError(errorMessage)
+    setTimeout(() => setVoiceError(null), 5000) // Clear error after 5 seconds
+  }, [])
+
+  const toggleVoiceRecognition = useCallback(() => {
+    if (!voiceRecognitionRef.current) {
+      // Initialize voice recognition
+      const language = getCurrentLanguageCode()
+      voiceRecognitionRef.current = createVoiceRecognition(
+        language,
+        handleVoiceScoreRecognized,
+        handleVoiceError
+      )
+    }
+
+    if (!voiceRecognitionRef.current.isSupported) {
+      setVoiceError(t.voiceNotSupported)
+      return
+    }
+
+    if (voiceActive) {
+      voiceRecognitionRef.current.stop()
+      setVoiceActive(false)
+      setVoiceError(null)
+    } else {
+      voiceRecognitionRef.current.start()
+      setVoiceActive(true)
+      setVoiceError(null)
+    }
+  }, [voiceActive, handleVoiceScoreRecognized, handleVoiceError])
+
+  // Cleanup voice recognition on unmount or when shooter changes
+  useEffect(() => {
+    return () => {
+      if (voiceRecognitionRef.current && voiceActive) {
+        voiceRecognitionRef.current.stop()
+      }
+    }
+  }, [voiceActive])
+
+  // Stop voice recognition when match is completed
+  useEffect(() => {
+    if (isMatchCompleted && voiceActive) {
+      voiceRecognitionRef.current?.stop()
+      setVoiceActive(false)
+    }
+  }, [isMatchCompleted, voiceActive])
 
 
   // Build score track data
@@ -617,6 +703,34 @@ export default function TabletScoringView({
           <div className="p-2 border-b border-gray-200 flex-shrink-0">
             <h3 className="font-semibold text-gray-700 text-xs">Score Pad</h3>
           </div>
+
+          {/* Voice Recognition Button */}
+          <div className="p-2 border-b border-gray-200 flex-shrink-0">
+            <button
+              onClick={toggleVoiceRecognition}
+              disabled={!selectedShooter || isMatchCompleted}
+              aria-label={voiceActive ? t.stopVoice : t.startVoice}
+              className={`w-full py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
+                voiceActive
+                  ? 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800'
+                  : 'bg-purple-600 text-white hover:bg-purple-700 active:bg-purple-800'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-xl">🎤</span>
+                <span>{voiceActive ? t.voiceListening : t.voiceRecognition}</span>
+                {voiceActive && (
+                  <span className="inline-block w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                )}
+              </div>
+            </button>
+            {voiceError && (
+              <div className="mt-1 text-xs text-red-600 text-center">
+                {voiceError}
+              </div>
+            )}
+          </div>
+
           <div className="p-2 flex-1 overflow-y-auto">
             <div className="grid grid-cols-3 gap-2">
               {SCORE_ZONES.map((zone) => {
@@ -626,7 +740,7 @@ export default function TabletScoringView({
                   low: 'bg-gray-600 hover:bg-gray-700 active:bg-gray-800 text-white',
                   miss: 'bg-red-600 hover:bg-red-700 active:bg-red-800 text-white',
                 }
-                
+
                 return (
                   <button
                     key={zone}
