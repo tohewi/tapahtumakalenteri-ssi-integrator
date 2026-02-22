@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useRememberMe } from './hooks/useRememberMe'
+import { useVoiceScoring } from './hooks/useVoiceScoring'
 import MatchPicker from './components/MatchPicker'
 import SquadPicker from './components/SquadPicker'
 import ScoringForm from './components/ScoringForm'
@@ -473,6 +474,34 @@ export function App() {
   const pairedSeries = doubleSeries ? activeSeries + 1 : null
   const effectiveMaxHits = doubleSeries ? MAX_HITS_PER_SERIES * 2 : MAX_HITS_PER_SERIES
 
+  // --- Voice scoring ---
+  // Compute total shots for the current shooter in the active series/pair.
+  // Falls back to 0 when no shooter is selected (i.e., outside the scoring view).
+  const voiceTotalShots = (() => {
+    if (!selectedShooterId || !allScores[selectedShooterId]) return 0
+    const sc = allScores[selectedShooterId]
+    let total = hitsInSeries(sc[activeSeries] || {})
+    if (doubleSeries && sc[pairedSeries]) total += hitsInSeries(sc[pairedSeries])
+    return total
+  })()
+
+  const handleVoiceScore = useCallback((zone) => {
+    updateScore(activeSeries, zone, 1)
+  }, [updateScore, activeSeries])
+
+  const { isListening: voiceListening, isSupported: voiceSupported,
+          lastRecognized: voiceLastZone, startListening: voiceStart,
+          stopListening: voiceStop } = useVoiceScoring({
+    onScore: handleVoiceScore,
+    totalShots: voiceTotalShots,
+    maxHits: effectiveMaxHits,
+  })
+
+  // Stop listening when navigating away from the scoring view
+  useEffect(() => {
+    if (view !== 'scoring') voiceStop()
+  }, [view, voiceStop])
+
   // Check if a shooter is scored for the active group (single or double)
   const isGroupScored = (shooterId) => {
     if (!allScores[shooterId]) return false
@@ -836,6 +865,27 @@ export function App() {
         onUpdate={updateScore}
       />
 
+      {/* Voice scoring feedback banner */}
+      {voiceListening && (
+        <div className="mx-3 mt-3 bg-green-50 border border-green-300 rounded-xl p-3 flex items-center gap-3">
+          {/* Pulsing mic icon */}
+          <span className="relative flex h-5 w-5 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-5 w-5 bg-green-500 items-center justify-center">
+              <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 14a3 3 0 003-3V5a3 3 0 00-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 0014 0h-2z"/>
+              </svg>
+            </span>
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="text-green-800 text-sm font-medium">{fi.voiceListening}</p>
+            {voiceLastZone && (
+              <p className="text-green-600 text-xs mt-0.5">→ {voiceLastZone}</p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Error banner */}
       {error && (
         <div className="mx-3 mt-2 bg-red-50 border border-red-200 rounded-xl p-3 text-center">
@@ -845,6 +895,27 @@ export function App() {
       )}
 
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 shadow-lg">
+        {/* Voice scoring controls row */}
+        <div className="flex items-center gap-2 max-w-lg mx-auto mb-2">
+          {voiceSupported ? (
+            <button
+              type="button"
+              onClick={voiceListening ? voiceStop : voiceStart}
+              aria-label={voiceListening ? fi.voiceStop : fi.voiceStart}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm transition-colors w-full justify-center
+                ${voiceListening
+                  ? 'bg-green-600 text-white active:bg-green-700'
+                  : 'bg-gray-100 text-gray-700 active:bg-gray-200 border border-gray-300'}`}
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 14a3 3 0 003-3V5a3 3 0 00-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 0014 0h-2z"/>
+              </svg>
+              {voiceListening ? fi.voiceStop : fi.voiceScoring}
+            </button>
+          ) : (
+            <p className="text-xs text-gray-400 text-center w-full">{fi.voiceNotSupported}</p>
+          )}
+        </div>
         <div className="flex items-center gap-3 max-w-lg mx-auto">
           <button
             onClick={() => setView('series')}

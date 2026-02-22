@@ -5,6 +5,38 @@
 
 ---
 
+## Release 7.6 — Voice Recognition Scoring (2026-02-22)
+
+**Requirements:** VS1–VS5 ✅
+
+### Overview
+
+Voice-driven score input for the mobile scoring app. A referee can now dictate scores verbally while reading results from the target without touching the screen. The app recognises spoken zone names in Finnish and English, speaks back the recognised zone as TTS confirmation, and announces series completion.
+
+### New Features
+
+- **Voice command recognition (VS1):** The mobile scoring view gains a microphone toggle button. When active, the Web Speech API listens continuously for Finnish and English spoken zone names (napa/napakymppi, kymmenen, yhdeksän, kahdeksan/kasi, seitsemän/seiska, kuusi, viisi/vitonen, neljä, kolme/kolonen, kaksi/kakonen/kakkonen, yksi/ykönen/ykkönen, ohi/ohilaukaus — plus English equivalents). The first matching word in each recognition result increments the corresponding score zone.
+- **TTS zone confirmation (VS2):** After each accepted command, the app speaks back the recognised zone name using the SpeechSynthesis API (Finnish voice for fi browsers, English for en browsers), so the referee knows the command was received without looking at the screen.
+- **Series completion announcement (VS3):** When the series becomes full, the app announces "N laukausta" (Finnish) or "N shots" (English) after a short delay so it does not overlap the zone confirmation.
+- **Active state indicator (VS4):** The toggle button turns green with a pulsing animation when listening, and shows the last recognised zone below the pulsing icon.
+- **Graceful degradation (VS5):** On browsers that do not support the Web Speech API (older desktop browsers), the mic button is replaced by an informational note; scoring otherwise works normally via button presses.
+
+### Requirements Met
+
+- **VS1:** Finnish + English voice command recognition via `useVoiceScoring` hook + `parseVoiceCommand` utility.
+- **VS2:** TTS confirmation via SpeechSynthesis after each accepted zone command.
+- **VS3:** Series completion announced via TTS when shots reach the series maximum.
+- **VS4:** Microphone toggle button with pulsing active state and last-recognised zone feedback.
+- **VS5:** `isSupported` flag in hook; unsupported browsers see explanatory text instead.
+
+### Test Status
+
+| Suite | Passing | Notes |
+|-------|--------:|-------|
+| Frontend (scoring-ui) | 234 | 44 new voice-scoring unit tests added |
+
+---
+
 ## Release 7.4.1 — Authentication UX Hardening (2026-02-22)
 
 **Requirements:** AUTH-UX1–AUTH-UX5 ✅
