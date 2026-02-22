@@ -350,7 +350,7 @@ Analysis completed 2026-02-20. Reviewed `docs/design/architecture-review.md` (20
 
 **Implementation**: Check `match.status === 'cp'` and disable all score modification operations while preserving read-only browsing capability.
 
-## Release 8.0.1 — Authentication UX Hardening
+## Release 7.4.1 — Authentication UX Hardening
 
 Patch release focused on authentication UX consistency across protected feature domains and documentation consolidation.
 
@@ -433,9 +433,9 @@ Vision: Transform the current "link collection" home page into a structured matc
 - **Release 7.2** (Kupittaa Cup Management): 3 requirements — 1 ✅, 2 📋 Specified (CUP1–CUP3)
 - **Release 7.3** (Refactoring Analysis): 1 requirement — 1 ✅ (RFA1). 5 outdated docs removed
 - **Release 7.4** (Refactoring Implementation): 8 requirements — 8 ✅ (RFR1–RFR8)
+- **Release 7.4.1** (Authentication UX Hardening): 5 requirements — 5 ✅ (AUTH-UX1–AUTH-UX5)
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
-- **Release 8.0.1** (Authentication UX Hardening): 5 requirements — 5 ✅ (AUTH-UX1–AUTH-UX5)
 - **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
 
 
