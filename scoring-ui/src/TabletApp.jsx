@@ -54,7 +54,7 @@ function lsRemove(key) {
   try { localStorage.removeItem(key) } catch { /* ignore */ }
 }
 
-function TabletApp() {
+export function TabletApp() {
   const { savedCreds, handleRememberMe } = useRememberMe('ssi_credentials_tablet')
   
   const [view, setView] = useState('login') // 'login' | 'cup' | 'match' | 'squad' | 'scoring'
@@ -68,6 +68,26 @@ function TabletApp() {
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
   const [userEmail, setUserEmail] = useState(null)
   const [userName, setUserName] = useState(null)
+
+  const fetchAndSetUserInfo = useCallback(async () => {
+    try {
+      const userInfo = await api.getUserInfo()
+      log.debug('[TabletApp] User info received:', userInfo)
+
+      const fullName = `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim()
+      if (userInfo.email) {
+        setUserEmail(userInfo.email)
+      }
+
+      if (fullName) {
+        setUserName(fullName)
+      } else if (userInfo.email) {
+        setUserName(userInfo.email.split('@')[0])
+      }
+    } catch (err) {
+      log.warn('[TabletApp] Could not fetch user info:', err)
+    }
+  }, [])
 
   // --- Helper to handle session expiry ---
   const handleSessionExpired = useCallback(() => {
@@ -120,22 +140,7 @@ function TabletApp() {
     setUserName(emailPrefix)
     
     // Fetch user info from SSI in background (non-blocking)
-    api.getUserInfo()
-      .then(userInfo => {
-        log.debug('[TabletApp] User info received:', userInfo)
-        const fullName = `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim()
-        log.debug('[TabletApp] Full name constructed:', fullName)
-        if (fullName) {
-          log.debug('[TabletApp] Setting userName to:', fullName)
-          setUserName(fullName) // Update with real name when available
-        } else {
-          log.warn('[TabletApp] User info has no name, keeping email prefix')
-        }
-      })
-      .catch(err => {
-        log.warn('[TabletApp] Could not fetch user info:', err)
-        // Keep the email prefix fallback we already set
-      })
+    void fetchAndSetUserInfo()
     
     await handleRememberMe(email, password, apiKey, rememberMe)
     try {
@@ -146,7 +151,7 @@ function TabletApp() {
     }
   }
 
-  const restoreNavState = async () => {
+  const restoreNavState = useCallback(async () => {
     const nav = lsGet(LS_KEYS.NAV)
     const savedCup = lsGet(LS_KEYS.CUP)
     log.debug('[TabletApp] restoreNavState: nav=', nav, 'savedCup=', savedCup?.id)
@@ -213,7 +218,34 @@ function TabletApp() {
     }
 
     setView(nav.view === 'cup' ? 'cup' : 'match')
-  }
+  }, [])
+
+  // On reload, keep users in scoring flow when session cookie is still valid.
+  useEffect(() => {
+    let isActive = true
+
+    const bootstrapFromActiveSession = async () => {
+      try {
+        const status = await api.getAuthStatus()
+        if (!isActive) return
+
+        const canRestoreScoring = status?.authenticated && (!status.scope || status.scope === 'scoring')
+        if (!canRestoreScoring) return
+
+        await restoreNavState()
+        if (!isActive) return
+        void fetchAndSetUserInfo()
+      } catch {
+        // Ignore bootstrap errors and keep explicit login as the fallback.
+      }
+    }
+
+    bootstrapFromActiveSession()
+
+    return () => {
+      isActive = false
+    }
+  }, [restoreNavState, fetchAndSetUserInfo])
 
   const handleLogout = async () => {
     await api.logout()

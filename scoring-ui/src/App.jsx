@@ -173,7 +173,7 @@ function setMatchDoubleSeriesEnabled(matchId, enabled) {
   lsSet(LS_KEYS.DOUBLE_SERIES_BY_MATCH, byMatch)
 }
 
-function App() {
+export function App() {
   const { savedCreds, handleRememberMe } = useRememberMe('ssi_credentials_scoring')
   
   const [view, setView] = useState('login') // 'login' | 'cup' | 'match' | 'squad' | 'series' | 'scoring'
@@ -247,7 +247,7 @@ function App() {
     await restoreNavState()
   }
 
-  const restoreNavState = async () => {
+  const restoreNavState = useCallback(async () => {
     const nav = lsGet(LS_KEYS.NAV)
     const savedCup = lsGet(LS_KEYS.CUP)
 
@@ -310,7 +310,32 @@ function App() {
     }
 
     setView(nav.view === 'cup' ? 'cup' : 'match')
-  }
+  }, [])
+
+  // On reload, keep users in scoring flow when session cookie is still valid.
+  useEffect(() => {
+    let isActive = true
+
+    const bootstrapFromActiveSession = async () => {
+      try {
+        const status = await api.getAuthStatus()
+        if (!isActive) return
+
+        const canRestoreScoring = status?.authenticated && (!status.scope || status.scope === 'scoring')
+        if (canRestoreScoring) {
+          await restoreNavState()
+        }
+      } catch {
+        // Ignore bootstrap errors and keep explicit login as the fallback.
+      }
+    }
+
+    bootstrapFromActiveSession()
+
+    return () => {
+      isActive = false
+    }
+  }, [restoreNavState])
 
   const handleLogout = async () => {
     try { await api.logout() } catch { /* ignore */ }

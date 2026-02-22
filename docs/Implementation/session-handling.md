@@ -248,6 +248,41 @@ useEffect(() => {
 - Now user MUST click Login button to create session
 - This ensures session timeout actually works
 
+### Mount-Time Session Bootstrap Pattern (RELOAD UX)
+
+To avoid dropping users to login on browser reload when the session cookie is still valid,
+feature entry components should run a mount-time auth bootstrap:
+
+```javascript
+useEffect(() => {
+  let isActive = true
+
+  const bootstrapFromActiveSession = async () => {
+    try {
+      const status = await api.getAuthStatus()
+      if (!isActive) return
+
+      const canRestore = status?.authenticated && (!status.scope || status.scope === 'scoring')
+      if (canRestore) {
+        await restoreNavState()
+      }
+    } catch {
+      // keep explicit login as fallback
+    }
+  }
+
+  bootstrapFromActiveSession()
+  return () => { isActive = false }
+}, [restoreNavState])
+```
+
+Important constraints:
+
+- This **does not call** `/api/auth/login` and therefore is **not auto-login**.
+- It only reads existing session state from `/api/auth/status` and restores local UI state.
+- Scope must match the feature (`scoring` for `App.jsx` and `TabletApp.jsx`).
+- If status check fails or scope does not match, stay on login view.
+
 ### State Restoration Pattern (UX ENHANCEMENT)
 
 Components save navigation state during user interactions and restore it after re-login:
