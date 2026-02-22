@@ -223,3 +223,81 @@ $values = [regex]::Matches($formPage.Content, '<input[^>]+name="weapon_groups"[^
   - `NODE_ENV=development`, `PORT=3001` for local development
   - `NODE_ENV=production` for production do not specify PORT. Render will assign a port.
 - Max JSON body size: 10kb
+
+## Architecture Guidelines (v7.5+)
+
+### Module Boundaries
+
+Follow the modular monolith pattern with enforced boundaries:
+
+1. **Routes** (`routes/*.js`) may import:
+   - Their domain module from `lib/ssi-core/`
+   - Their service module from `lib/services/`
+   - Shared utilities (logger, errors, middleware)
+
+2. **Services** (`lib/services/*.js`) may import:
+   - Their domain module from `lib/ssi-core/`
+   - Other services (if absolutely necessary)
+   - Shared utilities
+
+3. **Domain modules** (`lib/ssi-core/*.js`) may import:
+   - `http-helpers.js` only
+   - Nothing else from outside `ssi-core/`
+
+4. **UI Components** may import:
+   - Their feature's hooks/components
+   - Shared UI components
+   - API client (`api.js`)
+
+### Forbidden Patterns
+
+```javascript
+// ❌ Forbidden - creates hidden coupling
+import * from '../lib/ssi-core/'
+
+// ❌ Forbidden - cross-domain imports
+import { ssiGetScoringPage } from '../lib/ssi-core/participants.js'
+
+// ❌ Forbidden - barrel imports that hide dependencies
+import { ssiGraphQL } from '../lib/ssi-core/index.js'
+
+// ✅ Allowed - domain-specific import
+import { ssiGetScoringPage } from '../lib/ssi-core/scoring.js'
+```
+
+### Service Layer Pattern
+
+Routes must be thin dispatchers. Business logic goes in services:
+
+```javascript
+// Route - thin dispatcher
+app.get('/api/v1/cups', requireAuth('scoring'), asyncHandler(async (req, res) => {
+  const cups = await scoringService.searchCups(...)
+  res.json({ cups })
+}))
+
+// Service - pure business logic
+async function searchCups(search, session, graphqlWithRefresh) {
+  // Business logic here, no Express dependencies
+}
+```
+
+### Error Handling
+
+Use the centralized error handling:
+
+```javascript
+// Throw operational errors
+throw createError('validation', 'Invalid email format', { field: 'email' })
+
+// Routes use asyncHandler wrapper
+router.post('/data', asyncHandler(async (req, res) => {
+  // Async errors automatically caught
+}))
+```
+
+### API Versioning
+
+- All new endpoints use `/api/v1/` prefix
+- Frontend API calls use versioned paths
+- Future versions will support discipline-specific paths (`/api/v2/sra/`, `/api/v2/resul/`)

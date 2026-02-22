@@ -1,7 +1,8 @@
 # Software Architecture Review
 
-**Date:** 2026-02-19
+**Date:** 2026-02-19 (updated 2026-02-22 for v7.5)
 **Scope:** `scoring-proxy/` (Express backend) and `scoring-ui/` (React frontend)
+**Target Architecture:** Modular Monolith with clear module boundaries
 
 ---
 
@@ -366,3 +367,126 @@ The following rules should be added to `AGENTS.md` and `.github/copilot-instruct
 1. Split `ssi-core/client.js` by domain
 2. Add fixture-based SSI client tests
 3. Add file size limits to agentic guidelines
+
+---
+
+## 8. Target Architecture (v7.5+)
+
+### 8.1 Architectural Vision
+
+**Modular Monolith** - Single deployment with enforced module boundaries. This provides simplicity while enabling future microservice extraction when multi-tenancy is needed.
+
+### 8.2 Module Structure
+
+```
+┌─────────────────────────────────────────┐
+│           Modular Monolith              │
+├─────────────────────────────────────────┤
+│ Presentation Layer                      │
+│ ├── React components (feature modules)  │
+│ └── Shared UI library                   │
+├─────────────────────────────────────────┤
+│ Application Layer                       │
+│ ├── Routes (thin dispatchers)           │
+│ ├── Services (business logic)           │
+│ └── Error handling middleware           │
+├─────────────────────────────────────────┤
+│ Domain Layer                            │
+│ ├── SSI Core (split by domain)          │
+│ │   ├── graphql.js                      │
+│ │   ├── scoring.js                      │
+│ │   ├── participants.js                 │
+│ │   ├── management.js                   │
+│ │   └── http-helpers.js                 │
+│ └── Domain services                     │
+├─────────────────────────────────────────┤
+│ Infrastructure Layer                    │
+│ ├── Session store (Memory/Redis)        │
+│ ├── Logger                              │
+│ └── Error classes                       │
+└─────────────────────────────────────────┘
+```
+
+### 8.3 Module Boundaries
+
+#### Import Hierarchy (Enforced by ESLint)
+```javascript
+1. Routes may import: 
+   - Their domain module from ssi-core/
+   - Their service module from lib/services/
+   - Shared utilities (logger, errors)
+
+2. Services may import:
+   - Their domain module from ssi-core/
+   - Other services (if absolutely necessary)
+   - Shared utilities
+
+3. Domain modules (ssi-core/) may import:
+   - http-helpers.js
+   - Nothing else from outside ssi-core/
+
+4. UI Components may import:
+   - Their feature's hooks/components
+   - Shared UI components
+   - API client (api.js)
+```
+
+#### Anti-Patterns (Forbidden)
+```javascript
+// Forbidden - creates hidden coupling
+import * from '../lib/ssi-core/'
+
+// Forbidden - cross-domain imports
+import { ssiGetScoringPage } from '../lib/ssi-core/participants.js'
+
+// Allowed - domain-specific import
+import { ssiGetScoringPage } from '../lib/ssi-core/scoring.js'
+```
+
+### 8.4 API Versioning Strategy
+
+- **Current**: `/api/v1/` for all endpoints
+- **Future**: `/api/v2/{discipline}/` for discipline-specific APIs
+- **Backward compatibility**: Maintained during transition periods
+
+### 8.5 Error Handling Pattern
+
+Centralized error handling with:
+- Custom error classes (`AppError`, `ValidationError`, etc.)
+- Error middleware for consistent responses
+- Operational vs programming error distinction
+- Request context enhancement (userId, requestId)
+
+### 8.6 Service Layer Pattern
+
+Routes become thin dispatchers:
+```javascript
+// Route - thin dispatcher
+app.get('/api/cups', requireAuth('scoring'), asyncHandler(async (req, res) => {
+  const cups = await scoringService.searchCups(...)
+  res.json({ cups })
+}))
+
+// Service - pure business logic
+async function searchCups(search, session, graphqlWithRefresh) {
+  // Business logic here
+}
+```
+
+### 8.7 Migration Status
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| SSI Core Domain Split | Complete (v7.4) | 5 domain modules created |
+| Service Layer | In Progress (v7.5) | scoring-service.js done |
+| Error Handling | Complete (v7.5) | Centralized middleware |
+| API Versioning | Complete (v7.5) | `/api/v1/` paths active |
+| Module Boundaries | Complete (v7.5) | ESLint rules enforced |
+| UI Module Split | Planned | Future release |
+
+### 8.8 Future Considerations
+
+1. **Redis Sessions** (v10/11): Move from in-memory to Redis
+2. **Multi-tenancy**: When needed, extract modules to microservices
+3. **Background Jobs**: Queue system for async operations
+4. **Discipline APIs**: Version 2 with discipline-specific paths

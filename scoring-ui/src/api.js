@@ -1,6 +1,6 @@
 import { log } from './log.js'
 
-const API_BASE = '/api'
+const API_BASE = '/api/v1'
 
 // Custom error for session expiry
 export class SessionExpiredError extends Error {

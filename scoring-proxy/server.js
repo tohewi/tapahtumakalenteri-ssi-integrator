@@ -8,6 +8,7 @@ import { existsSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { ssiGraphQL, ssiLogin, ssiRefreshJWT } from './lib/ssi-core/graphql.js'
 import { log } from './lib/logger.js'
+import { errorHandler } from './middleware/errorHandler.js'
 import { createScoringRouter } from './routes/scoring.js'
 import { createRegistrationRouter } from './routes/registration.js'
 import { createReportsRouter } from './routes/reports.js'
@@ -16,6 +17,7 @@ import { createStaffingRouter } from './routes/staffing.js'
 import { initRedis, getActiveSessionCount, isUsingRedis, touchSession } from './lib/session/index.js'
 import { requireAuthV7 } from './middleware/auth-v7.js'
 import { createAuthV7Router } from './routes/auth-v7.js'
+import apiV1Router from './routes/v1/index.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -342,6 +344,9 @@ const registerBodyLimit = express.json({ limit: '1kb' })
 // Mount route modules
 // ============================================================
 
+// API versioning
+app.use('/api/v1', apiV1Router)
+
 // Auth routes (V7 — Redis/memory backed dual sessions)
 const authRouter = createAuthV7Router({ 
   loginLimiter, 
@@ -350,13 +355,6 @@ const authRouter = createAuthV7Router({
   graphqlWithRefresh,
 })
 app.use('/api/auth', authRouter)
-
-// Scoring routes
-const scoringRouter = createScoringRouter({
-  requireAuth,
-  graphqlWithRefresh,
-})
-app.use('/api', scoringRouter)
 
 // Management routes
 const managementRouter = createManagementRouter({
@@ -405,6 +403,11 @@ if (existsSync(indexPath)) {
     res.sendFile(indexPath)
   })
 }
+
+// ============================================================
+// Error handling middleware (must be last)
+// ============================================================
+app.use(errorHandler)
 
 // ============================================================
 // Start server (only when run directly, not when imported for tests)

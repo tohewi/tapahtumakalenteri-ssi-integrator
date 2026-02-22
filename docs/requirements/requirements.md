@@ -378,6 +378,26 @@ Patch release focused on authentication UX consistency across protected feature 
 - **CUP3**: Paid status is read from and written to SSI at **cup level only**. No local persistence — SSI is the source of truth.
 - **SSI integration**: CUP2 and CUP3 use **web scraping** (admin cookies) for both reading and writing state. SSI GraphQL does not support write operations reliably. Endpoints: `set-did-not-show`, `undo-did-not-show`, `toggle-paid` via `GET /event/participant/{ct}/{id}/...`. Reading paid/DNS status also requires scraping the participant page since GraphQL does not expose these fields.
 
+## Release 7.5 — Architecture V2 Foundation
+
+Establish architectural patterns and foundations for future scalability while maintaining simplicity. This release focuses on modular monolith patterns, centralized error handling, API versioning preparation, and service layer completion.
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| ARCH1 | **Centralized Error Handling**: Implement Express error handling middleware with custom error classes. Consistent error responses across all endpoints with proper logging and operational vs. programming error distinction | 📋 Specified |
+| ARCH2 | **API Versioning Structure**: Add `/api/v1/` base path for current endpoints. Prepare versioning strategy to support shooting disciplines (e.g., `/api/v2/sra/`, `/api/v2/resul/`). Update all frontend API calls to use versioned paths | 📋 Specified |
+| ARCH3 | **Service Layer Completion**: Extract business logic from remaining routes into service modules: `scoring-service.js`, `registration-service.js`, `report-service.js`. Routes become thin dispatchers focusing on HTTP contract only | 📋 Specified |
+| ARCH4 | **Module Boundary Enforcement**: Add ESLint rules to prevent architectural drift. Define and document allowed import patterns: routes → domain modules → services, no cross-domain imports in ssi-core, no barrel imports that create hidden coupling | 📋 Specified |
+| ARCH5 | **Architecture Documentation**: Update architecture-review.md with target modular monolith patterns, module boundaries, and migration progress. Document explicit import rules and anti-patterns to prevent | 📋 Specified |
+
+### Design Decisions (ARCH1-ARCH5)
+
+- **Modular Monolith Target**: Keep single deployment but enforce clear module boundaries. This provides simplicity while enabling future microservice extraction when multi-tenancy is needed
+- **Error Pattern**: Custom `AppError` class + centralized middleware. Operational errors (validation, auth) return user-friendly messages; programming errors return generic 500 with stack only in dev
+- **Versioning Strategy**: URL-based versioning (`/api/v1/`) with discipline-specific paths in future versions. Maintain backward compatibility during transition
+- **Service Extraction**: Pure business logic functions without Express dependencies. Enables unit testing without HTTP mocking
+- **Import Rules**: Enforced via ESLint to prevent re-coupling. Domain modules in ssi-core/ may only import http-helpers; routes must import specific domain modules, not barrel exports
+
 ## Release 7.9 — GraphQL Cup Management
 
 Migrate Cup creation and maintenance from web scraping to SSI GraphQL API. The legacy `New-KupittaaCup.ps1` script uses web scraping (CSRF tokens, form POSTs, HTML parsing) which is fragile and breaks when SSI updates their UI. The GraphQL `create_event` mutation is now confirmed working (Feb 2026) and should be the primary method.
