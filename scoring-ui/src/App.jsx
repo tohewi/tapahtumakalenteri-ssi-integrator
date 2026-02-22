@@ -176,7 +176,7 @@ function setMatchDoubleSeriesEnabled(matchId, enabled) {
 export function App() {
   const { savedCreds, handleRememberMe } = useRememberMe('ssi_credentials_scoring')
   
-  const [view, setView] = useState('login') // 'login' | 'cup' | 'match' | 'squad' | 'series' | 'scoring'
+  const [view, setView] = useState('restoring') // 'restoring' | 'login' | 'cup' | 'match' | 'squad' | 'series' | 'scoring'
   const [selectedCup, setSelectedCup] = useState(null)
   const [matches, setMatches] = useState([])
   const [selectedMatch, setSelectedMatch] = useState(null)
@@ -324,9 +324,13 @@ export function App() {
         const canRestoreScoring = status?.authenticated && (!status.scope || status.scope === 'scoring')
         if (canRestoreScoring) {
           await restoreNavState()
+          return
         }
+
+        setView('login')
       } catch {
         // Ignore bootstrap errors and keep explicit login as the fallback.
+        if (isActive) setView('login')
       }
     }
 
@@ -552,6 +556,20 @@ export function App() {
     // Return to shooter list so user picks who to score next
     setSelectedShooterId(null)
     setView('series')
+  }
+
+  // ============================================================
+  // VIEW: Restoring session state
+  // ============================================================
+  if (view === 'restoring') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <p className="text-gray-500 text-sm">{fi.loading}</p>
+        </div>
+      </div>
+    )
   }
 
   // ============================================================

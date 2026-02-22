@@ -57,7 +57,7 @@ function lsRemove(key) {
 export function TabletApp() {
   const { savedCreds, handleRememberMe } = useRememberMe('ssi_credentials_tablet')
   
-  const [view, setView] = useState('login') // 'login' | 'cup' | 'match' | 'squad' | 'scoring'
+  const [view, setView] = useState('restoring') // 'restoring' | 'login' | 'cup' | 'match' | 'squad' | 'scoring'
   const [selectedCup, setSelectedCup] = useState(null)
   const [matches, setMatches] = useState([])
   const [selectedMatch, setSelectedMatch] = useState(null)
@@ -230,13 +230,17 @@ export function TabletApp() {
         if (!isActive) return
 
         const canRestoreScoring = status?.authenticated && (!status.scope || status.scope === 'scoring')
-        if (!canRestoreScoring) return
+        if (!canRestoreScoring) {
+          setView('login')
+          return
+        }
 
         await restoreNavState()
         if (!isActive) return
         void fetchAndSetUserInfo()
       } catch {
         // Ignore bootstrap errors and keep explicit login as the fallback.
+        if (isActive) setView('login')
       }
     }
 
@@ -388,6 +392,17 @@ export function TabletApp() {
   }
 
   // Render appropriate view
+  if (view === 'restoring') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <p className="text-gray-500 text-sm">{t.loading}</p>
+        </div>
+      </div>
+    )
+  }
+
   if (view === 'login') {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
