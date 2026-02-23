@@ -8,7 +8,12 @@ const { mockSsiGetScoringPage, mockSsiSubmitScore } = vi.hoisted(() => ({
 
 // Mock the logger
 vi.mock('../lib/logger.js', () => ({
-  log: vi.fn()
+  log: {
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
+  }
 }))
 
 // Mock SSI core functions
