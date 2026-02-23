@@ -48,7 +48,7 @@ async function searchCups(search, session, graphqlWithRefresh) {
 
     return cups
   } catch (err) {
-    log('Failed to search cups:', err.message)
+    log.error('Failed to search cups:', err.message)
     throw new SSIError('Failed to search cups')
   }
 }
@@ -100,7 +100,7 @@ async function getCupDetails(cupId, session, graphqlWithRefresh) {
     if (err instanceof NotFoundError) {
       throw err
     }
-    log('Failed to fetch cup:', err.message)
+    log.error('Failed to fetch cup:', err.message)
     throw new SSIError('Failed to fetch cup details')
   }
 }
@@ -148,7 +148,7 @@ async function getMatchDetails(matchId, session, graphqlWithRefresh) {
     if (err instanceof NotFoundError) {
       throw err
     }
-    log('Failed to fetch match:', err.message)
+    log.error('Failed to fetch match:', err.message)
     throw new SSIError('Failed to fetch match details')
   }
 }
@@ -193,7 +193,7 @@ async function getCompetitorDetails(competitorId, session, graphqlWithRefresh) {
     if (err instanceof NotFoundError) {
       throw err
     }
-    log('Failed to fetch competitor:', err.message)
+    log.error('Failed to fetch competitor:', err.message)
     throw new SSIError('Failed to fetch competitor details')
   }
 }
@@ -283,7 +283,7 @@ async function submitScores(competitorId, scores, session, matchConfig) {
     // Submit scores
     const result = await ssiSubmitScore(competitorId, formData, session.ssiCookies, scoringPage.csrfToken)
     
-    log(`Scores submitted for competitor ${competitorId}`)
+    log.debug(`Scores submitted for competitor ${competitorId}`)
     
     return {
       success: true,
@@ -291,7 +291,7 @@ async function submitScores(competitorId, scores, session, matchConfig) {
       submittedAt: new Date().toISOString()
     }
   } catch (err) {
-    log('Failed to submit scores:', err.message)
+    log.error('Failed to submit scores:', err.message)
     throw new SSIError('Failed to submit scores')
   }
 }
