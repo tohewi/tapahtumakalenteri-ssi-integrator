@@ -38,22 +38,51 @@ This is a **shooting competition management system** to help setting up events i
 │   ├── src/
 │   │   ├── main.jsx         # Hash-based routing
 │   │   ├── App.jsx          # Scoring app (state machine)
-│   │   ├── api.js           # API client
+│   │   ├── TabletApp.jsx    # Tablet scoring app shell
+│   │   ├── api.js           # API client (versioned /api/v1/)
+│   │   ├── register-api.js  # Registration API client
+│   │   ├── staffing-api.js  # Staffing API client
 │   │   ├── i18n.js          # Internationalization (fi/en)
+│   │   ├── hooks/           # Shared hooks (useAuthenticatedPage, useRememberMe)
 │   │   └── components/      # Page components
+│   │       └── manage/      # ManagePage sub-components (barrel export)
 │   └── package.json
 │
 ├── scoring-proxy/           # Express backend
-│   ├── server.js            # Main server + session management
+│   ├── server.js            # Main server, middleware, route mounting
 │   ├── routes/
-│   │   ├── auth.js          # Authentication (login, session, allowlist)
-│   │   └── staffing.js      # Staffing endpoints (signup, resign, sync)
+│   │   ├── auth-v7.js       # Authentication (dual-session login/logout/status)
+│   │   ├── scoring.js       # Score entry endpoints
+│   │   ├── management.js    # Cup management endpoints
+│   │   ├── registration.js  # Public self-registration
+│   │   ├── reports.js       # Report generation
+│   │   ├── staffing.js      # Staffing endpoints (signup, resign, sync)
+│   │   └── v1/index.js      # API version info endpoint
+│   ├── middleware/
+│   │   ├── auth-v7.js       # Auth middleware (requireAuthV7, requireScopeV7)
+│   │   └── errorHandler.js  # Centralized error handling + asyncHandler
 │   ├── lib/
-│   │   ├── ssi-client.js    # SSI GraphQL + web scraping
+│   │   ├── ssi-core/        # SSI API integration (split by domain)
+│   │   │   ├── client.js    # Monolithic SSI client (code move pending)
+│   │   │   ├── graphql.js   # Auth, JWT, login (re-export shim)
+│   │   │   ├── scoring.js   # Scoring pages (re-export shim)
+│   │   │   ├── participants.js # Participant management (re-export shim)
+│   │   │   ├── management.js   # Match management (re-export shim)
+│   │   │   └── http-helpers.js # Cookie/fetch helpers (re-export shim)
+│   │   ├── services/        # Business logic (pure functions)
+│   │   │   ├── scoring-service.js  # Scoring operations
+│   │   │   └── cup-manage.js       # Cup management operations
+│   │   ├── errors/          # Custom error classes
+│   │   │   └── AppError.js  # AppError hierarchy (9 error types)
+│   │   ├── session/         # Session management
+│   │   │   ├── store.js     # Redis/memory dual store
+│   │   │   ├── config.js    # Session configuration
+│   │   │   └── index.js     # Barrel export
+│   │   ├── staffing/        # Staffing engine
+│   │   │   ├── engine.js    # Core staffing logic
+│   │   │   └── config-loader.js  # Config loading + helpers
 │   │   ├── email.js         # Email via Resend API
-│   │   └── staffing/        # Staffing engine
-│   │       ├── engine.js    # Core staffing logic
-│   │       └── config-loader.js  # Config loading + helpers
+│   │   └── logger.js        # Structured logger (LOG_LEVEL controlled)
 │   └── package.json
 │
 ├── config/                  # Cup templates and defaults
@@ -61,6 +90,7 @@ This is a **shooting competition management system** to help setting up events i
 ├── test-harness/            # E2E test scripts
 ├── render.yaml              # Render Blueprint (deploy config)
 └── docs/                    # Documentation
+    └── design/architecture-review.md  # Architecture review & roadmap
 ```
 
 ## Development Workflow
@@ -185,16 +215,20 @@ Use these to check deploy status, view logs, monitor service performance, and ma
 
 | Task | Files |
 |------|-------|
-| Add API endpoint | `scoring-proxy/server.js`, `scoring-ui/src/api.js` |
+| Add API endpoint | `scoring-proxy/server.js` (mount), `scoring-proxy/routes/*.js` (handler), `scoring-ui/src/api.js` (client) |
 | Add new page | `scoring-ui/src/components/NewPage.jsx`, `scoring-ui/src/main.jsx` |
-| Modify SSI integration | `scoring-proxy/lib/ssi-client.js` |
+| Modify SSI integration | `scoring-proxy/lib/ssi-core/*.js` (domain module, NOT `client.js`) |
 | Update home navigation | `scoring-ui/src/components/HomePage.jsx` |
 | Change deploy config | `render.yaml` |
+| Modify scoring logic | `scoring-proxy/lib/services/scoring-service.js`, `scoring-proxy/routes/scoring.js` |
+| Modify management logic | `scoring-proxy/lib/services/cup-manage.js`, `scoring-proxy/routes/management.js` |
 | Modify staffing logic | `scoring-proxy/lib/staffing/engine.js`, `scoring-proxy/routes/staffing.js` |
 | Modify staffing config | `config/sra-training-config.yml`, `scoring-proxy/lib/staffing/config-loader.js` |
 | Update staffing UI | `scoring-ui/src/components/StaffingPage.jsx` |
 | Add/update translations | `scoring-ui/src/i18n.js` |
-| Modify authentication | `scoring-proxy/routes/auth.js` |
+| Modify authentication | `scoring-proxy/routes/auth-v7.js`, `scoring-proxy/middleware/auth-v7.js` |
+| Modify error handling | `scoring-proxy/middleware/errorHandler.js`, `scoring-proxy/lib/errors/AppError.js` |
+| Modify session management | `scoring-proxy/lib/session/store.js`, `scoring-proxy/lib/session/config.js` |
 
 ## SSI GraphQL — Discovering Form Fields
 
@@ -239,6 +273,136 @@ $values = [regex]::Matches($formPage.Content, '<input[^>]+name="weapon_groups"[^
 - **Array fields** (`weapon_groups`, `categories`, `competence_classes`) must be present with valid enum values scraped from the form
 - **`has_accepted_event_data_ass_agreement`** must be `"on"`
 - **`group`** and `ends_date`/`ends_time` are accepted but not required
+
+## Architecture Guidelines (v7.5+)
+
+### Module Boundaries
+
+Follow the modular monolith pattern with enforced boundaries:
+
+1. **Routes** (`routes/*.js`) may import:
+   - Their domain module from `lib/ssi-core/`
+   - Their service module from `lib/services/`
+   - Shared utilities (logger, errors, middleware)
+
+2. **Services** (`lib/services/*.js`) may import:
+   - Their domain module from `lib/ssi-core/`
+   - Other services (if absolutely necessary)
+   - Shared utilities
+
+3. **Domain modules** (`lib/ssi-core/*.js`) may import:
+   - `http-helpers.js` only
+   - Nothing else from outside `ssi-core/`
+
+4. **UI Components** may import:
+   - Their feature's hooks/components
+   - Shared UI components
+   - API client (`api.js`)
+
+### Forbidden Patterns
+
+```javascript
+// ❌ Forbidden - creates hidden coupling
+import * from '../lib/ssi-core/'
+
+// ❌ Forbidden - cross-domain imports
+import { ssiGetScoringPage } from '../lib/ssi-core/participants.js'
+
+// ❌ Forbidden - barrel imports that hide dependencies
+import { ssiGraphQL } from '../lib/ssi-core/index.js'
+
+// ✅ Allowed - domain-specific import
+import { ssiGetScoringPage } from '../lib/ssi-core/scoring.js'
+```
+
+### Service Layer Pattern
+
+Routes must be thin dispatchers. Business logic goes in services:
+
+```javascript
+// Route - thin dispatcher
+app.get('/api/v1/cups', requireAuth('scoring'), asyncHandler(async (req, res) => {
+  const cups = await scoringService.searchCups(...)
+  res.json({ cups })
+}))
+
+// Service - pure business logic
+async function searchCups(search, session, graphqlWithRefresh) {
+  // Business logic here, no Express dependencies
+}
+```
+
+### Error Handling
+
+All route errors must flow through centralized error handling:
+
+```javascript
+import { AppError } from '../lib/errors/AppError.js'
+
+function internalError(message) {
+  return new AppError(message, 500, 'INTERNAL_ERROR')
+}
+
+// Route handlers use next(error) — NEVER res.status(500).json() directly
+router.post('/data', async (req, res, next) => {
+  try {
+    // ... business logic
+  } catch (err) {
+    log.error('[module] Operation failed:', err.message)
+    return next(internalError('User-safe error message'))
+  }
+})
+
+// Or use asyncHandler wrapper (scoring.js pattern)
+router.post('/data', asyncHandler(async (req, res) => {
+  // Async errors automatically caught and forwarded to errorHandler
+}))
+```
+
+### Logging Discipline
+
+- **Always use `log.*`** from `lib/logger.js` — never `console.log/error/warn` in route or service files
+- `log.error()` for failures, `log.warn()` for degraded states, `log.debug()` for operational traces
+- Logging verbosity controlled by `LOG_LEVEL` env var (production: `info`, development: `debug`)
+- Include module prefix in log messages: `[manage]`, `[staffing]`, `[register]`, `[auth-v7]`, `[reports]`
+
+### Router Factory Pattern
+
+All route modules must use the stateless factory pattern:
+
+```javascript
+export function createXxxRouter({ requireAuth, graphqlWithRefresh, ... }) {
+  const router = express.Router()
+  // Define routes...
+  return router
+}
+```
+
+- Router instance created **inside** the factory (no module-level shared state)
+- Dependencies injected via factory parameters (testable, no hidden coupling)
+- Factory exported as named export
+
+### API Versioning
+
+- All new endpoints use `/api/v1/` prefix
+- Frontend API calls use versioned paths
+- Legacy `/api/` aliases exist with deprecation headers — do not add new legacy aliases
+- Future versions will support discipline-specific paths (`/api/v2/sra/`, `/api/v2/resul/`)
+
+### Test Requirements
+
+- **New endpoints:** Must include route-level tests (HTTP contract: status codes, response shape, validation errors, auth checks)
+- **New SSI client functions:** Must include unit tests with HTML fixture files for any scraping logic
+- **Bug fixes:** Must include a regression test that fails without the fix
+- **Refactors:** Must not reduce test count. Run `npm test` in both `scoring-proxy/` and `scoring-ui/` before committing
+- **Time-dependent tests:** Must use `vi.useFakeTimers()` to pin the clock. Never hardcode dates that will expire
+
+### Merge Conflict Prevention
+
+- Before starting work, check if the target files are being modified in other active branches
+- When adding a new endpoint, prefer creating a new route file or service module rather than appending to existing large files
+- When adding SSI integration, add to the appropriate domain module in `lib/ssi-core/`, not to the monolithic `client.js`
+- Keep commits small and focused — one logical change per commit
 
 ## Important Constraints
 
