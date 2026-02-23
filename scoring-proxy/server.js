@@ -24,6 +24,15 @@ const app = express()
 const PORT = process.env.PORT || 3001
 const IS_PROD = process.env.NODE_ENV === 'production'
 const IS_RENDER = process.env.RENDER === 'true' // Render platform (production or preview)
+const API_V1_BASE = '/api/v1'
+const API_LEGACY_BASE = '/api'
+
+function legacyApiAlias(req, res, next) {
+  // Temporary backward-compatibility signal for unversioned endpoints.
+  res.setHeader('Deprecation', 'true')
+  res.setHeader('Sunset', '2026-12-31')
+  next()
+}
 
 // Trust exactly one reverse proxy (Render). Without this, req.ip is always
 // the Render proxy IP, making all rate limiters share a single counter.
@@ -172,7 +181,7 @@ async function graphqlWithRefresh(session, query, variables = {}) {
 // ============================================================
 // GET /api/health — Health check
 // ============================================================
-app.get('/api/health', async (req, res) => {
+async function healthHandler(req, res) {
   let activeSessions = 0
   try { activeSessions = await getActiveSessionCount() } catch { /* ignore */ }
   res.json({
@@ -181,7 +190,10 @@ app.get('/api/health', async (req, res) => {
     sessionBackend: isUsingRedis() ? 'redis' : 'memory',
     uptime: Math.round(process.uptime()),
   })
-})
+}
+
+app.get(`${API_V1_BASE}/health`, healthHandler)
+app.get(`${API_LEGACY_BASE}/health`, legacyApiAlias, healthHandler)
 
 // ============================================================
 // Registration: Admin session (singleton, lazy-init)
@@ -344,8 +356,16 @@ const registerBodyLimit = express.json({ limit: '1kb' })
 // Mount route modules
 // ============================================================
 
-// API versioning
-app.use('/api/v1', apiV1Router)
+// API versioning info endpoint
+app.use(API_V1_BASE, apiV1Router)
+
+// Scoring routes
+const scoringRouter = createScoringRouter({
+  requireAuth,
+  graphqlWithRefresh,
+})
+app.use(API_V1_BASE, scoringRouter)
+app.use(API_LEGACY_BASE, legacyApiAlias, scoringRouter)
 
 // Auth routes (V7 — Redis/memory backed dual sessions)
 const authRouter = createAuthV7Router({ 
@@ -354,7 +374,8 @@ const authRouter = createAuthV7Router({
   requireAuth,
   graphqlWithRefresh,
 })
-app.use('/api/auth', authRouter)
+app.use(`${API_V1_BASE}/auth`, authRouter)
+app.use(`${API_LEGACY_BASE}/auth`, legacyApiAlias, authRouter)
 
 // Management routes
 const managementRouter = createManagementRouter({
@@ -363,7 +384,8 @@ const managementRouter = createManagementRouter({
   adminGraphQL,
   getAdminSession,
 })
-app.use('/api/manage', managementRouter)
+app.use(`${API_V1_BASE}/manage`, managementRouter)
+app.use(`${API_LEGACY_BASE}/manage`, legacyApiAlias, managementRouter)
 
 // Registration routes
 const registrationRouter = createRegistrationRouter({
@@ -377,14 +399,16 @@ const registrationRouter = createRegistrationRouter({
   adminGraphQL,
   IS_PROD,
 })
-app.use('/api/register', registrationRouter)
+app.use(`${API_V1_BASE}/register`, registrationRouter)
+app.use(`${API_LEGACY_BASE}/register`, legacyApiAlias, registrationRouter)
 
 // Reports routes
 const reportsRouter = createReportsRouter({
   requireAuth,
   graphqlWithRefresh,
 })
-app.use('/api/report', reportsRouter)
+app.use(`${API_V1_BASE}/report`, reportsRouter)
+app.use(`${API_LEGACY_BASE}/report`, legacyApiAlias, reportsRouter)
 
 // Staffing routes
 const staffingRouter = createStaffingRouter({
@@ -392,7 +416,8 @@ const staffingRouter = createStaffingRouter({
   graphqlWithRefresh,
   getAdminSession,
 })
-app.use('/api/staffing', staffingRouter)
+app.use(`${API_V1_BASE}/staffing`, staffingRouter)
+app.use(`${API_LEGACY_BASE}/staffing`, legacyApiAlias, staffingRouter)
 
 // ============================================================
 // SPA fallback — serve index.html for non-API routes (production)
@@ -424,27 +449,27 @@ if (isDirectRun) {
     console.log(`Mode: ${IS_PROD ? 'production' : 'development'}`)
     console.log(`Session backend: ${isUsingRedis() ? 'redis' : 'memory'}`)
     console.log('Endpoints:')
-    console.log('  POST /api/auth/login     { email, password, apiKey }')
-    console.log('  GET  /api/auth/status')
-    console.log('  POST /api/auth/logout')
-    console.log('  GET  /api/health')
-    console.log('  GET  /api/cups?search=')
-    console.log('  GET  /api/cup/:id')
-    console.log('  GET  /api/match/:id')
-    console.log('  GET  /api/competitor/:id')
-    console.log('  POST /api/competitor/:id/score  { scores, warning, dqReason, comment }')
-    console.log('  GET  /api/register/captcha')
-    console.log('  POST /api/register/verify-captcha  { captchaId, captchaAnswer }')
-    console.log('  GET  /api/register/cups')
-    console.log('  GET  /api/register/cup/:id')
-    console.log('  POST /api/register/submit     { cupId, squadNumber, email, captchaId, captchaAnswer }')
-    console.log('  GET  /api/manage/cup/:id')
-    console.log('  POST /api/manage/cup/:id/assign-squad  { shooterName, squadNumber }')
-    console.log('  POST /api/manage/cup/:id/fix-squad     { shooterName, targetSquad }')
-    console.log('  POST /api/manage/cup/:id/add-to-cup    { shooterName }')
-    console.log('  GET  /api/matches?search=')
-    console.log('  POST /api/report/summary       { matches }')
-    console.log('  POST /api/report/matches       { matchIds }')
+    console.log('  POST /api/v1/auth/login     { email, password, apiKey }')
+    console.log('  GET  /api/v1/auth/status')
+    console.log('  POST /api/v1/auth/logout')
+    console.log('  GET  /api/v1/health')
+    console.log('  GET  /api/v1/cups?search=')
+    console.log('  GET  /api/v1/cup/:id')
+    console.log('  GET  /api/v1/match/:id')
+    console.log('  GET  /api/v1/competitor/:id')
+    console.log('  POST /api/v1/competitor/:id/score  { scores, warning, dqReason, comment }')
+    console.log('  GET  /api/v1/register/captcha')
+    console.log('  POST /api/v1/register/verify-captcha  { captchaId, captchaAnswer }')
+    console.log('  GET  /api/v1/register/cups')
+    console.log('  GET  /api/v1/register/cup/:id')
+    console.log('  POST /api/v1/register/submit     { cupId, squadNumber, email, captchaId, captchaAnswer }')
+    console.log('  GET  /api/v1/manage/cup/:id')
+    console.log('  POST /api/v1/manage/cup/:id/assign-squad  { shooterName, squadNumber }')
+    console.log('  POST /api/v1/manage/cup/:id/fix-squad     { shooterName, targetSquad }')
+    console.log('  POST /api/v1/manage/cup/:id/add-to-cup    { shooterName }')
+    console.log('  GET  /api/v1/matches?search=')
+    console.log('  POST /api/v1/report/summary       { matches }')
+    console.log('  POST /api/v1/report/matches       { matchIds }')
     if (existsSync(indexPath)) {
       console.log(`  UI served from ${uiDist}`)
     }

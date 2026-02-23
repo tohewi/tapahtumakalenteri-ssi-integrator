@@ -9,6 +9,7 @@ import express from 'express'
 import { ssiGraphQL, ssiLogin } from '../lib/ssi-core/graphql.js'
 import { log } from '../lib/logger.js'
 import { isAdminEmail } from '../lib/staffing/config-loader.js'
+import { AppError } from '../lib/errors/AppError.js'
 import {
   createSession,
   getSession,
@@ -18,6 +19,10 @@ import {
   auditLogin,
   auditLogout,
 } from '../lib/session/index.js'
+
+function internalError(message) {
+  return new AppError(message, 500, 'INTERNAL_ERROR')
+}
 
 const SESSION_COOKIE = sessionConfig.session.cookieName
 
@@ -127,7 +132,7 @@ export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth,
       })
     } catch (err) {
       auditLogin(email, req.ip, false, err.message)
-      console.error('[auth-v7] Login failed:', err.message)
+      log.error('[auth-v7] Login failed:', err.message)
       res.status(401).json({ error: 'Login failed' })
     }
   })
@@ -189,7 +194,7 @@ export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth,
   // GET /api/auth/me — Get current user info from SSI
   // No scope restriction — all authenticated users can fetch their own info
   // ============================================================
-  router.get('/me', requireAuth, async (req, res) => {
+  router.get('/me', requireAuth, async (req, res, next) => {
     try {
       const meData = await graphqlWithRefresh(req.ssiSession, '{ me { email first_name last_name } }')
       const me = meData.me
@@ -203,8 +208,8 @@ export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth,
       }
       res.json(responseData)
     } catch (err) {
-      console.error('[auth-v7] /me error:', err)
-      res.status(500).json({ error: 'Failed to fetch user info' })
+      log.error('[auth-v7] /me error:', err.message)
+      return next(internalError('Failed to fetch user info'))
     }
   })
 

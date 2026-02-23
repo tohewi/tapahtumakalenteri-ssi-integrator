@@ -30,6 +30,11 @@ import {
   ssiGetMatchOfficials,
 } from '../lib/ssi-core/management.js'
 import { ssiFetchPage } from '../lib/ssi-core/http-helpers.js'
+import { AppError } from '../lib/errors/AppError.js'
+
+function internalError(message) {
+  return new AppError(message, 500, 'INTERNAL_ERROR')
+}
 
 // Map staffing roles to SSI management group role + event official codes
 // role: 1=admin, 2=staff, 7=assistant
@@ -54,7 +59,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
   // ============================================================
   // GET /events — list training events with staffing status
   // ============================================================
-  router.get('/events', requireAuth('staffing'), async (req, res) => {
+  router.get('/events', requireAuth('staffing'), async (req, res, next) => {
     try {
       const config = loadConfig()
       const session = req.ssiSession
@@ -169,7 +174,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
         const adminSession = getAdminSession ? await getAdminSession() : null
         adminCookies = adminSession?.cookies
       } catch (adminErr) {
-        console.warn('[staffing] Admin session not available for SSI sync:', adminErr.message)
+        log.warn('[staffing] Admin session not available for SSI sync:', adminErr.message)
       }
       if (ssiSyncQueue.length > 0 && adminCookies) {
         await Promise.all(ssiSyncQueue.map(async ({ eventId, squadMembers, contentType: evtContentType }) => {
@@ -193,7 +198,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
 
             syncStaffFromSSI(eventId, staffList)
           } catch (err) {
-            console.error(`[staffing] SSI sync failed for event ${eventId}: ${err.message}`)
+            log.error(`[staffing] SSI sync failed for event ${eventId}: ${err.message}`)
           }
         }))
       }
@@ -219,8 +224,8 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
 
       res.json({ events: allMatches, isAdmin, userEmail })
     } catch (err) {
-      console.error('[staffing] GET /events error:', err.message)
-      res.status(500).json({ error: err.message })
+      log.error('[staffing] GET /events error:', err.message)
+      return next(internalError('Failed to load staffing events'))
     }
   })
 
@@ -228,7 +233,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
   // POST /events/:eventId/signup — register for a role
   // Body: { role: "leadInstructor" | "equipmentManager" | "staff" }
   // ============================================================
-  router.post('/events/:eventId/signup', requireAuth('staffing'), async (req, res) => {
+  router.post('/events/:eventId/signup', requireAuth('staffing'), async (req, res, next) => {
     try {
       const session = req.ssiSession
       const { role } = req.body || {}
@@ -270,7 +275,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
         if (staffSquadName) {
           try {
             const squadResult = await ssiRegisterToTrainerSquad(contentType, eventId, me.email, staffSquadName, cookies)
-            console.log(`[staffing] SSI trainer squad: ${me.email} → ${squadResult.message}`)
+            log.debug(`[staffing] SSI trainer squad: ${me.email} → ${squadResult.message}`)
             ssiResults.trainerSquad = { success: true, message: squadResult.message }
 
             // Fallback: if "Already registered" but not in the trainer squad,
@@ -306,16 +311,16 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
                 }
 
                 if (competitorId && currentSquad !== staffSquadNum) {
-                  console.log(`[staffing] ${me.email} in Squad ${currentSquad}, moving to Squad ${staffSquadNum} (competitor ${competitorId})`)
+                  log.debug(`[staffing] ${me.email} in Squad ${currentSquad}, moving to Squad ${staffSquadNum} (competitor ${competitorId})`)
                   const moveResult = await ssiSetParticipantSquad(competitorId, staffSquadNum, cookies, 'a', 23)
-                  console.log(`[staffing] Squad move: ${moveResult.message || 'done'}`)
+                  log.debug(`[staffing] Squad move: ${moveResult.message || 'done'}`)
                   ssiResults.trainerSquad = { success: true, message: `Moved to Squad ${staffSquadNum}` }
                 } else if (competitorId && currentSquad === staffSquadNum) {
-                  console.log(`[staffing] ${me.email} already in Squad ${staffSquadNum}`)
+                  log.debug(`[staffing] ${me.email} already in Squad ${staffSquadNum}`)
                 } else if (!competitorId) {
                   // User is registered but not in any squad (unassigned).
                   // Scrape participants page to find participant ID, then set squad.
-                  console.log(`[staffing] ${me.email} not in any squad, scraping participants page...`)
+                  log.debug(`[staffing] ${me.email} not in any squad, scraping participants page...`)
                   const partHtml = await ssiFetchPage(`/event/${contentType}/${eventId}/participants/`, cookies)
                   // Pattern: <a href="/event/participant/23/{participantId}/">Name</a>
                   const partMatch = partHtml.match(/\/event\/participant\/\d+\/(\d+)\/[^"]*"[^>]*>[^<]*Tuloskone[^<]*/i)
@@ -330,20 +335,20 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
                   const participantCT = userPart?.[1] || '23'
 
                   if (participantId) {
-                    console.log(`[staffing] Found participant ${participantId} (ct=${participantCT}), setting squad to ${staffSquadNum}`)
+                    log.debug(`[staffing] Found participant ${participantId} (ct=${participantCT}), setting squad to ${staffSquadNum}`)
                     const moveResult = await ssiSetParticipantSquad(participantId, staffSquadNum, cookies, 'a', parseInt(participantCT))
-                    console.log(`[staffing] Squad set: ${moveResult.message || 'done'}`)
+                    log.debug(`[staffing] Squad set: ${moveResult.message || 'done'}`)
                     ssiResults.trainerSquad = { success: true, message: `Assigned to Squad ${staffSquadNum}` }
                   } else {
-                    console.warn(`[staffing] Could not find participant ID for ${me.email} on participants page`)
+                    log.warn(`[staffing] Could not find participant ID for ${me.email} on participants page`)
                   }
                 }
               } catch (fallbackErr) {
-                console.error(`[staffing] Squad fallback failed: ${fallbackErr.message}`)
+                log.error(`[staffing] Squad fallback failed: ${fallbackErr.message}`)
               }
             }
           } catch (e) {
-            console.error(`[staffing] SSI trainer squad failed for ${me.email}: ${e.message}`)
+            log.error(`[staffing] SSI trainer squad failed for ${me.email}: ${e.message}`)
             ssiResults.trainerSquad = { success: false, message: e.message }
           }
         }
@@ -354,10 +359,10 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
           try {
             const groupId = await ssiGetMatchGroupId(contentType, eventId, cookies)
             const mgmtResult = await ssiAddToMatchManagement(groupId, contentType, eventId, me.email, ssiRole.role, ssiRole.officials, cookies)
-            console.log(`[staffing] SSI management: ${me.email} (${role}) → ${mgmtResult.message}`)
+            log.debug(`[staffing] SSI management: ${me.email} (${role}) → ${mgmtResult.message}`)
             ssiResults.management = { success: true, message: mgmtResult.message, role: 'Admin' }
           } catch (e) {
-            console.error(`[staffing] SSI management add failed for ${me.email}: ${e.message}`)
+            log.error(`[staffing] SSI management add failed for ${me.email}: ${e.message}`)
             ssiResults.management = { success: false, message: e.message }
           }
         }
@@ -365,19 +370,20 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
 
       res.json({ ...result, ssi: ssiResults })
     } catch (err) {
-      console.error('[staffing] POST /signup error:', err.message)
+      log.error('[staffing] POST /signup error:', err.message)
       const status = err.message.includes('Not authorized') ? 403
         : err.message.includes('not found') ? 404
         : err.message.includes('full') || err.message.includes('taken') || err.message.includes('Already') ? 409
         : 500
-      res.status(status).json({ error: err.message })
+      if (status === 500) return next(internalError('Failed to sign up for staffing role'))
+      return res.status(status).json({ error: err.message })
     }
   })
 
   // ============================================================
   // DELETE /events/:eventId/signup — resign from own role
   // ============================================================
-  router.delete('/events/:eventId/signup', requireAuth('staffing'), async (req, res) => {
+  router.delete('/events/:eventId/signup', requireAuth('staffing'), async (req, res, next) => {
     try {
       const session = req.ssiSession
       const meData = await graphqlWithRefresh(session, '{ me { email first_name last_name } }')
@@ -404,10 +410,10 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
         try {
           const groupId = await ssiGetMatchGroupId(contentType, eventId, cookies)
           const removeResult = await ssiRemoveFromMatchManagement(groupId, contentType, eventId, userEmail, cookies)
-          console.log(`[staffing] SSI management remove: ${userEmail} → ${removeResult.message}`)
+          log.debug(`[staffing] SSI management remove: ${userEmail} → ${removeResult.message}`)
           ssiResults.management = { success: true, message: removeResult.message, usedFallback: removeResult.usedFallback }
         } catch (e) {
-          console.error(`[staffing] SSI management remove failed for ${userEmail}: ${e.message}`)
+          log.error(`[staffing] SSI management remove failed for ${userEmail}: ${e.message}`)
           if (!e.message.includes('not found') && !e.message.includes('may already be removed')) {
             ssiResults.management = { success: false, message: e.message }
           } else {
@@ -426,14 +432,14 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
           if (found) {
             log.debug(`[staffing] Found participant ${found.participantId} (ct=${found.participantCT}) for "${displayName}" via scraping`)
             const deleteResult = await ssiDeleteMatchParticipant(eventId, found.participantId, displayName, cookies, found.participantCT)
-            console.log(`[staffing] SSI trainer squad remove: ${userEmail} → ${deleteResult.message}`)
+            log.debug(`[staffing] SSI trainer squad remove: ${userEmail} → ${deleteResult.message}`)
             ssiResults.trainerSquad = { success: true, message: deleteResult.message }
           } else {
-            console.log(`[staffing] ${userEmail} ("${displayName}") not found on participants page (may already be removed)`)
+            log.debug(`[staffing] ${userEmail} ("${displayName}") not found on participants page (may already be removed)`)
             ssiResults.trainerSquad = { success: true, message: 'Not found on participants page (may already be removed)' }
           }
         } catch (e) {
-          console.error(`[staffing] SSI trainer squad remove failed for ${userEmail}: ${e.message}`)
+          log.error(`[staffing] SSI trainer squad remove failed for ${userEmail}: ${e.message}`)
           ssiResults.trainerSquad = { success: false, message: e.message }
         }
       }
@@ -457,16 +463,17 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
         res.json({ ...result, ssi: ssiResults })
       }
     } catch (err) {
-      console.error('[staffing] DELETE /signup error:', err.message)
+      log.error('[staffing] DELETE /signup error:', err.message)
       const status = err.message.includes('not found') || err.message.includes('Not registered') ? 404 : 500
-      res.status(status).json({ error: err.message })
+      if (status === 500) return next(internalError('Failed to resign from staffing role'))
+      return res.status(status).json({ error: err.message })
     }
   })
 
   // ============================================================
   // GET /config — get staffing configuration
   // ============================================================
-  router.get('/config', requireAuth('staffing'), (req, res) => {
+  router.get('/config', requireAuth('staffing'), (req, res, next) => {
     try {
       const config = loadConfig()
       res.json({
@@ -474,7 +481,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
         roles: config.roles,
       })
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      return next(internalError('Failed to load staffing config'))
     }
   })
 

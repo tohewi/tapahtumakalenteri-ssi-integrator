@@ -1,6 +1,11 @@
 import express from 'express'
 import { ssiGetEventStaff } from '../lib/ssi-core/management.js'
 import { log } from '../lib/logger.js'
+import { AppError } from '../lib/errors/AppError.js'
+
+function internalError(message) {
+  return new AppError(message, 500, 'INTERNAL_ERROR')
+}
 
 export function createReportsRouter({ requireAuth, graphqlWithRefresh }) {
   const router = express.Router()
@@ -9,7 +14,7 @@ export function createReportsRouter({ requireAuth, graphqlWithRefresh }) {
   // Body: { matches: [{ id, contentType }, ...] }
   // Returns per-match: name, date, shooterCount, squadCount, shootersPerSquad, staff, staffCount
   // ============================================================
-  router.post('/summary', requireAuth('reporting'), async (req, res) => {
+  router.post('/summary', requireAuth('reporting'), async (req, res, next) => {
     let matchList = req.body.matches
     if (!matchList && Array.isArray(req.body.matchIds)) {
       matchList = req.body.matchIds.map(id => ({ id, contentType: 91 }))
@@ -117,8 +122,8 @@ export function createReportsRouter({ requireAuth, graphqlWithRefresh }) {
 
       res.json({ rows })
     } catch (err) {
-      console.error('Failed to generate summary report:', err.message)
-      res.status(500).json({ error: err.message })
+      log.error('[reports] Failed to generate summary report:', err.message)
+      return next(internalError('Failed to generate summary report'))
     }
   })
 
@@ -127,7 +132,7 @@ export function createReportsRouter({ requireAuth, graphqlWithRefresh }) {
   // Body: { matches: [{ id, contentType }, ...] }
   // Returns approved shooters per squad per match with admin role
   // ============================================================
-  router.post('/matches', requireAuth('reporting'), async (req, res) => {
+  router.post('/matches', requireAuth('reporting'), async (req, res, next) => {
     // Support both old format { matchIds } and new { matches }
     let matchList = req.body.matches
     if (!matchList && Array.isArray(req.body.matchIds)) {
@@ -216,8 +221,8 @@ export function createReportsRouter({ requireAuth, graphqlWithRefresh }) {
 
       res.json({ rows })
     } catch (err) {
-      console.error('Failed to generate report:', err.message)
-      res.status(500).json({ error: err.message })
+      log.error('[reports] Failed to generate report:', err.message)
+      return next(internalError('Failed to generate report'))
     }
   })
 

@@ -26,7 +26,7 @@ describe('Registration API client', () => {
 
       const result = await getCaptcha()
       expect(result).toEqual(mockCaptcha)
-      expect(fetch).toHaveBeenCalledWith('/api/register/captcha')
+      expect(fetch).toHaveBeenCalledWith('/api/v1/register/captcha')
     })
 
     it('throws on server error', async () => {
@@ -47,7 +47,7 @@ describe('Registration API client', () => {
 
       const result = await verifyCaptcha('abc-123', '8')
       expect(result).toEqual({ ok: true })
-      expect(fetch).toHaveBeenCalledWith('/api/register/verify-captcha', {
+      expect(fetch).toHaveBeenCalledWith('/api/v1/register/verify-captcha', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ captchaId: 'abc-123', captchaAnswer: 8 }),
@@ -110,7 +110,7 @@ describe('Registration API client', () => {
 
       const result = await getCups()
       expect(result).toEqual(cups)
-      expect(fetch).toHaveBeenCalledWith('/api/register/cups')
+      expect(fetch).toHaveBeenCalledWith('/api/v1/register/cups')
     })
 
     it('returns empty array when no cups', async () => {
@@ -152,7 +152,7 @@ describe('Registration API client', () => {
 
       const result = await getCupDetail('160')
       expect(result).toEqual(detail)
-      expect(fetch).toHaveBeenCalledWith('/api/register/cup/160')
+      expect(fetch).toHaveBeenCalledWith('/api/v1/register/cup/160')
     })
 
     it('throws on server error', async () => {
