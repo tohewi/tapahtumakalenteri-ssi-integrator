@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-gray-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Match Management — UI Prototype</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .view{display:none}.view.active{display:block}
+    .nav-link{cursor:pointer}.nav-link.active{background:#0ea5e9;color:#fff}
+    .nav-link:not(.active):hover{background:#e0f2fe}
+    .tab-btn.active{border-bottom:2px solid #0ea5e9;color:#0284c7;font-weight:600}
+    .card-hover:hover{box-shadow:0 4px 12px rgba(0,0,0,.1);transform:translateY(-1px);transition:.15s}
+    .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:9999px;font-size:.75rem;font-weight:500}
+    .proto-note{background:#fef3c7;border:1px dashed #f59e0b;border-radius:6px;padding:8px 12px;font-size:.8rem;color:#92400e;margin-bottom:16px}
+  </style>
+</head>
+<body class="text-gray-800">
+<!-- Top bar -->
+<header class="bg-white border-b shadow-sm sticky top-0 z-50">
+  <div class="max-w-7xl mx-auto flex items-center justify-between px-4 h-14">
+    <div class="flex items-center gap-3">
+      <div class="text-lg font-bold text-sky-700">Match Management</div>
+      <span class="text-xs text-gray-400">PROTOTYPE</span>
+    </div>
+    <div class="flex items-center gap-4">
+      <select class="text-sm border rounded-md px-3 py-1.5"><option>TurRes</option><option>RaiResUps</option></select>
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 bg-sky-100 rounded-full flex items-center justify-center text-sky-700 text-sm font-semibold">TW</div>
+        <span class="text-sm text-gray-600 hidden sm:inline">tohewi@live.com</span>
+        <button onclick="showView('platform-welcome')" class="text-xs text-gray-400 hover:text-gray-600 ml-2">Sign out</button>
+      </div>
+    </div>
+  </div>
+</header>
+<div class="max-w-7xl mx-auto flex min-h-[calc(100vh-3.5rem)]">
+<!-- Sidebar -->
+<nav class="w-56 bg-white border-r p-3 flex-shrink-0 hidden md:block">
+  <div class="text-xs uppercase tracking-wider text-gray-400 font-semibold mb-2 px-3">Management</div>
+  <div class="space-y-0.5" id="nav-links">
+    <div class="nav-link active rounded-md px-3 py-2 text-sm" data-view="dashboard">&#127968; Dashboard</div>
+    <div class="nav-link rounded-md px-3 py-2 text-sm" data-view="templates">&#128203; Templates</div>
+    <div class="nav-link rounded-md px-3 py-2 text-sm" data-view="schedule">&#128197; Schedule</div>
+  </div>
+  <div class="text-xs uppercase tracking-wider text-gray-400 font-semibold mt-6 mb-2 px-3">Instructor Roster</div>
+  <div class="space-y-0.5">
+    <div class="nav-link rounded-md px-3 py-2 text-sm" data-view="roster">&#128101; Roster</div>
+    <div class="nav-link rounded-md px-3 py-2 text-sm" data-view="instructor-join">&#128587; Join</div>
+    <div class="nav-link rounded-md px-3 py-2 text-sm" data-view="my-profile">&#128100; My Profile</div>
+  </div>
+  <div class="text-xs uppercase tracking-wider text-gray-400 font-semibold mt-6 mb-2 px-3">Admin</div>
+  <div class="space-y-0.5">
+    <div class="nav-link rounded-md px-3 py-2 text-sm text-gray-500" data-view="platform-tenants">&#128202; My Tenants</div>
+    <div class="nav-link rounded-md px-3 py-2 text-sm text-gray-500" data-view="platform-billing">&#128179; Billing</div>
+    <div class="nav-link rounded-md px-3 py-2 text-sm text-gray-500" data-view="settings">&#9881; Settings</div>
+  </div>
+</nav>
+<!-- Main -->
+<main class="flex-1 p-6 overflow-auto" id="main-content"></main>
+</div>
+
+<script>
+const views = {
+dashboard: `
+<div class="proto-note">Dashboard — at-a-glance overview</div>
+<h1 class="text-2xl font-bold mb-6">Dashboard</h1>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+  <div class="bg-white rounded-lg border p-4"><div class="text-sm text-gray-500">Upcoming Events</div><div class="text-3xl font-bold text-sky-700 mt-1">8</div><div class="text-xs text-gray-400 mt-1">Next 30 days</div></div>
+  <div class="bg-white rounded-lg border p-4"><div class="text-sm text-gray-500">Staffing Gaps</div><div class="text-3xl font-bold text-amber-600 mt-1">3</div><div class="text-xs text-gray-400 mt-1">Events need instructors</div></div>
+  <div class="bg-white rounded-lg border p-4"><div class="text-sm text-gray-500">Active Templates</div><div class="text-3xl font-bold text-gray-700 mt-1">4</div><div class="text-xs text-gray-400 mt-1">Across 3 disciplines</div></div>
+  <div class="bg-white rounded-lg border p-4"><div class="text-sm text-gray-500">Instructors</div><div class="text-3xl font-bold text-gray-700 mt-1">12</div><div class="text-xs text-gray-400 mt-1">Active roster</div></div>
+</div>
+<div class="bg-white rounded-lg border mb-6">
+  <div class="px-4 py-3 border-b flex items-center justify-between"><h2 class="font-semibold">Upcoming Events</h2></div>
+  <div class="divide-y">
+    <div class="px-4 py-3 flex items-center gap-4 hover:bg-gray-50 cursor-pointer" onclick="showView('event-detail')">
+      <div class="w-14 text-center"><div class="text-xs text-gray-400">Feb</div><div class="text-xl font-bold">28</div><div class="text-xs text-gray-400">La</div></div>
+      <div class="flex-1"><div class="font-medium">TurRes Kupittaa CUP 28.02.2026</div><div class="text-sm text-gray-500 mt-0.5"><span class="badge bg-blue-100 text-blue-700">Kupittaa Cup</span> 3 matches · 25 max</div></div>
+      <div class="flex items-center gap-2"><span class="text-sm text-green-600">&#9679; 2/2 staff</span><span class="badge bg-green-100 text-green-700">Ready</span></div>
+    </div>
+    <div class="px-4 py-3 flex items-center gap-4 hover:bg-gray-50">
+      <div class="w-14 text-center"><div class="text-xs text-gray-400">Mar</div><div class="text-xl font-bold">01</div><div class="text-xs text-gray-400">Su</div></div>
+      <div class="flex-1"><div class="font-medium">TR-SRA Oldies 01.03.2026</div><div class="text-sm text-gray-500 mt-0.5"><span class="badge bg-orange-100 text-orange-700">SRA</span> 1 match · 4+1 squads</div></div>
+      <div class="flex items-center gap-2"><span class="text-sm text-amber-600">&#9679; 3/5 staff</span><span class="badge bg-amber-100 text-amber-700">Needs staff</span></div>
+    </div>
+    <div class="px-4 py-3 flex items-center gap-4 hover:bg-gray-50">
+      <div class="w-14 text-center"><div class="text-xs text-gray-400">Mar</div><div class="text-xl font-bold">07</div><div class="text-xs text-gray-400">La</div></div>
+      <div class="flex-1"><div class="font-medium">TurRes Kupittaa CUP 07.03.2026</div><div class="text-sm text-gray-500 mt-0.5"><span class="badge bg-blue-100 text-blue-700">Kupittaa Cup</span> 3 matches</div></div>
+      <div class="flex items-center gap-2"><span class="text-sm text-red-500">&#9679; 0/2 staff</span><span class="badge bg-red-100 text-red-700">No staff</span></div>
+    </div>
+    <div class="px-4 py-3 flex items-center gap-4 hover:bg-gray-50">
+      <div class="w-14 text-center"><div class="text-xs text-gray-400">Mar</div><div class="text-xl font-bold">08</div><div class="text-xs text-gray-400">Su</div></div>
+      <div class="flex-1"><div class="font-medium">TR-SRA Newbie 08.03.2026</div><div class="text-sm text-gray-500 mt-0.5"><span class="badge bg-orange-100 text-orange-700">SRA</span> 1 match · 4+1 squads</div></div>
+      <div class="flex items-center gap-2"><span class="text-sm text-green-600">&#9679; 6/6 staff</span><span class="badge bg-green-100 text-green-700">Ready</span></div>
+    </div>
+  </div>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+  <div class="card-hover bg-white rounded-lg border p-4 text-left cursor-pointer" onclick="showView('seed-import')"><div class="text-sky-600 font-semibold">+ New Template</div><div class="text-sm text-gray-500 mt-1">Import from SSI seed event</div></div>
+  <div class="card-hover bg-white rounded-lg border p-4 text-left cursor-pointer" onclick="showView('batch-create')"><div class="text-sky-600 font-semibold">+ Schedule Events</div><div class="text-sm text-gray-500 mt-1">Batch create from template</div></div>
+  <div class="card-hover bg-white rounded-lg border p-4 text-left cursor-pointer" onclick="showView('roster')"><div class="text-sky-600 font-semibold">Instructor Roster</div><div class="text-sm text-gray-500 mt-1">Manage instructors</div></div>
+</div>
+`,
+
+templates: `
+<div class="proto-note">Templates — browse event templates created from SSI seed events</div>
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold">Event Templates</h1>
+  <button onclick="showView('seed-import')" class="bg-sky-600 text-white px-4 py-2 rounded-md text-sm hover:bg-sky-700">+ Import from SSI</button>
+</div>
+<div class="flex gap-2 mb-4">
+  <button class="tab-btn active px-3 py-1.5 text-sm">All</button>
+  <button class="tab-btn px-3 py-1.5 text-sm text-gray-500">Kupittaa Cup</button>
+  <button class="tab-btn px-3 py-1.5 text-sm text-gray-500">SRA</button>
+  <button class="tab-btn px-3 py-1.5 text-sm text-gray-500">RA</button>
+  <button class="tab-btn px-3 py-1.5 text-sm text-gray-500">PRS</button>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+  <div class="card-hover bg-white rounded-lg border p-5 cursor-pointer" onclick="showView('template-detail')">
+    <span class="badge bg-blue-100 text-blue-700 mb-2">Kupittaa Cup</span><span class="text-xs text-gray-400 float-right">Seed: SSI #28451</span>
+    <h3 class="font-semibold text-lg">TurRes Kupittaa CUP</h3>
+    <div class="mt-2 text-sm text-gray-600">3 matches (Tarkkuus, Pika, Kuvio) · 3 squads/match · 25 max<br>Min 2 instructors · Calendar: WordPress</div>
+    <div class="mt-3 pt-3 border-t flex justify-between text-xs text-gray-400"><span>12 events created</span><span>Last: 21.02.2026</span></div>
+  </div>
+  <div class="card-hover bg-white rounded-lg border p-5 cursor-pointer">
+    <span class="badge bg-orange-100 text-orange-700 mb-2">SRA</span><span class="text-xs text-gray-400 float-right">Seed: SSI #29012</span>
+    <h3 class="font-semibold text-lg">SRA Kokeneiden harjoitus</h3>
+    <div class="mt-2 text-sm text-gray-600">1 match · 4 shooter + 1 staff squad · 20 max/squad<br>Min 4, max 6 instructors · Self-signup</div>
+    <div class="mt-3 pt-3 border-t flex justify-between text-xs text-gray-400"><span>8 events</span><span>Last: 15.02.2026</span></div>
+  </div>
+  <div class="card-hover bg-white rounded-lg border p-5 cursor-pointer">
+    <span class="badge bg-orange-100 text-orange-700 mb-2">SRA</span><span class="text-xs text-gray-400 float-right">Seed: SSI #29015</span>
+    <h3 class="font-semibold text-lg">SRA Uusien koulutus</h3>
+    <div class="mt-2 text-sm text-gray-600">1 match · 4 shooter + 1 staff squad · 15 max/squad<br>Min 5, max 8 instructors · Self-signup</div>
+    <div class="mt-3 pt-3 border-t flex justify-between text-xs text-gray-400"><span>6 events</span><span>Last: 16.02.2026</span></div>
+  </div>
+  <div class="card-hover bg-white rounded-lg border p-5 cursor-pointer">
+    <span class="badge bg-purple-100 text-purple-700 mb-2">RA</span><span class="text-xs text-gray-400 float-right">Seed: SSI #30102</span>
+    <h3 class="font-semibold text-lg">Reserviläisammunta (RA)</h3>
+    <div class="mt-2 text-sm text-gray-600">1 match · 2 squads · 30 max<br>Min 2 instructors</div>
+    <div class="mt-3 pt-3 border-t flex justify-between text-xs text-gray-400"><span>2 events</span><span>Last: 01.02.2026</span></div>
+  </div>
+</div>
+`,
+
+'seed-import': `
+<div class="proto-note">Seed Import — enter SSI event URL/ID to create a template</div>
+<div class="flex items-center gap-2 mb-6">
+  <button onclick="showView('templates')" class="text-gray-400 hover:text-gray-600">&#9664;</button>
+  <h1 class="text-2xl font-bold">Import Template from SSI</h1>
+</div>
+<div class="bg-white rounded-lg border p-6 mb-6">
+  <h2 class="font-semibold text-lg mb-1">Step 1: Enter SSI seed event</h2>
+  <p class="text-sm text-gray-500 mb-4">Create a seed event in SSI first with the desired structure (matches, squads, settings). Then paste the URL or event ID here.</p>
+  <div class="flex gap-3">
+    <input type="text" placeholder="https://shootnscoreit.com/nordic/serie/28451/ or just 28451" value="https://shootnscoreit.com/nordic/serie/28451/" class="flex-1 border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200">
+    <button onclick="showView('template-detail')" class="bg-sky-600 text-white px-5 py-2 rounded-md text-sm hover:bg-sky-700">Fetch Structure</button>
+  </div>
+</div>
+<div class="bg-white rounded-lg border p-6">
+  <h2 class="font-semibold text-lg mb-4">Step 2: Review imported structure</h2>
+  <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+    <div class="font-medium text-green-800">&#10003; Successfully read SSI event #28451</div>
+    <div class="text-sm text-green-700 mt-1">Type: RESUL Cup (NordicSerie, CT 136) · 3 component matches · 3 squads/match</div>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="bg-gray-50 rounded-lg p-4 border">
+      <h4 class="font-medium text-sm mb-2">Cup Settings (from SSI)</h4>
+      <dl class="text-xs space-y-1 text-gray-600">
+        <div class="flex justify-between"><dt>Visibility</dt><dd>Public</dd></div>
+        <div class="flex justify-between"><dt>Registration</dt><dd>Open</dd></div>
+        <div class="flex justify-between"><dt>Max competitors</dt><dd>25</dd></div>
+        <div class="flex justify-between"><dt>Scoring mode</dt><dd>Series points</dd></div>
+        <div class="flex justify-between"><dt>Match registration</dt><dd>All (auto)</dd></div>
+        <div class="flex justify-between"><dt>Venue</dt><dd>Kupittaan urheiluhalli</dd></div>
+      </dl>
+    </div>
+    <div class="bg-gray-50 rounded-lg p-4 border">
+      <h4 class="font-medium text-sm mb-2">Matches (from SSI)</h4>
+      <div class="space-y-2 text-xs">
+        <div class="bg-white rounded p-2 border">#1 <b>Tarkkuus</b> — 25m Kuvio, 6 strings, 5 shots, sub_rule: p2p</div>
+        <div class="bg-white rounded p-2 border">#2 <b>Pika</b> — 25m Kuvio, 6 strings, 5 shots, sub_rule: p2p</div>
+        <div class="bg-white rounded p-2 border">#3 <b>Kuvio</b> — 25m Kuvio, 6 strings, 5 shots, sub_rule: p2p</div>
+      </div>
+    </div>
+  </div>
+  <div class="mt-4 bg-gray-50 rounded-lg p-4 border">
+    <h4 class="font-medium text-sm mb-2">Squads per match (from SSI)</h4>
+    <table class="w-full text-xs"><thead><tr class="text-gray-500"><th class="text-left pb-1">#</th><th class="text-left pb-1">Comment</th><th class="text-left pb-1">Max</th></tr></thead>
+    <tbody><tr><td>1</td><td>Laina-ase (pieni puoli)</td><td>9</td></tr><tr><td>2</td><td>Oma ase 1 (iso puoli, vasen)</td><td>9</td></tr><tr><td>3</td><td>Oma ase 2 (iso puoli, oikea)</td><td>7</td></tr></tbody></table>
+  </div>
+  <div class="mt-6 flex items-center justify-between">
+    <div class="text-sm text-gray-500">Assign a discipline and configure overrides on the next screen.</div>
+    <button onclick="showView('template-detail')" class="bg-sky-600 text-white px-5 py-2 rounded-md text-sm hover:bg-sky-700">Create Template &rarr;</button>
+  </div>
+</div>
+`,
+
+'template-detail': `
+<div class="proto-note">Template Editor — configure overrides on top of SSI seed structure</div>
+<div class="flex items-center gap-2 mb-6">
+  <button onclick="showView('templates')" class="text-gray-400 hover:text-gray-600">&#9664;</button>
+  <h1 class="text-2xl font-bold">Template: TurRes Kupittaa CUP</h1>
+  <span class="badge bg-blue-100 text-blue-700 ml-2">Kupittaa Cup</span>
+</div>
+<div class="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 mb-6 flex items-center justify-between">
+  <div class="text-sm"><span class="text-blue-700 font-medium">SSI Seed:</span> <a href="#" class="text-blue-600 underline">#28451 — TEST TurRes Kupittaa CUP 01.01.2026</a></div>
+  <button class="text-xs text-blue-600 border border-blue-300 rounded px-2 py-1">Re-sync from SSI</button>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <div class="bg-white rounded-lg border p-5">
+    <h3 class="font-semibold mb-3">Name Templates</h3>
+    <div class="space-y-3">
+      <div><label class="text-xs text-gray-500 uppercase">Cup Name</label><input type="text" value="TurRes Kupittaa CUP {displayDate}" class="w-full border rounded px-3 py-1.5 text-sm mt-1"><div class="text-xs text-gray-400 mt-0.5">{displayDate} = dd.MM.yyyy</div></div>
+      <div><label class="text-xs text-gray-500 uppercase">Match Name</label><input type="text" value="Kupittaa {displayDate} {matchSuffix}" class="w-full border rounded px-3 py-1.5 text-sm mt-1"><div class="text-xs text-gray-400 mt-0.5">{matchSuffix} = Tarkkuus/Pika/Kuvio</div></div>
+    </div>
+  </div>
+  <div class="bg-white rounded-lg border p-5">
+    <h3 class="font-semibold mb-3">Timing & Registration</h3>
+    <div class="grid grid-cols-2 gap-3">
+      <div><label class="text-xs text-gray-500 uppercase">Start</label><input type="time" value="09:00" class="w-full border rounded px-3 py-1.5 text-sm mt-1"></div>
+      <div><label class="text-xs text-gray-500 uppercase">End</label><input type="time" value="12:00" class="w-full border rounded px-3 py-1.5 text-sm mt-1"></div>
+      <div><label class="text-xs text-gray-500 uppercase">Reg opens</label><div class="flex items-center gap-1 mt-1"><input type="number" value="7" class="w-14 border rounded px-2 py-1.5 text-sm"><span class="text-xs">days before</span></div></div>
+      <div><label class="text-xs text-gray-500 uppercase">Reg closes</label><div class="flex items-center gap-1 mt-1"><input type="number" value="12" class="w-14 border rounded px-2 py-1.5 text-sm"><span class="text-xs">hrs before</span></div></div>
+    </div>
+  </div>
+  <div class="bg-white rounded-lg border p-5">
+    <h3 class="font-semibold mb-3">Cup Description <span class="text-xs text-gray-400 font-normal">(max 300)</span></h3>
+    <textarea rows="3" class="w-full border rounded px-3 py-2 text-sm">Lauantain pistooliampumavuoro Kupittaalla. Ohjattu ammunta sovelletuilla SAL ja RESUL lajeilla.</textarea>
+  </div>
+  <div class="bg-white rounded-lg border p-5">
+    <h3 class="font-semibold mb-3">Staffing Rules</h3>
+    <div class="grid grid-cols-2 gap-3">
+      <div><label class="text-xs text-gray-500 uppercase">Min instructors</label><input type="number" value="2" class="w-full border rounded px-3 py-1.5 text-sm mt-1"></div>
+      <div><label class="text-xs text-gray-500 uppercase">Max instructors</label><input type="number" value="4" class="w-full border rounded px-3 py-1.5 text-sm mt-1"></div>
+    </div>
+    <div class="mt-3"><label class="text-xs text-gray-500 uppercase">Required roles</label>
+      <div class="mt-1 space-y-1"><label class="flex items-center gap-2 text-sm"><input type="checkbox" checked> Vastuuvetäjä (max 1)</label><label class="flex items-center gap-2 text-sm"><input type="checkbox"> Kalustovastaava (max 1)</label></div>
+    </div>
+  </div>
+  <div class="bg-white rounded-lg border p-5 lg:col-span-2">
+    <h3 class="font-semibold mb-3">Calendar Template (Tapahtumakalenteri)</h3>
+    <div class="grid grid-cols-2 gap-3 mb-3">
+      <div><label class="text-xs text-gray-500 uppercase">Title</label><input type="text" value="Kupittaan ampumavuoro {displayDate}" class="w-full border rounded px-3 py-1.5 text-sm mt-1"></div>
+      <div><label class="text-xs text-gray-500 uppercase">Location</label><input type="text" value="Kupittaan urheiluhallin ampumarata" class="w-full border rounded px-3 py-1.5 text-sm mt-1"></div>
+    </div>
+    <div><label class="text-xs text-gray-500 uppercase">Content (HTML) — {ssiCupLink} replaced at creation</label>
+      <textarea rows="6" class="w-full border rounded px-3 py-2 text-sm mt-1 font-mono text-xs">&lt;strong&gt;Ohjattu pienoispistooliammunta&lt;/strong&gt; sovelletuilla ampumaohjelmilla...
+{ssiCupLink}
+&lt;em&gt;Ensikertalaiset vain perehdytysvuoron kautta.&lt;/em&gt;</textarea>
+    </div>
+  </div>
+</div>
+<div class="mt-6 flex items-center justify-between bg-white rounded-lg border p-4">
+  <div class="text-sm text-gray-500">Overrides are saved locally, not pushed to SSI seed.</div>
+  <div class="flex gap-3"><button onclick="showView('templates')" class="px-4 py-2 text-sm border rounded-md">Cancel</button><button class="px-4 py-2 text-sm bg-sky-600 text-white rounded-md">Save Template</button></div>
+</div>
+`,
+
+schedule: `
+<div class="proto-note">Schedule — calendar view of all events + batch creation</div>
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold">Event Schedule</h1>
+  <button onclick="showView('batch-create')" class="bg-sky-600 text-white px-4 py-2 rounded-md text-sm">+ Schedule Events</button>
+</div>
+<div class="flex items-center gap-4 mb-4">
+  <select class="text-sm border rounded-md px-3 py-1.5"><option>All Disciplines</option><option>Kupittaa Cup</option><option>SRA</option></select>
+  <select class="text-sm border rounded-md px-3 py-1.5"><option>All Statuses</option><option>Ready</option><option>Needs staff</option><option>Planned</option></select>
+</div>
+<div class="bg-white rounded-lg border">
+  <table class="w-full text-sm">
+    <thead><tr class="text-xs text-gray-500 uppercase border-b bg-gray-50 text-left"><th class="px-4 py-2">Date</th><th class="px-4 py-2">Event</th><th class="px-4 py-2">Discipline</th><th class="px-4 py-2">Status</th><th class="px-4 py-2">Staff</th><th class="px-4 py-2">Links</th></tr></thead>
+    <tbody class="divide-y">
+      <tr class="hover:bg-gray-50 cursor-pointer" onclick="showView('event-detail')"><td class="px-4 py-3 font-medium">28.02 La</td><td class="px-4 py-3">TurRes Kupittaa CUP 28.02.2026</td><td class="px-4 py-3"><span class="badge bg-blue-100 text-blue-700">KC</span></td><td class="px-4 py-3"><span class="badge bg-green-100 text-green-700">Ready</span></td><td class="px-4 py-3 text-green-600">2/2</td><td class="px-4 py-3"><a href="#" class="text-xs text-blue-600">SSI</a> <a href="#" class="text-xs text-blue-600">Cal</a></td></tr>
+      <tr class="hover:bg-gray-50"><td class="px-4 py-3 font-medium">01.03 Su</td><td class="px-4 py-3">TR-SRA Oldies 01.03.2026</td><td class="px-4 py-3"><span class="badge bg-orange-100 text-orange-700">SRA</span></td><td class="px-4 py-3"><span class="badge bg-amber-100 text-amber-700">Needs staff</span></td><td class="px-4 py-3 text-amber-600">3/5</td><td class="px-4 py-3"><a href="#" class="text-xs text-blue-600">SSI</a> <a href="#" class="text-xs text-blue-600">Cal</a></td></tr>
+      <tr class="hover:bg-gray-50"><td class="px-4 py-3 font-medium">07.03 La</td><td class="px-4 py-3">TurRes Kupittaa CUP 07.03.2026</td><td class="px-4 py-3"><span class="badge bg-blue-100 text-blue-700">KC</span></td><td class="px-4 py-3"><span class="badge bg-red-100 text-red-700">No staff</span></td><td class="px-4 py-3 text-red-500">0/2</td><td class="px-4 py-3"><a href="#" class="text-xs text-blue-600">SSI</a> <a href="#" class="text-xs text-blue-600">Cal</a></td></tr>
+      <tr class="hover:bg-gray-50"><td class="px-4 py-3 font-medium">08.03 Su</td><td class="px-4 py-3">TR-SRA Newbie 08.03.2026</td><td class="px-4 py-3"><span class="badge bg-orange-100 text-orange-700">SRA</span></td><td class="px-4 py-3"><span class="badge bg-green-100 text-green-700">Ready</span></td><td class="px-4 py-3 text-green-600">6/6</td><td class="px-4 py-3"><a href="#" class="text-xs text-blue-600">SSI</a> <a href="#" class="text-xs text-blue-600">Cal</a></td></tr>
+      <tr class="hover:bg-gray-50 bg-gray-50/50"><td class="px-4 py-3 font-medium text-gray-400">14.03 La</td><td class="px-4 py-3 text-gray-500">TurRes Kupittaa CUP 14.03.2026</td><td class="px-4 py-3"><span class="badge bg-blue-100 text-blue-700">KC</span></td><td class="px-4 py-3"><span class="badge bg-yellow-100 text-yellow-700">SSI only</span></td><td class="px-4 py-3 text-gray-400">-</td><td class="px-4 py-3"><a href="#" class="text-xs text-blue-600">SSI</a></td></tr>
+      <tr class="hover:bg-gray-50 bg-gray-50/50"><td class="px-4 py-3 font-medium text-gray-400">21.03 La</td><td class="px-4 py-3 text-gray-500">TurRes Kupittaa CUP 21.03.2026</td><td class="px-4 py-3"><span class="badge bg-blue-100 text-blue-700">KC</span></td><td class="px-4 py-3"><span class="badge bg-gray-100 text-gray-500">Planned</span></td><td class="px-4 py-3 text-gray-400">-</td><td class="px-4 py-3 text-xs text-gray-400">Not created</td></tr>
+    </tbody>
+  </table>
+</div>
+`,
+
+'batch-create': `
+<div class="proto-note">Batch Create — select template, enter dates, create all SSI + calendar events</div>
+<div class="flex items-center gap-2 mb-6">
+  <button onclick="showView('schedule')" class="text-gray-400 hover:text-gray-600">&#9664;</button>
+  <h1 class="text-2xl font-bold">Schedule Events</h1>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <div class="space-y-6">
+    <div class="bg-white rounded-lg border p-5">
+      <h3 class="font-semibold mb-3">1. Select Template</h3>
+      <select class="w-full border rounded-md px-3 py-2 text-sm"><option selected>TurRes Kupittaa CUP (Kupittaa Cup)</option><option>SRA Kokeneiden harjoitus</option><option>SRA Uusien koulutus</option></select>
+    </div>
+    <div class="bg-white rounded-lg border p-5">
+      <h3 class="font-semibold mb-3">2. Enter Dates</h3>
+      <p class="text-sm text-gray-500 mb-3">One per line: d.M.yyyy</p>
+      <textarea rows="8" class="w-full border rounded px-3 py-2 text-sm font-mono">14.3.2026
+21.3.2026
+28.3.2026
+4.4.2026
+11.4.2026
+25.4.2026</textarea>
+      <div class="flex items-center justify-between mt-2">
+        <span class="text-xs text-gray-400">6 dates</span>
+        <div class="flex gap-3"><label class="text-sm text-gray-600"><input type="checkbox" checked> SSI</label><label class="text-sm text-gray-600"><input type="checkbox" checked> Calendar</label></div>
+      </div>
+    </div>
+    <button class="w-full bg-sky-600 text-white py-3 rounded-md font-semibold hover:bg-sky-700">&#9889; Create 6 Events</button>
+  </div>
+  <div class="bg-white rounded-lg border p-5">
+    <h3 class="font-semibold mb-3">Progress</h3>
+    <div class="space-y-3">
+      <div class="rounded-lg bg-green-50 border-green-200 border p-3"><div class="font-medium text-sm text-green-800">14.03.2026 La &#10003;</div><div class="text-xs text-green-700 mt-1">&#10003; Cup #55201 · 3 matches · 9 squads · Calendar published</div></div>
+      <div class="rounded-lg bg-green-50 border-green-200 border p-3"><div class="font-medium text-sm text-green-800">21.03.2026 La &#10003;</div><div class="text-xs text-green-700 mt-1">&#10003; Cup #55204 · 3 matches · 9 squads · Calendar published</div></div>
+      <div class="rounded-lg bg-blue-50 border-blue-200 border p-3"><div class="font-medium text-sm text-blue-800">28.03.2026 La &#8987;</div><div class="text-xs text-blue-700 mt-1">&#10003; Cup #55207 · &#10003; 3 matches · &#8987; Creating squads...</div></div>
+      <div class="rounded-lg bg-gray-50 border p-3"><div class="font-medium text-sm text-gray-500">04.04.2026 La</div><div class="text-xs text-gray-400">Pending</div></div>
+      <div class="rounded-lg bg-gray-50 border p-3"><div class="font-medium text-sm text-gray-500">11.04.2026 La</div><div class="text-xs text-gray-400">Pending</div></div>
+      <div class="rounded-lg bg-gray-50 border p-3"><div class="font-medium text-sm text-gray-500">25.04.2026 La</div><div class="text-xs text-gray-400">Pending</div></div>
+    </div>
+  </div>
+</div>
+`,
+
+'event-detail': `
+<div class="proto-note">Event Detail — single event with SSI links, calendar, registration status, instructor assignments</div>
+<div class="flex items-center gap-2 mb-6">
+  <button onclick="showView('schedule')" class="text-gray-400 hover:text-gray-600">&#9664;</button>
+  <h1 class="text-2xl font-bold">TurRes Kupittaa CUP 28.02.2026</h1>
+  <span class="badge bg-green-100 text-green-700 ml-2">Ready</span>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div class="lg:col-span-2 space-y-6">
+    <div class="bg-white rounded-lg border p-5">
+      <h3 class="font-semibold mb-3">SSI Events</h3>
+      <div class="bg-blue-50 rounded-lg p-3 mb-2 flex justify-between items-center">
+        <div><div class="font-medium text-sm">TurRes Kupittaa CUP 28.02.2026</div><div class="text-xs text-gray-500">Cup (CT 136) · #55180</div></div>
+        <div class="flex gap-2"><a href="#" class="text-xs text-blue-600 border border-blue-300 rounded px-2 py-1">Open SSI</a><a href="#" class="text-xs text-blue-600 border border-blue-300 rounded px-2 py-1">Manage</a></div>
+      </div>
+      <div class="space-y-1">
+        <div class="flex justify-between items-center p-2 hover:bg-gray-50 rounded"><div><div class="text-sm">#1 Kupittaa 28.02.2026 Tarkkuus</div><div class="text-xs text-gray-500">Match #55181 · 3 squads</div></div><a href="#" class="text-xs text-blue-600">Open</a></div>
+        <div class="flex justify-between items-center p-2 hover:bg-gray-50 rounded"><div><div class="text-sm">#2 Kupittaa 28.02.2026 Pika</div><div class="text-xs text-gray-500">Match #55182 · 3 squads</div></div><a href="#" class="text-xs text-blue-600">Open</a></div>
+        <div class="flex justify-between items-center p-2 hover:bg-gray-50 rounded"><div><div class="text-sm">#3 Kupittaa 28.02.2026 Kuvio</div><div class="text-xs text-gray-500">Match #55183 · 3 squads</div></div><a href="#" class="text-xs text-blue-600">Open</a></div>
+      </div>
+    </div>
+    <div class="bg-white rounded-lg border p-5">
+      <h3 class="font-semibold mb-3">Tapahtumakalenteri</h3>
+      <div class="flex justify-between items-center"><div><div class="text-sm font-medium">Kupittaan ampumavuoro 28.02.2026</div><div class="text-xs text-gray-500">WordPress #1205 · Published</div></div><a href="#" class="text-xs text-blue-600 border border-blue-300 rounded px-2 py-1">View on site</a></div>
+    </div>
+    <div class="bg-white rounded-lg border p-5">
+      <h3 class="font-semibold mb-3">Registration <span class="text-xs text-gray-400 font-normal">(live from SSI)</span></h3>
+      <div class="grid grid-cols-3 gap-4 text-center">
+        <div class="bg-gray-50 rounded-lg p-3"><div class="text-2xl font-bold text-sky-700">18</div><div class="text-xs text-gray-500">Registered</div></div>
+        <div class="bg-gray-50 rounded-lg p-3"><div class="text-2xl font-bold text-gray-700">25</div><div class="text-xs text-gray-500">Max capacity</div></div>
+        <div class="bg-gray-50 rounded-lg p-3"><div class="text-2xl font-bold text-green-600">Open</div><div class="text-xs text-gray-500">Registration</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="space-y-6">
+    <div class="bg-white rounded-lg border p-5">
+      <h3 class="font-semibold mb-3">Event Info</h3>
+      <dl class="space-y-2 text-sm"><div><dt class="text-gray-500">Date</dt><dd class="font-medium">28.02.2026 (La)</dd></div><div><dt class="text-gray-500">Time</dt><dd>09:00 — 12:00</dd></div><div><dt class="text-gray-500">Venue</dt><dd>Kupittaan urheiluhalli</dd></div><div><dt class="text-gray-500">Template</dt><dd>TurRes Kupittaa CUP</dd></div><div><dt class="text-gray-500">Created</dt><dd>20.01.2026 by tohewi</dd></div></dl>
+    </div>
+    <div class="bg-white rounded-lg border p-5">
+      <div class="flex justify-between mb-3"><h3 class="font-semibold">Instructors</h3><span class="text-sm text-green-600 font-medium">2/2</span></div>
+      <div class="space-y-2">
+        <div class="flex items-center gap-3 p-2 bg-green-50 rounded"><div class="w-8 h-8 bg-green-200 rounded-full flex items-center justify-center text-green-800 text-xs font-semibold">TS</div><div><div class="text-sm font-medium">Tapio S.</div><div class="text-xs text-gray-500">Vastuuvetäjä</div></div></div>
+        <div class="flex items-center gap-3 p-2 bg-green-50 rounded"><div class="w-8 h-8 bg-green-200 rounded-full flex items-center justify-center text-green-800 text-xs font-semibold">AL</div><div><div class="text-sm font-medium">Antti L.</div><div class="text-xs text-gray-500">Vetäjä</div></div></div>
+      </div>
+      <button class="w-full mt-3 text-sm text-sky-600 py-1.5 border border-sky-200 rounded hover:bg-sky-50">Edit assignments</button>
+    </div>
+    <div class="bg-white rounded-lg border border-red-200 p-5"><h3 class="font-semibold text-red-700 mb-2">Danger Zone</h3><button class="w-full text-sm text-red-600 py-1.5 border border-red-200 rounded hover:bg-red-50">Delete event (SSI + Calendar)</button></div>
+  </div>
+</div>
+`,
+
+roster: `
+<div class="proto-note">Instructor Roster (Admin View) — manage the pool of qualified instructors. Staffing matrix is in Schedule.</div>
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold">Instructor Roster</h1>
+  <div class="flex gap-2">
+    <button class="border border-sky-300 text-sky-600 px-4 py-2 rounded-md text-sm hover:bg-sky-50">Invite instructor</button>
+  </div>
+</div>
+<!-- Pending approvals -->
+<div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+  <div class="flex items-center justify-between mb-2"><h3 class="font-semibold text-amber-800">Pending Registrations (2)</h3></div>
+  <div class="space-y-2">
+    <div class="bg-white rounded-lg border p-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-amber-200 rounded-full flex items-center justify-center text-amber-800 text-xs font-semibold">MV</div>
+        <div><div class="text-sm font-medium">Matti Virtanen</div><div class="text-xs text-gray-500">matti.virtanen@gmail.com · Applied 23.02.2026</div><div class="text-xs text-gray-500 mt-0.5">Disciplines: <span class="badge bg-orange-100 text-orange-700">SRA</span> · Roles: Staff</div></div>
+      </div>
+      <div class="flex gap-2"><button class="text-xs bg-green-600 text-white px-3 py-1 rounded">Approve</button><button class="text-xs border border-red-300 text-red-600 px-3 py-1 rounded">Reject</button></div>
+    </div>
+    <div class="bg-white rounded-lg border p-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-amber-200 rounded-full flex items-center justify-center text-amber-800 text-xs font-semibold">KH</div>
+        <div><div class="text-sm font-medium">Kalle Huttunen</div><div class="text-xs text-gray-500">kalle.h@outlook.com · Applied 24.02.2026</div><div class="text-xs text-gray-500 mt-0.5">Disciplines: <span class="badge bg-blue-100 text-blue-700">KC</span> <span class="badge bg-orange-100 text-orange-700">SRA</span> · Roles: Staff, Equipment</div></div>
+      </div>
+      <div class="flex gap-2"><button class="text-xs bg-green-600 text-white px-3 py-1 rounded">Approve</button><button class="text-xs border border-red-300 text-red-600 px-3 py-1 rounded">Reject</button></div>
+    </div>
+  </div>
+</div>
+<!-- Filter bar -->
+<div class="flex items-center gap-4 mb-4">
+  <select class="text-sm border rounded-md px-3 py-1.5"><option>All Disciplines</option><option>Kupittaa Cup</option><option>SRA</option><option>RA</option><option>PRS</option></select>
+  <select class="text-sm border rounded-md px-3 py-1.5"><option>All Statuses</option><option>Active</option><option>Inactive</option><option>Pending</option></select>
+  <input type="text" placeholder="Search by name or email..." class="text-sm border rounded-md px-3 py-1.5 w-64">
+  <span class="text-xs text-gray-400 ml-auto">12 instructors</span>
+</div>
+<!-- Roster table -->
+<div class="bg-white rounded-lg border">
+  <table class="w-full text-sm"><thead><tr class="text-xs text-gray-500 uppercase border-b bg-gray-50 text-left"><th class="px-4 py-2">Name</th><th class="px-4 py-2">Email (SSI)</th><th class="px-4 py-2">Disciplines</th><th class="px-4 py-2">Roles</th><th class="px-4 py-2">Status</th><th class="px-4 py-2">Joined</th><th class="px-4 py-2"></th></tr></thead>
+  <tbody class="divide-y">
+    <tr class="hover:bg-gray-50"><td class="px-4 py-3 font-medium">Tapio Santavuori</td><td class="px-4 py-3 text-gray-500">tapio...@protonmail</td><td class="px-4 py-3"><span class="badge bg-orange-100 text-orange-700 mr-1">SRA</span><span class="badge bg-blue-100 text-blue-700">KC</span></td><td class="px-4 py-3">Lead, Staff</td><td class="px-4 py-3"><span class="badge bg-green-100 text-green-700">Active</span></td><td class="px-4 py-3 text-xs text-gray-400">01.09.2025</td><td class="px-4 py-3"><button class="text-xs text-gray-400 hover:text-gray-600">Edit</button></td></tr>
+    <tr class="hover:bg-gray-50"><td class="px-4 py-3 font-medium">Jarkko Ahola</td><td class="px-4 py-3 text-gray-500">jarkko...@icloud</td><td class="px-4 py-3"><span class="badge bg-orange-100 text-orange-700 mr-1">SRA</span><span class="badge bg-purple-100 text-purple-700">PRS</span></td><td class="px-4 py-3">Staff</td><td class="px-4 py-3"><span class="badge bg-green-100 text-green-700">Active</span></td><td class="px-4 py-3 text-xs text-gray-400">15.09.2025</td><td class="px-4 py-3"><button class="text-xs text-gray-400 hover:text-gray-600">Edit</button></td></tr>
+    <tr class="hover:bg-gray-50"><td class="px-4 py-3 font-medium">Joose Olli</td><td class="px-4 py-3 text-gray-500">joose...@gmail</td><td class="px-4 py-3"><span class="badge bg-orange-100 text-orange-700">SRA</span></td><td class="px-4 py-3">Equipment, Staff</td><td class="px-4 py-3"><span class="badge bg-green-100 text-green-700">Active</span></td><td class="px-4 py-3 text-xs text-gray-400">01.10.2025</td><td class="px-4 py-3"><button class="text-xs text-gray-400 hover:text-gray-600">Edit</button></td></tr>
+    <tr class="hover:bg-gray-50"><td class="px-4 py-3 font-medium">Antti Lampo</td><td class="px-4 py-3 text-gray-500">antti...@gmail</td><td class="px-4 py-3"><span class="badge bg-blue-100 text-blue-700 mr-1">KC</span><span class="badge bg-purple-100 text-purple-700">RA</span></td><td class="px-4 py-3">Staff</td><td class="px-4 py-3"><span class="badge bg-green-100 text-green-700">Active</span></td><td class="px-4 py-3 text-xs text-gray-400">15.10.2025</td><td class="px-4 py-3"><button class="text-xs text-gray-400 hover:text-gray-600">Edit</button></td></tr>
+    <tr class="hover:bg-gray-50"><td class="px-4 py-3 font-medium">Mikko Lahtinen</td><td class="px-4 py-3 text-gray-500">mikko.l@...</td><td class="px-4 py-3"><span class="badge bg-orange-100 text-orange-700 mr-1">SRA</span><span class="badge bg-blue-100 text-blue-700">KC</span></td><td class="px-4 py-3">Staff</td><td class="px-4 py-3"><span class="badge bg-green-100 text-green-700">Active</span></td><td class="px-4 py-3 text-xs text-gray-400">01.11.2025</td><td class="px-4 py-3"><button class="text-xs text-gray-400 hover:text-gray-600">Edit</button></td></tr>
+    <tr class="hover:bg-gray-50"><td class="px-4 py-3 font-medium text-gray-400">Pekka Korhonen</td><td class="px-4 py-3 text-gray-400">pekka.k@...</td><td class="px-4 py-3"><span class="badge bg-orange-100 text-orange-700">SRA</span></td><td class="px-4 py-3 text-gray-400">Staff</td><td class="px-4 py-3"><span class="badge bg-gray-100 text-gray-500">Inactive</span></td><td class="px-4 py-3 text-xs text-gray-400">01.09.2025</td><td class="px-4 py-3"><button class="text-xs text-gray-400 hover:text-gray-600">Edit</button></td></tr>
+  </tbody></table>
+</div>
+`,
+
+'instructor-join': `
+<div class="proto-note">Self-Registration — any instructor can join the roster. Phase 1: auto-approve. Phase 2: admin approval required.</div>
+<div class="max-w-lg mx-auto">
+  <div class="text-center mb-8">
+    <h1 class="text-2xl font-bold">Join the Instructor Roster</h1>
+    <p class="text-gray-500 mt-2">Register as an instructor for TurRes shooting events. Your SSI email is used as your identity.</p>
+  </div>
+  <div class="bg-white rounded-lg border p-6">
+    <div class="space-y-4">
+      <div>
+        <label class="text-xs text-gray-500 uppercase tracking-wider">Full Name *</label>
+        <input type="text" placeholder="Matti Virtanen" class="w-full border rounded-md px-3 py-2 text-sm mt-1">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500 uppercase tracking-wider">SSI Email *</label>
+        <input type="email" placeholder="your.email@example.com" class="w-full border rounded-md px-3 py-2 text-sm mt-1">
+        <div class="text-xs text-gray-400 mt-1">Must match your ShootNScoreIt account email</div>
+      </div>
+      <div>
+        <label class="text-xs text-gray-500 uppercase tracking-wider">Phone (optional)</label>
+        <input type="tel" placeholder="+358 40 1234567" class="w-full border rounded-md px-3 py-2 text-sm mt-1">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500 uppercase tracking-wider">Disciplines *</label>
+        <div class="mt-1 space-y-2">
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" class="rounded"> <span class="badge bg-blue-100 text-blue-700">KC</span> Kupittaa Cup</label>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" checked class="rounded"> <span class="badge bg-orange-100 text-orange-700">SRA</span> SRA</label>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" class="rounded"> <span class="badge bg-purple-100 text-purple-700">RA</span> Reserviläisammunta</label>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" class="rounded"> <span class="badge bg-emerald-100 text-emerald-700">PRS</span> PRS</label>
+        </div>
+      </div>
+      <div>
+        <label class="text-xs text-gray-500 uppercase tracking-wider">Preferred Roles</label>
+        <div class="mt-1 space-y-2">
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" checked class="rounded"> Vetäjä (Staff / Instructor)</label>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" class="rounded"> Vastuuvetäjä (Lead Instructor)</label>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" class="rounded"> Kalustovastaava (Equipment Manager)</label>
+        </div>
+      </div>
+      <div>
+        <label class="text-xs text-gray-500 uppercase tracking-wider">Notes (optional)</label>
+        <textarea rows="2" placeholder="Any relevant experience or comments..." class="w-full border rounded-md px-3 py-2 text-sm mt-1"></textarea>
+      </div>
+      <button class="w-full bg-sky-600 text-white py-2.5 rounded-md font-semibold hover:bg-sky-700 mt-2">Register as Instructor</button>
+      <div class="text-xs text-gray-400 text-center mt-2">Your registration will be reviewed by an instructor administrator.</div>
+    </div>
+  </div>
+</div>
+`,
+
+'my-profile': `
+<div class="proto-note">Instructor Self-View — own profile, disciplines, roles, and upcoming event assignments</div>
+<div class="max-w-2xl">
+  <h1 class="text-2xl font-bold mb-6">My Instructor Profile</h1>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <!-- Profile card -->
+    <div class="bg-white rounded-lg border p-5 md:col-span-1">
+      <div class="text-center mb-4">
+        <div class="w-16 h-16 bg-sky-100 rounded-full flex items-center justify-center text-sky-700 text-xl font-bold mx-auto">TS</div>
+        <div class="font-semibold mt-2">Tapio Santavuori</div>
+        <div class="text-xs text-gray-500">tapiosantavuori@protonmail.com</div>
+        <span class="badge bg-green-100 text-green-700 mt-2">Active</span>
+      </div>
+      <div class="border-t pt-3 space-y-2">
+        <div><div class="text-xs text-gray-400">Disciplines</div><div class="mt-1"><span class="badge bg-orange-100 text-orange-700 mr-1">SRA</span><span class="badge bg-blue-100 text-blue-700">KC</span></div></div>
+        <div><div class="text-xs text-gray-400">Roles</div><div class="text-sm mt-0.5">Vastuuvetäjä, Vetäjä</div></div>
+        <div><div class="text-xs text-gray-400">Member since</div><div class="text-sm mt-0.5">01.09.2025</div></div>
+      </div>
+      <button class="w-full mt-4 text-sm text-sky-600 py-1.5 border border-sky-200 rounded hover:bg-sky-50">Edit Profile</button>
+    </div>
+    <!-- Upcoming assignments -->
+    <div class="md:col-span-2 space-y-4">
+      <div class="bg-white rounded-lg border p-5">
+        <h3 class="font-semibold mb-3">My Upcoming Events</h3>
+        <div class="space-y-3">
+          <div class="flex items-center gap-4 p-3 bg-green-50 rounded-lg border border-green-200">
+            <div class="w-12 text-center"><div class="text-xs text-gray-400">Feb</div><div class="text-lg font-bold">28</div><div class="text-xs text-gray-400">La</div></div>
+            <div class="flex-1">
+              <div class="font-medium text-sm">TurRes Kupittaa CUP 28.02.2026</div>
+              <div class="text-xs text-gray-500"><span class="badge bg-blue-100 text-blue-700">KC</span> · 09:00-12:00 · Kupittaan urheiluhalli</div>
+            </div>
+            <div class="text-right"><div class="text-sm font-medium text-green-700">Vastuuvetäjä</div><div class="text-xs text-gray-400">Lead Instructor</div></div>
+          </div>
+          <div class="flex items-center gap-4 p-3 bg-green-50 rounded-lg border border-green-200">
+            <div class="w-12 text-center"><div class="text-xs text-gray-400">Mar</div><div class="text-lg font-bold">01</div><div class="text-xs text-gray-400">Su</div></div>
+            <div class="flex-1">
+              <div class="font-medium text-sm">TR-SRA Oldies 01.03.2026</div>
+              <div class="text-xs text-gray-500"><span class="badge bg-orange-100 text-orange-700">SRA</span> · 10:00-14:00 · Temppelivuori</div>
+            </div>
+            <div class="text-right"><div class="text-sm font-medium text-green-700">Vetäjä</div><div class="text-xs text-gray-400">Staff</div></div>
+          </div>
+          <div class="flex items-center gap-4 p-3 bg-green-50 rounded-lg border border-green-200">
+            <div class="w-12 text-center"><div class="text-xs text-gray-400">Mar</div><div class="text-lg font-bold">08</div><div class="text-xs text-gray-400">Su</div></div>
+            <div class="flex-1">
+              <div class="font-medium text-sm">TR-SRA Newbie 08.03.2026</div>
+              <div class="text-xs text-gray-500"><span class="badge bg-orange-100 text-orange-700">SRA</span> · 10:00-14:00 · Temppelivuori</div>
+            </div>
+            <div class="text-right"><div class="text-sm font-medium text-green-700">Vetäjä</div><div class="text-xs text-gray-400">Staff</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="bg-white rounded-lg border p-5">
+        <h3 class="font-semibold mb-3">History</h3>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between text-gray-500"><span>21.02 — Kupittaa CUP (Vastuuvetäjä)</span><span class="badge bg-gray-100 text-gray-500">Completed</span></div>
+          <div class="flex justify-between text-gray-500"><span>15.02 — SRA Oldies (Vetäjä)</span><span class="badge bg-gray-100 text-gray-500">Completed</span></div>
+          <div class="flex justify-between text-gray-500"><span>08.02 — SRA Newbie (Vastuuvetäjä)</span><span class="badge bg-gray-100 text-gray-500">Completed</span></div>
+        </div>
+        <div class="text-xs text-gray-400 mt-3">Total: 14 events · 6 as Lead</div>
+      </div>
+    </div>
+  </div>
+</div>
+`,
+
+'platform-welcome': `
+<div class="proto-note">Welcome / Sign-Up — shown only before login. After login, user lands on Dashboard.</div>
+<div class="max-w-3xl mx-auto text-center">
+  <div class="mb-10">
+    <h1 class="text-3xl font-bold mb-3">Match Management Platform</h1>
+    <p class="text-gray-500 text-lg">Streamline your shooting competition events — from templates to schedules to instructor management.</p>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+    <div class="bg-white rounded-lg border p-5 text-left">
+      <div class="text-2xl mb-2">&#128203;</div>
+      <h3 class="font-semibold mb-1">Templates</h3>
+      <p class="text-sm text-gray-500">Import seed events from SSI and create reusable templates for any discipline.</p>
+    </div>
+    <div class="bg-white rounded-lg border p-5 text-left">
+      <div class="text-2xl mb-2">&#128197;</div>
+      <h3 class="font-semibold mb-1">Batch Scheduling</h3>
+      <p class="text-sm text-gray-500">Create an entire season of events in one go. Auto-publish to calendars.</p>
+    </div>
+    <div class="bg-white rounded-lg border p-5 text-left">
+      <div class="text-2xl mb-2">&#128101;</div>
+      <h3 class="font-semibold mb-1">Instructor Roster</h3>
+      <p class="text-sm text-gray-500">Manage your instructor pool with self-registration, approvals, and staffing.</p>
+    </div>
+  </div>
+  <div class="bg-sky-50 border border-sky-200 rounded-lg p-8 mb-8">
+    <h2 class="text-xl font-bold mb-2">Start your free 30-day trial</h2>
+    <p class="text-gray-600 mb-5">No credit card required. Full functionality during trial.</p>
+    <div class="max-w-sm mx-auto space-y-3">
+      <input type="text" placeholder="Organization name (e.g. TurRes)" class="w-full border rounded-md px-3 py-2 text-sm">
+      <input type="text" placeholder="Your name" class="w-full border rounded-md px-3 py-2 text-sm">
+      <input type="email" placeholder="Email address" class="w-full border rounded-md px-3 py-2 text-sm">
+      <input type="password" placeholder="Password" class="w-full border rounded-md px-3 py-2 text-sm">
+      <button onclick="showView('platform-tenants')" class="w-full bg-sky-600 text-white py-2.5 rounded-md font-semibold hover:bg-sky-700">Create Account & Start Trial</button>
+    </div>
+  </div>
+  <p class="text-xs text-gray-400">Already have an account? <a href="#" onclick="showView('dashboard')" class="text-sky-600">Sign in</a></p>
+</div>
+`,
+
+'platform-tenants': `
+<div class="proto-note">Owner Dashboard — view and manage your tenants (organizations)</div>
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-bold">My Tenants</h1>
+    <p class="text-sm text-gray-500 mt-1">Signed in as <strong>tohewi@live.com</strong></p>
+  </div>
+  <button onclick="showView('platform-new-tenant')" class="bg-sky-600 text-white px-4 py-2 rounded-md text-sm hover:bg-sky-700">+ New Tenant</button>
+</div>
+<div class="space-y-4">
+  <!-- Active tenant -->
+  <div class="bg-white rounded-lg border p-5 card-hover cursor-pointer" onclick="showView('dashboard')">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 bg-sky-100 rounded-lg flex items-center justify-center text-sky-700 text-lg font-bold">TR</div>
+        <div>
+          <div class="font-semibold text-lg">TurRes</div>
+          <div class="text-sm text-gray-500">Turun Reserviläiset · 3 disciplines · 12 instructors</div>
+        </div>
+      </div>
+      <div class="text-right">
+        <span class="badge bg-green-100 text-green-700">Active</span>
+        <div class="text-xs text-gray-400 mt-1">Pro plan · Renews 25.03.2026</div>
+      </div>
+    </div>
+    <div class="mt-3 pt-3 border-t flex gap-6 text-xs text-gray-500">
+      <span>&#128203; 5 templates</span>
+      <span>&#128197; 14 scheduled events</span>
+      <span>&#128101; 12 instructors</span>
+      <span>&#9989; 8 events completed</span>
+    </div>
+  </div>
+  <!-- Trial tenant -->
+  <div class="bg-white rounded-lg border p-5 card-hover cursor-pointer" onclick="showView('dashboard')">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center text-amber-700 text-lg font-bold">RR</div>
+        <div>
+          <div class="font-semibold text-lg">RaiResUps</div>
+          <div class="text-sm text-gray-500">Raision Reserviupseerit · 1 discipline · 3 instructors</div>
+        </div>
+      </div>
+      <div class="text-right">
+        <span class="badge bg-amber-100 text-amber-700">Trial</span>
+        <div class="text-xs text-amber-600 mt-1">18 days left · Ends 15.03.2026</div>
+      </div>
+    </div>
+    <div class="mt-3 pt-3 border-t flex gap-6 text-xs text-gray-500">
+      <span>&#128203; 1 template</span>
+      <span>&#128197; 2 scheduled events</span>
+      <span>&#128101; 3 instructors</span>
+    </div>
+  </div>
+  <!-- Cancelled tenant (grayed) -->
+  <div class="bg-white rounded-lg border p-5 opacity-60">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-lg font-bold">TP</div>
+        <div>
+          <div class="font-semibold text-lg text-gray-400">TestiProjekti</div>
+          <div class="text-sm text-gray-400">Test tenant · 0 disciplines</div>
+        </div>
+      </div>
+      <div class="text-right">
+        <span class="badge bg-gray-100 text-gray-500">Cancelled</span>
+        <div class="text-xs text-gray-400 mt-1">Cancelled 10.02.2026</div>
+      </div>
+    </div>
+  </div>
+</div>
+`,
+
+'platform-billing': `
+<div class="proto-note">Billing & Subscription — manage plans, payment methods, cancel service</div>
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold">Billing & Subscription</h1>
+</div>
+<div class="space-y-6">
+  <!-- Current plan -->
+  <div class="bg-white rounded-lg border p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-semibold">Current Plan</h3>
+      <button class="text-sm text-sky-600 hover:text-sky-700">Change plan</button>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="p-4 rounded-lg border-2 border-gray-200 text-center">
+        <div class="text-sm font-semibold text-gray-500 uppercase">Free Trial</div>
+        <div class="text-2xl font-bold mt-1">0 &euro;</div>
+        <div class="text-xs text-gray-400">30 days · No card required</div>
+        <ul class="text-xs text-gray-500 mt-3 space-y-1 text-left"><li>&#10003; 1 tenant</li><li>&#10003; 2 templates</li><li>&#10003; 10 events</li><li>&#10003; 5 instructors</li></ul>
+      </div>
+      <div class="p-4 rounded-lg border-2 border-sky-500 bg-sky-50 text-center relative">
+        <div class="absolute -top-2 left-1/2 -translate-x-1/2 bg-sky-600 text-white text-[10px] px-2 py-0.5 rounded-full font-semibold">CURRENT</div>
+        <div class="text-sm font-semibold text-sky-700 uppercase">Pro</div>
+        <div class="text-2xl font-bold mt-1">19 &euro;<span class="text-sm font-normal text-gray-500">/mo</span></div>
+        <div class="text-xs text-gray-500">Per tenant</div>
+        <ul class="text-xs text-gray-600 mt-3 space-y-1 text-left"><li>&#10003; Unlimited templates</li><li>&#10003; Unlimited events</li><li>&#10003; Unlimited instructors</li><li>&#10003; Calendar integration</li><li>&#10003; Email notifications</li></ul>
+      </div>
+      <div class="p-4 rounded-lg border-2 border-gray-200 text-center">
+        <div class="text-sm font-semibold text-gray-500 uppercase">Enterprise</div>
+        <div class="text-2xl font-bold mt-1">Custom</div>
+        <div class="text-xs text-gray-400">Contact us</div>
+        <ul class="text-xs text-gray-500 mt-3 space-y-1 text-left"><li>&#10003; Multiple tenants</li><li>&#10003; Priority support</li><li>&#10003; Custom integrations</li><li>&#10003; SLA</li></ul>
+      </div>
+    </div>
+  </div>
+  <!-- Payment method -->
+  <div class="bg-white rounded-lg border p-5">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-semibold">Payment Method</h3>
+      <button class="text-sm text-sky-600 hover:text-sky-700">Update</button>
+    </div>
+    <div class="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
+      <div class="w-10 h-7 bg-blue-900 rounded flex items-center justify-center text-white text-[10px] font-bold">VISA</div>
+      <div>
+        <div class="text-sm font-medium">**** **** **** 4242</div>
+        <div class="text-xs text-gray-400">Expires 12/2028</div>
+      </div>
+    </div>
+  </div>
+  <!-- Billing history -->
+  <div class="bg-white rounded-lg border p-5">
+    <h3 class="font-semibold mb-3">Billing History</h3>
+    <table class="w-full text-sm"><thead><tr class="text-xs text-gray-500 uppercase border-b"><th class="text-left pb-2">Date</th><th class="text-left pb-2">Description</th><th class="text-left pb-2">Tenant</th><th class="text-right pb-2">Amount</th><th class="text-right pb-2">Status</th></tr></thead>
+    <tbody class="divide-y">
+      <tr><td class="py-2">25.02.2026</td><td class="py-2">Pro plan — Monthly</td><td class="py-2">TurRes</td><td class="py-2 text-right">19.00 &euro;</td><td class="py-2 text-right"><span class="badge bg-green-100 text-green-700">Paid</span></td></tr>
+      <tr><td class="py-2">25.01.2026</td><td class="py-2">Pro plan — Monthly</td><td class="py-2">TurRes</td><td class="py-2 text-right">19.00 &euro;</td><td class="py-2 text-right"><span class="badge bg-green-100 text-green-700">Paid</span></td></tr>
+      <tr><td class="py-2">25.12.2025</td><td class="py-2">Pro plan — First month (after trial)</td><td class="py-2">TurRes</td><td class="py-2 text-right">19.00 &euro;</td><td class="py-2 text-right"><span class="badge bg-green-100 text-green-700">Paid</span></td></tr>
+    </tbody></table>
+  </div>
+  <!-- Cancel service -->
+  <div class="bg-white rounded-lg border border-red-200 p-5">
+    <h3 class="font-semibold text-red-700 mb-2">Cancel Service</h3>
+    <p class="text-sm text-gray-500 mb-3">Your tenants and data will remain accessible until the end of the current billing period. After that, data will be retained for 30 days before deletion. You can export your data at any time.</p>
+    <div class="flex gap-3">
+      <button class="text-sm border border-gray-300 text-gray-600 px-4 py-2 rounded-md hover:bg-gray-50">Export Data</button>
+      <button class="text-sm border border-red-300 text-red-600 px-4 py-2 rounded-md hover:bg-red-50">Cancel Subscription</button>
+    </div>
+  </div>
+</div>
+`,
+
+settings: `
+<div class="proto-note">Tenant Settings — SSI credentials, calendar backend, disciplines, user management</div>
+<h1 class="text-2xl font-bold mb-6">Settings — TurRes</h1>
+<div class="space-y-6">
+  <div class="bg-white rounded-lg border p-5">
+    <h3 class="font-semibold mb-3">SSI Credentials</h3>
+    <p class="text-xs text-gray-400 mb-3">Shared login for all disciplines in this tenant. Group ID and Organizer ID are configured per discipline.</p>
+    <div class="grid grid-cols-3 gap-4">
+      <div><label class="text-xs text-gray-500 uppercase">Email</label><input type="text" value="admin@turunreservilaiset.fi" class="w-full border rounded px-3 py-1.5 text-sm mt-1"></div>
+      <div><label class="text-xs text-gray-500 uppercase">Password</label><input type="password" value="hidden" class="w-full border rounded px-3 py-1.5 text-sm mt-1"></div>
+      <div><label class="text-xs text-gray-500 uppercase">API Key</label><input type="password" value="hidden" class="w-full border rounded px-3 py-1.5 text-sm mt-1"></div>
+    </div>
+  </div>
+  <div class="bg-white rounded-lg border p-5">
+    <h3 class="font-semibold mb-3">Calendar Backend</h3>
+    <div class="space-y-3">
+      <div><label class="text-xs text-gray-500 uppercase">Type</label><select class="w-full border rounded px-3 py-1.5 text-sm mt-1"><option selected>WordPress (Tapahtumakalenteri)</option><option>None</option></select></div>
+      <div class="grid grid-cols-2 gap-4">
+        <div><label class="text-xs text-gray-500 uppercase">WordPress URL</label><input type="text" value="https://turun-reservialiupseerit-turun-reservilaiset.reservilaisliitto.fi" class="w-full border rounded px-3 py-1.5 text-sm mt-1"></div>
+        <div><label class="text-xs text-gray-500 uppercase">WP Username</label><input type="text" value="admin" class="w-full border rounded px-3 py-1.5 text-sm mt-1"></div>
+      </div>
+    </div>
+  </div>
+  <div class="bg-white rounded-lg border p-5">
+    <div class="flex justify-between mb-3"><h3 class="font-semibold">Disciplines</h3><button class="text-sm text-sky-600">+ Add</button></div>
+    <div class="space-y-2">
+      <div class="bg-gray-50 rounded-lg p-3"><div class="flex justify-between items-start"><div class="flex items-center gap-3"><span class="badge bg-blue-100 text-blue-700">KC</span><div><div class="text-sm font-medium">Kupittaa Cup</div><div class="text-xs text-gray-500">Group: 25874 · Organizer: 1215 (TurResKu) · 3 templates</div></div></div><button class="text-xs text-gray-400">Edit</button></div></div>
+      <div class="bg-gray-50 rounded-lg p-3"><div class="flex justify-between items-start"><div class="flex items-center gap-3"><span class="badge bg-orange-100 text-orange-700">SRA</span><div><div class="text-sm font-medium">SRA</div><div class="text-xs text-gray-500">Group: 31200 · Organizer: 1215 (TurResKu) · 2 templates</div></div></div><button class="text-xs text-gray-400">Edit</button></div></div>
+      <div class="bg-gray-50 rounded-lg p-3"><div class="flex justify-between items-start"><div class="flex items-center gap-3"><span class="badge bg-purple-100 text-purple-700">RA</span><div><div class="text-sm font-medium">RA</div><div class="text-xs text-gray-500">Group: 25874 · Organizer: 1215 (TurResKu) · 1 template</div></div></div><button class="text-xs text-gray-400">Edit</button></div></div>
+    </div>
+  </div>
+  <div class="bg-white rounded-lg border p-5">
+    <div class="flex justify-between mb-3"><h3 class="font-semibold">Users</h3><button class="text-sm text-sky-600">+ Add user</button></div>
+    <table class="w-full text-sm"><thead><tr class="text-xs text-gray-500 uppercase border-b"><th class="text-left pb-2">Email</th><th class="text-left pb-2">Role</th><th class="text-left pb-2">Disciplines</th></tr></thead>
+    <tbody class="divide-y">
+      <tr><td class="py-2">tohewi@live.com</td><td class="py-2"><span class="badge bg-sky-100 text-sky-700">Tenant Admin</span></td><td class="py-2 text-gray-500">All</td></tr>
+      <tr><td class="py-2">tapiosantavuori@protonmail.com</td><td class="py-2"><span class="badge bg-gray-100 text-gray-600">Match Director</span></td><td class="py-2 text-gray-500">SRA, KC</td></tr>
+    </tbody></table>
+  </div>
+</div>
+`
+};
+
+function showView(name) {
+  document.getElementById('main-content').innerHTML = views[name] || '<div class="text-gray-400 py-20 text-center">View not found</div>';
+  document.querySelectorAll('.nav-link').forEach(n => {
+    n.classList.toggle('active', n.dataset.view === name);
+  });
+}
+
+// Nav click handlers
+document.querySelectorAll('.nav-link[data-view]').forEach(link => {
+  link.addEventListener('click', () => showView(link.dataset.view));
+});
+
+// Initial view
+showView('dashboard');
+</script>
+</body>
+</html>

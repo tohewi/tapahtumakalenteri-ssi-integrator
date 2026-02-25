@@ -439,6 +439,89 @@ Vision: Transform the current "link collection" home page into a structured matc
 - **Progressive disclosure**: Show simple views by default, reveal complexity on demand. A range officer sees different things than an administrator.
 - **Offline-capable**: Design for intermittent connectivity at shooting ranges. Critical paths (scoring) must work offline with sync.
 
+## Regulatory Requirements — SaaS Platform (EU/Finland)
+
+This section covers the key regulatory obligations for operating a self-service SaaS platform in the EU (Finland) that processes personal data and handles payments. These apply to the Match Management Platform (R8.1) once it becomes a commercial multi-tenant service.
+
+### GDPR — EU General Data Protection Regulation (2016/679)
+
+The platform processes personal data of platform owners, tenant admins, match directors, and instructors (names, email addresses, phone numbers, SSI identities, event participation history).
+
+| # | Requirement | Status | Notes |
+|---|-------------|--------|-------|
+| REG1 | **Lawful basis for processing**: Identify and document the lawful basis for each category of personal data. Instructor roster data = legitimate interest or consent. Billing data = contractual necessity. SSI credentials = contractual necessity | ⬚ Design | Art. 6 GDPR |
+| REG2 | **Privacy policy**: Publish a clear privacy policy describing what data is collected, why, how long it's retained, who it's shared with (sub-processors), and data subject rights | ⬚ Design | Art. 13–14 GDPR |
+| REG3 | **Data subject rights**: Implement mechanisms for data access (Art. 15), rectification (Art. 16), erasure / "right to be forgotten" (Art. 17), data portability (Art. 20), and objection (Art. 21). The "Export Data" feature in billing partially covers portability | ⬚ Design | Art. 15–22 GDPR |
+| REG4 | **Data Processing Agreement (DPA)**: Execute DPAs with all sub-processors: hosting (Render), email (Resend), payment (Stripe), SSI (ShootNScoreIt). The platform acts as data controller; sub-processors are data processors | ⬚ Design | Art. 28 GDPR |
+| REG5 | **Data minimization**: Collect only data necessary for the service. The "minimal data" design principle already aligns with this. Avoid storing data that SSI or calendar backends already hold | ⬚ Design | Art. 5(1)(c) GDPR |
+| REG6 | **Data retention & deletion**: Define retention periods per data category. Delete personal data when tenant is cancelled (after the 30-day grace period). Billing records must be retained per bookkeeping law (see REG16) | ⬚ Design | Art. 5(1)(e) GDPR |
+| REG7 | **Breach notification**: Implement a process to detect, document, and report personal data breaches to the Finnish DPA (Tietosuojavaltuutettu) within 72 hours and to affected data subjects without undue delay if high risk | ⬚ Design | Art. 33–34 GDPR |
+| REG8 | **Privacy by design & default**: Build data protection into the architecture. Multi-tenancy isolation, encrypted credentials, minimal data storage, and role-based access are examples. New features must consider privacy impact | ⬚ Design | Art. 25 GDPR |
+| REG9 | **Record of processing activities (ROPA)**: Maintain an internal register documenting all processing activities, purposes, data categories, recipients, and retention periods | ⬚ Design | Art. 30 GDPR |
+| REG10 | **Data transfers**: Ensure all personal data stays within the EU/EEA, or if transferred outside (e.g., US-based sub-processors), appropriate safeguards are in place (EU–US Data Privacy Framework, SCCs). Render deployment is Frankfurt (EU) | ⬚ Design | Art. 44–49 GDPR. Check each sub-processor |
+
+### Finnish Data Protection Act (Tietosuojalaki 1050/2018)
+
+| # | Requirement | Status | Notes |
+|---|-------------|--------|-------|
+| REG11 | **Supervisory authority**: The Finnish Data Protection Ombudsman (Tietosuojavaltuutettu) is the supervisory authority. Include contact details in the privacy policy | ⬚ Design | Supplements GDPR |
+| REG12 | **National ID / SSN**: If the system ever needs to handle Finnish national identifiers (henkilötunnus), additional restrictions apply (§29 Tietosuojalaki). Currently not applicable — SSI email is the identity key | ⬚ N/A | Monitor if scope changes |
+
+### ePrivacy — Cookies & Electronic Communications
+
+| # | Requirement | Status | Notes |
+|---|-------------|--------|-------|
+| REG13 | **Cookie consent**: Strictly necessary cookies (session cookies) don't require consent. Analytics or tracking cookies (if added later) require informed consent with opt-in. Implement a cookie banner if non-essential cookies are used | ⬚ Design | ePrivacy Directive + Finnish SVPL (917/2014) |
+| REG14 | **Session security**: Session cookies must be httpOnly, secure, sameSite. Already implemented in V7.0 auth. Ensure this extends to the platform-level auth | ✅ Implemented | Current V7 session already compliant |
+
+### Consumer Protection (Kuluttajansuojalaki 38/1978)
+
+Applies if tenants are consumers or non-commercial associations (e.g., shooting clubs registered as yhdistys). Even B2B, best practice is to follow these.
+
+| # | Requirement | Status | Notes |
+|---|-------------|--------|-------|
+| REG15 | **Transparent pricing**: Display all prices including VAT. Subscription terms (monthly/annual, auto-renewal) must be clearly communicated before purchase. No hidden fees | ⬚ Design | Ch. 2 §6–7 KSL |
+| REG16 | **Right of withdrawal (cooling-off)**: For distance sales to consumers, 14-day right of withdrawal from the date of contract. If the service starts during the withdrawal period with consumer's explicit consent, the right may be limited but must be communicated | ⬚ Design | Ch. 6 §14 KSL. Free trial naturally covers this |
+| REG17 | **Cancellation process**: Cancellation must be as easy as sign-up (no dark patterns). Provide clear confirmation of cancellation date, what happens to data, and any remaining billing obligations | ⬚ Design | Ch. 6 §14 KSL |
+| REG18 | **Terms of Service**: Publish ToS covering: service description, subscription terms, payment terms, liability limitations, governing law (Finland), dispute resolution. Must be accepted at sign-up | ⬚ Design | General contract law + KSL |
+
+### Payment Regulation (PSD2 / Maksulaitoslaki)
+
+| # | Requirement | Status | Notes |
+|---|-------------|--------|-------|
+| REG19 | **PCI DSS delegation**: Never handle raw card numbers. Delegate payment processing to a PCI DSS-compliant provider (Stripe, Paytrail, etc.). Store only tokenized references and last-4 digits | ⬚ Design | PSD2 + PCI DSS. Stripe Checkout/Elements handles this |
+| REG20 | **Strong Customer Authentication (SCA)**: Payment provider must support SCA (3D Secure) for EU card payments. Stripe handles this automatically | ⬚ Design | PSD2 Art. 97 |
+| REG21 | **Invoicing & bookkeeping**: Issue proper invoices/receipts per Finnish Bookkeeping Act (Kirjanpitolaki 1336/1997). Retain financial records for 6 years (10 years for accounting books). This applies even after tenant cancellation | ⬚ Design | Kirjanpitolaki §2:10 |
+
+### Accessibility — European Accessibility Act (EAA / Directive 2019/882)
+
+| # | Requirement | Status | Notes |
+|---|-------------|--------|-------|
+| REG22 | **WCAG 2.1 AA compliance**: The EAA (effective June 28, 2025) requires digital services to meet EN 301 549 / WCAG 2.1 Level AA. Applies to new products and services offered to consumers in the EU. Key areas: keyboard navigation, screen reader support, color contrast, form labels, error messages | ⬚ Design | Directive 2019/882. Scoring UI already had a WCAG pass (R8.0) |
+| REG23 | **Accessibility statement**: Publish an accessibility statement describing compliance level, known limitations, and contact for accessibility issues | ⬚ Design | EN 301 549 §12 |
+
+### Summary of Regulatory Applicability
+
+| Regulation | Applies when | Priority |
+|-----------|-------------|----------|
+| **GDPR + Finnish DPA** | Immediately — personal data is processed from day one | Critical |
+| **ePrivacy (cookies)** | At launch — session cookies already compliant, watch for analytics | Low (currently) |
+| **Consumer protection** | When charging money / offering trials to end users | High at billing launch |
+| **PSD2 / PCI DSS** | When accepting payments — delegated to Stripe | Medium (Stripe handles most) |
+| **Bookkeeping** | When issuing invoices | Medium |
+| **EAA / WCAG** | Effective now (June 2025) — new digital services must comply | High |
+
+### Key Actions Before Launch
+
+1. **Draft privacy policy** — data collected, purposes, sub-processors, retention, rights
+2. **Draft Terms of Service** — subscription terms, liability, governing law
+3. **Execute DPAs** with Render, Resend, Stripe, and ShootNScoreIt
+4. **Verify EU data residency** for all sub-processors (Render = Frankfurt ✅)
+5. **Implement data export** (JSON/CSV) for portability and cancellation
+6. **Implement data deletion** workflow triggered on tenant cancellation + grace period
+7. **WCAG 2.1 AA audit** of all new platform views
+8. **Set up Stripe** (or Paytrail for Finnish market) — never touch raw card data
+
 ## Summary
 
 - **Release 1.0** (SSI Cup Automation): 37 requirements — 35 ✅, 2 on hold (35, 36)
@@ -459,6 +542,7 @@ Vision: Transform the current "link collection" home page into a structured matc
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
 - **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
+- **Regulatory** (SaaS Platform EU/Finland): 23 requirements — 1 ✅ (REG14), 1 N/A (REG12), 21 design phase (REG1–REG23)
 
 
 ## Configuration Files
