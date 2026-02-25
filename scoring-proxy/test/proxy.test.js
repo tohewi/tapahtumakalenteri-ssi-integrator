@@ -84,7 +84,7 @@ describe('GET /api/auth/status', () => {
 // Cup search (requires prior login)
 // ============================================================
 
-describe('GET /api/cups', () => {
+describe('GET /api/scoring/cups', () => {
   before(async () => {
     await jsonFetch(`${BASE}/auth/login`, {
       method: 'POST',
@@ -94,18 +94,18 @@ describe('GET /api/cups', () => {
   })
 
   it('returns empty array for short search term', async () => {
-    const { data } = await jsonFetch(`${BASE}/cups?search=K`)
+    const { data } = await jsonFetch(`${BASE}/scoring/cups?search=K`)
     assert.deepEqual(data.cups, [])
   })
 
   it('returns cups for valid search term', async () => {
-    const { data } = await jsonFetch(`${BASE}/cups?search=Kupittaa`)
+    const { data } = await jsonFetch(`${BASE}/scoring/cups?search=Kupittaa`)
     assert.ok(Array.isArray(data.cups))
     assert.ok(data.cups.length > 0, 'Expected at least one cup')
   })
 
   it('cups are sorted by closest date to today', async () => {
-    const { data } = await jsonFetch(`${BASE}/cups?search=Kupittaa`)
+    const { data } = await jsonFetch(`${BASE}/scoring/cups?search=Kupittaa`)
     if (data.cups.length >= 2) {
       const now = Date.now()
       const d0 = Math.abs(new Date(data.cups[0].starts).getTime() - now)
@@ -115,7 +115,7 @@ describe('GET /api/cups', () => {
   })
 
   it('cups have required fields', async () => {
-    const { data } = await jsonFetch(`${BASE}/cups?search=Kupittaa`)
+    const { data } = await jsonFetch(`${BASE}/scoring/cups?search=Kupittaa`)
     const cup = data.cups[0]
     assert.ok(cup.id, 'Cup should have id')
     assert.ok(cup.name, 'Cup should have name')
@@ -124,7 +124,7 @@ describe('GET /api/cups', () => {
   })
 
   it('returns empty for non-existent search', async () => {
-    const { data } = await jsonFetch(`${BASE}/cups?search=ZZZZNONEXISTENT`)
+    const { data } = await jsonFetch(`${BASE}/scoring/cups?search=ZZZZNONEXISTENT`)
     assert.deepEqual(data.cups, [])
   })
 })
@@ -133,7 +133,7 @@ describe('GET /api/cups', () => {
 // Cup detail
 // ============================================================
 
-describe('GET /api/cup/:id', () => {
+describe('GET /api/scoring/cup/:id', () => {
   let cupId
 
   before(async () => {
@@ -142,20 +142,20 @@ describe('GET /api/cup/:id', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(CREDS),
     })
-    const { data } = await jsonFetch(`${BASE}/cups?search=Kupittaa`)
+    const { data } = await jsonFetch(`${BASE}/scoring/cups?search=Kupittaa`)
     cupId = data.cups[0]?.id
   })
 
   it('returns cup with component matches', async () => {
     assert.ok(cupId, 'Need a cup ID from search')
-    const { status, data } = await jsonFetch(`${BASE}/cup/${cupId}`)
+    const { status, data } = await jsonFetch(`${BASE}/scoring/cup/${cupId}`)
     assert.equal(status, 200)
     assert.ok(data.name, 'Cup should have name')
     assert.ok(Array.isArray(data.matches), 'Cup should have matches array')
   })
 
   it('matches have required fields', async () => {
-    const { data } = await jsonFetch(`${BASE}/cup/${cupId}`)
+    const { data } = await jsonFetch(`${BASE}/scoring/cup/${cupId}`)
     if (data.matches.length > 0) {
       const m = data.matches[0]
       assert.ok(m.id, 'Match should have id')
@@ -166,7 +166,7 @@ describe('GET /api/cup/:id', () => {
   })
 
   it('matches preserve SSI component order', async () => {
-    const { data } = await jsonFetch(`${BASE}/cup/${cupId}`)
+    const { data } = await jsonFetch(`${BASE}/scoring/cup/${cupId}`)
     if (data.matches.length >= 2) {
       for (let i = 1; i < data.matches.length; i++) {
         assert.ok(
@@ -178,7 +178,7 @@ describe('GET /api/cup/:id', () => {
   })
 
   it('returns 404 for non-existent cup', async () => {
-    const { status } = await jsonFetch(`${BASE}/cup/99999`)
+    const { status } = await jsonFetch(`${BASE}/scoring/cup/99999`)
     assert.equal(status, 404)
   })
 })
@@ -187,7 +187,7 @@ describe('GET /api/cup/:id', () => {
 // Match detail
 // ============================================================
 
-describe('GET /api/match/:id', () => {
+describe('GET /api/scoring/match/:id', () => {
   let matchId
 
   before(async () => {
@@ -196,17 +196,17 @@ describe('GET /api/match/:id', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(CREDS),
     })
-    const { data: cupsData } = await jsonFetch(`${BASE}/cups?search=Kupittaa`)
+    const { data: cupsData } = await jsonFetch(`${BASE}/scoring/cups?search=Kupittaa`)
     const cupId = cupsData.cups[0]?.id
     if (cupId) {
-      const { data: cupData } = await jsonFetch(`${BASE}/cup/${cupId}`)
+      const { data: cupData } = await jsonFetch(`${BASE}/scoring/cup/${cupId}`)
       matchId = cupData.matches[0]?.id
     }
   })
 
   it('returns match with squads', async () => {
     assert.ok(matchId, 'Need a match ID')
-    const { status, data } = await jsonFetch(`${BASE}/match/${matchId}`)
+    const { status, data } = await jsonFetch(`${BASE}/scoring/match/${matchId}`)
     assert.equal(status, 200)
     assert.ok(data.name, 'Match should have name')
     assert.ok(data.starts, 'Match should have starts field')
@@ -214,7 +214,7 @@ describe('GET /api/match/:id', () => {
   })
 
   it('squads have number and comment fields', async () => {
-    const { data } = await jsonFetch(`${BASE}/match/${matchId}`)
+    const { data } = await jsonFetch(`${BASE}/scoring/match/${matchId}`)
     if (data.squads.length > 0) {
       const sq = data.squads[0]
       assert.ok(sq.id, 'Squad should have id')
@@ -224,7 +224,7 @@ describe('GET /api/match/:id', () => {
   })
 
   it('match has scoring configuration', async () => {
-    const { data } = await jsonFetch(`${BASE}/match/${matchId}`)
+    const { data } = await jsonFetch(`${BASE}/scoring/match/${matchId}`)
     assert.equal(typeof data.number_of_strings, 'number')
     assert.equal(typeof data.number_of_rounds_per_string, 'number')
   })
@@ -241,7 +241,7 @@ describe('Endpoints require authentication', () => {
 
   it('GET /api/cups returns 401 when not authenticated (documented behavior)', async () => {
     // This documents the expected behavior — in practice the proxy may still have JWT
-    const { data } = await jsonFetch(`${BASE}/cups?search=test`)
+    const { data } = await jsonFetch(`${BASE}/scoring/cups?search=test`)
     assert.ok(data.cups !== undefined || data.error !== undefined)
   })
 })
