@@ -18,17 +18,22 @@ import {
   filterManageableCups,
 } from '../lib/services/cup-manage.js'
 import { log } from '../lib/logger.js'
+import { AppError } from '../lib/errors/AppError.js'
 
-const router = express.Router()
+function internalError(message) {
+  return new AppError(message, 500, 'INTERNAL_ERROR')
+}
 
 export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminGraphQL, getAdminSession }) {
+  const router = express.Router()
+
   // ============================================================
   // GET /api/manage/cups — List cups available for management
   // Returns cups that haven't ended yet, regardless of registration status.
   // Uses admin GraphQL to query SSI events (same as registration endpoint
   // but with relaxed filtering: no registration status check, uses end date).
   // ============================================================
-  router.get('/cups', requireAuth('manage'), async (req, res) => {
+  router.get('/cups', requireAuth('manage'), async (req, res, next) => {
     try {
       const result = await adminGraphQL(`
         query {
@@ -58,8 +63,8 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
 
       res.json({ cups })
     } catch (err) {
-      console.error('[manage] Failed to list cups:', err.message)
-      res.status(500).json({ error: 'Hallintapalvelu ei ole käytettävissä.' })
+      log.error('[manage] Failed to list cups:', err.message)
+      return next(internalError('Hallintapalvelu ei ole käytettävissä.'))
     }
   })
 
@@ -67,7 +72,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
   // GET /api/manage/cup/:id — Consolidated squadding overview
   // Requires manage auth
   // ============================================================
-  router.get('/cup/:id', requireAuth('manage'), async (req, res) => {
+  router.get('/cup/:id', requireAuth('manage'), async (req, res, next) => {
     try {
       const result = await graphqlWithRefresh(req.ssiSession, `
         query ManageCup($id: String!) {
@@ -124,7 +129,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
           }
         }
       } catch (err) {
-        console.error(`[manage] Failed to scrape paid/DNS status: ${err.message}`)
+        log.error(`[manage] Failed to scrape paid/DNS status: ${err.message}`)
       }
 
       // Attach paid/DNS status to shooters
@@ -141,8 +146,8 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
         pendingShooters,
       })
     } catch (err) {
-      console.error('Failed to fetch management data:', err.message)
-      res.status(500).json({ error: err.message })
+      log.error('[manage] Failed to fetch management data:', err.message)
+      return next(internalError('Failed to fetch management data'))
     }
   })
 
@@ -151,7 +156,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
   // Assign an unsquadded shooter to a squad in all component matches.
   // Body: { shooterName, squadNumber, email }
   // ============================================================
-  router.post('/cup/:id/assign-squad', requireAuth('manage'), async (req, res) => {
+  router.post('/cup/:id/assign-squad', requireAuth('manage'), async (req, res, next) => {
     const { shooterName, squadNumber, email } = req.body
     if (!shooterName || !squadNumber) {
       return res.status(400).json({ error: 'shooterName and squadNumber required' })
@@ -207,8 +212,8 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       const allOk = results.every(r => r.success)
       res.json({ success: allOk, results })
     } catch (err) {
-      console.error('[manage] assign-squad error:', err.message)
-      res.status(500).json({ error: err.message })
+      log.error('[manage] assign-squad error:', err.message)
+      return next(internalError('Failed to assign squad'))
     }
   })
 
@@ -217,7 +222,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
   // Fix inconsistent squad assignment across matches.
   // Body: { shooterName, targetSquad, email }
   // ============================================================
-  router.post('/cup/:id/fix-squad', requireAuth('manage'), async (req, res) => {
+  router.post('/cup/:id/fix-squad', requireAuth('manage'), async (req, res, next) => {
     const { shooterName, targetSquad, email } = req.body
     if (!shooterName || !targetSquad) {
       return res.status(400).json({ error: 'shooterName and targetSquad required' })
@@ -275,8 +280,8 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       const allOk = results.every(r => r.success)
       res.json({ success: allOk, results })
     } catch (err) {
-      console.error('[manage] fix-squad error:', err.message)
-      res.status(500).json({ error: err.message })
+      log.error('[manage] fix-squad error:', err.message)
+      return next(internalError('Failed to fix squad assignment'))
     }
   })
 
@@ -285,7 +290,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
   // Add a match-only shooter to the CUP and approve.
   // Body: { shooterName, email }
   // ============================================================
-  router.post('/cup/:id/add-to-cup', requireAuth('manage'), async (req, res) => {
+  router.post('/cup/:id/add-to-cup', requireAuth('manage'), async (req, res, next) => {
     const { shooterName, email } = req.body
     if (!shooterName) {
       return res.status(400).json({ error: 'shooterName required' })
@@ -306,7 +311,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       log.debug(`[manage] Cup add result: ${addResult.message}`)
 
       if (!addResult.success) {
-        console.error(`[manage] Failed to add "${shooterName}" to cup: ${addResult.message}`)
+        log.error(`[manage] Failed to add "${shooterName}" to cup: ${addResult.message}`)
         return res.status(400).json({ error: `Failed to add competitor: ${addResult.message}` })
       }
 
@@ -315,14 +320,14 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       log.debug(`[manage] Cup approve result: ${approveResult.message}`)
 
       if (!approveResult.success) {
-        console.error(`[manage] Failed to approve "${shooterName}" in cup: ${approveResult.message}`)
+        log.error(`[manage] Failed to approve "${shooterName}" in cup: ${approveResult.message}`)
         return res.status(400).json({ error: `Failed to approve competitor: ${approveResult.message}` })
       }
 
       res.json({ success: true, message: approveResult.message })
     } catch (err) {
-      console.error('[manage] add-to-cup error:', err.message)
-      res.status(500).json({ error: err.message })
+      log.error('[manage] add-to-cup error:', err.message)
+      return next(internalError('Failed to add competitor to cup'))
     }
   })
 
@@ -333,7 +338,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
   // Note: This endpoint only approves in CUP. Shooters pending only in matches
   //       should be approved at the match level, not CUP level.
   // ============================================================
-  router.post('/cup/:id/approve-pending', requireAuth('manage'), async (req, res) => {
+  router.post('/cup/:id/approve-pending', requireAuth('manage'), async (req, res, next) => {
     const { shooterName, email, cupParticipantId } = req.body
     if (!shooterName) {
       return res.status(400).json({ error: 'shooterName required' })
@@ -348,7 +353,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       // Check if shooter is actually in the CUP
       if (!cupParticipantId) {
         const errorMsg = `Cannot approve "${shooterName}" in CUP: shooter is not pending in CUP (only in matches)`
-        console.warn(`[manage] ${errorMsg}`)
+        log.warn(`[manage] ${errorMsg}`)
         return res.status(400).json({ error: errorMsg })
       }
 
@@ -358,14 +363,14 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       log.debug(`[manage] Cup approve result: ${approveResult.message}`)
 
       if (!approveResult.success) {
-        console.error(`[manage] Failed to approve "${shooterName}" in cup: ${approveResult.message}`)
+        log.error(`[manage] Failed to approve "${shooterName}" in cup: ${approveResult.message}`)
         return res.status(400).json({ error: `Failed to approve competitor: ${approveResult.message}` })
       }
 
       res.json({ success: true, message: approveResult.message })
     } catch (err) {
-      console.error('[manage] approve-pending error:', err.message)
-      res.status(500).json({ error: err.message })
+      log.error('[manage] approve-pending error:', err.message)
+      return next(internalError('Failed to approve pending competitor'))
     }
   })
 
@@ -376,7 +381,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
   // Deletes shooter from CUP (if present) and from all matches (if present).
   // This ensures shooters are removed from both Cup and Matches when they click "Poista".
   // ============================================================
-  router.post('/cup/:id/remove-pending', requireAuth('manage'), async (req, res) => {
+  router.post('/cup/:id/remove-pending', requireAuth('manage'), async (req, res, next) => {
     const { shooterName, email, cupParticipantId, matchParticipants = [] } = req.body
     if (!shooterName) {
       return res.status(400).json({ error: 'shooterName required' })
@@ -396,7 +401,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
         log.debug(`[manage] Cup delete result: ${deleteResult.message}`)
 
         if (!deleteResult.success) {
-          console.error(`[manage] Failed to remove "${shooterName}" from cup: ${deleteResult.message}`)
+          log.error(`[manage] Failed to remove "${shooterName}" from cup: ${deleteResult.message}`)
           results.push({ location: 'CUP', success: false, error: deleteResult.message })
         } else {
           results.push({ location: 'CUP', success: true })
@@ -411,7 +416,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
 
         for (const mp of matchParticipants) {
           if (!mp.participantId) {
-            console.warn(`[manage] Missing participantId for match ${mp.matchId}, skipping`)
+            log.warn(`[manage] Missing participantId for match ${mp.matchId}, skipping`)
             continue
           }
 
@@ -420,13 +425,13 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
             log.debug(`[manage] Match ${mp.matchName} delete result: ${matchDeleteResult.message}`)
 
             if (!matchDeleteResult.success) {
-              console.error(`[manage] Failed to remove "${shooterName}" from match ${mp.matchName}: ${matchDeleteResult.message}`)
+              log.error(`[manage] Failed to remove "${shooterName}" from match ${mp.matchName}: ${matchDeleteResult.message}`)
               results.push({ location: `Match: ${mp.matchName}`, success: false, error: matchDeleteResult.message })
             } else {
               results.push({ location: `Match: ${mp.matchName}`, success: true })
             }
           } catch (err) {
-            console.error(`[manage] Error removing from match ${mp.matchName}:`, err.message)
+            log.error(`[manage] Error removing from match ${mp.matchName}:`, err.message)
             results.push({ location: `Match: ${mp.matchName}`, success: false, error: err.message })
           }
         }
@@ -458,8 +463,8 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       // All succeeded
       res.json({ success: true, message: 'Removed from all locations', results })
     } catch (err) {
-      console.error('[manage] remove-pending error:', err.message)
-      res.status(500).json({ error: err.message })
+      log.error('[manage] remove-pending error:', err.message)
+      return next(internalError('Failed to remove pending competitor'))
     }
   })
 
@@ -469,7 +474,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
   // Body: { shooterName, email, cupParticipantId }
   // Uses admin cookies for web scraping (SSI has no GraphQL write support)
   // ============================================================
-  router.post('/cup/:id/set-dns', requireAuth('manage'), async (req, res) => {
+  router.post('/cup/:id/set-dns', requireAuth('manage'), async (req, res, next) => {
     const { shooterName, email, cupParticipantId } = req.body
     if (!shooterName) {
       return res.status(400).json({ error: 'shooterName required' })
@@ -478,7 +483,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
     try {
       const adminSess = getAdminSession ? await getAdminSession() : null
       const cookies = adminSess?.cookies
-      if (!cookies) return res.status(500).json({ error: 'Admin session not available' })
+      if (!cookies) return next(internalError('Admin session not available'))
 
       const cupId = req.params.id
       const results = []
@@ -527,8 +532,8 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       const allOk = results.every(r => r.success)
       res.json({ success: allOk || results.some(r => r.success), results })
     } catch (err) {
-      console.error('[manage] set-dns error:', err.message)
-      res.status(500).json({ error: err.message })
+      log.error('[manage] set-dns error:', err.message)
+      return next(internalError('Failed to set DNS status'))
     }
   })
 
@@ -537,7 +542,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
   // Undo "Did Not Show" on a shooter at CUP level + all matches
   // Body: { shooterName, email, cupParticipantId }
   // ============================================================
-  router.post('/cup/:id/undo-dns', requireAuth('manage'), async (req, res) => {
+  router.post('/cup/:id/undo-dns', requireAuth('manage'), async (req, res, next) => {
     const { shooterName, email, cupParticipantId } = req.body
     if (!shooterName) {
       return res.status(400).json({ error: 'shooterName required' })
@@ -546,7 +551,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
     try {
       const adminSess = getAdminSession ? await getAdminSession() : null
       const cookies = adminSess?.cookies
-      if (!cookies) return res.status(500).json({ error: 'Admin session not available' })
+      if (!cookies) return next(internalError('Admin session not available'))
 
       const cupId = req.params.id
       const results = []
@@ -591,8 +596,8 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       const allOk = results.every(r => r.success)
       res.json({ success: allOk || results.some(r => r.success), results })
     } catch (err) {
-      console.error('[manage] undo-dns error:', err.message)
-      res.status(500).json({ error: err.message })
+      log.error('[manage] undo-dns error:', err.message)
+      return next(internalError('Failed to undo DNS status'))
     }
   })
 
@@ -601,7 +606,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
   // Toggle paid status on a CUP participant (cup level only)
   // Body: { shooterName, cupParticipantId }
   // ============================================================
-  router.post('/cup/:id/toggle-paid', requireAuth('manage'), async (req, res) => {
+  router.post('/cup/:id/toggle-paid', requireAuth('manage'), async (req, res, next) => {
     const { shooterName, cupParticipantId } = req.body
     if (!shooterName || !cupParticipantId) {
       return res.status(400).json({ error: 'shooterName and cupParticipantId required' })
@@ -610,7 +615,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
     try {
       const adminSess = getAdminSession ? await getAdminSession() : null
       const cookies = adminSess?.cookies
-      if (!cookies) return res.status(500).json({ error: 'Admin session not available' })
+      if (!cookies) return next(internalError('Admin session not available'))
 
       log.debug(`[manage] Toggling paid for CUP participant ${cupParticipantId} ("${shooterName}")`)
       const result = await ssiTogglePaid(137, cupParticipantId, cookies)
@@ -618,8 +623,8 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
 
       res.json({ success: result.success, message: result.message })
     } catch (err) {
-      console.error('[manage] toggle-paid error:', err.message)
-      res.status(500).json({ error: err.message })
+      log.error('[manage] toggle-paid error:', err.message)
+      return next(internalError('Failed to toggle paid status'))
     }
   })
 

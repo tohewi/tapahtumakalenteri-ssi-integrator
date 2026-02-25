@@ -1,7 +1,8 @@
 # Software Architecture Review
 
-**Date:** 2026-02-19
+**Date:** 2026-02-19 (updated 2026-02-23 for v7.5)
 **Scope:** `scoring-proxy/` (Express backend) and `scoring-ui/` (React frontend)
+**Target Architecture:** Modular Monolith with clear module boundaries
 
 ---
 
@@ -11,47 +12,52 @@
 
 | File | Lines | Role |
 |------|------:|------|
-| `lib/ssi-core/client.js` | 1 482 | SSI API integration (GraphQL + web scraping) |
-| `routes/management.js` | 890 | Cup management endpoints (9 routes) |
-| `routes/staffing.js` | 430 | Staff signup/resign/sync |
-| `routes/registration.js` | 379 | Public self-registration |
-| `server.js` | 380 | Express bootstrap, middleware, route mounting |
-| `routes/scoring.js` | 332 | Score entry endpoints |
-| `routes/reports.js` | 206 | Report generation |
-| `routes/auth-v7.js` | 166 | Authentication routes |
+| `lib/ssi-core/client.js` | 1 474 | SSI API integration (GraphQL + web scraping) |
+| `routes/management.js` | 550 | Cup management endpoints (10 routes) |
+| `routes/staffing.js` | 438 | Staff signup/resign/sync |
+| `server.js` | 428 | Express bootstrap, middleware, route mounting |
+| `routes/registration.js` | 402 | Public self-registration |
+| `lib/services/cup-manage.js` | 356 | Cup management service (pure logic) |
+| `lib/services/scoring-service.js` | 284 | Scoring service (pure logic) |
 | `lib/staffing/engine.js` | 268 | Staffing business logic |
+| `routes/reports.js` | 210 | Report generation |
+| `routes/auth-v7.js` | 192 | Authentication routes |
+| `routes/scoring.js` | 183 | Score entry endpoints |
+| `middleware/errorHandler.js` | 169 | Centralized error handling |
 | `lib/session/store.js` | 168 | Session store (Redis/memory) |
-| Other libs | ~600 | Logger, email, session, staffing helpers |
+| Other libs | ~800 | Logger, email, session, staffing helpers |
 
-**Total backend source:** ~5 300 lines across 25 files.
+**Total backend source:** ~6 100 lines across 36 files.
 
 ### 1.2 Frontend (`scoring-ui/src/`)
 
 | File | Lines | Role |
 |------|------:|------|
-| `components/ManagePage.jsx` | 959 | Cup management UI (8 sub-components inline) |
-| `App.jsx` | 644 | Scoring app (state machine, all views) |
-| `components/SummaryReportPage.jsx` | 536 | Summary report builder |
-| `components/ReportPage.jsx` | 498 | Detailed report page |
+| `App.jsx` | 792 | Scoring app (state machine, all views) |
+| `components/ManagePage.jsx` | 689 | Cup management UI (sub-components extracted) |
+| `components/TabletScoringView.jsx` | 600 | Tablet scoring view |
+| `components/SummaryReportPage.jsx` | 485 | Summary report builder |
 | `components/StaffingPage.jsx` | 458 | Staff management UI |
+| `components/ReportPage.jsx` | 449 | Detailed report page |
+| `TabletApp.jsx` | 441 | Tablet app shell |
 | `components/RegisterPage.jsx` | 385 | Self-registration UI |
-| `api.js` | 248 | API client |
+| `api.js` | 334 | API client |
+| `i18n.js` | 329 | Finnish/English translations |
 | `components/shared.jsx` | 187 | Shared UI components |
-| `i18n.js` | 275 | Finnish/English translations |
-| Other components | ~500 | Pickers, buttons, login, etc. |
+| Other components | ~1 050 | Pickers, buttons, login, manage sub-components, hooks |
 
-**Total frontend source:** ~4 700 lines across 20 files.
+**Total frontend source:** ~6 700 lines across 35 files.
 
 ### 1.3 Tests
 
 | Suite | Files | Tests | Runtime |
 |-------|------:|------:|--------:|
-| `scoring-proxy` (vitest) | 8 | 134 | ~14 s |
-| `scoring-ui` (vitest/jsdom) | 6 | 160 | ~15 s |
+| `scoring-proxy` (vitest) | 13 | 223 | ~11 s |
+| `scoring-ui` (vitest/jsdom) | 9 | 190 | ~23 s |
 | `proxy.test.js` (node:test, live SSI) | 1 | excluded | manual |
 | `session-timeout.test.js` (node:test, live SSI) | 1 | excluded | manual |
 
-**Total automated:** 294 tests, ~30 s combined.
+**Total automated:** 413 tests, ~35 s combined.
 
 ---
 
@@ -63,11 +69,12 @@ The top merge-conflict hotspots are files where multiple features converge:
 
 | File | Lines | Why it's a problem |
 |------|------:|-------------------|
-| `ssi-core/client.js` | 1 482 | 29 exported functions covering auth, scoring, participants, squads, management, staffing, scraping. Every feature touches this file. |
-| `ManagePage.jsx` | 959 | 8 inline sub-components, all management UI in one file. |
-| `App.jsx` | 644 | Entire scoring flow as a single state machine with inline views. |
-| `management.js` (route) | 890 | 9 endpoints with inline business logic (validation, orchestration, error handling). |
-| `server.js` | 380 | All middleware, rate limiters, and route mounting in one file. |
+| `ssi-core/client.js` | 1 474 | 29 exported functions covering auth, scoring, participants, squads, management, staffing, scraping. Domain shims exist but actual code not yet moved. |
+| `App.jsx` | 792 | Entire scoring flow as a single state machine with inline views. |
+| `ManagePage.jsx` | 689 | Sub-components extracted to `components/manage/` but still large. |
+| `TabletScoringView.jsx` | 600 | Tablet scoring above 500-line guideline. |
+| `management.js` (route) | 550 | 10 endpoints, business logic partially extracted to `cup-manage.js`. |
+| `server.js` | 428 | All middleware, rate limiters, and route mounting in one file. |
 
 **Impact:** When two developers (or agent sessions) work on different features that both touch `client.js` or `management.js`, merge conflicts are almost guaranteed.
 
@@ -75,15 +82,17 @@ The top merge-conflict hotspots are files where multiple features converge:
 
 ```
 server.js
-  ├── routes/management.js ──→ lib/ssi-client.js ──→ lib/ssi-core/client.js
-  ├── routes/registration.js ──→ lib/ssi-client.js ──→ lib/ssi-core/client.js
-  ├── routes/staffing.js ──→ lib/ssi-client.js ──→ lib/ssi-core/client.js
-  ├── routes/scoring.js ──→ lib/ssi-client.js ──→ lib/ssi-core/client.js
-  ├── routes/reports.js ──→ lib/ssi-client.js ──→ lib/ssi-core/client.js
-  └── routes/auth-v7.js ──→ lib/ssi-client.js ──→ lib/ssi-core/client.js
+  ├── routes/management.js ──→ lib/ssi-core/participants.js ──→ lib/ssi-core/client.js
+  ├── routes/registration.js ──→ lib/ssi-core/participants.js ──→ lib/ssi-core/client.js
+  │                           ──→ lib/ssi-core/graphql.js    ──→ lib/ssi-core/client.js
+  ├── routes/staffing.js ──→ lib/ssi-core/participants.js    ──→ lib/ssi-core/client.js
+  │                       ──→ lib/ssi-core/management.js     ──→ lib/ssi-core/client.js
+  ├── routes/scoring.js ──→ lib/services/scoring-service.js  ──→ lib/ssi-core/scoring.js
+  ├── routes/reports.js ──→ lib/ssi-core/management.js       ──→ lib/ssi-core/client.js
+  └── routes/auth-v7.js ──→ lib/ssi-core/graphql.js          ──→ lib/ssi-core/client.js
 ```
 
-Every route depends on the same monolithic SSI client. The `ssi-client.js` → `ssi-core/client.js` re-export layer exists but all routes still import from the compat shim.
+Routes now import from domain-specific modules (RFR3 complete). However, the domain modules are re-export shims — actual code still lives in the monolithic `client.js` (1 474 lines).
 
 ### 2.3 Pattern Duplication (UI)
 
@@ -93,17 +102,17 @@ Multiple page components repeat the same pattern:
 3. Login → content view transition
 4. Session expiry detection and re-login flow
 
-This is duplicated in: `ManagePage`, `SummaryReportPage`, `ReportPage`, `StaffingPage`, `App` (scoring).
+This was originally duplicated in 5 pages. Three have been migrated to `useAuthenticatedPage` hook (v7.4, RFR6): `ManagePage`, `SummaryReportPage`, `ReportPage`. Remaining with duplicated boilerplate: `StaffingPage`, `App` (scoring).
 
 ---
 
 ## 3. Recommendations — Maintainability & Merge Conflicts
 
-### 3.1 Split `ssi-core/client.js` by Domain (HIGH PRIORITY)
+### 3.1 Move Code from `ssi-core/client.js` into Domain Modules (HIGH PRIORITY)
 
-Current: 1 file, 29 functions, 1 482 lines.
+Current: 1 file, 29 functions, 1 474 lines. Domain re-export shims exist (v7.4) but actual code not yet moved.
 
-Proposed structure:
+Target structure (shims already exist, code movement pending):
 ```
 lib/ssi-core/
   ├── graphql.js          # ssiGraphQL, ssiRefreshJWT, ssiLogin (~80 lines)
@@ -125,55 +134,36 @@ lib/ssi-core/
 
 **Migration:** Keep `index.js` barrel export so existing imports don't break. Migrate route imports to domain modules gradually.
 
-### 3.2 Extract Route Handler Logic (MEDIUM PRIORITY)
+### 3.2 Continue Service Layer Extraction (MEDIUM PRIORITY)
 
-`management.js` has 890 lines with inline business logic in each handler. Extract orchestration into service functions:
-
-```
-routes/management.js        → thin handlers (validation, response)
-lib/services/cup-manage.js  → addToCup(), approvePending(), assignSquad(), etc.
-```
-
-**Benefit:** Route files become short dispatchers. Business logic is independently testable without HTTP mocking. Two features adding management endpoints won't conflict as much.
-
-### 3.3 Extract Shared Auth/Page Pattern (UI) (MEDIUM PRIORITY)
-
-Create a higher-order component or custom hook:
-
-```javascript
-// hooks/useAuthenticatedPage.js
-export function useAuthenticatedPage(storageKey) {
-  const { savedCreds, handleRememberMe } = useRememberMe(storageKey)
-  const [authed, setAuthed] = useState(false)
-  const [view, setView] = useState('login')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
-  // ... shared login/logout/session-expiry logic
-  return { authed, view, setView, loading, setLoading, error, setError, ... }
-}
-```
-
-**Benefit:** Eliminates ~50 lines of boilerplate per page. Session handling changes only need one edit.
-
-### 3.4 Split `ManagePage.jsx` (LOW-MEDIUM PRIORITY)
-
-Extract inline sub-components to separate files:
+`management.js` reduced from 890→550 lines (v7.4) via `cup-manage.js` extraction. `scoring.js` uses `scoring-service.js`. Remaining routes (`staffing.js` at 438 lines, `registration.js` at 402 lines) still have inline business logic.
 
 ```
-components/manage/
-  ├── ManagePage.jsx          # main page shell + state
-  ├── SquaddingOverview.jsx   # the big overview component
-  ├── SquadCard.jsx           # individual squad display
-  ├── ShooterActions.jsx      # DNS/paid/squad action buttons
-  └── SquadPickerSheet.jsx    # squad selection bottom sheet
+routes/staffing.js          → thin handlers (validation, response)
+lib/services/staffing-service.js → signup(), resign(), syncFromSSI(), etc.
 ```
 
-**Benefit:** Reduces ManagePage from 959 to ~300 lines. Sub-components can be worked on independently.
+**Benefit:** Route files become short dispatchers. Business logic is independently testable without HTTP mocking.
 
-### 3.5 Migrate Route Imports to `ssi-core/` Directly (LOW PRIORITY)
+### 3.3 Migrate Remaining Pages to `useAuthenticatedPage` Hook (LOW PRIORITY)
 
-All routes currently import from `lib/ssi-client.js` (compat shim). After split (3.1), update imports to target domain modules directly. Then remove the compat shim.
+`useAuthenticatedPage` hook was extracted (v7.4, RFR6) and migrated to `ReportPage`, `SummaryReportPage`, `ManagePage`. Remaining pages with duplicated auth boilerplate: `StaffingPage`, `App.jsx` (scoring).
+
+**Benefit:** Eliminates ~50 lines of boilerplate per migrated page. Session handling changes only need one edit.
+
+### 3.4 Split `App.jsx` and `TabletScoringView.jsx` (MEDIUM PRIORITY)
+
+`ManagePage` sub-components were extracted (v7.4, RFR7): `SquadCard`, `ShooterActions`, `SquadPickerSheet`, `ActionButton`, `SectionHeader` now in `components/manage/`.
+
+Remaining oversized UI files:
+- `App.jsx` (792 lines) — entire mobile scoring flow as a single state machine
+- `TabletScoringView.jsx` (600 lines) — tablet scoring above 500-line guideline
+
+**Benefit:** Reduces merge conflicts and makes scoring flow phases independently editable.
+
+### 3.5 Remove Deprecated `ssi-client.js` Compat Shim (LOW PRIORITY)
+
+All routes now import from domain-specific modules (v7.4, RFR3 complete). The `lib/ssi-client.js` compat shim (6 lines) remains for any external scripts. Can be safely deleted once no imports reference it.
 
 ---
 
@@ -190,7 +180,7 @@ All routes currently import from `lib/ssi-client.js` (compat shim). After split 
 | **Session security** | ✅ Good | 7 tests for cookie security, CSRF |
 | **Session compat** | ✅ Good | 4 tests for backward compatibility |
 | **Impersonation** | ✅ Good | 6 tests |
-| **SSI core client** | ⚠️ Minimal | 1 test file, ~3 tests (cookie parsing only) |
+| **SSI core client** | ⚠️ Partial | 2 test files, ~28 tests (cookie parsing + fixture-based scraping) |
 | **Scoring routes** | ❌ None | No unit tests |
 | **Reports routes** | ❌ None | No unit tests |
 | **Staffing routes** | ❌ None | No unit tests (empty `test/staffing/` dir) |
@@ -205,16 +195,17 @@ All routes currently import from `lib/ssi-client.js` (compat shim). After split 
 
 ### 4.2 Coverage Gaps (Priority Order)
 
-1. **SSI core client** — The 1 482-line heart of the system has almost no tests. All route tests mock it away. If scraping logic breaks (SSI HTML changes), nothing catches it until production.
-2. **Staffing routes + engine** — Entirely untested. The `test/staffing/` directory is empty.
-3. **Scoring routes** — No tests at all.
+1. **SSI core client** — The 1 474-line heart of the system now has ~28 fixture-based tests, but GraphQL integration functions remain untested.
+2. **Staffing routes + engine** — Route handlers untested. Engine logic untested.
+3. **Scoring routes** — No route-level tests (service layer has 12 unit tests).
 4. **Reports routes** — No tests at all.
+5. **Auth-v7 routes** — No route-level tests.
 
 ### 4.3 Test Strategy Recommendations
 
-#### Keep Test Runs Fast (<30 seconds)
+#### Keep Test Runs Fast (<60 seconds)
 
-Current: 294 tests in ~30 s. This is healthy. To maintain this as coverage grows:
+Current: 413 tests in ~35 s. This is healthy. To maintain this as coverage grows:
 
 - **Unit tests for SSI client functions:** Mock `fetch` at the function level, not at the HTTP layer. Test HTML parsing with fixture files (saved SSI HTML snapshots). These run in <1 ms each.
 - **Route tests:** Continue the current pattern of mocking SSI client functions. Keep route tests focused on HTTP contract (status codes, response shapes, validation).
@@ -238,12 +229,12 @@ Test SSI parsing functions against real HTML snapshots. When SSI changes their H
 
 | Layer | Current | Target | Notes |
 |-------|--------:|-------:|-------|
-| Unit (SSI client, helpers, engine) | ~10 | ~60 | Biggest gap |
-| Route/API (HTTP contract) | ~100 | ~140 | Add scoring, reports, staffing |
-| UI unit (hooks, utils, api) | ~55 | ~70 | Good coverage already |
-| UI component (render, interaction) | ~9 | ~30 | Add key user flows |
+| Unit (SSI client, helpers, engine) | ~60 | ~80 | Good progress, GraphQL functions still untested |
+| Route/API (HTTP contract) | ~100 | ~160 | Add scoring, reports, staffing, auth |
+| UI unit (hooks, utils, api) | ~100 | ~110 | Good coverage |
+| UI component (render, interaction) | ~33 | ~50 | Add key user flows |
 | Integration (live SSI) | ~2 | ~5 | Keep manual/separate |
-| **Total** | **~175** | **~305** | |
+| **Total** | **~295** | **~405** | |
 
 **Estimated runtime at target:** ~45-50 s (still under 1 minute).
 
@@ -335,34 +326,168 @@ The following rules should be added to `AGENTS.md` and `.github/copilot-instruct
 
 ## 6. Suggested Refactoring Roadmap
 
-| Phase | Work | Effort | Impact |
-|-------|------|--------|--------|
-| **Phase 1** | Split `ssi-core/client.js` into domain modules | 2-3 h | High — eliminates #1 conflict hotspot |
-| **Phase 2** | Add SSI client unit tests with HTML fixtures | 3-4 h | High — catches SSI HTML changes |
-| **Phase 3** | Extract management route logic into service layer | 2-3 h | Medium — reduces route file size |
-| **Phase 4** | Add missing route tests (scoring, reports, staffing) | 3-4 h | Medium — closes coverage gaps |
-| **Phase 5** | Extract `useAuthenticatedPage` hook, split ManagePage | 2-3 h | Medium — reduces UI duplication |
-| **Phase 6** | Fix time-dependent UI test | 0.5 h | Low — prevents CI flakiness |
+| Phase | Work | Status | Effort | Impact |
+|-------|------|--------|--------|--------|
+| ~~Phase 1~~ | ~~Split `ssi-core/client.js` into domain re-export shims~~ | ✅ v7.4 (RFR1) | — | — |
+| ~~Phase 2~~ | ~~Add SSI client unit tests with HTML fixtures~~ | ✅ v7.4 (RFR2) | — | — |
+| ~~Phase 3~~ | ~~Extract management route logic into `cup-manage.js`~~ | ✅ v7.4 (RFR4) | — | — |
+| ~~Phase 4~~ | ~~Extract `useAuthenticatedPage` hook, split ManagePage~~ | ✅ v7.4 (RFR6-7) | — | — |
+| **Phase 5** | Move actual code from `client.js` into domain modules | Pending | 3-4 h | High — eliminates #1 conflict hotspot |
+| **Phase 6** | Add missing route tests (scoring, reports, staffing, auth) | Pending | 3-4 h | Medium — closes coverage gaps |
+| **Phase 7** | Continue service layer extraction (staffing, registration) | Pending | 2-3 h | Medium — reduces route file size |
+| **Phase 8** | Split `App.jsx` and `TabletScoringView.jsx` | Pending | 2-3 h | Medium — reduces UI merge conflicts |
+| **Phase 9** | Fix time-dependent UI test | Pending | 0.5 h | Low — prevents CI flakiness |
 
-**Total estimated effort:** ~15 hours across 6 phases.
+**Completed:** Phases 1-4 (~10 h of original plan).
+**Remaining estimated effort:** ~12 hours across 5 phases.
 
 ---
 
 ## 7. Summary
 
 **Strengths:**
-- Clean dependency injection pattern for routes (factory functions)
-- Good test coverage for session management and auth
-- Centralized logging via `LOG_LEVEL`
+- Clean dependency injection pattern for routes (stateless factory functions)
+- Good test coverage for session management and auth (413 tests, ~35 s)
+- Centralized error handling with `AppError` hierarchy and `errorHandler` middleware
+- Centralized logging via `LOG_LEVEL` — all routes use `log.*` (no `console.*` in routes)
+- API versioning deployed (`/api/v1/` primary, `/api/` legacy with deprecation headers)
+- Service layer pattern established (`scoring-service.js`, `cup-manage.js`)
 - Well-documented (design docs, debug guides, flow diagrams)
 
 **Key Risks:**
-- `ssi-core/client.js` (1 482 lines, 29 functions) is the #1 merge conflict and maintenance risk
-- `ManagePage.jsx` (959 lines) and `App.jsx` (644 lines) are UI conflict hotspots
-- SSI scraping logic has almost no tests — HTML changes will break silently
-- Staffing, scoring, and reports routes have zero test coverage
+- `ssi-core/client.js` (1 474 lines, 29 functions) — domain shims are re-exports only, actual code not moved
+- `App.jsx` (792 lines) and `TabletScoringView.jsx` (600 lines) are UI conflict hotspots
+- Staffing, scoring, reports, and auth-v7 routes have zero test coverage
+- SSI GraphQL integration functions remain untested (scraping has 28 fixture-based tests)
 
 **Top 3 Actions:**
-1. Split `ssi-core/client.js` by domain
-2. Add fixture-based SSI client tests
-3. Add file size limits to agentic guidelines
+1. Move actual code from `client.js` into domain modules (Phase 2 of RFR1)
+2. Add route tests for scoring, reports, staffing, auth-v7
+3. Split `App.jsx` into state-machine phases
+
+---
+
+## 8. Target Architecture (v7.5+)
+
+### 8.1 Architectural Vision
+
+**Modular Monolith** - Single deployment with enforced module boundaries. This provides simplicity while enabling future microservice extraction when multi-tenancy is needed.
+
+### 8.2 Module Structure
+
+```
+┌─────────────────────────────────────────┐
+│           Modular Monolith              │
+├─────────────────────────────────────────┤
+│ Presentation Layer                      │
+│ ├── React components (feature modules)  │
+│ └── Shared UI library                   │
+├─────────────────────────────────────────┤
+│ Application Layer                       │
+│ ├── Routes (thin dispatchers)           │
+│ ├── Services (business logic)           │
+│ └── Error handling middleware           │
+├─────────────────────────────────────────┤
+│ Domain Layer                            │
+│ ├── SSI Core (split by domain)          │
+│ │   ├── graphql.js                      │
+│ │   ├── scoring.js                      │
+│ │   ├── participants.js                 │
+│ │   ├── management.js                   │
+│ │   └── http-helpers.js                 │
+│ └── Domain services                     │
+├─────────────────────────────────────────┤
+│ Infrastructure Layer                    │
+│ ├── Session store (Memory/Redis)        │
+│ ├── Logger                              │
+│ └── Error classes                       │
+└─────────────────────────────────────────┘
+```
+
+### 8.3 Module Boundaries
+
+#### Import Hierarchy (Enforced by ESLint)
+```javascript
+1. Routes may import: 
+   - Their domain module from ssi-core/
+   - Their service module from lib/services/
+   - Shared utilities (logger, errors)
+
+2. Services may import:
+   - Their domain module from ssi-core/
+   - Other services (if absolutely necessary)
+   - Shared utilities
+
+3. Domain modules (ssi-core/) may import:
+   - http-helpers.js
+   - Nothing else from outside ssi-core/
+
+4. UI Components may import:
+   - Their feature's hooks/components
+   - Shared UI components
+   - API client (api.js)
+```
+
+#### Anti-Patterns (Forbidden)
+```javascript
+// Forbidden - creates hidden coupling
+import * from '../lib/ssi-core/'
+
+// Forbidden - cross-domain imports
+import { ssiGetScoringPage } from '../lib/ssi-core/participants.js'
+
+// Allowed - domain-specific import
+import { ssiGetScoringPage } from '../lib/ssi-core/scoring.js'
+```
+
+### 8.4 API Versioning Strategy
+
+- **Current**: `/api/v1/` for all endpoints
+- **Future**: `/api/v2/{discipline}/` for discipline-specific APIs
+- **Backward compatibility**: Maintained during transition periods
+
+### 8.5 Error Handling Pattern
+
+Centralized error handling with:
+- Custom error classes (`AppError`, `ValidationError`, etc.)
+- Error middleware for consistent responses
+- Operational vs programming error distinction
+- Request context enhancement (userId, requestId)
+
+### 8.6 Service Layer Pattern
+
+Routes become thin dispatchers:
+```javascript
+// Route - thin dispatcher
+app.get('/api/cups', requireAuth('scoring'), asyncHandler(async (req, res) => {
+  const cups = await scoringService.searchCups(...)
+  res.json({ cups })
+}))
+
+// Service - pure business logic
+async function searchCups(search, session, graphqlWithRefresh) {
+  // Business logic here
+}
+```
+
+### 8.7 Migration Status
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| SSI Core Domain Split | Partial (v7.4) | 5 re-export shims created; actual code still in `client.js` |
+| Service Layer | In Progress (v7.5) | `scoring-service.js` + `cup-manage.js` done |
+| Error Handling | Complete (v7.5) | Centralized middleware, all routes use `next(error)` |
+| API Versioning | Complete (v7.5) | `/api/v1/` paths active, legacy aliases with deprecation |
+| Route Logging | Complete (v7.5) | All routes use `log.*` instead of `console.*` |
+| Module Boundaries | Partial (v7.5) | Domain imports enforced; ESLint rules not yet configured |
+| UI Module Split | Partial (v7.4) | `ManagePage` sub-components + `useAuthenticatedPage` hook |
+| UI Hooks | Complete (v7.4) | `useAuthenticatedPage`, `useRememberMe` extracted |
+
+### 8.8 Future Considerations
+
+1. **Move SSI client code** into domain modules (Phase 2 of RFR1 — code movement, not just re-exports)
+2. **ESLint module boundary rules** — currently aspirational, not enforced
+3. **Split `App.jsx`** (792 lines) — extract state machine phases into sub-components
+4. **Multi-tenancy**: When needed, extract modules to microservices
+5. **Background Jobs**: Queue system for async operations
+6. **Discipline APIs**: Version 2 with discipline-specific paths

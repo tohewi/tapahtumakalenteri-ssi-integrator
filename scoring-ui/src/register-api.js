@@ -1,4 +1,4 @@
-const API_BASE = '/api/register'
+const API_BASE = '/api/v1/register'
 
 export async function getCaptcha() {
   const resp = await fetch(`${API_BASE}/captcha`)

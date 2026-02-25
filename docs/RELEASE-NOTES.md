@@ -5,6 +5,50 @@
 
 ---
 
+## Release 7.5 — Architecture V2 Foundation (2026-02-23)
+
+**Requirements:** ARCH1 ✅, ARCH2 ✅, ARCH5 ✅, ARCH3–ARCH4 📋
+
+### Overview
+
+Architecture V2 foundation release. Standardizes API versioning, centralizes error handling across all routes, enforces logging discipline, and documents architecture patterns and guidelines for positive evolution.
+
+### New Features
+
+- **Versioned API structure enabled:** Feature routers are mounted under `/api/v1/*` as the primary path.
+- **Legacy alias compatibility:** Temporary `/api/*` aliases remain available and now return deprecation guidance headers for migration.
+- **Scoring router wiring fixed:** Scoring routes are mounted in the server routing graph (previously imported but not mounted).
+- **Frontend registration client aligned:** Registration client now calls versioned `/api/v1/register/*` endpoints.
+- **Architecture guidelines documented:** AGENTS.md and copilot-instructions.md now include comprehensive architecture integrity guidelines: module boundaries, error handling patterns, logging discipline, router factory pattern, test requirements, and merge conflict prevention.
+
+### Bug Fixes
+
+- **Centralized error flow adoption:** All 7 remaining `res.status(500).json()` calls in `registration.js` (3), `management.js` (3), and `auth-v7.js` (1) replaced with `next(internalError(...))` flowing through centralized error middleware.
+- **Logging discipline enforced:** All 50 `console.error/warn/log` calls across route files (`management.js`, `staffing.js`, `registration.js`, `reports.js`, `auth-v7.js`) replaced with `log.error/warn/debug` to respect `LOG_LEVEL` control.
+- **Router factory safety:** Route modules were refactored to stateless router factory pattern to prevent accidental handler duplication from shared router instances.
+- **Test alignment updates:** API client and backend tests were updated for versioned paths and middleware-driven error responses.
+
+### Documentation Updates
+
+- **architecture-review.md:** Updated with current line counts, test counts (413 total), accurate coupling diagram, migration status, and refactoring roadmap reflecting completed v7.4 work.
+- **AGENTS.md / copilot-instructions.md:** Repository structure updated to reflect all route files, middleware, lib subdirectories, services, ssi-core domain modules, session management, and error classes. Key Files table updated with current file paths. Added sections: Error Handling, Logging Discipline, Router Factory Pattern, Test Requirements, Merge Conflict Prevention.
+- **requirements.md:** ARCH5 marked as implemented; summary counts updated.
+
+### Requirements Met
+
+- **ARCH1:** Centralized error handling pattern consistently adopted across all route modules — zero `res.status(500).json()` calls remain in routes.
+- **ARCH2:** `/api/v1` is now the canonical API base path, with backward-compatible `/api` aliases and deprecation headers.
+- **ARCH5:** Architecture documentation updated with modular monolith patterns, module boundaries, migration progress, and explicit import rules/anti-patterns in AGENTS.md and copilot-instructions.md.
+
+### Test Status
+
+| Suite | Passing | Notes |
+|-------|--------:|-------|
+| Backend (scoring-proxy) | 223 | Full suite green after error-flow and logging hardening |
+| Frontend (scoring-ui) | 190 | Full suite green with versioned registration API paths |
+
+---
+
 ## Release 7.4.1 — Authentication UX Hardening (2026-02-22)
 
 **Requirements:** AUTH-UX1–AUTH-UX5 ✅
