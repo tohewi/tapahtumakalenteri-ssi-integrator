@@ -359,13 +359,13 @@ const registerBodyLimit = express.json({ limit: '1kb' })
 // API versioning info endpoint
 app.use(API_V1_BASE, apiV1Router)
 
-// Scoring routes
+// Scoring routes (mounted at /api/v1/scoring)
 const scoringRouter = createScoringRouter({
   requireAuth,
   graphqlWithRefresh,
 })
-app.use(API_V1_BASE, scoringRouter)
-app.use(API_LEGACY_BASE, legacyApiAlias, scoringRouter)
+app.use(`${API_V1_BASE}/scoring`, scoringRouter)
+app.use(`${API_LEGACY_BASE}/scoring`, legacyApiAlias, scoringRouter)
 
 // Auth routes (V7 — Redis/memory backed dual sessions)
 const authRouter = createAuthV7Router({ 
@@ -453,11 +453,11 @@ if (isDirectRun) {
     console.log('  GET  /api/v1/auth/status')
     console.log('  POST /api/v1/auth/logout')
     console.log('  GET  /api/v1/health')
-    console.log('  GET  /api/v1/cups?search=')
-    console.log('  GET  /api/v1/cup/:id')
-    console.log('  GET  /api/v1/match/:id')
-    console.log('  GET  /api/v1/competitor/:id')
-    console.log('  POST /api/v1/competitor/:id/score  { scores, warning, dqReason, comment }')
+    console.log('  GET  /api/v1/scoring/cups?search=')
+    console.log('  GET  /api/v1/scoring/cup/:id')
+    console.log('  GET  /api/v1/scoring/match/:id')
+    console.log('  GET  /api/v1/scoring/competitor/:id')
+    console.log('  POST /api/v1/scoring/competitor/:id/score  { scores, warning, dqReason, comment }')
     console.log('  GET  /api/v1/register/captcha')
     console.log('  POST /api/v1/register/verify-captcha  { captchaId, captchaAnswer }')
     console.log('  GET  /api/v1/register/cups')
@@ -467,7 +467,7 @@ if (isDirectRun) {
     console.log('  POST /api/v1/manage/cup/:id/assign-squad  { shooterName, squadNumber }')
     console.log('  POST /api/v1/manage/cup/:id/fix-squad     { shooterName, targetSquad }')
     console.log('  POST /api/v1/manage/cup/:id/add-to-cup    { shooterName }')
-    console.log('  GET  /api/v1/matches?search=')
+    console.log('  GET  /api/v1/scoring/matches?search=')
     console.log('  POST /api/v1/report/summary       { matches }')
     console.log('  POST /api/v1/report/matches       { matchIds }')
     if (existsSync(indexPath)) {
