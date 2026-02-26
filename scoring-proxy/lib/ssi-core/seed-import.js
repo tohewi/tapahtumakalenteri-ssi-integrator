@@ -5,14 +5,20 @@
 // via GraphQL to create a template snapshot. This snapshot serves
 // as the blueprint for creating new events.
 //
-// Supported event types:
-//   CT 136 = NordicSerie (Cup with component matches)
-//   CT 160 = IPSC/SRA match (future)
+// Two-step discovery approach:
+//   1. Lightweight query to discover __typename of event, matches,
+//      and squads (discipline-agnostic)
+//   2. Type-specific query using correct inline fragments for the
+//      discovered node types
+//
+// Known SSI node types (from schema introspection):
+//   Serie:  NordicSerieNode, PrecisionSerieNode, IpscSerieNode, PpcSerieNode
+//   Squad:  NordicSquadNode, PrecisionSquadNode, CmpSquadNode, GenericSquadNode
 //
 // Usage:
 //   const snapshot = await ssiFetchEventStructure({
-//     contentType: '136', eventId: '160',
-//     email, password, apiKey
+//     ssiEventUrl: 'https://shootnscoreit.com/event/136/160/',
+//     credentials: { email, password, apiKey }
 //   })
 // ============================================================
 
@@ -29,32 +35,63 @@ const AUTH_MUTATION = `
   }
 `
 
-// GraphQL query to fetch a NordicSerie (Cup) with its component matches and squads
-const CUP_STRUCTURE_QUERY = `
-query CupStructure($ct: Int!, $id: String!) {
+// Step 1: Lightweight discovery query — get __typename of event, matches, squads
+const DISCOVERY_QUERY = `
+query EventDiscovery($ct: Int!, $id: String!) {
   event(content_type: $ct, id: $id) {
+    __typename
     id
     name
-    starts
-    ends
-    status
-    rule
-    description
-    information
-    venue
-    url
-    url_display
-    max_competitors
-    region
-    visibility
-    registration
-    results
-    currency
-    ... on NordicSerieNode {
-      scoring_mode
-      match_registration_mode
-      timezone
+    component_matches {
+      __typename
+      id
+      squads {
+        __typename
+        id
+      }
     }
+    squads {
+      __typename
+      id
+    }
+  }
+}
+`
+
+// Type-specific fields per SSI node type (serie/cup types)
+const SERIE_TYPE_FIELDS = {
+  NordicSerieNode: 'scoring_mode match_registration_mode timezone',
+  PrecisionSerieNode: 'scoring_mode match_registration_mode timezone',
+  IpscSerieNode: 'match_registration_mode timezone',
+  PpcSerieNode: 'match_registration_mode timezone',
+}
+
+// Type-specific fields per squad node type
+const SQUAD_TYPE_FIELDS = {
+  NordicSquadNode: 'name starts competitors { id }',
+  PrecisionSquadNode: 'name starts competitors { id }',
+  CmpSquadNode: 'name starts',
+  GenericSquadNode: 'name starts',
+}
+
+/**
+ * Build a type-specific structure query based on discovered __typename values.
+ * @param {boolean} isCup - true if event has component_matches
+ * @param {string} eventTypeName - __typename of the event node
+ * @param {string} squadTypeName - __typename of squad nodes (first found)
+ * @returns {string} GraphQL query string
+ */
+function buildStructureQuery(isCup, eventTypeName, squadTypeName) {
+  const serieFields = SERIE_TYPE_FIELDS[eventTypeName] || ''
+  const squadFields = SQUAD_TYPE_FIELDS[squadTypeName] || 'name starts'
+
+  const serieFragment = serieFields
+    ? `... on ${eventTypeName} { ${serieFields} }`
+    : ''
+
+  const squadFragment = `... on ${squadTypeName || 'GenericSquadNode'} { ${squadFields} }`
+
+  const matchesBlock = isCup ? `
     component_matches {
       id
       name
@@ -68,30 +105,12 @@ query CupStructure($ct: Int!, $id: String!) {
       squads {
         id
         max_competitors
-        ... on NordicSquadNode {
-          name
-          starts
-          competitors {
-            id
-          }
-        }
+        ${squadFragment}
       }
-    }
-    squads {
-      id
-      max_competitors
-      ... on NordicSquadNode {
-        name
-        starts
-      }
-    }
-  }
-}
-`
+    }` : ''
 
-// GraphQL query to fetch a single match (non-cup event)
-const MATCH_STRUCTURE_QUERY = `
-query MatchStructure($ct: Int!, $id: String!) {
+  return `
+query EventStructure($ct: Int!, $id: String!) {
   event(content_type: $ct, id: $id) {
     id
     name
@@ -110,24 +129,17 @@ query MatchStructure($ct: Int!, $id: String!) {
     registration
     results
     currency
-    ... on NordicSerieNode {
-      scoring_mode
-      timezone
-    }
+    ${serieFragment}
+    ${matchesBlock}
     squads {
       id
       max_competitors
-      ... on NordicSquadNode {
-        name
-        starts
-        competitors {
-          id
-        }
-      }
+      ${squadFragment}
     }
   }
 }
 `
+}
 
 /**
  * Authenticate with SSI and get a JWT token.
@@ -179,17 +191,34 @@ export async function ssiFetchEventStructure({ ssiEventUrl, credentials }) {
   // Authenticate with SSI
   const jwt = await authenticateSSI(credentials)
 
-  // Choose query based on content type
-  const isCup = contentType === '136'
-  const query = isCup ? CUP_STRUCTURE_QUERY : MATCH_STRUCTURE_QUERY
+  const vars = { ct: parseInt(contentType, 10), id: eventId }
 
-  const data = await ssiGraphQL(jwt, query, {
-    ct: parseInt(contentType, 10),
-    id: eventId,
-  })
+  // Step 1: Discovery — get __typename of event, matches, squads
+  log.info(`[seed-import] Step 1: Discovering event node types...`)
+  const discovery = await ssiGraphQL(jwt, DISCOVERY_QUERY, vars)
+
+  if (!discovery.event) {
+    throw new Error(`SSI event not found: CT=${contentType} ID=${eventId}`)
+  }
+
+  const eventTypeName = discovery.event.__typename
+  const isCup = (discovery.event.component_matches || []).length > 0
+
+  // Find first squad __typename (from matches or event-level squads)
+  const allSquads = [
+    ...(discovery.event.squads || []),
+    ...(discovery.event.component_matches || []).flatMap(m => m.squads || []),
+  ]
+  const squadTypeName = allSquads[0]?.__typename || 'GenericSquadNode'
+
+  log.info(`[seed-import] Discovered: event=${eventTypeName}, squad=${squadTypeName}, isCup=${isCup}`)
+
+  // Step 2: Type-specific structure query
+  const structureQuery = buildStructureQuery(isCup, eventTypeName, squadTypeName)
+  const data = await ssiGraphQL(jwt, structureQuery, vars)
 
   if (!data.event) {
-    throw new Error(`SSI event not found: CT=${contentType} ID=${eventId}`)
+    throw new Error(`SSI event structure query returned empty for CT=${contentType} ID=${eventId}`)
   }
 
   const event = data.event
@@ -201,6 +230,8 @@ export async function ssiFetchEventStructure({ ssiEventUrl, credentials }) {
     contentType,
     eventId,
     isCup,
+    eventTypeName,
+    squadTypeName,
 
     // Event details
     name: event.name,
