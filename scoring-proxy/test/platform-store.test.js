@@ -311,6 +311,13 @@ describe('getAccount / updateAccount', () => {
     expect(updated.name).toBe('New Name')
     expect(updated.email).toBe('upd@test.com')
   })
+
+  it('rejects unknown fields to prevent SQL injection via column names', async () => {
+    const { accountId } = await createAccount({ email: 'sqli@test.com', password: 'pass1234', name: 'SQLI' })
+    await expect(
+      updateAccount(accountId, { 'password_hash = $2; DROP TABLE accounts; --': 'evil' })
+    ).rejects.toThrow("updateAccount: unknown field 'password_hash = $2; DROP TABLE accounts; --'")
+  })
 })
 
 // ============================================================

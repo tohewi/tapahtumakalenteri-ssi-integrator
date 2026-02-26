@@ -20,6 +20,9 @@ import { NotFoundError } from '../errors/AppError.js'
 
 const BCRYPT_ROUNDS = 12
 
+// Allowed fields for updateAccount: maps API key → DB column name
+const ACCOUNT_UPDATE_FIELDS = { name: 'name', tenants: 'tenants' }
+
 // ---- Helpers ----
 
 function generateId(prefix) {
@@ -131,13 +134,18 @@ export async function getAccount(accountId) {
  * Update account fields (e.g., name, tenants list).
  */
 export async function updateAccount(accountId, updates) {
-  // Build SET clause dynamically for allowed fields
-  const allowedFields = { name: 'name', tenants: 'tenants' }
+  // Reject any key not in the allowlist to prevent unexpected column references
+  for (const key of Object.keys(updates)) {
+    if (!(key in ACCOUNT_UPDATE_FIELDS)) {
+      throw new Error(`updateAccount: unknown field '${key}'`)
+    }
+  }
+
   const setClauses = []
   const params = [accountId]
   let paramIndex = 2
 
-  for (const [key, column] of Object.entries(allowedFields)) {
+  for (const [key, column] of Object.entries(ACCOUNT_UPDATE_FIELDS)) {
     if (updates[key] !== undefined) {
       const value = key === 'tenants' ? JSON.stringify(updates[key]) : updates[key]
       setClauses.push(`${column} = $${paramIndex}`)
