@@ -216,6 +216,15 @@ export async function updateTemplateApi(tenantId, templateId, updates) {
 }
 
 /**
+ * Import seed event structure from SSI into a template's snapshot.
+ */
+export async function importTemplateSeed(tenantId, templateId) {
+  return platformFetch(`/tenants/${tenantId}/templates/${templateId}/import-seed`, {
+    method: 'POST',
+  })
+}
+
+/**
  * Delete a match template.
  */
 export async function deleteTemplateApi(tenantId, templateId) {

@@ -14,6 +14,7 @@
 import express from 'express'
 import { log } from '../lib/logger.js'
 import { AppError } from '../lib/errors/AppError.js'
+import { ssiFetchEventStructure } from '../lib/ssi-core/seed-import.js'
 import {
   createAccountWithTenant,
   authenticateAccount,
@@ -673,6 +674,55 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
 
     log.info(`[platform] Template deleted: ${req.params.id} from tenant ${req.params.tenantId}`)
     res.json({ success: true })
+  })
+
+  // POST /api/v1/platform/tenants/:tenantId/templates/:id/import-seed
+  // Fetches SSI event structure from the template's ssiSeedEventId URL
+  // and stores it as ssi_seed_snapshot. Requires tenant SSI credentials.
+  // Requires: owner, tenant_admin, or match_admin
+  router.post('/tenants/:tenantId/templates/:id/import-seed', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
+    const template = await getMatchTemplate(req.params.id)
+    if (!template || template.tenantId !== req.params.tenantId) {
+      return res.status(404).json({ error: 'Template not found' })
+    }
+
+    if (!template.ssiSeedEventId) {
+      return res.status(400).json({ error: 'Template has no SSI event URL configured' })
+    }
+
+    // Tenant must have SSI credentials configured
+    const tenant = req.tenant
+    if (!tenant.ssiCredentials?.email || !tenant.ssiCredentials?.password) {
+      return res.status(400).json({ error: 'Tenant SSI credentials must be configured before importing seed events' })
+    }
+
+    try {
+      const snapshot = await ssiFetchEventStructure({
+        ssiEventUrl: template.ssiSeedEventId,
+        credentials: {
+          email: tenant.ssiCredentials.email,
+          password: tenant.ssiCredentials.password,
+          apiKey: tenant.ssiCredentials.apiKey || null,
+        },
+      })
+
+      // Store snapshot in the template
+      const updated = await updateMatchTemplate(req.params.id, {
+        ssiSeedSnapshot: snapshot,
+      })
+
+      log.info(`[platform] Seed imported for template ${req.params.id}: "${snapshot.name}" (${snapshot.isCup ? snapshot.matchCount + ' matches' : 'single match'})`)
+      res.json({ success: true, template: updated, snapshot })
+    } catch (err) {
+      log.error(`[platform] Seed import failed for template ${req.params.id}:`, err.message)
+      if (err.message.includes('authentication failed') || err.message.includes('credentials')) {
+        return res.status(401).json({ error: 'SSI authentication failed — check tenant SSI credentials' })
+      }
+      if (err.message.includes('not found')) {
+        return res.status(404).json({ error: `SSI event not found at ${template.ssiSeedEventId}` })
+      }
+      return next(new AppError('Failed to import seed event', 500, 'INTERNAL_ERROR'))
+    }
   })
 
   // ============================================================

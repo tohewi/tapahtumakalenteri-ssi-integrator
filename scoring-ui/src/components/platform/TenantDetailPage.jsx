@@ -11,7 +11,7 @@
 // ============================================================
 
 import { useState, useEffect, useCallback } from 'react'
-import { getTenantDetails, updateTenant, listDisciplines, createDisciplineApi, updateDisciplineApi, deleteDisciplineApi, listTemplates, createTemplateApi, updateTemplateApi, deleteTemplateApi } from '../../platform-api.js'
+import { getTenantDetails, updateTenant, listDisciplines, createDisciplineApi, updateDisciplineApi, deleteDisciplineApi, listTemplates, createTemplateApi, updateTemplateApi, deleteTemplateApi, importTemplateSeed } from '../../platform-api.js'
 
 // ---- Helpers ----
 
@@ -528,6 +528,7 @@ function TemplatesSection({ tenantId }) {
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState(null)
   const [expandedId, setExpandedId] = useState(null)
+  const [importing, setImporting] = useState(null) // template ID being imported
 
   // Load templates and disciplines on mount
   useEffect(() => {
@@ -617,6 +618,21 @@ function TemplatesSection({ tenantId }) {
     }
   }
 
+  async function handleImportSeed(tplId) {
+    setImporting(tplId)
+    setStatus(null)
+    try {
+      const data = await importTemplateSeed(tenantId, tplId)
+      setTemplates(prev => prev.map(t => t.id === tplId ? data.template : t))
+      setStatus({ type: 'success', message: `Imported: "${data.snapshot.name}" — ${data.snapshot.isCup ? data.snapshot.matchCount + ' matches' : 'single match'}` })
+      setExpandedId(tplId)
+    } catch (err) {
+      setStatus({ type: 'error', message: err.message })
+    } finally {
+      setImporting(null)
+    }
+  }
+
   // Map disciplineId → discipline label for display
   const disMap = Object.fromEntries(disciplines.map(d => [d.id, d.labelFi || d.name]))
 
@@ -663,7 +679,65 @@ function TemplatesSection({ tenantId }) {
                   </div>
                   {/* Expanded detail */}
                   {expandedId === tpl.id && (
-                    <div className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-500 space-y-1">
+                    <div className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-500 space-y-3">
+                      {/* Seed snapshot */}
+                      {tpl.ssiSeedSnapshot ? (
+                        <div className="bg-white rounded-md border p-3 space-y-2">
+                          <div className="font-semibold text-gray-700 text-sm">
+                            {tpl.ssiSeedSnapshot.name}
+                            <span className="ml-2 text-xs font-normal text-gray-400">
+                              {tpl.ssiSeedSnapshot.isCup ? `Cup • ${tpl.ssiSeedSnapshot.matchCount} matches` : 'Single match'}
+                            </span>
+                          </div>
+                          {tpl.ssiSeedSnapshot.description && (
+                            <div className="text-gray-500">{tpl.ssiSeedSnapshot.description}</div>
+                          )}
+                          {tpl.ssiSeedSnapshot.matches && tpl.ssiSeedSnapshot.matches.length > 0 && (
+                            <div className="space-y-1">
+                              <div className="font-medium text-gray-600">Component Matches:</div>
+                              {tpl.ssiSeedSnapshot.matches.map((m, i) => (
+                                <div key={i} className="pl-3 border-l-2 border-sky-200">
+                                  <span className="font-medium text-gray-700">{m.name}</span>
+                                  <span className="text-gray-400 ml-2">
+                                    {m.squads?.length || 0} squads
+                                    {m.squads?.map(s => ` • ${s.name} (max ${s.maxCompetitors})`).join('')}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {tpl.ssiSeedSnapshot.squads && tpl.ssiSeedSnapshot.squads.length > 0 && !tpl.ssiSeedSnapshot.isCup && (
+                            <div className="space-y-1">
+                              <div className="font-medium text-gray-600">Squads:</div>
+                              {tpl.ssiSeedSnapshot.squads.map((s, i) => (
+                                <div key={i} className="pl-3 text-gray-500">{s.name} (max {s.maxCompetitors})</div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="text-gray-400 text-[10px]">
+                            Imported: {formatDate(new Date(tpl.ssiSeedSnapshot.importedAt).getTime())}
+                            {' • '}
+                            <button onClick={() => handleImportSeed(tpl.id)} disabled={importing === tpl.id} className="text-sky-500 hover:underline disabled:opacity-50">
+                              {importing === tpl.id ? 'Re-importing...' : 'Re-import from SSI'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-amber-50 rounded-md border border-amber-200 p-3 flex items-center justify-between">
+                          <div className="text-amber-700 text-xs">
+                            Seed event structure not yet imported from SSI.
+                          </div>
+                          <button
+                            onClick={() => handleImportSeed(tpl.id)}
+                            disabled={importing === tpl.id}
+                            className="bg-sky-600 text-white px-3 py-1 rounded text-xs font-semibold hover:bg-sky-700 disabled:opacity-50 transition-colors"
+                          >
+                            {importing === tpl.id ? 'Importing...' : 'Import from SSI'}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Config sections */}
                       <div><span className="font-medium">Overrides:</span> {Object.keys(tpl.overrides || {}).length > 0 ? JSON.stringify(tpl.overrides) : 'None'}</div>
                       <div><span className="font-medium">Calendar:</span> {Object.keys(tpl.calendarTemplate || {}).length > 0 ? JSON.stringify(tpl.calendarTemplate) : 'Not configured'}</div>
                       <div><span className="font-medium">Staffing:</span> {Object.keys(tpl.staffingRules || {}).length > 0 ? JSON.stringify(tpl.staffingRules) : 'Not configured'}</div>
