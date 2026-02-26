@@ -50,6 +50,22 @@ CREATE TABLE IF NOT EXISTS tenants (
 
 -- Index for listing tenants by account
 CREATE INDEX IF NOT EXISTS idx_tenants_account_id ON tenants (account_id);
+
+-- Disciplines (competition types per tenant)
+CREATE TABLE IF NOT EXISTS disciplines (
+  id                TEXT PRIMARY KEY,
+  tenant_id         TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  name              TEXT NOT NULL,
+  label_fi          TEXT DEFAULT '',
+  label_en          TEXT DEFAULT '',
+  ssi_group_id      TEXT,
+  ssi_organizer_id  TEXT,
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index for listing disciplines by tenant
+CREATE INDEX IF NOT EXISTS idx_disciplines_tenant_id ON disciplines (tenant_id);
 `
 
 // ---- Initialization ----
