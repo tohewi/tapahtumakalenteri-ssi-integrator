@@ -35,7 +35,10 @@ const AUTH_MUTATION = `
   }
 `
 
-// Step 1: Lightweight discovery query — get __typename of event, matches, squads
+// Step 1: Lightweight discovery query — get __typename and structure shape.
+// NOTE: Do NOT query `squads` here. Serie (Cup) types don't have squads
+// at the event level — only their component matches do. Standalone matches
+// have squads directly. The structure query in step 2 handles this.
 const DISCOVERY_QUERY = `
 query EventDiscovery($ct: Int!, $id: String!) {
   event(content_type: $ct, id: $id) {
@@ -43,10 +46,6 @@ query EventDiscovery($ct: Int!, $id: String!) {
     id
     name
     component_matches {
-      __typename
-      id
-    }
-    squads {
       __typename
       id
     }
@@ -70,6 +69,20 @@ const SQUAD_TYPE_FIELDS = {
   GenericSquadNode: 'name starts',
 }
 
+// Map event __typename → expected squad __typename.
+// Cups (Serie) don't have squads themselves, but their matches do.
+// This mapping lets us infer squad type without querying it from the cup.
+const EVENT_TO_SQUAD_TYPE = {
+  NordicSerieNode: 'NordicSquadNode',
+  NordicResulMatchNode: 'NordicSquadNode',
+  PrecisionSerieNode: 'PrecisionSquadNode',
+  PrecisionMatchNode: 'PrecisionSquadNode',
+  IpscSerieNode: 'GenericSquadNode',
+  IpscMatchNode: 'GenericSquadNode',
+  PpcSerieNode: 'GenericSquadNode',
+  PpcMatchNode: 'GenericSquadNode',
+}
+
 /**
  * Build a type-specific structure query based on discovered __typename values.
  * @param {boolean} isCup - true if event has component_matches
@@ -87,9 +100,16 @@ function buildStructureQuery(isCup, eventTypeName, matchTypeName, squadTypeName)
 
   const squadFragment = `... on ${squadTypeName || 'GenericSquadNode'} { ${squadFields} }`
 
-  // component_matches squads field is on specific node types, not ComponentMatchInterface.
-  // Use inline fragment on the discovered match __typename to access squads.
-  const matchesBlock = isCup ? `
+  // Business rule: Cups (Serie) do NOT have squads at the event level.
+  // Only their component matches have squads (accessed via match-type inline fragment).
+  // Standalone matches DO have squads directly on the event.
+
+  let matchesBlock = ''
+  let eventSquadsBlock = ''
+
+  if (isCup) {
+    // Cup: squads live on matches, not the cup itself
+    matchesBlock = `
     component_matches {
       id
       name
@@ -107,7 +127,16 @@ function buildStructureQuery(isCup, eventTypeName, matchTypeName, squadTypeName)
           ${squadFragment}
         }
       }` : ''}
-    }` : ''
+    }`
+  } else {
+    // Standalone match: squads are on the event itself
+    eventSquadsBlock = `
+    squads {
+      id
+      max_competitors
+      ${squadFragment}
+    }`
+  }
 
   return `
 query EventStructure($ct: Int!, $id: String!) {
@@ -131,11 +160,7 @@ query EventStructure($ct: Int!, $id: String!) {
     currency
     ${serieFragment}
     ${matchesBlock}
-    squads {
-      id
-      max_competitors
-      ${squadFragment}
-    }
+    ${eventSquadsBlock}
   }
 }
 `
@@ -204,11 +229,12 @@ export async function ssiFetchEventStructure({ ssiEventUrl, credentials }) {
   const eventTypeName = discovery.event.__typename
   const isCup = (discovery.event.component_matches || []).length > 0
 
-  // Find squad __typename from event-level squads (match squads not on ComponentMatchInterface)
-  const squadTypeName = (discovery.event.squads || [])[0]?.__typename || 'GenericSquadNode'
   const matchTypeName = (discovery.event.component_matches || [])[0]?.__typename || null
 
-  log.info(`[seed-import] Discovered: event=${eventTypeName}, match=${matchTypeName}, squad=${squadTypeName}, isCup=${isCup}`)
+  // Infer squad type from event type (cups don't expose squads for discovery)
+  const squadTypeName = EVENT_TO_SQUAD_TYPE[matchTypeName] || EVENT_TO_SQUAD_TYPE[eventTypeName] || 'GenericSquadNode'
+
+  log.info(`[seed-import] Discovered: event=${eventTypeName}, match=${matchTypeName}, squad=${squadTypeName} (inferred), isCup=${isCup}`)
 
   // Step 2: Type-specific structure query
 
@@ -256,12 +282,12 @@ export async function ssiFetchEventStructure({ ssiEventUrl, credentials }) {
       currency: event.currency,
     },
 
-    // Squads (cup-level or match-level)
+    // Squads — only present for standalone matches (cups have squads on matches)
     squads: (event.squads || []).map(sq => ({
       id: sq.id,
-      name: sq.name,
+      name: sq.name || null,
       maxCompetitors: sq.max_competitors,
-      starts: sq.starts,
+      starts: sq.starts || null,
     })),
   }
 

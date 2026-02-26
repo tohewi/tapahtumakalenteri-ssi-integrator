@@ -207,25 +207,42 @@ SQUAD_TYPE_FIELDS = {
 
 ## 6. Event-Level vs Match-Level Squads
 
-| Event Type | Has event-level squads? | Has match-level squads? | Notes |
-|------------|:-:|:-:|-------|
-| Cup (Serie) | ✅ Yes | ✅ Yes (via component matches) | Cup squads may be empty if squads are match-only |
-| Match (standalone) | ✅ Yes | N/A | Direct squads on the event |
-| Component Match (in cup) | N/A | ✅ Yes | Accessed via inline fragment, not interface |
+**Critical business rule: Cups (Serie types) do NOT have squads.** Only matches have squads.
+
+| Event Type | Has `squads` field? | How to access squads | Notes |
+|------------|:-:|---|-------|
+| Cup (Serie) | ❌ **No** | Via `component_matches → ... on MatchType { squads }` | Querying `squads` on a Serie **crashes SSI** |
+| Match (standalone) | ✅ Yes | Direct `squads { ... }` on event | Works on EventInterface |
+| Component Match (in cup) | ✅ Yes | Via inline fragment on match type | NOT on ComponentMatchInterface |
 
 **Cup structure example:**
 ```
 NordicSerieNode (Cup)
-├── squads: []                    ← Cup-level (often empty)
+├── squads: ✗ DOES NOT EXIST    ← DO NOT QUERY THIS
 ├── component_matches:
 │   ├── NordicResulMatchNode
-│   │   └── squads:              ← Match-level squads
+│   │   └── squads:              ← Squads live here (via inline fragment)
 │   │       ├── NordicSquadNode (Squad 1, max 9)
 │   │       └── NordicSquadNode (Squad 2, max 9)
 │   ├── NordicResulMatchNode
 │   │   └── squads: [...]
 │   └── NordicResulMatchNode
 │       └── squads: [...]
+```
+
+### Squad Type Inference
+
+Since cups don't expose squads for discovery, squad types are **inferred** from event/match types:
+
+```javascript
+EVENT_TO_SQUAD_TYPE = {
+  NordicSerieNode:      'NordicSquadNode',
+  NordicResulMatchNode: 'NordicSquadNode',
+  PrecisionSerieNode:   'PrecisionSquadNode',
+  PrecisionMatchNode:   'PrecisionSquadNode',
+  IpscSerieNode:        'GenericSquadNode',
+  PpcSerieNode:         'GenericSquadNode',
+}
 ```
 
 ## 7. Event Creation — Form URLs by Discipline
