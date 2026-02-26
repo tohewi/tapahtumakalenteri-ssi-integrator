@@ -5,8 +5,6 @@
 // showing subscription status, stats summary, and quick actions.
 // ============================================================
 
-import { useState } from 'react'
-
 // Subscription status badge colors
 const STATUS_STYLES = {
   trial: 'bg-amber-100 text-amber-700',

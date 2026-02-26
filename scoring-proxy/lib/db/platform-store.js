@@ -415,6 +415,14 @@ export async function updateTenant(tenantId, updates) {
     disciplines: 'disciplines',
     subscription: 'subscription',
   }
+
+  // Reject any key not in the allowlist to prevent unexpected column references
+  for (const key of Object.keys(updates)) {
+    if (!(key in allowedFields)) {
+      throw new Error(`updateTenant: unknown field '${key}'`)
+    }
+  }
+
   const setClauses = []
   const params = [tenantId]
   let paramIndex = 2

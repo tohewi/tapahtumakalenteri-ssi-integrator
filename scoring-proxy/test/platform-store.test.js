@@ -508,6 +508,14 @@ describe('getTenant / listAccountTenants / updateTenant', () => {
     expect(updated.name).toBe('New')
     expect(updated.disciplines).toEqual(['sra'])
   })
+
+  it('rejects unknown fields to prevent unexpected column references', async () => {
+    const { accountId } = await createAccount({ email: 'tenu@test.com', password: 'pass1234', name: 'TenU' })
+    const { tenantId } = await createTenant({ accountId, name: 'Guard' })
+    await expect(
+      updateTenant(tenantId, { 'account_id = $2; --': 'evil' })
+    ).rejects.toThrow("updateTenant: unknown field 'account_id = $2; --'")
+  })
 })
 
 // ============================================================
