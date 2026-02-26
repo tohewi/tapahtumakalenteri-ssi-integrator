@@ -375,8 +375,9 @@ Self-service account onboarding: sign up, sign in, create and manage tenants. Th
 | PA15 | **SSI Credential Configuration Form**: SSI email, password, and API key fields with show/hide toggles. Saves encrypted via PATCH endpoint. Connection status indicator (configured/not configured). Clear credentials button. Form validation — requires at least email + password | ✅ Implemented |
 | PA16 | **Platform Data Hardening**: Atomic `createAccountWithTenant` (PostgreSQL transaction), row-level locking on `createTenant` (`SELECT ... FOR UPDATE`), AES-256-GCM encryption for SSI credentials (random IV per write), field allowlist guards on `updateAccount` and `updateTenant`, structured logging in platform-auth middleware | ✅ Implemented |
 | PA17 | **Account Settings UI**: Account profile editing (name, email with normalization) and password change (verify current, bcrypt new). `PATCH /api/v1/platform/account` and `POST /api/v1/platform/account/change-password` endpoints. Dashboard header avatar clickable → account settings page → back to dashboard. 8 new tests (4 backend, 4 frontend) | ✅ Implemented |
+| PA18 | **Multi-Factor Authentication (MFA)**: TOTP-based MFA (RFC 6238) for platform owner accounts. Tenant owners hold encrypted SSI credentials and manage organization settings — account compromise could lead to unauthorized event creation, credential theft, or data manipulation. **Setup flow**: QR code generation (otpauth:// URI), manual secret entry fallback, 6-digit code verification, 10 single-use recovery codes (bcrypt-hashed). **Login enforcement**: After MFA is enabled, login requires email + password + TOTP code. Session creation blocked until MFA challenge is passed. **Sensitive operation protection**: Re-verify MFA before changing password, updating SSI credentials, or disabling MFA. **Account recovery**: Recovery codes displayed once at setup (user must save). Each code is single-use. If all codes exhausted and authenticator lost, manual account recovery via support. **Storage**: `mfa_secret` (encrypted, AES-256-GCM like SSI credentials), `mfa_enabled` boolean, `mfa_recovery_codes` (bcrypt-hashed array) in accounts table. **UI**: MFA section in Account Settings page with enable/disable toggle, QR code display, recovery code download. **Dependencies**: `otpauth` npm package for TOTP generation/verification, `qrcode` for QR rendering | ⬜ Pending |
 
-### Design Decisions (PA1–PA17)
+### Design Decisions (PA1–PA18)
 
 - **Separate from SSI auth**: Platform accounts have their own identity system. SSI credentials are per-tenant, not per-account. An account may have tenants that use different SSI accounts.
 - **Redis storage (temporary)**: Currently uses Redis with `platform:` key prefix. Will migrate to PostgreSQL for persistent data — see `docs/design/platform-data-model.md` for storage strategy.
@@ -388,6 +389,7 @@ Self-service account onboarding: sign up, sign in, create and manage tenants. Th
 - **SSI credential encryption**: AES-256-GCM with fresh random IV per write. Key from `PLATFORM_CREDENTIALS_KEY` env var (64 hex chars). Decrypted transparently on read by `rowToTenant()`. See `platform-store.js` for implementation.
 - **Atomic account creation**: `createAccountWithTenant()` uses PostgreSQL transaction — if tenant creation fails, account is rolled back. Prevents orphaned accounts.
 - **Tenant detail navigation**: Dashboard → Tenant Detail is state-based (not URL-based). Back navigation refreshes tenant list to pick up renames.
+- **MFA rationale**: Platform owner accounts are high-value targets — they hold encrypted SSI credentials for one or more organizations, control tenant settings, and manage personnel. TOTP (authenticator app) was chosen over SMS because: (a) no phone number required, (b) no SMS delivery cost, (c) resistant to SIM-swap attacks, (d) works offline. Recovery codes provide a fallback when the authenticator device is lost.
 
 ## Release 7.4.1 — Authentication UX Hardening
 
@@ -580,7 +582,7 @@ Applies if tenants are consumers or non-commercial associations (e.g., shooting 
 - **Release 7.6** (Consolidation & Completion): 18 requirements from R6.0/R7.0/R7.2/R7.5 — see `release-7.6.md`
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
-- **Release 8.0** (Platform Auth & Tenancy): 17 requirements — 17 ✅ (PA1–PA17)
+- **Release 8.0** (Platform Auth & Tenancy): 18 requirements — 17 ✅, 1 ⬜ pending (PA18 MFA)
 - **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
 - **Regulatory** (SaaS Platform EU/Finland): 23 requirements — 1 ✅ (REG14), 1 N/A (REG12), 21 design phase (REG1–REG23)
 
