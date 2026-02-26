@@ -157,6 +157,54 @@ class TestPgPool {
       return { rows: [row] }
     }
 
+    // SELECT id FROM tenants WHERE LOWER(name) = LOWER($1) — duplicate name check
+    if (sql.startsWith('SELECT id FROM tenants WHERE LOWER(name)')) {
+      const name = params[0]
+      for (const row of this.tenants.values()) {
+        if (row.name.toLowerCase() === name.toLowerCase()) {
+          return { rows: [{ id: row.id }] }
+        }
+      }
+      return { rows: [] }
+    }
+
+    // INSERT INTO tenant_members — membership record for tenant owner
+    if (sql.startsWith('INSERT INTO tenant_members')) {
+      const row = {
+        id: params[0], tenant_id: params[1], account_id: params[2],
+        roles: params[3], invited_by: null, status: 'active',
+        created_at: new Date(), updated_at: new Date(),
+      }
+      if (!this.members) this.members = []
+      this.members.push(row)
+      return { rows: [row] }
+    }
+
+    // SELECT * FROM tenant_members WHERE tenant_id = $1 AND account_id = $2 AND status = 'active'
+    if (sql.startsWith('SELECT * FROM tenant_members WHERE tenant_id')) {
+      const tenantId = params[0]
+      const accountId = params[1]
+      const rows = (this.members || []).filter(
+        m => m.tenant_id === tenantId && m.account_id === accountId && m.status === 'active'
+      )
+      return { rows }
+    }
+
+    // SELECT tenant_id, COUNT(*)::int AS count FROM disciplines WHERE tenant_id IN ...
+    if (sql.startsWith('SELECT tenant_id, COUNT(*)')) {
+      // No disciplines in mock — return empty
+      return { rows: [] }
+    }
+
+    // SELECT DISTINCT t.* FROM tenants t LEFT JOIN tenant_members ... — listAccountTenants
+    if (sql.startsWith('SELECT DISTINCT t.* FROM tenants')) {
+      const accountId = params[0]
+      const rows = [...this.tenants.values()]
+        .filter(t => t.account_id === accountId)
+        .sort((a, b) => a.created_at - b.created_at)
+      return { rows }
+    }
+
     if (sql.startsWith('SELECT * FROM tenants WHERE id')) {
       const row = this.tenants.get(params[0])
       return { rows: row ? [row] : [] }
@@ -277,7 +325,7 @@ async function registerAndGetCookie(opts = {}) {
       email: opts.email || `user${Date.now()}@test.com`,
       password: opts.password || 'password123',
       name: opts.name || 'Test User',
-      organizationName: opts.organizationName || 'Test Org',
+      organizationName: opts.organizationName || `Test Org ${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     },
     ip,
   })
