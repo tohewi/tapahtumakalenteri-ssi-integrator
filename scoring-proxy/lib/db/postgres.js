@@ -50,8 +50,6 @@ CREATE TABLE IF NOT EXISTS tenants (
 
 -- Index for listing tenants by account
 CREATE INDEX IF NOT EXISTS idx_tenants_account_id ON tenants (account_id);
--- Unique index on tenant name (case-insensitive) — no duplicate org names
-CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_name_unique ON tenants (LOWER(name));
 
 -- Disciplines (competition types per tenant)
 CREATE TABLE IF NOT EXISTS disciplines (
@@ -165,6 +163,14 @@ export async function initPostgres() {
       // Run schema migrations
       await client.query(SCHEMA_SQL)
       log.info('[postgres] Schema initialized')
+
+      // Optional unique constraints — may fail on existing data with duplicates.
+      // App-level checks in createTenant/createAccountWithTenant still prevent new duplicates.
+      try {
+        await client.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_name_unique ON tenants (LOWER(name))')
+      } catch (err) {
+        log.warn('[postgres] Could not create tenant name unique index (duplicate names exist):', err.message)
+      }
     } finally {
       client.release()
     }
