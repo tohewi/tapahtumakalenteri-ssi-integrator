@@ -126,16 +126,19 @@ This **does not** affect:
 
 ## References
 
+- **SSI GraphQL data model**: `docs/design/ssi-graphql-data-model.md` — event type hierarchy, field availability per node type, two-step discovery logic
 - Detailed technical analysis: `docs/ssi-graphql-findings.md`
 - Working web scraping scripts: `archive/scripts-legacy/New-KupittaaCup.ps1`
 - GraphQL test suite: `scripts-graphql/tests/SSI-GraphQL.Tests.ps1`
 - SSI client implementation: `scoring-proxy/lib/ssi-core/client.js`
+- Seed import (GraphQL reads): `scoring-proxy/lib/ssi-core/seed-import.js`
+- Event creation (web scraping): `scoring-proxy/lib/services/event-creation-service.js`
 
 ## Last Updated
 
-- **Date**: 2026-02-08
-- **Status**: GraphQL mutations still broken, web scraping required
-- **Next Review**: When SSI team announces API fix
+- **Date**: 2026-02-27
+- **Status**: GraphQL reads work (including seed import with two-step discovery). Mutations reportedly fixed by SSI but **untested** — see requirement GQL7 for viability testing. Web scraping still used for event creation.
+- **Next Review**: After GQL7 viability test determines migration path
 
 ---
 
