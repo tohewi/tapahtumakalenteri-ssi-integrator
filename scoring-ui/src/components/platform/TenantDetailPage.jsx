@@ -850,7 +850,7 @@ function CalendarConfigSection({ tenant }) {
 
 // ---- Main Page ----
 
-export default function TenantDetailPage({ tenantId, account, onBack, onLogout, onEditTemplate }) {
+export default function TenantDetailPage({ tenantId, account, onBack, onLogout, onEditTemplate, onSchedule }) {
   const [tenant, setTenant] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
@@ -944,6 +944,14 @@ export default function TenantDetailPage({ tenantId, account, onBack, onLogout, 
             <h1 className="text-2xl font-bold text-gray-900">{tenant.name}</h1>
             <p className="text-sm text-gray-500">Tenant settings and integrations</p>
           </div>
+          {onSchedule && (
+            <button
+              onClick={onSchedule}
+              className="ml-auto bg-sky-600 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-sky-700 transition-colors"
+            >
+              Schedule Events
+            </button>
+          )}
         </div>
 
         {/* Settings sections */}

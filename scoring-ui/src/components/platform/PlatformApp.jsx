@@ -29,6 +29,7 @@ import TenantCreatePage from './TenantCreatePage.jsx'
 import TenantDetailPage from './TenantDetailPage.jsx'
 import AccountSettingsPage from './AccountSettingsPage.jsx'
 import TemplateEditorPage from './TemplateEditorPage.jsx'
+import SchedulePage from './SchedulePage.jsx'
 
 // ---- App states ----
 const VIEW = {
@@ -40,6 +41,7 @@ const VIEW = {
   TENANT_DETAIL: 'tenant_detail',
   ACCOUNT_SETTINGS: 'account_settings',
   TEMPLATE_EDITOR: 'template_editor',
+  SCHEDULE: 'schedule',
 }
 
 export default function PlatformApp() {
@@ -184,6 +186,15 @@ export default function PlatformApp() {
     )
   }
 
+  if (view === VIEW.SCHEDULE && selectedTenantId) {
+    return (
+      <SchedulePage
+        tenantId={selectedTenantId}
+        onBack={() => setView(VIEW.TENANT_DETAIL)}
+      />
+    )
+  }
+
   if (view === VIEW.TEMPLATE_EDITOR && selectedTenantId && selectedTemplateId) {
     return (
       <TemplateEditorPage
@@ -202,6 +213,7 @@ export default function PlatformApp() {
         onBack={handleBackToDashboard}
         onLogout={handleLogout}
         onEditTemplate={(templateId) => { setSelectedTemplateId(templateId); setView(VIEW.TEMPLATE_EDITOR) }}
+        onSchedule={() => setView(VIEW.SCHEDULE)}
       />
     )
   }
