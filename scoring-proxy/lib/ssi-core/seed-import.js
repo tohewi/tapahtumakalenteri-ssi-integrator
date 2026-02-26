@@ -31,7 +31,7 @@ const AUTH_MUTATION = `
 
 // GraphQL query to fetch a NordicSerie (Cup) with its component matches and squads
 const CUP_STRUCTURE_QUERY = `
-query CupStructure($ct: Int!, $id: ID!) {
+query CupStructure($ct: Int!, $id: String!) {
   event(content_type: $ct, id: $id) {
     id
     name
@@ -49,11 +49,13 @@ query CupStructure($ct: Int!, $id: ID!) {
     visibility
     registration
     results
-    scoring_mode
-    match_registration_mode
-    timezone
     currency
-    component_events {
+    ... on NordicSerieNode {
+      scoring_mode
+      match_registration_mode
+      timezone
+    }
+    component_matches {
       id
       name
       starts
@@ -65,10 +67,10 @@ query CupStructure($ct: Int!, $id: ID!) {
       information
       squads {
         id
-        name
         max_competitors
-        starts
         ... on NordicSquadNode {
+          name
+          starts
           competitors {
             id
           }
@@ -77,9 +79,11 @@ query CupStructure($ct: Int!, $id: ID!) {
     }
     squads {
       id
-      name
       max_competitors
-      starts
+      ... on NordicSquadNode {
+        name
+        starts
+      }
     }
   }
 }
@@ -87,7 +91,7 @@ query CupStructure($ct: Int!, $id: ID!) {
 
 // GraphQL query to fetch a single match (non-cup event)
 const MATCH_STRUCTURE_QUERY = `
-query MatchStructure($ct: Int!, $id: ID!) {
+query MatchStructure($ct: Int!, $id: String!) {
   event(content_type: $ct, id: $id) {
     id
     name
@@ -105,15 +109,17 @@ query MatchStructure($ct: Int!, $id: ID!) {
     visibility
     registration
     results
-    scoring_mode
-    timezone
     currency
+    ... on NordicSerieNode {
+      scoring_mode
+      timezone
+    }
     squads {
       id
-      name
       max_competitors
-      starts
       ... on NordicSquadNode {
+        name
+        starts
         competitors {
           id
         }
@@ -231,8 +237,8 @@ export async function ssiFetchEventStructure({ ssiEventUrl, credentials }) {
   }
 
   // Component matches (cups only)
-  if (isCup && event.component_events) {
-    snapshot.matches = event.component_events.map(m => ({
+  if (isCup && event.component_matches) {
+    snapshot.matches = event.component_matches.map(m => ({
       id: m.id,
       name: m.name,
       contentTypeKey: m.get_content_type_key,
