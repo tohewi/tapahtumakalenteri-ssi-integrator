@@ -89,6 +89,31 @@ CREATE INDEX IF NOT EXISTS idx_match_templates_discipline_id ON match_templates 
 -- Index for listing templates by tenant
 CREATE INDEX IF NOT EXISTS idx_match_templates_tenant_id ON match_templates (tenant_id);
 
+-- Scheduled events (instances of templates for specific dates)
+CREATE TABLE IF NOT EXISTS scheduled_events (
+  id                  TEXT PRIMARY KEY,
+  tenant_id           TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  template_id         TEXT NOT NULL REFERENCES match_templates(id) ON DELETE CASCADE,
+  event_date          DATE NOT NULL,
+  status              TEXT NOT NULL DEFAULT 'planned',
+  ssi_references      JSONB DEFAULT '{}',
+  calendar_reference  JSONB DEFAULT '{}',
+  assigned_staff      JSONB DEFAULT '[]',
+  error_details       TEXT,
+  created_by          TEXT NOT NULL REFERENCES accounts(id),
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index for listing events by tenant
+CREATE INDEX IF NOT EXISTS idx_scheduled_events_tenant_id ON scheduled_events (tenant_id);
+-- Index for listing events by template
+CREATE INDEX IF NOT EXISTS idx_scheduled_events_template_id ON scheduled_events (template_id);
+-- Index for date-based queries (upcoming events)
+CREATE INDEX IF NOT EXISTS idx_scheduled_events_date ON scheduled_events (event_date);
+-- Prevent duplicate events on the same date for the same template
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scheduled_events_template_date ON scheduled_events (template_id, event_date);
+
 -- Tenant members (RBAC — links accounts to tenants with roles)
 CREATE TABLE IF NOT EXISTS tenant_members (
   id          TEXT PRIMARY KEY,

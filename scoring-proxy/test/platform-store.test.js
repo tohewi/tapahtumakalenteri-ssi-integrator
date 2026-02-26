@@ -41,6 +41,12 @@ import {
   removeTenantMember,
   hasRequiredRole,
   TENANT_ROLES,
+  createScheduledEvent,
+  createScheduledEventBatch,
+  getScheduledEvent,
+  listScheduledEvents,
+  updateScheduledEvent,
+  deleteScheduledEvent,
 } from '../lib/db/platform-store.js'
 
 // ---- In-memory Redis mock (for sessions) ----
@@ -73,6 +79,7 @@ class TestPgPool {
     this.disciplines = new Map()
     this.templates = new Map()
     this.members = new Map()
+    this.events = new Map()
     this.transactionCalls = [] // tracks BEGIN/COMMIT/ROLLBACK for assertions
   }
 
@@ -487,6 +494,85 @@ class TestPgPool {
       row.roles = newRoles
       row.updated_at = new Date()
       return { rows: [row] }
+    }
+
+    // INSERT INTO scheduled_events
+    if (sql.startsWith('INSERT INTO scheduled_events')) {
+      const now = new Date()
+      // Check for unique constraint (template_id + event_date)
+      for (const e of this.events.values()) {
+        if (e.template_id === params[2] && e.event_date === params[3] && e.status !== 'deleted') {
+          const err = new Error('duplicate key value violates unique constraint')
+          err.code = '23505'
+          throw err
+        }
+      }
+      const row = {
+        id: params[0], tenant_id: params[1], template_id: params[2],
+        event_date: params[3], status: params[4] || 'planned',
+        ssi_references: {}, calendar_reference: {}, assigned_staff: [],
+        error_details: null, created_by: params[5 - 1],
+        created_at: now, updated_at: now,
+      }
+      // Fix: created_by is $5
+      row.created_by = params[4]
+      row.status = 'planned'
+      this.events.set(row.id, row)
+      return { rows: [row] }
+    }
+
+    // SELECT * FROM scheduled_events WHERE id = $1
+    if (sql.startsWith('SELECT * FROM scheduled_events WHERE id')) {
+      const row = this.events.get(params[0])
+      return { rows: row ? [row] : [] }
+    }
+
+    // SELECT * FROM scheduled_events WHERE tenant_id = $1 ...
+    if (sql.startsWith('SELECT * FROM scheduled_events WHERE tenant_id')) {
+      let rows = [...this.events.values()].filter(e => e.tenant_id === params[0])
+      // Apply optional template_id filter
+      if (sql.includes('template_id') && params[1]) {
+        rows = rows.filter(e => e.template_id === params[1])
+      }
+      // Apply optional status filter
+      if (sql.includes('status') && params.length > 2) {
+        const statusParam = params[params.length - 1]
+        if (statusParam && !statusParam.startsWith('tpl_')) {
+          rows = rows.filter(e => e.status === statusParam)
+        }
+      }
+      rows.sort((a, b) => (a.event_date > b.event_date ? 1 : -1))
+      return { rows }
+    }
+
+    // UPDATE scheduled_events SET ... WHERE id = $1 RETURNING *
+    if (sql.startsWith('UPDATE scheduled_events SET')) {
+      const evtId = params[0]
+      const row = this.events.get(evtId)
+      if (!row) return { rows: [] }
+      const setMatch = sql.match(/SET (.+) WHERE/i)
+      if (setMatch) {
+        const clauses = setMatch[1].split(',').map(c => c.trim())
+        for (const clause of clauses) {
+          if (clause === 'updated_at = NOW()') { row.updated_at = new Date(); continue }
+          const m = clause.match(/(\w+)\s*=\s*\$(\d+)/)
+          if (m) {
+            const col = m[1]
+            const val = params[parseInt(m[2]) - 1]
+            try { row[col] = JSON.parse(val) } catch { row[col] = val }
+          }
+        }
+      }
+      return { rows: [row] }
+    }
+
+    // DELETE FROM scheduled_events WHERE id = $1 AND status = 'planned' RETURNING id
+    if (sql.startsWith('DELETE FROM scheduled_events')) {
+      const evtId = params[0]
+      const row = this.events.get(evtId)
+      if (!row || row.status !== 'planned') return { rows: [] }
+      this.events.delete(evtId)
+      return { rows: [{ id: evtId }] }
     }
 
     // UPDATE tenant_members SET status = 'suspended' ...
@@ -1563,5 +1649,143 @@ describe('listAccountTenants with RBAC', () => {
     const tenants = await listAccountTenants(memberId)
     expect(tenants.length).toBe(1)
     expect(tenants[0].id).toBe(tenantId)
+  })
+})
+
+// ============================================================
+// Scheduled Events
+// ============================================================
+
+// Helper: create account + tenant + discipline + template for event tests
+async function createTestTemplate() {
+  const { accountId, tenantId } = await createAccountWithTenant({
+    email: `evt-${Date.now()}@test.com`, password: 'password123',
+    name: 'Evt Tester', organizationName: `EvtOrg-${Date.now()}`,
+  })
+  const { disciplineId } = await createDiscipline({ tenantId, name: 'EvtDis' })
+  const { templateId } = await createMatchTemplate({
+    tenantId, disciplineId, name: 'EvtTpl',
+    ssiSeedEventId: 'https://shootnscoreit.com/event/136/160/',
+  })
+  return { accountId, tenantId, disciplineId, templateId }
+}
+
+describe('createScheduledEvent', () => {
+  it('creates a planned event for a date', async () => {
+    const { tenantId, templateId, accountId } = await createTestTemplate()
+    const { eventId, event } = await createScheduledEvent({
+      tenantId, templateId, eventDate: '2026-03-14', createdBy: accountId,
+    })
+
+    expect(eventId).toMatch(/^evt_/)
+    expect(event.status).toBe('planned')
+    expect(event.eventDate).toBe('2026-03-14')
+    expect(event.templateId).toBe(templateId)
+    expect(event.createdBy).toBe(accountId)
+  })
+
+  it('rejects duplicate template+date', async () => {
+    const { tenantId, templateId, accountId } = await createTestTemplate()
+    await createScheduledEvent({ tenantId, templateId, eventDate: '2026-04-01', createdBy: accountId })
+
+    await expect(
+      createScheduledEvent({ tenantId, templateId, eventDate: '2026-04-01', createdBy: accountId })
+    ).rejects.toThrow()
+  })
+})
+
+describe('createScheduledEventBatch', () => {
+  it('creates multiple events, reports partial failures', async () => {
+    const { tenantId, templateId, accountId } = await createTestTemplate()
+    // Create one event first to cause a duplicate
+    await createScheduledEvent({ tenantId, templateId, eventDate: '2026-05-01', createdBy: accountId })
+
+    const results = await createScheduledEventBatch({
+      tenantId, templateId,
+      dates: ['2026-05-01', '2026-05-08', '2026-05-15'],
+      createdBy: accountId,
+    })
+
+    expect(results).toHaveLength(3)
+    expect(results[0].success).toBe(false) // duplicate
+    expect(results[1].success).toBe(true)
+    expect(results[2].success).toBe(true)
+  })
+})
+
+describe('getScheduledEvent', () => {
+  it('returns null for non-existent event', async () => {
+    const result = await getScheduledEvent('evt_nonexistent')
+    expect(result).toBeNull()
+  })
+})
+
+describe('listScheduledEvents', () => {
+  it('lists events ordered by date', async () => {
+    const { tenantId, templateId, accountId } = await createTestTemplate()
+    await createScheduledEvent({ tenantId, templateId, eventDate: '2026-06-15', createdBy: accountId })
+    await createScheduledEvent({ tenantId, templateId, eventDate: '2026-06-01', createdBy: accountId })
+    await createScheduledEvent({ tenantId, templateId, eventDate: '2026-06-08', createdBy: accountId })
+
+    const events = await listScheduledEvents(tenantId)
+    expect(events).toHaveLength(3)
+    expect(events[0].eventDate).toBe('2026-06-01')
+    expect(events[1].eventDate).toBe('2026-06-08')
+    expect(events[2].eventDate).toBe('2026-06-15')
+  })
+})
+
+describe('updateScheduledEvent', () => {
+  it('updates status and ssiReferences', async () => {
+    const { tenantId, templateId, accountId } = await createTestTemplate()
+    const { eventId } = await createScheduledEvent({
+      tenantId, templateId, eventDate: '2026-07-01', createdBy: accountId,
+    })
+
+    const updated = await updateScheduledEvent(eventId, {
+      status: 'ssi_created',
+      ssiReferences: { cupId: '12345', cupUrl: 'https://shootnscoreit.com/cup/12345/' },
+    })
+
+    expect(updated.status).toBe('ssi_created')
+    expect(updated.ssiReferences.cupId).toBe('12345')
+  })
+
+  it('rejects unknown fields', async () => {
+    await expect(
+      updateScheduledEvent('evt_x', { tenantId: 'evil' })
+    ).rejects.toThrow("unknown field 'tenantId'")
+  })
+})
+
+describe('deleteScheduledEvent', () => {
+  it('deletes a planned event', async () => {
+    const { tenantId, templateId, accountId } = await createTestTemplate()
+    const { eventId } = await createScheduledEvent({
+      tenantId, templateId, eventDate: '2026-08-01', createdBy: accountId,
+    })
+
+    const deleted = await deleteScheduledEvent(eventId)
+    expect(deleted).toBe(true)
+
+    const found = await getScheduledEvent(eventId)
+    expect(found).toBeNull()
+  })
+
+  it('refuses to delete non-planned events', async () => {
+    const { tenantId, templateId, accountId } = await createTestTemplate()
+    const { eventId } = await createScheduledEvent({
+      tenantId, templateId, eventDate: '2026-09-01', createdBy: accountId,
+    })
+    // Change status to ssi_created
+    await updateScheduledEvent(eventId, { status: 'ssi_created' })
+
+    const deleted = await deleteScheduledEvent(eventId)
+    expect(deleted).toBe(false)
+  })
+
+  it('returns false for non-existent event', async () => {
+    const deleted = await deleteScheduledEvent('evt_nonexistent')
+    expect(deleted).toBe(false)
   })
 })

@@ -232,3 +232,52 @@ export async function deleteTemplateApi(tenantId, templateId) {
     method: 'DELETE',
   })
 }
+
+// ---- Scheduled Events ----
+
+/**
+ * List scheduled events for a tenant. Optional filters: templateId, status.
+ */
+export async function listEvents(tenantId, { templateId, status } = {}) {
+  const params = new URLSearchParams()
+  if (templateId) params.set('templateId', templateId)
+  if (status) params.set('status', status)
+  const qs = params.toString() ? `?${params}` : ''
+  return platformFetch(`/tenants/${tenantId}/events${qs}`)
+}
+
+/**
+ * Create scheduled event(s). Pass dates array (batch) or single date.
+ */
+export async function createEventsApi(tenantId, { templateId, dates }) {
+  return platformFetch(`/tenants/${tenantId}/events`, {
+    method: 'POST',
+    body: JSON.stringify({ templateId, dates }),
+  })
+}
+
+/**
+ * Get a single scheduled event.
+ */
+export async function getEventApi(tenantId, eventId) {
+  return platformFetch(`/tenants/${tenantId}/events/${eventId}`)
+}
+
+/**
+ * Update a scheduled event (status, ssiReferences, etc.).
+ */
+export async function updateEventApi(tenantId, eventId, updates) {
+  return platformFetch(`/tenants/${tenantId}/events/${eventId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  })
+}
+
+/**
+ * Delete a planned scheduled event.
+ */
+export async function deleteEventApi(tenantId, eventId) {
+  return platformFetch(`/tenants/${tenantId}/events/${eventId}`, {
+    method: 'DELETE',
+  })
+}

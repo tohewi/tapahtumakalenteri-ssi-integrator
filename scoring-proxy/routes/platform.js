@@ -47,6 +47,12 @@ import {
   hasRequiredRole,
   TENANT_ROLES,
   countDisciplinesByTenant,
+  createScheduledEvent,
+  createScheduledEventBatch,
+  getScheduledEvent,
+  listScheduledEvents,
+  updateScheduledEvent,
+  deleteScheduledEvent,
 } from '../lib/db/platform-store.js'
 import { requirePlatformAuth, PLATFORM_COOKIE } from '../middleware/platform-auth.js'
 
@@ -723,6 +729,124 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       }
       return next(new AppError('Failed to import seed event', 500, 'INTERNAL_ERROR'))
     }
+  })
+
+  // ============================================================
+  // Scheduled Events — nested under /tenants/:tenantId/events
+  // ============================================================
+
+  // GET /api/v1/platform/tenants/:tenantId/events
+  // Any member can view events. Optional query: ?templateId=tpl_xxx&status=planned
+  router.get('/tenants/:tenantId/events', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res) => {
+    const { templateId, status } = req.query
+    const events = await listScheduledEvents(req.params.tenantId, { templateId, status })
+    res.json({ events })
+  })
+
+  // POST /api/v1/platform/tenants/:tenantId/events — Create event(s) for date(s)
+  // Requires: owner, tenant_admin, or match_admin
+  // Body: { templateId, dates: ['2026-03-14', '2026-03-21'] }
+  router.post('/tenants/:tenantId/events', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
+    const { templateId, dates } = req.body
+    if (!templateId) {
+      return res.status(400).json({ error: 'templateId is required' })
+    }
+    if (!dates || !Array.isArray(dates) || dates.length === 0) {
+      return res.status(400).json({ error: 'dates array is required (at least one date)' })
+    }
+
+    // Validate template belongs to this tenant
+    const template = await getMatchTemplate(templateId)
+    if (!template || template.tenantId !== req.params.tenantId) {
+      return res.status(400).json({ error: 'Template not found in this tenant' })
+    }
+
+    // Validate date format (YYYY-MM-DD)
+    const dateRe = /^\d{4}-\d{2}-\d{2}$/
+    const invalidDates = dates.filter(d => !dateRe.test(d))
+    if (invalidDates.length > 0) {
+      return res.status(400).json({ error: `Invalid date format: ${invalidDates.join(', ')}. Use YYYY-MM-DD.` })
+    }
+
+    try {
+      if (dates.length === 1) {
+        // Single event
+        const { eventId, event } = await createScheduledEvent({
+          tenantId: req.params.tenantId,
+          templateId,
+          eventDate: dates[0],
+          createdBy: req.account.id,
+        })
+        log.info(`[platform] Event scheduled: ${eventId} for ${dates[0]} (template ${templateId})`)
+        res.status(201).json({ success: true, event })
+      } else {
+        // Batch creation
+        const results = await createScheduledEventBatch({
+          tenantId: req.params.tenantId,
+          templateId,
+          dates,
+          createdBy: req.account.id,
+        })
+        const successCount = results.filter(r => r.success).length
+        log.info(`[platform] Batch scheduled: ${successCount}/${dates.length} events for template ${templateId}`)
+        res.status(201).json({ success: true, results })
+      }
+    } catch (err) {
+      if (err.code === '23505' || err.message.includes('duplicate')) {
+        return res.status(409).json({ error: 'An event already exists for this template on one of the specified dates' })
+      }
+      log.error('[platform] Event creation failed:', err.message)
+      return next(new AppError('Failed to create scheduled event', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // GET /api/v1/platform/tenants/:tenantId/events/:id
+  router.get('/tenants/:tenantId/events/:id', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res) => {
+    const event = await getScheduledEvent(req.params.id)
+    if (!event || event.tenantId !== req.params.tenantId) {
+      return res.status(404).json({ error: 'Event not found' })
+    }
+    res.json({ event })
+  })
+
+  // PATCH /api/v1/platform/tenants/:tenantId/events/:id — Update event status/references
+  // Requires: owner, tenant_admin, or match_admin
+  router.patch('/tenants/:tenantId/events/:id', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
+    const event = await getScheduledEvent(req.params.id)
+    if (!event || event.tenantId !== req.params.tenantId) {
+      return res.status(404).json({ error: 'Event not found' })
+    }
+
+    try {
+      const updated = await updateScheduledEvent(req.params.id, req.body)
+      if (!updated) {
+        return res.status(404).json({ error: 'Event not found' })
+      }
+      res.json({ success: true, event: updated })
+    } catch (err) {
+      if (err.message.includes('unknown field')) {
+        return res.status(400).json({ error: err.message })
+      }
+      log.error('[platform] Event update failed:', err.message)
+      return next(new AppError('Failed to update event', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // DELETE /api/v1/platform/tenants/:tenantId/events/:id — Delete planned event
+  // Requires: owner, tenant_admin, or match_admin
+  router.delete('/tenants/:tenantId/events/:id', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res) => {
+    const event = await getScheduledEvent(req.params.id)
+    if (!event || event.tenantId !== req.params.tenantId) {
+      return res.status(404).json({ error: 'Event not found' })
+    }
+
+    const deleted = await deleteScheduledEvent(req.params.id)
+    if (!deleted) {
+      return res.status(400).json({ error: 'Only planned events can be deleted' })
+    }
+
+    log.info(`[platform] Event deleted: ${req.params.id}`)
+    res.json({ success: true })
   })
 
   // ============================================================

@@ -1008,6 +1008,170 @@ export async function deleteMatchTemplate(templateId) {
   return rows.length > 0
 }
 
+// ---- Scheduled Events CRUD ----
+
+/**
+ * Valid scheduled event statuses.
+ * Lifecycle: planned → ssi_created → calendar_published → staffed → ready → completed
+ * Any state can transition to → failed (with error_details)
+ */
+export const EVENT_STATUSES = ['planned', 'ssi_created', 'calendar_published', 'staffed', 'ready', 'completed', 'failed']
+
+/**
+ * Convert a PostgreSQL scheduled_events row to API format.
+ */
+function rowToEvent(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    templateId: row.template_id,
+    eventDate: row.event_date,
+    status: row.status,
+    ssiReferences: row.ssi_references || {},
+    calendarReference: row.calendar_reference || {},
+    assignedStaff: row.assigned_staff || [],
+    errorDetails: row.error_details || null,
+    createdBy: row.created_by,
+    createdAt: new Date(row.created_at).getTime(),
+    updatedAt: new Date(row.updated_at).getTime(),
+  }
+}
+
+/**
+ * Create a scheduled event for a specific date from a template.
+ * @param {object} params - { tenantId, templateId, eventDate, createdBy }
+ * @returns {{ eventId, event }}
+ */
+export async function createScheduledEvent({ tenantId, templateId, eventDate, createdBy }) {
+  const eventId = generateId('evt')
+  const { rows } = await query(
+    `INSERT INTO scheduled_events (id, tenant_id, template_id, event_date, status, created_by)
+     VALUES ($1, $2, $3, $4, 'planned', $5)
+     RETURNING *`,
+    [eventId, tenantId, templateId, eventDate, createdBy]
+  )
+  return { eventId, event: rowToEvent(rows[0]) }
+}
+
+/**
+ * Create multiple scheduled events in a batch (one per date).
+ * Returns array of { eventId, event } or { error, date } for failures.
+ * Uses individual inserts (not transaction) so partial success is possible.
+ */
+export async function createScheduledEventBatch({ tenantId, templateId, dates, createdBy }) {
+  const results = []
+  for (const date of dates) {
+    try {
+      const { eventId, event } = await createScheduledEvent({
+        tenantId, templateId, eventDate: date, createdBy,
+      })
+      results.push({ success: true, eventId, event, date })
+    } catch (err) {
+      const isDuplicate = err.code === '23505' || err.message.includes('duplicate')
+      results.push({
+        success: false,
+        date,
+        error: isDuplicate ? `Event already exists for ${date}` : err.message,
+      })
+    }
+  }
+  return results
+}
+
+/**
+ * Get a scheduled event by ID.
+ */
+export async function getScheduledEvent(eventId) {
+  const { rows } = await query(
+    'SELECT * FROM scheduled_events WHERE id = $1',
+    [eventId]
+  )
+  if (rows.length === 0) return null
+  return rowToEvent(rows[0])
+}
+
+/**
+ * List scheduled events for a tenant, ordered by date.
+ * Optionally filter by templateId and/or status.
+ */
+export async function listScheduledEvents(tenantId, { templateId, status } = {}) {
+  let sql = 'SELECT * FROM scheduled_events WHERE tenant_id = $1'
+  const params = [tenantId]
+  let paramIdx = 2
+
+  if (templateId) {
+    sql += ` AND template_id = $${paramIdx}`
+    params.push(templateId)
+    paramIdx++
+  }
+  if (status) {
+    sql += ` AND status = $${paramIdx}`
+    params.push(status)
+    paramIdx++
+  }
+
+  sql += ' ORDER BY event_date ASC'
+  const { rows } = await query(sql, params)
+  return rows.map(rowToEvent)
+}
+
+/**
+ * Update a scheduled event's status and optional fields.
+ * Used during SSI creation, calendar publishing, staffing, etc.
+ */
+export async function updateScheduledEvent(eventId, updates) {
+  const allowedFields = {
+    status: 'status',
+    ssiReferences: 'ssi_references',
+    calendarReference: 'calendar_reference',
+    assignedStaff: 'assigned_staff',
+    errorDetails: 'error_details',
+  }
+
+  for (const key of Object.keys(updates)) {
+    if (!(key in allowedFields)) {
+      throw new Error(`updateScheduledEvent: unknown field '${key}'`)
+    }
+  }
+
+  const setClauses = []
+  const params = [eventId]
+  let paramIndex = 2
+
+  for (const [key, column] of Object.entries(allowedFields)) {
+    if (updates[key] !== undefined) {
+      const value = typeof updates[key] === 'object' ? JSON.stringify(updates[key]) : updates[key]
+      setClauses.push(`${column} = $${paramIndex}`)
+      params.push(value)
+      paramIndex++
+    }
+  }
+
+  if (setClauses.length === 0) return getScheduledEvent(eventId)
+
+  setClauses.push('updated_at = NOW()')
+
+  const { rows } = await query(
+    `UPDATE scheduled_events SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`,
+    params
+  )
+  if (rows.length === 0) return null
+  return rowToEvent(rows[0])
+}
+
+/**
+ * Delete a scheduled event. Only planned events can be deleted.
+ * @returns {boolean}
+ */
+export async function deleteScheduledEvent(eventId) {
+  const { rows } = await query(
+    `DELETE FROM scheduled_events WHERE id = $1 AND status = 'planned' RETURNING id`,
+    [eventId]
+  )
+  return rows.length > 0
+}
+
 // ---- Platform Sessions (Redis — ephemeral, 24h TTL) ----
 
 const PLATFORM_SESSION_TTL = 24 * 60 * 60 // 24 hours in seconds
