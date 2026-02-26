@@ -29,7 +29,7 @@ projects:
             plan: starter
             branch: main
             repo: https://github.com/tohewi/tapahtumakalenteri-ssi-integrator
-            # PR previews are managed by .github/workflows/pr-preview.yml
+            # PR previews (including Postgres + Redis) are managed by .github/workflows/pr-preview.yml
             # to support all Render plans and deterministic naming.
             buildCommand: cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm ci
             startCommand: cd scoring-proxy && node server.js

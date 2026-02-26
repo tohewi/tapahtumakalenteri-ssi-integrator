@@ -4,9 +4,10 @@ name: PR Preview Environment
 #
 # This workflow:
 # 1. Creates a new Render service when a PR is opened (format: turres-ssi-tools-pr-{NUMBER})
-# 2. Triggers redeployment when new commits are pushed to the PR
-# 3. Deletes the preview service when the PR is closed or merged
-# 4. Posts preview URLs and status as PR comments
+# 2. Provisions a Postgres database and Redis Key Value store for the preview
+# 3. Triggers redeployment when new commits are pushed to the PR
+# 4. Deletes the preview service, database, and key-value store when the PR is closed or merged
+# 5. Posts preview URLs and status as PR comments
 #
 # Required GitHub Secrets:
 # - RENDER_API_KEY: Render API token (generate in Render Dashboard → Account Settings → API Keys)
@@ -130,6 +131,98 @@ jobs:
             echo "deleted=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Provision Postgres and Redis for PR preview
+        id: provision-databases
+        if: github.event.action != 'closed'
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          DB_NAME="turres-ssi-tools-pr-${PR_NUMBER}-db"
+          KV_NAME="turres-ssi-tools-pr-${PR_NUMBER}-redis"
+          PG_RETRIES=5   # × 10s = 50s max wait for Postgres connection string
+          KV_RETRIES=3   # × 5s  = 15s max wait for Redis connection string
+
+          # --- Postgres ---
+          PG_LIST=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            "https://api.render.com/v1/postgres?name=${DB_NAME}&limit=1")
+          PG_ID=$(echo "$PG_LIST" | jq -r 'if type == "array" and length > 0 then .[0].postgres.id else "" end' 2>/dev/null || echo "")
+
+          if [ -z "$PG_ID" ] || [ "$PG_ID" = "null" ]; then
+            PG_RESP=$(curl -s -w "\n%{http_code}" -X POST \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"name\":\"${DB_NAME}\",\"ownerId\":\"${RENDER_OWNER_ID}\",\"plan\":\"free\",\"region\":\"frankfurt\",\"version\":\"16\"}" \
+              "https://api.render.com/v1/postgres")
+            PG_HTTP=$(echo "$PG_RESP" | tail -n1)
+            PG_BODY=$(echo "$PG_RESP" | sed '$d')
+            if [ "$PG_HTTP" = "201" ]; then
+              PG_ID=$(echo "$PG_BODY" | jq -r '.postgres.id // .id')
+              echo "✅ Postgres created: ${PG_ID}"
+            else
+              echo "::warning::Postgres creation failed (HTTP ${PG_HTTP}): $(echo "$PG_BODY" | jq -r '.message // .' 2>/dev/null || echo "$PG_BODY"). Platform login requires Postgres; preview will fall back to no-db mode."
+              PG_ID=""
+            fi
+          else
+            echo "Using existing Postgres: ${PG_ID}"
+          fi
+
+          DATABASE_URL=""
+          if [ -n "$PG_ID" ] && [ "$PG_ID" != "null" ]; then
+            echo "postgres_id=${PG_ID}" >> $GITHUB_OUTPUT
+            # Poll for connection string (DB may still be initialising)
+            for i in $(seq 1 $PG_RETRIES); do
+              CONN=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" \
+                "https://api.render.com/v1/postgres/${PG_ID}/connection-info")
+              DATABASE_URL=$(echo "$CONN" | jq -r '.externalConnectionString // empty' 2>/dev/null || echo "")
+              [ -n "$DATABASE_URL" ] && break
+              sleep 10
+            done
+            if [ -z "$DATABASE_URL" ]; then
+              echo "::warning::Postgres ${PG_ID} did not return a connection string after 50s. DATABASE_URL will not be set."
+            fi
+            echo "database_url=${DATABASE_URL}" >> $GITHUB_OUTPUT
+          fi
+
+          # --- Redis / Key Value ---
+          KV_LIST=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            "https://api.render.com/v1/redis?name=${KV_NAME}&limit=1")
+          KV_ID=$(echo "$KV_LIST" | jq -r 'if type == "array" and length > 0 then (.[0].keyValue.id // .[0].redis.id // .[0].id) else "" end' 2>/dev/null || echo "")
+
+          if [ -z "$KV_ID" ] || [ "$KV_ID" = "null" ]; then
+            KV_RESP=$(curl -s -w "\n%{http_code}" -X POST \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{\"name\":\"${KV_NAME}\",\"ownerId\":\"${RENDER_OWNER_ID}\",\"plan\":\"free\",\"region\":\"frankfurt\",\"maxmemoryPolicy\":\"allkeys_lru\"}" \
+              "https://api.render.com/v1/redis")
+            KV_HTTP=$(echo "$KV_RESP" | tail -n1)
+            KV_BODY=$(echo "$KV_RESP" | sed '$d')
+            if [ "$KV_HTTP" = "201" ]; then
+              KV_ID=$(echo "$KV_BODY" | jq -r '.id // .keyValue.id // .redis.id')
+              echo "✅ Redis created: ${KV_ID}"
+            else
+              echo "::warning::Redis creation failed (HTTP ${KV_HTTP}). Sessions will use in-memory store."
+              KV_ID=""
+            fi
+          else
+            echo "Using existing Redis: ${KV_ID}"
+          fi
+
+          REDIS_URL=""
+          if [ -n "$KV_ID" ] && [ "$KV_ID" != "null" ]; then
+            echo "redis_id=${KV_ID}" >> $GITHUB_OUTPUT
+            # Poll for connection string (KV may still be initialising)
+            for i in $(seq 1 $KV_RETRIES); do
+              CONN=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" \
+                "https://api.render.com/v1/redis/${KV_ID}/connection-info")
+              REDIS_URL=$(echo "$CONN" | jq -r '.redisURL // .externalConnectionString // empty' 2>/dev/null || echo "")
+              [ -n "$REDIS_URL" ] && break
+              sleep 5
+            done
+            if [ -z "$REDIS_URL" ]; then
+              echo "::warning::Redis ${KV_ID} did not return a connection string. REDIS_URL will not be set; sessions will use in-memory store."
+            fi
+            echo "redis_url=${REDIS_URL}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create preview service
         id: create-service
         if: github.event.action != 'closed' && (steps.check-service.outputs.exists != 'true' || steps.delete-if-outdated.outputs.deleted == 'true')
@@ -174,6 +267,8 @@ jobs:
             --arg ssiBaseUrl "${PREVIEW_SSI_BASE_URL}" \
             --arg staffingCronSecret "${PREVIEW_STAFFING_CRON_SECRET}" \
             --arg staffingApiUrl "${PREVIEW_STAFFING_API_URL}" \
+            --arg databaseUrl "${{ steps.provision-databases.outputs.database_url }}" \
+            --arg redisUrl "${{ steps.provision-databases.outputs.redis_url }}" \
             '[
               {"key": "NODE_ENV", "value": $nodeEnv},
               {"key": "SESSION_SECRET", "value": $sessionSecret},
@@ -187,11 +282,11 @@ jobs:
             + (if $emailFrom != "" then [{"key": "EMAIL_FROM", "value": $emailFrom}] else [] end)
             + (if $ssiBaseUrl != "" then [{"key": "SSI_BASE_URL", "value": $ssiBaseUrl}] else [] end)
             + (if $staffingCronSecret != "" then [{"key": "STAFFING_CRON_SECRET", "value": $staffingCronSecret}] else [] end)
-            + (if $staffingApiUrl != "" then [{"key": "STAFFING_API_URL", "value": $staffingApiUrl}] else [] end)')
+            + (if $staffingApiUrl != "" then [{"key": "STAFFING_API_URL", "value": $staffingApiUrl}] else [] end)
+            + (if $databaseUrl != "" then [{"key": "DATABASE_URL", "value": $databaseUrl}] else [] end)
+            + (if $redisUrl != "" then [{"key": "REDIS_URL", "value": $redisUrl}] else [] end)')
 
           # Create the service using Render API
-          # Note: preview services use in-memory session store (no REDIS_URL).
-          # This is acceptable for short-lived test environments.
           PAYLOAD=$(jq -cn \
             --arg serviceName "${SERVICE_NAME}" \
             --arg ownerId "${RENDER_OWNER_ID}" \
@@ -242,6 +337,52 @@ jobs:
             echo "❌ Failed to create preview service (HTTP ${HTTP_CODE})"
             echo "$BODY" | jq '.' || echo "$BODY"
             exit 1
+          fi
+
+      - name: Update env vars on existing preview service
+        id: update-env-vars
+        if: github.event.action != 'closed' && steps.check-service.outputs.exists == 'true' && steps.delete-if-outdated.outputs.deleted != 'true'
+        run: |
+          SERVICE_ID="${{ steps.check-service.outputs.service_id }}"
+          DATABASE_URL="${{ steps.provision-databases.outputs.database_url }}"
+          REDIS_URL="${{ steps.provision-databases.outputs.redis_url }}"
+
+          # Only update if we have at least one URL to add
+          if [ -z "$DATABASE_URL" ] && [ -z "$REDIS_URL" ]; then
+            echo "No database URLs to update, skipping"
+            exit 0
+          fi
+
+          # GET current env vars so we don't lose any
+          CURRENT=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            "https://api.render.com/v1/services/${SERVICE_ID}/env-vars")
+
+          # Merge: update only keys for which we have a new non-empty value.
+          # If provisioning failed and a URL is empty, we leave the existing
+          # value intact so a previously working preview is not broken.
+          UPDATED=$(echo "$CURRENT" | jq \
+            --arg db "$DATABASE_URL" \
+            --arg redis "$REDIS_URL" \
+            'map(
+              if .key == "DATABASE_URL" and $db != "" then {"key": "DATABASE_URL", "value": $db}
+              elif .key == "REDIS_URL" and $redis != "" then {"key": "REDIS_URL", "value": $redis}
+              else .
+              end
+            )
+            + (if $db != "" and (map(select(.key == "DATABASE_URL")) | length) == 0 then [{"key": "DATABASE_URL", "value": $db}] else [] end)
+            + (if $redis != "" and (map(select(.key == "REDIS_URL")) | length) == 0 then [{"key": "REDIS_URL", "value": $redis}] else [] end)')
+
+          UPDATE_RESP=$(curl -s -w "\n%{http_code}" -X PUT \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "$UPDATED" \
+            "https://api.render.com/v1/services/${SERVICE_ID}/env-vars")
+
+          UPDATE_HTTP=$(echo "$UPDATE_RESP" | tail -n1)
+          if [ "$UPDATE_HTTP" = "200" ]; then
+            echo "✅ Service env vars updated with DATABASE_URL and REDIS_URL"
+          else
+            echo "::warning::Failed to update service env vars (HTTP ${UPDATE_HTTP})"
           fi
 
       - name: Comment on PR with preview URL
@@ -342,6 +483,51 @@ jobs:
             echo "⚠️  Failed to query services (HTTP ${HTTP_CODE})"
             echo "$BODY"
             # Don't fail the workflow if query fails
+          fi
+
+      - name: Delete preview databases (Postgres and Redis)
+        if: github.event.action == 'closed'
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          DB_NAME="turres-ssi-tools-pr-${PR_NUMBER}-db"
+          KV_NAME="turres-ssi-tools-pr-${PR_NUMBER}-redis"
+
+          # --- Delete Postgres ---
+          PG_LIST=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            "https://api.render.com/v1/postgres?name=${DB_NAME}&limit=1")
+          PG_ID=$(echo "$PG_LIST" | jq -r 'if type == "array" and length > 0 then .[0].postgres.id else "" end' 2>/dev/null || echo "")
+
+          if [ -n "$PG_ID" ] && [ "$PG_ID" != "null" ]; then
+            DEL=$(curl -s -w "\n%{http_code}" -X DELETE \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              "https://api.render.com/v1/postgres/${PG_ID}")
+            DEL_HTTP=$(echo "$DEL" | tail -n1)
+            if [ "$DEL_HTTP" = "204" ]; then
+              echo "✅ Postgres ${PG_ID} deleted"
+            else
+              echo "⚠️  Failed to delete Postgres ${PG_ID} (HTTP ${DEL_HTTP})"
+            fi
+          else
+            echo "ℹ️  No Postgres found for PR ${PR_NUMBER}"
+          fi
+
+          # --- Delete Redis / Key Value ---
+          KV_LIST=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            "https://api.render.com/v1/redis?name=${KV_NAME}&limit=1")
+          KV_ID=$(echo "$KV_LIST" | jq -r 'if type == "array" and length > 0 then (.[0].keyValue.id // .[0].redis.id // .[0].id) else "" end' 2>/dev/null || echo "")
+
+          if [ -n "$KV_ID" ] && [ "$KV_ID" != "null" ]; then
+            DEL=$(curl -s -w "\n%{http_code}" -X DELETE \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              "https://api.render.com/v1/redis/${KV_ID}")
+            DEL_HTTP=$(echo "$DEL" | tail -n1)
+            if [ "$DEL_HTTP" = "204" ]; then
+              echo "✅ Redis ${KV_ID} deleted"
+            else
+              echo "⚠️  Failed to delete Redis ${KV_ID} (HTTP ${DEL_HTTP})"
+            fi
+          else
+            echo "ℹ️  No Redis found for PR ${PR_NUMBER}"
           fi
 
       - name: Comment on PR about deletion
