@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Hide native browser password reveal toggle (Edge/Chrome) —
+   we use a custom Show/Hide button instead */
+input::-ms-reveal,
+input::-webkit-credentials-auto-fill-button {
+  display: none;
+}
+
 @keyframes slide-up {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
