@@ -454,8 +454,9 @@ Migrate Cup creation and maintenance from web scraping to SSI GraphQL API. The l
 | GQL4 | **GraphQL Batch Creation**: Create `New-KupittaaCupBatch-GraphQL.ps1` for batch Cup creation from date list file, replacing the web scraping batch script | ⬚ Pending |
 | GQL5 | **Form Field Discovery Automation**: Create a PowerShell function `Get-SSIFormFields` that logs in via web scraping, fetches a create-event form, and returns all field names, required status, and valid enum values. Use this to detect SSI form changes proactively | ⬚ Pending |
 | GQL6 | **Deprecate Web Scraping Scripts**: Mark `archive/scripts-legacy/New-KupittaaCup.ps1` and `New-KupittaaCupBatch.ps1` as deprecated once GraphQL equivalents are validated. Keep in archive for reference | ⬚ Pending |
+| GQL7 | **GraphQL Event Creation Viability Test (JS)**: The current `event-creation-service.js` uses web scraping (CSRF tokens, form POSTs) because SSI GraphQL was too broken at the time of `New-KupittaaCup.ps1`. SSI has reportedly made GraphQL fixes since then. **Test scope**: (1) Authenticate via GraphQL `token_auth` mutation, (2) Test `create_event` mutation for Cup (CT 136) with full `form_input` JSON — verify all required fields and correct response, (3) Test `create_event` for Match (CT 91) with discipline-specific fields, (4) Test Cup↔Match linking via `add_component_event` or equivalent mutation, (5) Test squad creation via GraphQL (may not exist — verify), (6) Test event read-back via `event(content_type, id)` query to confirm structure. **Deliverables**: A JS test script (`test-harness/test-graphql-event-creation.mjs`) that runs each operation against a real SSI test account and reports pass/fail per operation. Based on results, decide migration path: (a) full GraphQL migration if all operations work, (b) hybrid (GraphQL for cups/matches, web scraping for squads/linking), or (c) keep web scraping if GraphQL is still unreliable. **Context**: Web scraping is fragile — SSI UI changes break it. GraphQL would be more stable and maintainable. The `form_input` JSON scalar is opaque (fields not in schema), so the test must discover required fields empirically. | ⬚ Pending |
 
-### Design Decisions (GQL1–GQL6)
+### Design Decisions (GQL1–GQL7)
 
 - **GraphQL is primary, web scraping is fallback**: Use GraphQL for all operations where it works. Fall back to web scraping only for operations not yet supported (e.g., squad creation if `create_squad` mutation doesn't exist).
 - **Form field discovery**: SSI's `form_input` is an opaque `JSON` scalar — required fields are not in the GraphQL schema. Use web scraping to discover fields (see AGENTS.md § "SSI GraphQL — Discovering Form Fields").
@@ -583,7 +584,7 @@ Applies if tenants are consumers or non-commercial associations (e.g., shooting 
 - **Release 7.4.1** (Authentication UX Hardening): 5 requirements — 5 ✅ (AUTH-UX1–AUTH-UX5)
 - **Release 7.5** (Architecture V2 Foundation): 5 requirements — 3 ✅, 2 📋 ➜ R7.6 (ARCH3, ARCH4)
 - **Release 7.6** (Consolidation & Completion): 18 requirements from R6.0/R7.0/R7.2/R7.5 — see `release-7.6.md`
-- **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6)
+- **Release 7.9** (GraphQL Cup Management): 7 requirements — 0 ✅, 7 pending (GQL1–GQL7)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
 - **Release 8.0** (Platform Auth & Tenancy): 21 requirements — 19 ✅, 2 ⬜ pending (PA18 MFA, PA21 Invitation Links)
 - **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
