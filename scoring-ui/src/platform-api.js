@@ -137,3 +137,43 @@ export async function changeAccountPassword({ currentPassword, newPassword }) {
     body: JSON.stringify({ currentPassword, newPassword }),
   })
 }
+
+// ---- Disciplines ----
+
+/**
+ * List disciplines for a tenant.
+ */
+export async function listDisciplines(tenantId) {
+  return platformFetch(`/tenants/${tenantId}/disciplines`)
+}
+
+/**
+ * Create a discipline for a tenant.
+ * @param {string} tenantId
+ * @param {{ name, labelFi?, labelEn?, ssiGroupId?, ssiOrganizerId? }} data
+ */
+export async function createDisciplineApi(tenantId, data) {
+  return platformFetch(`/tenants/${tenantId}/disciplines`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+/**
+ * Update a discipline.
+ */
+export async function updateDisciplineApi(tenantId, disciplineId, updates) {
+  return platformFetch(`/tenants/${tenantId}/disciplines/${disciplineId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  })
+}
+
+/**
+ * Delete a discipline.
+ */
+export async function deleteDisciplineApi(tenantId, disciplineId) {
+  return platformFetch(`/tenants/${tenantId}/disciplines/${disciplineId}`, {
+    method: 'DELETE',
+  })
+}

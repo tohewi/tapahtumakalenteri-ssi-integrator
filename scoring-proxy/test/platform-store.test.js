@@ -23,6 +23,11 @@ import {
   createPlatformSession,
   getPlatformSession,
   deletePlatformSession,
+  createDiscipline,
+  getDiscipline,
+  listTenantDisciplines,
+  updateDiscipline,
+  deleteDiscipline,
 } from '../lib/db/platform-store.js'
 
 // ---- In-memory Redis mock (for sessions) ----
@@ -52,6 +57,7 @@ class TestPgPool {
   constructor() {
     this.accounts = new Map()
     this.tenants = new Map()
+    this.disciplines = new Map()
     this.transactionCalls = [] // tracks BEGIN/COMMIT/ROLLBACK for assertions
   }
 
@@ -225,6 +231,61 @@ class TestPgPool {
         }
       }
       return { rows: [row] }
+    }
+
+    // INSERT INTO disciplines
+    if (sql.startsWith('INSERT INTO disciplines')) {
+      const now = new Date()
+      const row = {
+        id: params[0], tenant_id: params[1], name: params[2],
+        label_fi: params[3], label_en: params[4],
+        ssi_group_id: params[5], ssi_organizer_id: params[6],
+        created_at: now, updated_at: now,
+      }
+      this.disciplines.set(row.id, row)
+      return { rows: [row] }
+    }
+
+    // SELECT * FROM disciplines WHERE id = $1
+    if (sql.startsWith('SELECT * FROM disciplines WHERE id')) {
+      const row = this.disciplines.get(params[0])
+      return { rows: row ? [row] : [] }
+    }
+
+    // SELECT * FROM disciplines WHERE tenant_id = $1
+    if (sql.startsWith('SELECT * FROM disciplines WHERE tenant_id')) {
+      const rows = [...this.disciplines.values()]
+        .filter(d => d.tenant_id === params[0])
+        .sort((a, b) => a.created_at - b.created_at)
+      return { rows }
+    }
+
+    // UPDATE disciplines SET ... WHERE id = $1 RETURNING *
+    if (sql.startsWith('UPDATE disciplines SET')) {
+      const disId = params[0]
+      const row = this.disciplines.get(disId)
+      if (!row) return { rows: [] }
+      const setMatch = sql.match(/SET (.+) WHERE/i)
+      if (setMatch) {
+        const clauses = setMatch[1].split(',').map(c => c.trim())
+        for (const clause of clauses) {
+          if (clause === 'updated_at = NOW()') { row.updated_at = new Date(); continue }
+          const m = clause.match(/(\w+)\s*=\s*\$(\d+)/)
+          if (m) {
+            const col = m[1]
+            row[col] = params[parseInt(m[2]) - 1]
+          }
+        }
+      }
+      return { rows: [row] }
+    }
+
+    // DELETE FROM disciplines WHERE id = $1 RETURNING id
+    if (sql.startsWith('DELETE FROM disciplines WHERE id')) {
+      const disId = params[0]
+      const existed = this.disciplines.has(disId)
+      this.disciplines.delete(disId)
+      return { rows: existed ? [{ id: disId }] : [] }
     }
 
     throw new Error(`TestPgPool: unhandled query: ${sql}`)
@@ -716,5 +777,152 @@ describe('SSI credential encryption', () => {
     } finally {
       process.env.PLATFORM_CREDENTIALS_KEY = TEST_CRED_KEY
     }
+  })
+})
+
+// ============================================================
+// Discipline CRUD
+// ============================================================
+
+describe('createDiscipline', () => {
+  it('creates a discipline with correct fields', async () => {
+    const { accountId } = await createAccount({ email: 'dis@test.com', password: 'pass1234', name: 'Dis' })
+    const { tenantId } = await createTenant({ accountId, name: 'DisOrg' })
+
+    const { disciplineId, discipline } = await createDiscipline({
+      tenantId,
+      name: 'kupittaa_cup',
+      labelFi: 'Kupittaa Cup',
+      labelEn: 'Kupittaa Cup',
+      ssiGroupId: '25874',
+      ssiOrganizerId: '1215',
+    })
+
+    expect(disciplineId).toMatch(/^dis_/)
+    expect(discipline.name).toBe('kupittaa_cup')
+    expect(discipline.labelFi).toBe('Kupittaa Cup')
+    expect(discipline.labelEn).toBe('Kupittaa Cup')
+    expect(discipline.ssiGroupId).toBe('25874')
+    expect(discipline.ssiOrganizerId).toBe('1215')
+    expect(discipline.tenantId).toBe(tenantId)
+    expect(discipline.createdAt).toBeTypeOf('number')
+  })
+
+  it('creates a discipline with optional fields omitted', async () => {
+    const { accountId } = await createAccount({ email: 'dismin@test.com', password: 'pass1234', name: 'DisMin' })
+    const { tenantId } = await createTenant({ accountId, name: 'MinOrg' })
+
+    const { discipline } = await createDiscipline({
+      tenantId,
+      name: 'sra_training',
+      labelFi: 'SRA Harjoitus',
+    })
+
+    expect(discipline.name).toBe('sra_training')
+    expect(discipline.labelFi).toBe('SRA Harjoitus')
+    expect(discipline.labelEn).toBe('')
+    expect(discipline.ssiGroupId).toBeNull()
+    expect(discipline.ssiOrganizerId).toBeNull()
+  })
+})
+
+describe('getDiscipline / listTenantDisciplines', () => {
+  it('gets discipline by ID', async () => {
+    const { accountId } = await createAccount({ email: 'gd@test.com', password: 'pass1234', name: 'GD' })
+    const { tenantId } = await createTenant({ accountId, name: 'GDOrg' })
+    const { disciplineId } = await createDiscipline({ tenantId, name: 'sra', labelFi: 'SRA' })
+
+    const dis = await getDiscipline(disciplineId)
+    expect(dis.name).toBe('sra')
+    expect(dis.tenantId).toBe(tenantId)
+  })
+
+  it('returns null for non-existent discipline', async () => {
+    const dis = await getDiscipline('dis_nonexistent')
+    expect(dis).toBeNull()
+  })
+
+  it('lists all disciplines for a tenant', async () => {
+    const { accountId } = await createAccount({ email: 'ld@test.com', password: 'pass1234', name: 'LD' })
+    const { tenantId } = await createTenant({ accountId, name: 'LDOrg' })
+
+    await createDiscipline({ tenantId, name: 'sra', labelFi: 'SRA' })
+    await createDiscipline({ tenantId, name: 'kupittaa', labelFi: 'Kupittaa' })
+
+    const list = await listTenantDisciplines(tenantId)
+    expect(list).toHaveLength(2)
+    expect(list.map(d => d.name).sort()).toEqual(['kupittaa', 'sra'])
+  })
+
+  it('returns empty array for tenant with no disciplines', async () => {
+    const { accountId } = await createAccount({ email: 'nd@test.com', password: 'pass1234', name: 'ND' })
+    const { tenantId } = await createTenant({ accountId, name: 'NDOrg' })
+
+    const list = await listTenantDisciplines(tenantId)
+    expect(list).toEqual([])
+  })
+
+  it('does not return other tenants disciplines', async () => {
+    const { accountId } = await createAccount({ email: 'iso@test.com', password: 'pass1234', name: 'Iso' })
+    const { tenantId: t1 } = await createTenant({ accountId, name: 'Org1' })
+    const { tenantId: t2 } = await createTenant({ accountId, name: 'Org2' })
+
+    await createDiscipline({ tenantId: t1, name: 'sra', labelFi: 'SRA' })
+    await createDiscipline({ tenantId: t2, name: 'prs', labelFi: 'PRS' })
+
+    const list1 = await listTenantDisciplines(t1)
+    expect(list1).toHaveLength(1)
+    expect(list1[0].name).toBe('sra')
+
+    const list2 = await listTenantDisciplines(t2)
+    expect(list2).toHaveLength(1)
+    expect(list2[0].name).toBe('prs')
+  })
+})
+
+describe('updateDiscipline', () => {
+  it('updates discipline fields', async () => {
+    const { accountId } = await createAccount({ email: 'ud@test.com', password: 'pass1234', name: 'UD' })
+    const { tenantId } = await createTenant({ accountId, name: 'UDOrg' })
+    const { disciplineId } = await createDiscipline({ tenantId, name: 'old', labelFi: 'Vanha' })
+
+    const updated = await updateDiscipline(disciplineId, { name: 'new', labelFi: 'Uusi', labelEn: 'New' })
+    expect(updated.name).toBe('new')
+    expect(updated.labelFi).toBe('Uusi')
+    expect(updated.labelEn).toBe('New')
+  })
+
+  it('rejects unknown fields', async () => {
+    const { accountId } = await createAccount({ email: 'udf@test.com', password: 'pass1234', name: 'UDF' })
+    const { tenantId } = await createTenant({ accountId, name: 'UDFOrg' })
+    const { disciplineId } = await createDiscipline({ tenantId, name: 'x', labelFi: 'X' })
+
+    await expect(
+      updateDiscipline(disciplineId, { 'tenant_id': 'evil' })
+    ).rejects.toThrow("updateDiscipline: unknown field 'tenant_id'")
+  })
+
+  it('returns null for non-existent discipline', async () => {
+    const result = await updateDiscipline('dis_nonexistent', { name: 'x' })
+    expect(result).toBeNull()
+  })
+})
+
+describe('deleteDiscipline', () => {
+  it('deletes a discipline and returns true', async () => {
+    const { accountId } = await createAccount({ email: 'dd@test.com', password: 'pass1234', name: 'DD' })
+    const { tenantId } = await createTenant({ accountId, name: 'DDOrg' })
+    const { disciplineId } = await createDiscipline({ tenantId, name: 'gone', labelFi: 'Pois' })
+
+    const deleted = await deleteDiscipline(disciplineId)
+    expect(deleted).toBe(true)
+
+    const dis = await getDiscipline(disciplineId)
+    expect(dis).toBeNull()
+  })
+
+  it('returns false for non-existent discipline', async () => {
+    const deleted = await deleteDiscipline('dis_nonexistent')
+    expect(deleted).toBe(false)
   })
 })

@@ -485,6 +485,122 @@ export async function updateTenant(tenantId, updates) {
   return rowToTenant(rows[0])
 }
 
+// ---- Discipline CRUD ----
+
+/**
+ * Convert a PostgreSQL discipline row to API format.
+ */
+function rowToDiscipline(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    name: row.name,
+    labelFi: row.label_fi || '',
+    labelEn: row.label_en || '',
+    ssiGroupId: row.ssi_group_id || null,
+    ssiOrganizerId: row.ssi_organizer_id || null,
+    createdAt: new Date(row.created_at).getTime(),
+    updatedAt: new Date(row.updated_at).getTime(),
+  }
+}
+
+/**
+ * Create a new discipline for a tenant.
+ * @param {object} params - { tenantId, name, labelFi, labelEn, ssiGroupId?, ssiOrganizerId? }
+ */
+export async function createDiscipline({ tenantId, name, labelFi, labelEn, ssiGroupId, ssiOrganizerId }) {
+  const disciplineId = generateId('dis')
+  const { rows } = await query(
+    `INSERT INTO disciplines (id, tenant_id, name, label_fi, label_en, ssi_group_id, ssi_organizer_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING *`,
+    [disciplineId, tenantId, name.trim(), (labelFi || '').trim(), (labelEn || '').trim(),
+     ssiGroupId || null, ssiOrganizerId || null]
+  )
+  return { disciplineId, discipline: rowToDiscipline(rows[0]) }
+}
+
+/**
+ * Get a discipline by ID.
+ */
+export async function getDiscipline(disciplineId) {
+  const { rows } = await query(
+    'SELECT * FROM disciplines WHERE id = $1',
+    [disciplineId]
+  )
+  if (rows.length === 0) return null
+  return rowToDiscipline(rows[0])
+}
+
+/**
+ * List all disciplines for a tenant.
+ */
+export async function listTenantDisciplines(tenantId) {
+  const { rows } = await query(
+    'SELECT * FROM disciplines WHERE tenant_id = $1 ORDER BY created_at',
+    [tenantId]
+  )
+  return rows.map(rowToDiscipline)
+}
+
+// Allowed fields for updateDiscipline
+const DISCIPLINE_UPDATE_FIELDS = {
+  name: 'name',
+  labelFi: 'label_fi',
+  labelEn: 'label_en',
+  ssiGroupId: 'ssi_group_id',
+  ssiOrganizerId: 'ssi_organizer_id',
+}
+
+/**
+ * Update discipline fields.
+ */
+export async function updateDiscipline(disciplineId, updates) {
+  for (const key of Object.keys(updates)) {
+    if (!(key in DISCIPLINE_UPDATE_FIELDS)) {
+      throw new Error(`updateDiscipline: unknown field '${key}'`)
+    }
+  }
+
+  const setClauses = []
+  const params = [disciplineId]
+  let paramIndex = 2
+
+  for (const [key, column] of Object.entries(DISCIPLINE_UPDATE_FIELDS)) {
+    if (updates[key] !== undefined) {
+      setClauses.push(`${column} = $${paramIndex}`)
+      params.push(updates[key])
+      paramIndex++
+    }
+  }
+
+  if (setClauses.length === 0) {
+    return getDiscipline(disciplineId)
+  }
+
+  setClauses.push(`updated_at = NOW()`)
+
+  const { rows } = await query(
+    `UPDATE disciplines SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`,
+    params
+  )
+  if (rows.length === 0) return null
+  return rowToDiscipline(rows[0])
+}
+
+/**
+ * Delete a discipline by ID.
+ * @returns {boolean} true if deleted, false if not found
+ */
+export async function deleteDiscipline(disciplineId) {
+  const { rows } = await query(
+    'DELETE FROM disciplines WHERE id = $1 RETURNING id',
+    [disciplineId]
+  )
+  return rows.length > 0
+}
+
 // ---- Platform Sessions (Redis — ephemeral, 24h TTL) ----
 
 const PLATFORM_SESSION_TTL = 24 * 60 * 60 // 24 hours in seconds

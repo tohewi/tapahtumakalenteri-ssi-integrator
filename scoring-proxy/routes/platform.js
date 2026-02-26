@@ -27,6 +27,11 @@ import {
   createPlatformSession,
   deletePlatformSession,
   getPlatformSession,
+  createDiscipline,
+  getDiscipline,
+  listTenantDisciplines,
+  updateDiscipline,
+  deleteDiscipline,
 } from '../lib/db/platform-store.js'
 import { requirePlatformAuth, PLATFORM_COOKIE } from '../middleware/platform-auth.js'
 
@@ -416,6 +421,96 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       log.error('[platform] Tenant update failed:', err.message)
       return next(new AppError('Failed to update tenant', 500, 'INTERNAL_ERROR'))
     }
+  })
+
+  // ============================================================
+  // Discipline CRUD — nested under /tenants/:tenantId/disciplines
+  // ============================================================
+
+  // Middleware: verify tenant ownership for discipline routes
+  async function requireTenantOwnership(req, res, next) {
+    const tenant = await getTenant(req.params.tenantId)
+    if (!tenant) return res.status(404).json({ error: 'Tenant not found' })
+    if (tenant.accountId !== req.account.id) return res.status(403).json({ error: 'Access denied' })
+    req.tenant = tenant
+    next()
+  }
+
+  // GET /api/v1/platform/tenants/:tenantId/disciplines
+  router.get('/tenants/:tenantId/disciplines', requirePlatformAuth(), requireTenantOwnership, async (req, res) => {
+    const disciplines = await listTenantDisciplines(req.params.tenantId)
+    res.json({ disciplines })
+  })
+
+  // POST /api/v1/platform/tenants/:tenantId/disciplines
+  router.post('/tenants/:tenantId/disciplines', requirePlatformAuth(), requireTenantOwnership, async (req, res, next) => {
+    const { name, labelFi, labelEn, ssiGroupId, ssiOrganizerId } = req.body
+    if (!name || name.trim().length < 2) {
+      return res.status(400).json({ error: 'Discipline name is required (min 2 characters)' })
+    }
+
+    try {
+      const { disciplineId, discipline } = await createDiscipline({
+        tenantId: req.params.tenantId,
+        name, labelFi, labelEn, ssiGroupId, ssiOrganizerId,
+      })
+      log.info(`[platform] Discipline created: ${name} (${disciplineId}) for tenant ${req.params.tenantId}`)
+      res.status(201).json({ success: true, discipline })
+    } catch (err) {
+      log.error('[platform] Discipline creation failed:', err.message)
+      return next(new AppError('Failed to create discipline', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // GET /api/v1/platform/tenants/:tenantId/disciplines/:id
+  router.get('/tenants/:tenantId/disciplines/:id', requirePlatformAuth(), requireTenantOwnership, async (req, res) => {
+    const discipline = await getDiscipline(req.params.id)
+    if (!discipline || discipline.tenantId !== req.params.tenantId) {
+      return res.status(404).json({ error: 'Discipline not found' })
+    }
+    res.json({ discipline })
+  })
+
+  // PATCH /api/v1/platform/tenants/:tenantId/disciplines/:id
+  router.patch('/tenants/:tenantId/disciplines/:id', requirePlatformAuth(), requireTenantOwnership, async (req, res, next) => {
+    const discipline = await getDiscipline(req.params.id)
+    if (!discipline || discipline.tenantId !== req.params.tenantId) {
+      return res.status(404).json({ error: 'Discipline not found' })
+    }
+
+    const allowedFields = ['name', 'labelFi', 'labelEn', 'ssiGroupId', 'ssiOrganizerId']
+    const updates = {}
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) updates[field] = req.body[field]
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' })
+    }
+
+    try {
+      const updated = await updateDiscipline(req.params.id, updates)
+      res.json({ success: true, discipline: updated })
+    } catch (err) {
+      log.error('[platform] Discipline update failed:', err.message)
+      return next(new AppError('Failed to update discipline', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // DELETE /api/v1/platform/tenants/:tenantId/disciplines/:id
+  router.delete('/tenants/:tenantId/disciplines/:id', requirePlatformAuth(), requireTenantOwnership, async (req, res) => {
+    const discipline = await getDiscipline(req.params.id)
+    if (!discipline || discipline.tenantId !== req.params.tenantId) {
+      return res.status(404).json({ error: 'Discipline not found' })
+    }
+
+    const deleted = await deleteDiscipline(req.params.id)
+    if (!deleted) {
+      return res.status(404).json({ error: 'Discipline not found' })
+    }
+
+    log.info(`[platform] Discipline deleted: ${req.params.id} from tenant ${req.params.tenantId}`)
+    res.json({ success: true })
   })
 
   return router
