@@ -52,3 +52,9 @@ projects:
                   name: turres-ssi-tools-redis
                   type: keyvalue
                   property: connectionString
+              # AES-256-GCM key for encrypting SSI credentials.
+              # Must be exactly 64 hex characters (32 bytes). Generate with:
+              #   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+              # Set manually in Render Dashboard → Environment.
+              - key: PLATFORM_CREDENTIALS_KEY
+                sync: false
