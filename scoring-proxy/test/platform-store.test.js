@@ -34,6 +34,13 @@ import {
   listTenantTemplates,
   updateMatchTemplate,
   deleteMatchTemplate,
+  getTenantMembership,
+  listTenantMembers,
+  addTenantMember,
+  updateMemberRoles,
+  removeTenantMember,
+  hasRequiredRole,
+  TENANT_ROLES,
 } from '../lib/db/platform-store.js'
 
 // ---- In-memory Redis mock (for sessions) ----
@@ -65,6 +72,7 @@ class TestPgPool {
     this.tenants = new Map()
     this.disciplines = new Map()
     this.templates = new Map()
+    this.members = new Map()
     this.transactionCalls = [] // tracks BEGIN/COMMIT/ROLLBACK for assertions
   }
 
@@ -358,6 +366,113 @@ class TestPgPool {
       const existed = this.templates.has(tplId)
       this.templates.delete(tplId)
       return { rows: existed ? [{ id: tplId }] : [] }
+    }
+
+    // INSERT INTO tenant_members
+    if (sql.startsWith('INSERT INTO tenant_members')) {
+      const now = new Date()
+      // Check for ON CONFLICT (upsert)
+      const isUpsert = sql.includes('ON CONFLICT')
+      const tenantId = params[1]
+      const accountId = params[2]
+      const roles = params[3]
+      const invitedBy = params[4] || null
+
+      // Check for existing membership (for upsert)
+      let existing = null
+      if (isUpsert) {
+        for (const m of this.members.values()) {
+          if (m.tenant_id === tenantId && m.account_id === accountId) {
+            existing = m
+            break
+          }
+        }
+      }
+
+      if (existing) {
+        existing.roles = roles
+        existing.invited_by = invitedBy
+        existing.status = 'active'
+        existing.updated_at = now
+        return { rows: [existing] }
+      }
+
+      const row = {
+        id: params[0], tenant_id: tenantId, account_id: accountId,
+        roles, invited_by: invitedBy, status: 'active',
+        created_at: now, updated_at: now,
+      }
+      this.members.set(row.id, row)
+      return { rows: [row] }
+    }
+
+    // SELECT tm.*, a.name AS account_name ... FROM tenant_members tm JOIN accounts a ...
+    // NOTE: Must come before simpler tenant_members checks to avoid false match
+    if (sql.includes('FROM tenant_members tm') && sql.includes('JOIN accounts a')) {
+      const tenantId = params[0]
+      const rows = [...this.members.values()]
+        .filter(m => m.tenant_id === tenantId && m.status === 'active')
+        .map(m => {
+          const account = this.accounts.get(m.account_id)
+          return { ...m, account_name: account?.name || '', account_email: account?.email || '' }
+        })
+        .sort((a, b) => a.created_at - b.created_at)
+      return { rows }
+    }
+
+    // SELECT DISTINCT t.* FROM tenants t LEFT JOIN tenant_members tm ...
+    if (sql.includes('SELECT DISTINCT t.*') && sql.includes('tenant_members')) {
+      const accountId = params[0]
+      const memberTenantIds = new Set(
+        [...this.members.values()]
+          .filter(m => m.account_id === accountId && m.status === 'active')
+          .map(m => m.tenant_id)
+      )
+      const rows = [...this.tenants.values()]
+        .filter(t => t.account_id === accountId || memberTenantIds.has(t.id))
+        .sort((a, b) => a.created_at - b.created_at)
+      return { rows }
+    }
+
+    // SELECT * FROM tenant_members WHERE tenant_id = $1 AND account_id = $2 AND status = 'active'
+    if (sql.includes('FROM tenant_members') && sql.includes('tenant_id') && sql.includes('account_id') && sql.includes('active')) {
+      const rows = [...this.members.values()]
+        .filter(m => m.tenant_id === params[0] && m.account_id === params[1] && m.status === 'active')
+      return { rows }
+    }
+
+    // SELECT * FROM tenant_members WHERE id = $1
+    if (sql.startsWith('SELECT * FROM tenant_members WHERE id')) {
+      const row = this.members.get(params[0])
+      return { rows: row ? [row] : [] }
+    }
+
+    // SELECT id FROM tenant_members WHERE tenant_id = $1 AND 'owner' = ANY(roles) AND status = 'active' AND id != $2
+    if (sql.includes('FROM tenant_members') && sql.includes('owner') && sql.includes('ANY(roles)')) {
+      const rows = [...this.members.values()]
+        .filter(m => m.tenant_id === params[0] && (m.roles || []).includes('owner') && m.status === 'active' && m.id !== params[1])
+      return { rows: rows.map(r => ({ id: r.id })) }
+    }
+
+    // UPDATE tenant_members SET roles = $1, updated_at = NOW() WHERE id = $2 RETURNING *
+    if (sql.startsWith('UPDATE tenant_members SET roles')) {
+      const newRoles = params[0]
+      const memberId = params[1]
+      const row = this.members.get(memberId)
+      if (!row) return { rows: [] }
+      row.roles = newRoles
+      row.updated_at = new Date()
+      return { rows: [row] }
+    }
+
+    // UPDATE tenant_members SET status = 'suspended' ...
+    if (sql.startsWith('UPDATE tenant_members SET status')) {
+      const memberId = params[0]
+      const row = this.members.get(memberId)
+      if (!row) return { rows: [] }
+      row.status = 'suspended'
+      row.updated_at = new Date()
+      return { rows: [{ id: row.id }] }
     }
 
     throw new Error(`TestPgPool: unhandled query: ${sql}`)
@@ -1150,5 +1265,260 @@ describe('deleteMatchTemplate', () => {
   it('returns false for non-existent template', async () => {
     const deleted = await deleteMatchTemplate('tpl_nonexistent')
     expect(deleted).toBe(false)
+  })
+})
+
+// ============================================================
+// Tenant Roles (RBAC)
+// ============================================================
+
+describe('hasRequiredRole (pure function)', () => {
+  it('owner satisfies any role', () => {
+    expect(hasRequiredRole(['owner'], ['instructor'])).toBe(true)
+    expect(hasRequiredRole(['owner'], ['match_admin'])).toBe(true)
+    expect(hasRequiredRole(['owner'], ['owner'])).toBe(true)
+  })
+
+  it('tenant_admin satisfies operational roles', () => {
+    expect(hasRequiredRole(['tenant_admin'], ['discipline_admin'])).toBe(true)
+    expect(hasRequiredRole(['tenant_admin'], ['match_admin'])).toBe(true)
+    expect(hasRequiredRole(['tenant_admin'], ['instructor'])).toBe(true)
+    expect(hasRequiredRole(['tenant_admin'], ['tenant_admin'])).toBe(true)
+  })
+
+  it('tenant_admin does NOT satisfy owner-only actions', () => {
+    expect(hasRequiredRole(['tenant_admin'], ['owner'])).toBe(false)
+  })
+
+  it('discipline_admin only satisfies discipline_admin', () => {
+    expect(hasRequiredRole(['discipline_admin'], ['discipline_admin'])).toBe(true)
+    expect(hasRequiredRole(['discipline_admin'], ['match_admin'])).toBe(false)
+    expect(hasRequiredRole(['discipline_admin'], ['owner'])).toBe(false)
+  })
+
+  it('match_admin satisfies match_admin', () => {
+    expect(hasRequiredRole(['match_admin'], ['owner', 'tenant_admin', 'match_admin'])).toBe(true)
+    expect(hasRequiredRole(['match_admin'], ['discipline_admin'])).toBe(false)
+  })
+
+  it('instructor only satisfies instructor', () => {
+    expect(hasRequiredRole(['instructor'], ['instructor'])).toBe(true)
+    expect(hasRequiredRole(['instructor'], ['match_admin'])).toBe(false)
+  })
+
+  it('multiple roles: any match works', () => {
+    expect(hasRequiredRole(['discipline_admin', 'match_admin'], ['match_admin'])).toBe(true)
+    expect(hasRequiredRole(['instructor', 'discipline_admin'], ['discipline_admin'])).toBe(true)
+  })
+
+  it('returns false for empty/null inputs', () => {
+    expect(hasRequiredRole([], ['owner'])).toBe(false)
+    expect(hasRequiredRole(null, ['owner'])).toBe(false)
+    expect(hasRequiredRole(['owner'], [])).toBe(false)
+    expect(hasRequiredRole(['owner'], null)).toBe(false)
+  })
+})
+
+describe('TENANT_ROLES constant', () => {
+  it('contains all 6 defined roles', () => {
+    expect(TENANT_ROLES).toEqual(['owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor'])
+  })
+})
+
+describe('createAccountWithTenant — auto-owner membership', () => {
+  it('creates owner membership in same transaction', async () => {
+    const { accountId, tenantId } = await createAccountWithTenant({
+      email: 'rbac@test.com', password: 'password123', name: 'RBAC Tester', organizationName: 'RBAC Org',
+    })
+
+    const membership = await getTenantMembership(tenantId, accountId)
+    expect(membership).not.toBeNull()
+    expect(membership.roles).toContain('owner')
+    expect(membership.status).toBe('active')
+    expect(membership.invitedBy).toBeNull() // auto-created, no inviter
+  })
+})
+
+describe('createTenant — auto-owner membership', () => {
+  it('creates owner membership when adding a new tenant', async () => {
+    const { accountId } = await createAccountWithTenant({
+      email: 'multi@test.com', password: 'password123', name: 'Multi Tester', organizationName: 'Org 1',
+    })
+
+    const { tenantId } = await createTenant({ accountId, name: 'Org 2' })
+    const membership = await getTenantMembership(tenantId, accountId)
+    expect(membership).not.toBeNull()
+    expect(membership.roles).toContain('owner')
+  })
+})
+
+describe('getTenantMembership', () => {
+  it('returns null for non-existent membership', async () => {
+    const result = await getTenantMembership('ten_nonexistent', 'acc_nonexistent')
+    expect(result).toBeNull()
+  })
+})
+
+describe('addTenantMember', () => {
+  it('adds a member with specified roles', async () => {
+    const { accountId: ownerId, tenantId } = await createAccountWithTenant({
+      email: 'owner@test.com', password: 'password123', name: 'Owner', organizationName: 'Org',
+    })
+    const { accountId: memberId } = await createAccount({
+      email: 'member@test.com', password: 'password123', name: 'Member',
+    })
+
+    const { member } = await addTenantMember({
+      tenantId, accountId: memberId, roles: ['match_admin', 'instructor'], invitedBy: ownerId,
+    })
+
+    expect(member.accountId).toBe(memberId)
+    expect(member.roles).toContain('match_admin')
+    expect(member.roles).toContain('instructor')
+    expect(member.invitedBy).toBe(ownerId)
+    expect(member.status).toBe('active')
+  })
+
+  it('rejects invalid roles', async () => {
+    await expect(
+      addTenantMember({ tenantId: 'ten_1', accountId: 'acc_1', roles: ['superadmin'] })
+    ).rejects.toThrow("invalid role 'superadmin'")
+  })
+})
+
+describe('listTenantMembers', () => {
+  it('lists all active members with account info', async () => {
+    const { accountId: ownerId, tenantId } = await createAccountWithTenant({
+      email: 'list-owner@test.com', password: 'password123', name: 'List Owner', organizationName: 'List Org',
+    })
+    const { accountId: memberId } = await createAccount({
+      email: 'list-member@test.com', password: 'password123', name: 'List Member',
+    })
+    await addTenantMember({ tenantId, accountId: memberId, roles: ['instructor'], invitedBy: ownerId })
+
+    const members = await listTenantMembers(tenantId)
+    expect(members.length).toBe(2) // owner + member
+    expect(members.some(m => m.accountEmail === 'list-owner@test.com')).toBe(true)
+    expect(members.some(m => m.accountEmail === 'list-member@test.com')).toBe(true)
+  })
+})
+
+describe('updateMemberRoles', () => {
+  it('updates roles for an existing member', async () => {
+    const { accountId: ownerId, tenantId } = await createAccountWithTenant({
+      email: 'role-owner@test.com', password: 'password123', name: 'Role Owner', organizationName: 'Role Org',
+    })
+    const { accountId: memberId } = await createAccount({
+      email: 'role-member@test.com', password: 'password123', name: 'Role Member',
+    })
+    const { memberId: mbrId } = await addTenantMember({
+      tenantId, accountId: memberId, roles: ['instructor'], invitedBy: ownerId,
+    })
+
+    const updated = await updateMemberRoles(mbrId, ['match_admin', 'discipline_admin'])
+    expect(updated.roles).toContain('match_admin')
+    expect(updated.roles).toContain('discipline_admin')
+    expect(updated.roles).not.toContain('instructor')
+  })
+
+  it('rejects empty roles array', async () => {
+    await expect(
+      updateMemberRoles('mbr_x', [])
+    ).rejects.toThrow('at least one role is required')
+  })
+
+  it('rejects invalid roles', async () => {
+    await expect(
+      updateMemberRoles('mbr_x', ['superadmin'])
+    ).rejects.toThrow("invalid role 'superadmin'")
+  })
+
+  it('throws NotFoundError for non-existent membership', async () => {
+    await expect(
+      updateMemberRoles('mbr_nonexistent', ['instructor'])
+    ).rejects.toThrow()
+  })
+})
+
+describe('removeTenantMember', () => {
+  it('suspends a member', async () => {
+    const { accountId: ownerId, tenantId } = await createAccountWithTenant({
+      email: 'remove-owner@test.com', password: 'password123', name: 'Remove Owner', organizationName: 'Remove Org',
+    })
+    const { accountId: memberId } = await createAccount({
+      email: 'remove-member@test.com', password: 'password123', name: 'Remove Member',
+    })
+    const { memberId: mbrId } = await addTenantMember({
+      tenantId, accountId: memberId, roles: ['instructor'], invitedBy: ownerId,
+    })
+
+    const removed = await removeTenantMember(mbrId)
+    expect(removed).toBe(true)
+
+    // Should no longer appear in active memberships
+    const membership = await getTenantMembership(tenantId, memberId)
+    expect(membership).toBeNull()
+  })
+
+  it('returns false for non-existent member', async () => {
+    const removed = await removeTenantMember('mbr_nonexistent')
+    expect(removed).toBe(false)
+  })
+})
+
+describe('last-owner protection', () => {
+  it('prevents removing the last owner via updateMemberRoles', async () => {
+    const { accountId, tenantId } = await createAccountWithTenant({
+      email: 'last-owner@test.com', password: 'password123', name: 'Last Owner', organizationName: 'Last Org',
+    })
+    const membership = await getTenantMembership(tenantId, accountId)
+
+    await expect(
+      updateMemberRoles(membership.id, ['instructor'])
+    ).rejects.toThrow('Cannot remove the last owner')
+  })
+
+  it('prevents removing the last owner via removeTenantMember', async () => {
+    const { accountId, tenantId } = await createAccountWithTenant({
+      email: 'last-owner2@test.com', password: 'password123', name: 'Last Owner 2', organizationName: 'Last Org 2',
+    })
+    const membership = await getTenantMembership(tenantId, accountId)
+
+    await expect(
+      removeTenantMember(membership.id)
+    ).rejects.toThrow('Cannot remove the last owner')
+  })
+
+  it('allows removing owner if another owner exists', async () => {
+    const { accountId: owner1Id, tenantId } = await createAccountWithTenant({
+      email: 'owner1@test.com', password: 'password123', name: 'Owner 1', organizationName: 'Dual Org',
+    })
+    const { accountId: owner2Id } = await createAccount({
+      email: 'owner2@test.com', password: 'password123', name: 'Owner 2',
+    })
+    await addTenantMember({ tenantId, accountId: owner2Id, roles: ['owner'], invitedBy: owner1Id })
+
+    // Now owner1 can be demoted because owner2 also has owner role
+    const membership1 = await getTenantMembership(tenantId, owner1Id)
+    const updated = await updateMemberRoles(membership1.id, ['tenant_admin'])
+    expect(updated.roles).toContain('tenant_admin')
+    expect(updated.roles).not.toContain('owner')
+  })
+})
+
+describe('listAccountTenants with RBAC', () => {
+  it('includes tenants where account has membership', async () => {
+    const { accountId: ownerId, tenantId } = await createAccountWithTenant({
+      email: 'list-rbac-owner@test.com', password: 'password123', name: 'List RBAC Owner', organizationName: 'RBAC Org',
+    })
+    const { accountId: memberId } = await createAccount({
+      email: 'list-rbac-member@test.com', password: 'password123', name: 'List RBAC Member',
+    })
+    await addTenantMember({ tenantId, accountId: memberId, roles: ['instructor'], invitedBy: ownerId })
+
+    // Member should see the tenant even though they don't own it
+    const tenants = await listAccountTenants(memberId)
+    expect(tenants.length).toBe(1)
+    expect(tenants[0].id).toBe(tenantId)
   })
 })

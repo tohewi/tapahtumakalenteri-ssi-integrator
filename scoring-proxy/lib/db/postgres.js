@@ -86,6 +86,24 @@ CREATE TABLE IF NOT EXISTS match_templates (
 CREATE INDEX IF NOT EXISTS idx_match_templates_discipline_id ON match_templates (discipline_id);
 -- Index for listing templates by tenant
 CREATE INDEX IF NOT EXISTS idx_match_templates_tenant_id ON match_templates (tenant_id);
+
+-- Tenant members (RBAC — links accounts to tenants with roles)
+CREATE TABLE IF NOT EXISTS tenant_members (
+  id          TEXT PRIMARY KEY,
+  tenant_id   TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  account_id  TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  roles       TEXT[] NOT NULL DEFAULT '{}',
+  invited_by  TEXT REFERENCES accounts(id),
+  status      TEXT NOT NULL DEFAULT 'active',
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(tenant_id, account_id)
+);
+
+-- Index for listing members by tenant
+CREATE INDEX IF NOT EXISTS idx_tenant_members_tenant_id ON tenant_members (tenant_id);
+-- Index for listing memberships by account (dashboard: "my tenants")
+CREATE INDEX IF NOT EXISTS idx_tenant_members_account_id ON tenant_members (account_id);
 `
 
 // ---- Initialization ----

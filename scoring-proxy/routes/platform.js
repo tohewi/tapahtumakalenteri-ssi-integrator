@@ -38,6 +38,13 @@ import {
   listDisciplineTemplates,
   updateMatchTemplate,
   deleteMatchTemplate,
+  getTenantMembership,
+  listTenantMembers,
+  addTenantMember,
+  updateMemberRoles,
+  removeTenantMember,
+  hasRequiredRole,
+  TENANT_ROLES,
 } from '../lib/db/platform-store.js'
 import { requirePlatformAuth, PLATFORM_COOKIE } from '../middleware/platform-auth.js'
 
@@ -378,33 +385,29 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
 
   // ============================================================
   // GET /api/v1/platform/tenants/:id — Get tenant details
+  // Any member can read tenant details
   // ============================================================
-  router.get('/tenants/:id', requirePlatformAuth(), async (req, res) => {
-    const tenant = await getTenant(req.params.id)
-    if (!tenant) {
-      return res.status(404).json({ error: 'Tenant not found' })
+  router.get('/tenants/:id', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res) => {
+    // SSI credentials are sensitive — only show to owner
+    const tenant = { ...req.tenant }
+    if (!hasRequiredRole(req.membership.roles, ['owner'])) {
+      tenant.ssiCredentials = tenant.ssiCredentials ? { configured: true } : null
     }
-
-    // Verify ownership
-    if (tenant.accountId !== req.account.id) {
-      return res.status(403).json({ error: 'Access denied' })
-    }
-
     res.json({ tenant })
   })
 
   // ============================================================
   // PATCH /api/v1/platform/tenants/:id — Update tenant settings
+  // Name: owner or tenant_admin
+  // SSI credentials, calendar config: owner only
   // ============================================================
-  router.patch('/tenants/:id', requirePlatformAuth(), async (req, res, next) => {
-    const tenant = await getTenant(req.params.id)
-    if (!tenant) {
-      return res.status(404).json({ error: 'Tenant not found' })
-    }
-
-    // Verify ownership
-    if (tenant.accountId !== req.account.id) {
-      return res.status(403).json({ error: 'Access denied' })
+  router.patch('/tenants/:id', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
+    // Field-level permission check:
+    // SSI credentials and calendar config require owner role
+    const ownerOnlyFields = ['ssiCredentials', 'calendarConfig']
+    const hasOwnerOnlyFields = ownerOnlyFields.some(f => req.body[f] !== undefined)
+    if (hasOwnerOnlyFields && !hasRequiredRole(req.membership.roles, ['owner'])) {
+      return res.status(403).json({ error: 'Only the tenant owner can update SSI credentials and calendar config' })
     }
 
     // Only allow updating safe fields
@@ -430,26 +433,69 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   })
 
   // ============================================================
+  // RBAC Middleware — role-based access for tenant-scoped routes
+  // ============================================================
+
+  /**
+   * Middleware factory: verify the caller has an active membership in the tenant
+   * and at least one of the required roles. Sets req.tenant and req.membership.
+   *
+   * Usage:
+   *   requireTenantRole('owner')                          // owner only (billing, SSI creds)
+   *   requireTenantRole('owner', 'tenant_admin')          // owner or tenant_admin
+   *   requireTenantRole('owner', 'tenant_admin', 'discipline_admin')  // discipline ops
+   *   requireTenantRole('owner', 'tenant_admin', 'match_admin')       // template/scheduling
+   *   requireTenantRole(...TENANT_ROLES)                  // any member (read-only)
+   *
+   * Note: hasRequiredRole() handles implicit escalation:
+   *   - owner satisfies ALL roles
+   *   - tenant_admin satisfies all except owner-only actions
+   */
+  function requireTenantRole(...requiredRoles) {
+    return async (req, res, next) => {
+      const tenantId = req.params.tenantId || req.params.id
+      const tenant = await getTenant(tenantId)
+      if (!tenant) return res.status(404).json({ error: 'Tenant not found' })
+
+      // Check membership
+      const membership = await getTenantMembership(tenantId, req.account.id)
+
+      // Backward compatibility: if no membership exists but account owns the tenant,
+      // treat as owner (for tenants created before RBAC migration)
+      if (!membership && tenant.accountId === req.account.id) {
+        req.tenant = tenant
+        req.membership = { roles: ['owner'], id: null, tenantId, accountId: req.account.id }
+        return next()
+      }
+
+      if (!membership) {
+        return res.status(403).json({ error: 'Access denied' })
+      }
+
+      if (!hasRequiredRole(membership.roles, requiredRoles)) {
+        return res.status(403).json({ error: 'Insufficient permissions for this action' })
+      }
+
+      req.tenant = tenant
+      req.membership = membership
+      next()
+    }
+  }
+
+  // ============================================================
   // Discipline CRUD — nested under /tenants/:tenantId/disciplines
   // ============================================================
 
-  // Middleware: verify tenant ownership for discipline routes
-  async function requireTenantOwnership(req, res, next) {
-    const tenant = await getTenant(req.params.tenantId)
-    if (!tenant) return res.status(404).json({ error: 'Tenant not found' })
-    if (tenant.accountId !== req.account.id) return res.status(403).json({ error: 'Access denied' })
-    req.tenant = tenant
-    next()
-  }
-
   // GET /api/v1/platform/tenants/:tenantId/disciplines
-  router.get('/tenants/:tenantId/disciplines', requirePlatformAuth(), requireTenantOwnership, async (req, res) => {
+  // Any member can read disciplines
+  router.get('/tenants/:tenantId/disciplines', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res) => {
     const disciplines = await listTenantDisciplines(req.params.tenantId)
     res.json({ disciplines })
   })
 
   // POST /api/v1/platform/tenants/:tenantId/disciplines
-  router.post('/tenants/:tenantId/disciplines', requirePlatformAuth(), requireTenantOwnership, async (req, res, next) => {
+  // Requires: owner, tenant_admin, or discipline_admin
+  router.post('/tenants/:tenantId/disciplines', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'discipline_admin'), async (req, res, next) => {
     const { name, labelFi, labelEn, ssiGroupId, ssiOrganizerId } = req.body
     if (!name || name.trim().length < 2) {
       return res.status(400).json({ error: 'Discipline name is required (min 2 characters)' })
@@ -469,7 +515,8 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   })
 
   // GET /api/v1/platform/tenants/:tenantId/disciplines/:id
-  router.get('/tenants/:tenantId/disciplines/:id', requirePlatformAuth(), requireTenantOwnership, async (req, res) => {
+  // Any member can read
+  router.get('/tenants/:tenantId/disciplines/:id', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res) => {
     const discipline = await getDiscipline(req.params.id)
     if (!discipline || discipline.tenantId !== req.params.tenantId) {
       return res.status(404).json({ error: 'Discipline not found' })
@@ -478,7 +525,8 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   })
 
   // PATCH /api/v1/platform/tenants/:tenantId/disciplines/:id
-  router.patch('/tenants/:tenantId/disciplines/:id', requirePlatformAuth(), requireTenantOwnership, async (req, res, next) => {
+  // Requires: owner, tenant_admin, or discipline_admin
+  router.patch('/tenants/:tenantId/disciplines/:id', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'discipline_admin'), async (req, res, next) => {
     const discipline = await getDiscipline(req.params.id)
     if (!discipline || discipline.tenantId !== req.params.tenantId) {
       return res.status(404).json({ error: 'Discipline not found' })
@@ -504,7 +552,8 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   })
 
   // DELETE /api/v1/platform/tenants/:tenantId/disciplines/:id
-  router.delete('/tenants/:tenantId/disciplines/:id', requirePlatformAuth(), requireTenantOwnership, async (req, res) => {
+  // Requires: owner, tenant_admin, or discipline_admin
+  router.delete('/tenants/:tenantId/disciplines/:id', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'discipline_admin'), async (req, res) => {
     const discipline = await getDiscipline(req.params.id)
     if (!discipline || discipline.tenantId !== req.params.tenantId) {
       return res.status(404).json({ error: 'Discipline not found' })
@@ -524,8 +573,8 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   // ============================================================
 
   // GET /api/v1/platform/tenants/:tenantId/templates
-  // Optional query: ?disciplineId=dis_xxx to filter by discipline
-  router.get('/tenants/:tenantId/templates', requirePlatformAuth(), requireTenantOwnership, async (req, res) => {
+  // Any member can read templates
+  router.get('/tenants/:tenantId/templates', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res) => {
     const { disciplineId } = req.query
     const templates = disciplineId
       ? await listDisciplineTemplates(disciplineId)
@@ -534,7 +583,8 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   })
 
   // POST /api/v1/platform/tenants/:tenantId/templates
-  router.post('/tenants/:tenantId/templates', requirePlatformAuth(), requireTenantOwnership, async (req, res, next) => {
+  // Requires: owner, tenant_admin, or match_admin
+  router.post('/tenants/:tenantId/templates', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
     const { name, disciplineId, ssiSeedEventId, ssiSeedSnapshot, overrides, calendarTemplate, staffingRules } = req.body
     if (!name || name.trim().length < 2) {
       return res.status(400).json({ error: 'Template name is required (min 2 characters)' })
@@ -564,7 +614,8 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   })
 
   // GET /api/v1/platform/tenants/:tenantId/templates/:id
-  router.get('/tenants/:tenantId/templates/:id', requirePlatformAuth(), requireTenantOwnership, async (req, res) => {
+  // Any member can read
+  router.get('/tenants/:tenantId/templates/:id', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res) => {
     const template = await getMatchTemplate(req.params.id)
     if (!template || template.tenantId !== req.params.tenantId) {
       return res.status(404).json({ error: 'Template not found' })
@@ -573,7 +624,8 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   })
 
   // PATCH /api/v1/platform/tenants/:tenantId/templates/:id
-  router.patch('/tenants/:tenantId/templates/:id', requirePlatformAuth(), requireTenantOwnership, async (req, res, next) => {
+  // Requires: owner, tenant_admin, or match_admin
+  router.patch('/tenants/:tenantId/templates/:id', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
     const template = await getMatchTemplate(req.params.id)
     if (!template || template.tenantId !== req.params.tenantId) {
       return res.status(404).json({ error: 'Template not found' })
@@ -599,7 +651,8 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   })
 
   // DELETE /api/v1/platform/tenants/:tenantId/templates/:id
-  router.delete('/tenants/:tenantId/templates/:id', requirePlatformAuth(), requireTenantOwnership, async (req, res) => {
+  // Requires: owner, tenant_admin, or match_admin
+  router.delete('/tenants/:tenantId/templates/:id', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res) => {
     const template = await getMatchTemplate(req.params.id)
     if (!template || template.tenantId !== req.params.tenantId) {
       return res.status(404).json({ error: 'Template not found' })
@@ -612,6 +665,104 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
 
     log.info(`[platform] Template deleted: ${req.params.id} from tenant ${req.params.tenantId}`)
     res.json({ success: true })
+  })
+
+  // ============================================================
+  // Member Management — nested under /tenants/:tenantId/members
+  // Requires: owner or tenant_admin
+  // ============================================================
+
+  // GET /api/v1/platform/tenants/:tenantId/members
+  router.get('/tenants/:tenantId/members', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res) => {
+    const members = await listTenantMembers(req.params.tenantId)
+    res.json({ members })
+  })
+
+  // POST /api/v1/platform/tenants/:tenantId/members — Add a member
+  router.post('/tenants/:tenantId/members', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
+    const { accountId, roles } = req.body
+    if (!accountId) {
+      return res.status(400).json({ error: 'accountId is required' })
+    }
+    if (!roles || !Array.isArray(roles) || roles.length === 0) {
+      return res.status(400).json({ error: 'roles array is required (at least one role)' })
+    }
+
+    // Validate role names
+    const invalidRoles = roles.filter(r => !TENANT_ROLES.includes(r))
+    if (invalidRoles.length > 0) {
+      return res.status(400).json({ error: `Invalid roles: ${invalidRoles.join(', ')}` })
+    }
+
+    // tenant_admin cannot assign owner role
+    if (roles.includes('owner') && !hasRequiredRole(req.membership.roles, ['owner'])) {
+      return res.status(403).json({ error: 'Only an owner can assign the owner role' })
+    }
+
+    try {
+      const { memberId, member } = await addTenantMember({
+        tenantId: req.params.tenantId,
+        accountId,
+        roles,
+        invitedBy: req.account.id,
+      })
+      log.info(`[platform] Member added: ${accountId} → tenant ${req.params.tenantId} with roles [${roles}]`)
+      res.status(201).json({ success: true, member })
+    } catch (err) {
+      log.error('[platform] Add member failed:', err.message)
+      return next(new AppError('Failed to add member', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // PATCH /api/v1/platform/tenants/:tenantId/members/:memberId — Update roles
+  router.patch('/tenants/:tenantId/members/:memberId', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
+    const { roles } = req.body
+    if (!roles || !Array.isArray(roles) || roles.length === 0) {
+      return res.status(400).json({ error: 'roles array is required (at least one role)' })
+    }
+
+    const invalidRoles = roles.filter(r => !TENANT_ROLES.includes(r))
+    if (invalidRoles.length > 0) {
+      return res.status(400).json({ error: `Invalid roles: ${invalidRoles.join(', ')}` })
+    }
+
+    // tenant_admin cannot assign or remove owner role
+    if (roles.includes('owner') && !hasRequiredRole(req.membership.roles, ['owner'])) {
+      return res.status(403).json({ error: 'Only an owner can assign the owner role' })
+    }
+
+    try {
+      const updated = await updateMemberRoles(req.params.memberId, roles)
+      if (!updated) {
+        return res.status(404).json({ error: 'Membership not found' })
+      }
+      log.info(`[platform] Member roles updated: ${req.params.memberId} → [${roles}]`)
+      res.json({ success: true, member: updated })
+    } catch (err) {
+      if (err.message.includes('last owner')) {
+        return res.status(400).json({ error: err.message })
+      }
+      log.error('[platform] Update member roles failed:', err.message)
+      return next(new AppError('Failed to update member roles', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // DELETE /api/v1/platform/tenants/:tenantId/members/:memberId — Remove member
+  router.delete('/tenants/:tenantId/members/:memberId', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
+    try {
+      const removed = await removeTenantMember(req.params.memberId)
+      if (!removed) {
+        return res.status(404).json({ error: 'Membership not found' })
+      }
+      log.info(`[platform] Member removed: ${req.params.memberId} from tenant ${req.params.tenantId}`)
+      res.json({ success: true })
+    } catch (err) {
+      if (err.message.includes('last owner')) {
+        return res.status(400).json({ error: err.message })
+      }
+      log.error('[platform] Remove member failed:', err.message)
+      return next(new AppError('Failed to remove member', 500, 'INTERNAL_ERROR'))
+    }
   })
 
   return router

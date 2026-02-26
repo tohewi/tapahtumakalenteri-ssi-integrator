@@ -111,7 +111,69 @@ An instance of a template for a specific date. Created by the scheduling workflo
 | `created_by` | string | Account ID of who scheduled it |
 | `created_at` | timestamp | |
 
-### 2.6 Instructor (Future — Phase 2)
+### 2.6 Tenant Member (RBAC)
+
+Links an account to a tenant with one or more roles. Created automatically when a tenant is created (owner role) or via invitation by an admin.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | `mbr_` + 16 hex chars |
+| `tenant_id` | string | FK → Tenant |
+| `account_id` | string | FK → Account |
+| `roles` | string[] | One or more of: `owner`, `tenant_admin`, `discipline_admin`, `instructor_admin`, `match_admin`, `instructor` |
+| `invited_by` | string | FK → Account (null for auto-created owner) |
+| `status` | string | `active`, `invited`, `suspended` |
+| `created_at` | timestamp | |
+| `updated_at` | timestamp | |
+
+**Key behaviors:**
+- UNIQUE(tenant_id, account_id) — one membership per account per tenant
+- When a tenant is created, the creating account automatically gets `{owner}` membership (in same transaction)
+- Owner role is protected: cannot remove the last owner from a tenant
+- `tenant_admin` can assign/revoke all roles except `owner`
+- `owner` can assign any role including `owner` (ownership transfer)
+- A member can hold multiple roles simultaneously (e.g., `match_admin` + `instructor_admin`)
+
+#### Role Definitions
+
+| Role | Description | Permissions |
+|------|-------------|-------------|
+| `owner` | Tenant creator/billing contact | All permissions. Billing, SSI credentials, delete tenant. Implicit access to everything below |
+| `tenant_admin` | Organization administrator | Manage members & roles (except owner), tenant name, all operational permissions below. NOT billing or SSI credentials |
+| `discipline_admin` | Discipline manager | CRUD disciplines |
+| `instructor_admin` | Instructor manager | Manage & approve instructors, view instructor roster |
+| `match_admin` | Match operations | CRUD templates, schedule matches, view disciplines (read-only) |
+| `instructor` | Staff member | Read-only tenant info, self-register as match staff (director, quartermaster, instructor) |
+
+#### Permission Matrix
+
+| Action | owner | tenant_admin | discipline_admin | instructor_admin | match_admin | instructor |
+|--------|:-----:|:------------:|:----------------:|:----------------:|:-----------:|:----------:|
+| Billing & subscription | ✅ | | | | | |
+| SSI credentials | ✅ | | | | | |
+| Tenant name & settings | ✅ | ✅ | | | | |
+| Manage members & roles | ✅ | ✅ | | | | |
+| CRUD disciplines | ✅ | ✅ | ✅ | | | |
+| Manage instructors | ✅ | ✅ | | ✅ | | |
+| CRUD templates | ✅ | ✅ | | | ✅ | |
+| Schedule matches | ✅ | ✅ | | | ✅ | |
+| View disciplines (read) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| View tenant info (read) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Self-register as staff | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+#### Implications for Existing and Future Features
+
+- **All tenant-scoped routes** must check membership roles instead of `account_id` ownership
+- **Discipline routes**: require `owner`, `tenant_admin`, or `discipline_admin`
+- **Template routes**: require `owner`, `tenant_admin`, or `match_admin`
+- **Tenant detail/settings read**: any member role
+- **Tenant settings write (name)**: `owner` or `tenant_admin`
+- **SSI credentials write**: `owner` only
+- **Future instructor routes**: `owner`, `tenant_admin`, or `instructor_admin`
+- **Future scheduling routes**: `owner`, `tenant_admin`, or `match_admin`
+- **Dashboard tenant list**: must query `tenant_members` instead of `tenants.account_id`
+
+### 2.7 Instructor (Future — Phase 2)
 
 A person available for event staffing. Self-registers via the platform.
 
@@ -213,7 +275,9 @@ Every tenant has a subscription. The system enforces access based on subscriptio
 ## 4. Relationships
 
 ```
-Account 1 ──────* Tenant
+Account 1 ──────* Tenant          (via tenant_members)
+Account 1 ──────* Tenant Member
+Tenant  1 ──────* Tenant Member
 Tenant  1 ──────* Discipline
 Tenant  1 ──────* Instructor
 Discipline 1 ──* Event Template
@@ -222,7 +286,10 @@ Scheduled Event *──* Instructor  (via assigned_instructors)
 ```
 
 **Access rules:**
-- An account can only see/modify tenants it owns (`tenant.account_id = account.id`)
+- An account can only see/modify tenants where it has a membership in `tenant_members`
+- The membership's `roles` array determines what actions are allowed (see §2.6 Permission Matrix)
+- The `owner` role has implicit access to all permissions — no need to check specific roles
+- The `tenant_admin` role has implicit access to all operational permissions (not billing/SSI)
 - All operational data (disciplines, templates, events, instructors) is scoped to a tenant
 - Cross-tenant access is never allowed
 
@@ -270,6 +337,7 @@ All entity IDs use a type prefix + 16 random hex characters:
 | Discipline | `dis_` | `dis_1234567890abcdef` |
 | Template | `tpl_` | `tpl_abcdef1234567890` |
 | Event | `evt_` | `evt_fedcba0987654321` |
+| Member | `mbr_` | `mbr_9876543210fedcba` |
 | Instructor | `ins_` | `ins_0123456789abcdef` |
 
 Prefixed IDs make debugging easier (you can tell what kind of entity an ID refers to in logs, URLs, and database queries).
@@ -293,7 +361,8 @@ Prefixed IDs make debugging easier (you can tell what kind of entity an ID refer
 | **Phase 0** (current) | Account, Tenant, Subscription | PostgreSQL |
 | **Phase 1** | Discipline, Event Template, Scheduled Event | PostgreSQL |
 | **Phase 2** | Instructor | PostgreSQL |
-| **Phase 3** | Full multi-tenancy (user invitations, roles) | PostgreSQL |
+| **Phase 2.5** | Tenant Members (RBAC) — roles, permissions, membership | PostgreSQL |
+| **Phase 3** | Full multi-tenancy (invitation flow, role management UI) | PostgreSQL |
 | **Phase 4** | Notification preferences, audit log | PostgreSQL |
 
 The database schema grows incrementally. Each phase adds tables via migration scripts. No existing tables are altered destructively.

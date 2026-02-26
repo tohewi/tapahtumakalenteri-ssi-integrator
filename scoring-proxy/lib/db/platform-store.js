@@ -1,12 +1,15 @@
 // ============================================================
 // Platform Data Store
 //
-// Persistent data (accounts, tenants) → PostgreSQL
+// Persistent data (accounts, tenants, memberships) → PostgreSQL
 // Ephemeral data (sessions) → Redis
 //
 // PostgreSQL tables:
-//   accounts  — id, email, name, password_hash, tenants[], timestamps
-//   tenants   — id, account_id, name, subscription{}, config, timestamps
+//   accounts        — id, email, name, password_hash, tenants[], timestamps
+//   tenants         — id, account_id, name, subscription{}, config, timestamps
+//   tenant_members  — id, tenant_id, account_id, roles[], status, timestamps
+//   disciplines     — id, tenant_id, name, labels, SSI refs, timestamps
+//   match_templates — id, tenant_id, discipline_id, name, JSONB config
 //
 // Redis keys:
 //   platform:session:{id} — platform login session (24h TTL)
@@ -19,6 +22,42 @@ import { getRedisClient } from '../session/redis.js'
 import { NotFoundError } from '../errors/AppError.js'
 
 const BCRYPT_ROUNDS = 12
+
+// ---- Tenant Roles (RBAC) ----
+// See docs/design/platform-data-model.md §2.6 for full permission matrix.
+
+/** All valid tenant member roles */
+export const TENANT_ROLES = ['owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor']
+
+/** Roles that inherit ALL operational permissions (but NOT billing/SSI) */
+const ADMIN_ROLES = new Set(['owner', 'tenant_admin'])
+
+/**
+ * Check if a membership's roles satisfy the required roles for an action.
+ * - `owner` implicitly satisfies every role
+ * - `tenant_admin` implicitly satisfies every operational role (not billing/SSI)
+ *
+ * @param {string[]} memberRoles - roles the member actually has
+ * @param {string[]} requiredRoles - any one of these must match
+ * @returns {boolean}
+ */
+export function hasRequiredRole(memberRoles, requiredRoles) {
+  if (!memberRoles || memberRoles.length === 0) return false
+  if (!requiredRoles || requiredRoles.length === 0) return false
+
+  // owner can do everything
+  if (memberRoles.includes('owner')) return true
+
+  // tenant_admin can do everything except owner-only actions (billing, SSI creds)
+  // Owner-only actions are identified by requiring ONLY 'owner' in requiredRoles
+  if (memberRoles.includes('tenant_admin')) {
+    const ownerOnly = requiredRoles.length === 1 && requiredRoles[0] === 'owner'
+    if (!ownerOnly) return true
+  }
+
+  // Direct role match
+  return memberRoles.some(r => requiredRoles.includes(r))
+}
 
 // Allowed fields for updateAccount: maps API key → DB column name
 const ACCOUNT_UPDATE_FIELDS = { name: 'name', email: 'email', tenants: 'tenants' }
@@ -343,6 +382,14 @@ export async function createAccountWithTenant({ email, password, name, organizat
       [JSON.stringify([tenantId]), accountId]
     )
 
+    // Create owner membership — the creator is automatically the owner
+    const memberId = generateId('mbr')
+    await client.query(
+      `INSERT INTO tenant_members (id, tenant_id, account_id, roles, invited_by, status)
+       VALUES ($1, $2, $3, $4, NULL, 'active')`,
+      [memberId, tenantId, accountId, ['owner']]
+    )
+
     return {
       account: rowToAccount(accountRows[0]),
       tenant: rowToTenant(tenantRows[0]),
@@ -404,6 +451,14 @@ export async function createTenant({ accountId, name }) {
       [JSON.stringify([tenantId]), accountId]
     )
 
+    // Create owner membership — the creator is automatically the owner
+    const memberId = generateId('mbr')
+    await client.query(
+      `INSERT INTO tenant_members (id, tenant_id, account_id, roles, invited_by, status)
+       VALUES ($1, $2, $3, $4, NULL, 'active')`,
+      [memberId, tenantId, accountId, ['owner']]
+    )
+
     return rowToTenant(rows[0])
   })
 
@@ -423,11 +478,16 @@ export async function getTenant(tenantId) {
 }
 
 /**
- * List all tenants for an account.
+ * List all tenants where the account has an active membership.
+ * Falls back to account_id ownership for backward compatibility with
+ * tenants created before the RBAC migration.
  */
 export async function listAccountTenants(accountId) {
   const { rows } = await query(
-    'SELECT * FROM tenants WHERE account_id = $1 ORDER BY created_at',
+    `SELECT DISTINCT t.* FROM tenants t
+     LEFT JOIN tenant_members tm ON tm.tenant_id = t.id AND tm.account_id = $1 AND tm.status = 'active'
+     WHERE t.account_id = $1 OR tm.id IS NOT NULL
+     ORDER BY t.created_at`,
     [accountId]
   )
   return rows.map(rowToTenant)
@@ -483,6 +543,174 @@ export async function updateTenant(tenantId, updates) {
   )
   if (rows.length === 0) return null
   return rowToTenant(rows[0])
+}
+
+// ---- Tenant Membership CRUD (RBAC) ----
+
+/**
+ * Convert a PostgreSQL tenant_members row to API format.
+ */
+function rowToMember(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    accountId: row.account_id,
+    roles: row.roles || [],
+    invitedBy: row.invited_by || null,
+    status: row.status,
+    createdAt: new Date(row.created_at).getTime(),
+    updatedAt: new Date(row.updated_at).getTime(),
+  }
+}
+
+/**
+ * Get the membership for an account in a specific tenant.
+ * Returns null if no active membership exists.
+ * @param {string} tenantId
+ * @param {string} accountId
+ * @returns {object|null} membership with roles array
+ */
+export async function getTenantMembership(tenantId, accountId) {
+  const { rows } = await query(
+    `SELECT * FROM tenant_members
+     WHERE tenant_id = $1 AND account_id = $2 AND status = 'active'`,
+    [tenantId, accountId]
+  )
+  if (rows.length === 0) return null
+  return rowToMember(rows[0])
+}
+
+/**
+ * List all active members of a tenant.
+ * Joins with accounts to include member name and email.
+ */
+export async function listTenantMembers(tenantId) {
+  const { rows } = await query(
+    `SELECT tm.*, a.name AS account_name, a.email AS account_email
+     FROM tenant_members tm
+     JOIN accounts a ON a.id = tm.account_id
+     WHERE tm.tenant_id = $1 AND tm.status = 'active'
+     ORDER BY tm.created_at`,
+    [tenantId]
+  )
+  return rows.map(row => ({
+    ...rowToMember(row),
+    accountName: row.account_name,
+    accountEmail: row.account_email,
+  }))
+}
+
+/**
+ * Add a member to a tenant with specified roles.
+ * @param {object} params - { tenantId, accountId, roles, invitedBy }
+ * @returns {{ memberId, member }}
+ */
+export async function addTenantMember({ tenantId, accountId, roles, invitedBy }) {
+  // Validate roles
+  for (const role of roles) {
+    if (!TENANT_ROLES.includes(role)) {
+      throw new Error(`addTenantMember: invalid role '${role}'`)
+    }
+  }
+
+  const memberId = generateId('mbr')
+  const { rows } = await query(
+    `INSERT INTO tenant_members (id, tenant_id, account_id, roles, invited_by, status)
+     VALUES ($1, $2, $3, $4, $5, 'active')
+     ON CONFLICT (tenant_id, account_id) DO UPDATE
+       SET roles = $4, invited_by = $5, status = 'active', updated_at = NOW()
+     RETURNING *`,
+    [memberId, tenantId, accountId, roles, invitedBy || null]
+  )
+  return { memberId: rows[0].id, member: rowToMember(rows[0]) }
+}
+
+/**
+ * Update the roles for an existing tenant member.
+ * Enforces last-owner protection: cannot remove the last owner.
+ *
+ * @param {string} memberId
+ * @param {string[]} newRoles
+ * @returns {object} updated membership
+ */
+export async function updateMemberRoles(memberId, newRoles) {
+  // Validate roles
+  for (const role of newRoles) {
+    if (!TENANT_ROLES.includes(role)) {
+      throw new Error(`updateMemberRoles: invalid role '${role}'`)
+    }
+  }
+  if (newRoles.length === 0) {
+    throw new Error('updateMemberRoles: at least one role is required')
+  }
+
+  // Get current membership to check last-owner protection
+  const { rows: currentRows } = await query(
+    'SELECT * FROM tenant_members WHERE id = $1',
+    [memberId]
+  )
+  if (currentRows.length === 0) throw new NotFoundError('Membership')
+
+  const current = currentRows[0]
+  const hadOwner = (current.roles || []).includes('owner')
+  const willHaveOwner = newRoles.includes('owner')
+
+  // If removing owner role, check that another owner exists
+  if (hadOwner && !willHaveOwner) {
+    const { rows: ownerRows } = await query(
+      `SELECT id FROM tenant_members
+       WHERE tenant_id = $1 AND 'owner' = ANY(roles) AND status = 'active' AND id != $2`,
+      [current.tenant_id, memberId]
+    )
+    if (ownerRows.length === 0) {
+      throw new Error('Cannot remove the last owner from a tenant')
+    }
+  }
+
+  const { rows } = await query(
+    `UPDATE tenant_members SET roles = $1, updated_at = NOW()
+     WHERE id = $2 RETURNING *`,
+    [newRoles, memberId]
+  )
+  if (rows.length === 0) return null
+  return rowToMember(rows[0])
+}
+
+/**
+ * Remove a member from a tenant (sets status to 'suspended').
+ * Enforces last-owner protection.
+ *
+ * @param {string} memberId
+ * @returns {boolean} true if removed
+ */
+export async function removeTenantMember(memberId) {
+  const { rows: currentRows } = await query(
+    'SELECT * FROM tenant_members WHERE id = $1',
+    [memberId]
+  )
+  if (currentRows.length === 0) return false
+
+  const current = currentRows[0]
+
+  // Last-owner protection
+  if ((current.roles || []).includes('owner')) {
+    const { rows: ownerRows } = await query(
+      `SELECT id FROM tenant_members
+       WHERE tenant_id = $1 AND 'owner' = ANY(roles) AND status = 'active' AND id != $2`,
+      [current.tenant_id, memberId]
+    )
+    if (ownerRows.length === 0) {
+      throw new Error('Cannot remove the last owner from a tenant')
+    }
+  }
+
+  const { rows } = await query(
+    `UPDATE tenant_members SET status = 'suspended', updated_at = NOW()
+     WHERE id = $1 RETURNING id`,
+    [memberId]
+  )
+  return rows.length > 0
 }
 
 // ---- Discipline CRUD ----
