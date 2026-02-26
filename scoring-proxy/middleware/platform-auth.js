@@ -8,6 +8,7 @@
 
 import { getPlatformSession, getAccount } from '../lib/db/platform-store.js'
 import { log } from '../lib/logger.js'
+import { AppError } from '../lib/errors/AppError.js'
 
 const PLATFORM_COOKIE = 'platform_sid'
 
@@ -47,7 +48,7 @@ export function requirePlatformAuth() {
       next()
     } catch (err) {
       log.error('[platform-auth] Middleware error:', err.message)
-      res.status(500).json({ error: 'Authentication error' })
+      return next(new AppError('Authentication error', 500, 'INTERNAL_ERROR'))
     }
   }
 }
