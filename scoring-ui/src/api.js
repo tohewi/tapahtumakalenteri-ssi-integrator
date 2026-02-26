@@ -60,28 +60,28 @@ export async function getUserInfo() {
 }
 
 export async function searchCups(search) {
-  const resp = await fetch(`${API_BASE}/cups?search=${encodeURIComponent(search)}`, { credentials: 'include' })
+  const resp = await fetch(`${SCORING_BASE}/cups?search=${encodeURIComponent(search)}`, { credentials: 'include' })
   const data = await handleResponse(resp)
   return data.cups || []
 }
 
 export async function getCup(cupId) {
-  const resp = await fetch(`${API_BASE}/cup/${cupId}`, { credentials: 'include' })
+  const resp = await fetch(`${SCORING_BASE}/cup/${cupId}`, { credentials: 'include' })
   return handleResponse(resp)
 }
 
 export async function getMatch(matchId) {
-  const resp = await fetch(`${API_BASE}/match/${matchId}`, { credentials: 'include' })
+  const resp = await fetch(`${SCORING_BASE}/match/${matchId}`, { credentials: 'include' })
   return handleResponse(resp)
 }
 
 export async function getCompetitor(competitorId) {
-  const resp = await fetch(`${API_BASE}/competitor/${competitorId}`, { credentials: 'include' })
+  const resp = await fetch(`${SCORING_BASE}/competitor/${competitorId}`, { credentials: 'include' })
   return handleResponse(resp)
 }
 
 export async function submitScore(competitorId, scores, options = {}) {
-  const resp = await fetch(`${API_BASE}/competitor/${competitorId}/score`, {
+  const resp = await fetch(`${SCORING_BASE}/competitor/${competitorId}/score`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -96,7 +96,7 @@ export async function submitScore(competitorId, scores, options = {}) {
 }
 
 export async function searchMatches(search) {
-  const resp = await fetch(`${API_BASE}/matches?search=${encodeURIComponent(search)}`, { credentials: 'include' })
+  const resp = await fetch(`${SCORING_BASE}/matches?search=${encodeURIComponent(search)}`, { credentials: 'include' })
   const data = await handleResponse(resp)
   return data.matches || []
 }
