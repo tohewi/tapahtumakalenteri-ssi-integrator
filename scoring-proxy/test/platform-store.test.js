@@ -8,6 +8,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { _setClient } from '../lib/session/redis.js'
 import { _setPool } from '../lib/db/postgres.js'
+import { NotFoundError } from '../lib/errors/AppError.js'
 import {
   createAccount,
   authenticateAccount,
@@ -49,13 +50,35 @@ class TestPgPool {
   constructor() {
     this.accounts = new Map()
     this.tenants = new Map()
+    this.transactionCalls = [] // tracks BEGIN/COMMIT/ROLLBACK for assertions
+  }
+
+  /**
+   * Support connect() for transaction tests.
+   * Returns a lightweight client that delegates to pool.query() and
+   * records BEGIN/COMMIT/ROLLBACK calls for test assertions.
+   */
+  async connect() {
+    const pool = this
+    return {
+      query: async (text, params) => {
+        const sql = text.replace(/\s+/g, ' ').trim()
+        // Record but ignore transaction control statements
+        if (/^(BEGIN|COMMIT|ROLLBACK)$/i.test(sql)) {
+          pool.transactionCalls.push(sql)
+          return { rows: [] }
+        }
+        return pool.query(text, params)
+      },
+      release: () => {},
+    }
   }
 
   async query(text, params = []) {
     const sql = text.replace(/\s+/g, ' ').trim()
 
     // SELECT id FROM accounts WHERE LOWER(email) = $1
-    if (sql.startsWith('SELECT id FROM accounts')) {
+    if (sql.startsWith('SELECT id FROM accounts WHERE LOWER')) {
       const email = params[0]
       for (const row of this.accounts.values()) {
         if (row.email.toLowerCase() === email.toLowerCase()) {
@@ -63,6 +86,12 @@ class TestPgPool {
         }
       }
       return { rows: [] }
+    }
+
+    // SELECT id FROM accounts WHERE id = $1 FOR UPDATE (transaction lock)
+    if (sql.startsWith('SELECT id FROM accounts WHERE id')) {
+      const row = this.accounts.get(params[0])
+      return { rows: row ? [{ id: row.id }] : [] }
     }
 
     // INSERT INTO accounts
@@ -184,8 +213,11 @@ class TestPgPool {
 
 // ---- Setup ----
 
+let testPool
+
 beforeEach(() => {
-  _setPool(new TestPgPool())
+  testPool = new TestPgPool()
+  _setPool(testPool)
   _setClient(new TestRedisStore())
 })
 
@@ -313,6 +345,36 @@ describe('createTenant', () => {
 
     const account = await getAccount(accountId)
     expect(account.tenants).toHaveLength(2)
+  })
+
+  it('does not lose tenant IDs under concurrent creation (regression: race condition)', async () => {
+    // Simulate two concurrent createTenant calls racing to append to the same account.
+    // Both must appear in the account's tenants list — no update should be silently lost.
+    const { accountId } = await createAccount({ email: 'race@test.com', password: 'pass1234', name: 'Race' })
+    const [r1, r2] = await Promise.all([
+      createTenant({ accountId, name: 'RaceOrg1' }),
+      createTenant({ accountId, name: 'RaceOrg2' }),
+    ])
+
+    const account = await getAccount(accountId)
+    expect(account.tenants).toContain(r1.tenantId)
+    expect(account.tenants).toContain(r2.tenantId)
+    expect(account.tenants).toHaveLength(2)
+  })
+
+  it('wraps tenant creation in a transaction (BEGIN + COMMIT)', async () => {
+    const { accountId } = await createAccount({ email: 'txn@test.com', password: 'pass1234', name: 'Txn' })
+    testPool.transactionCalls = []
+    await createTenant({ accountId, name: 'TxnOrg' })
+    expect(testPool.transactionCalls).toContain('BEGIN')
+    expect(testPool.transactionCalls).toContain('COMMIT')
+    expect(testPool.transactionCalls).not.toContain('ROLLBACK')
+  })
+
+  it('throws NotFoundError when account does not exist', async () => {
+    const err = await createTenant({ accountId: 'acc_nonexistent', name: 'Ghost' }).catch(e => e)
+    expect(err).toBeInstanceOf(NotFoundError)
+    expect(err.message).toMatch(/not found/i)
   })
 })
 

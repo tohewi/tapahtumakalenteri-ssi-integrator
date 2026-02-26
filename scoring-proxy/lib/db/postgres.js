@@ -114,6 +114,34 @@ export async function query(text, params) {
 }
 
 /**
+ * Execute a callback inside a database transaction using row-level locking.
+ * The callback receives a pg Client and must use it for all queries.
+ * Automatically commits on success and rolls back on error.
+ * Uses the default READ COMMITTED isolation level; callers can use
+ * SELECT ... FOR UPDATE inside the callback to lock individual rows.
+ *
+ * @param {(client: pg.PoolClient) => Promise<T>} callback
+ * @returns {Promise<T>}
+ */
+export async function withTransaction(callback) {
+  if (!pool) {
+    throw new Error('PostgreSQL not initialized. Call initPostgres() first or set DATABASE_URL.')
+  }
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const result = await callback(client)
+    await client.query('COMMIT')
+    return result
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
+/**
  * Check if PostgreSQL is available.
  */
 export function isPostgresAvailable() {
