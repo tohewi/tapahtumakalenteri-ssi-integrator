@@ -23,6 +23,80 @@ const BCRYPT_ROUNDS = 12
 // Allowed fields for updateAccount: maps API key → DB column name
 const ACCOUNT_UPDATE_FIELDS = { name: 'name', tenants: 'tenants' }
 
+// ---- SSI Credential Encryption (AES-256-GCM) ----
+//
+// SSI credentials (email, password, API key) are sensitive secrets. They are
+// encrypted with AES-256-GCM before being written to the database, and
+// decrypted transparently when read back. The encryption key must be set via
+// the PLATFORM_CREDENTIALS_KEY environment variable (64 hex characters = 32 bytes).
+//
+// Storage format stored in the ssi_credentials JSONB column:
+//   { iv: "<24-char hex>", tag: "<32-char hex>", data: "<hex ciphertext>" }
+
+const CRED_ALGO = 'aes-256-gcm'
+const CRED_IV_BYTES = 12 // 96-bit IV recommended for GCM
+
+/**
+ * Return the 32-byte AES key from PLATFORM_CREDENTIALS_KEY env var.
+ * Throws if the variable is missing or the wrong length.
+ */
+function getCredentialKey() {
+  const keyHex = process.env.PLATFORM_CREDENTIALS_KEY
+  if (!keyHex) {
+    throw new Error(
+      'PLATFORM_CREDENTIALS_KEY environment variable is required for SSI credential encryption'
+    )
+  }
+  const key = Buffer.from(keyHex, 'hex')
+  if (key.length !== 32) {
+    throw new Error(
+      'PLATFORM_CREDENTIALS_KEY must be exactly 64 hex characters (32 bytes)'
+    )
+  }
+  return key
+}
+
+/**
+ * Encrypt SSI credentials for database storage.
+ * @param {object} credentials - e.g. { email, password, apiKey }
+ * @returns {{ iv: string, tag: string, data: string }} encrypted envelope
+ */
+function encryptCredentials(credentials) {
+  if (credentials === null || credentials === undefined || typeof credentials !== 'object') {
+    throw new Error('encryptCredentials: credentials must be a non-null object')
+  }
+  const key = getCredentialKey()
+  const iv = crypto.randomBytes(CRED_IV_BYTES)
+  const cipher = crypto.createCipheriv(CRED_ALGO, key, iv)
+  const plaintext = JSON.stringify(credentials)
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()])
+  return {
+    iv: iv.toString('hex'),
+    tag: cipher.getAuthTag().toString('hex'),
+    data: encrypted.toString('hex'),
+  }
+}
+
+/**
+ * Decrypt SSI credentials from a stored envelope.
+ * @param {{ iv: string, tag: string, data: string }} envelope
+ * @returns {object} decrypted credentials
+ */
+function decryptCredentials(envelope) {
+  if (!envelope || typeof envelope.iv !== 'string' ||
+      typeof envelope.tag !== 'string' || typeof envelope.data !== 'string') {
+    throw new Error('decryptCredentials: malformed envelope — expected { iv, tag, data } strings')
+  }
+  const key = getCredentialKey()
+  const iv = Buffer.from(envelope.iv, 'hex')
+  const tag = Buffer.from(envelope.tag, 'hex')
+  const data = Buffer.from(envelope.data, 'hex')
+  const decipher = crypto.createDecipheriv(CRED_ALGO, key, iv)
+  decipher.setAuthTag(tag)
+  const decrypted = Buffer.concat([decipher.update(data), decipher.final()])
+  return JSON.parse(decrypted.toString('utf8'))
+}
+
 // ---- Helpers ----
 
 function generateId(prefix) {
@@ -49,15 +123,20 @@ function rowToAccount(row) {
 
 /**
  * Convert a PostgreSQL tenant row to the API format.
+ * ssi_credentials is stored as an encrypted envelope and decrypted here.
  */
 function rowToTenant(row) {
   if (!row) return null
+  let ssiCredentials = null
+  if (row.ssi_credentials) {
+    ssiCredentials = decryptCredentials(row.ssi_credentials)
+  }
   return {
     id: row.id,
     accountId: row.account_id,
     name: row.name,
     subscription: row.subscription || {},
-    ssiCredentials: row.ssi_credentials || null,
+    ssiCredentials,
     calendarConfig: row.calendar_config || null,
     disciplines: row.disciplines || [],
     createdAt: new Date(row.created_at).getTime(),
@@ -342,7 +421,13 @@ export async function updateTenant(tenantId, updates) {
 
   for (const [key, column] of Object.entries(allowedFields)) {
     if (updates[key] !== undefined) {
-      const value = typeof updates[key] === 'object' ? JSON.stringify(updates[key]) : updates[key]
+      let value
+      if (key === 'ssiCredentials' && updates[key] !== null) {
+        // Encrypt SSI credentials before storing — see encryptCredentials()
+        value = JSON.stringify(encryptCredentials(updates[key]))
+      } else {
+        value = typeof updates[key] === 'object' ? JSON.stringify(updates[key]) : updates[key]
+      }
       setClauses.push(`${column} = $${paramIndex}`)
       params.push(value)
       paramIndex++
