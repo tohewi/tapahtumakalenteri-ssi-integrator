@@ -508,13 +508,23 @@ function DisciplinesSection({ tenantId }) {
 
 // ---- Templates Section ----
 
+// Parse SSI event URL → { eventType, eventId, url } or null
+// Supports: https://shootnscoreit.com/event/{type}/{id}/
+const SSI_EVENT_URL_RE = /shootnscoreit\.com\/event\/(\d+)\/(\d+)/
+function parseSsiEventUrl(input) {
+  if (!input) return null
+  const m = input.match(SSI_EVENT_URL_RE)
+  if (!m) return null
+  return { eventType: m[1], eventId: m[2] }
+}
+
 function TemplatesSection({ tenantId }) {
   const [templates, setTemplates] = useState([])
   const [disciplines, setDisciplines] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
-  const [form, setForm] = useState({ name: '', disciplineId: '', ssiSeedEventId: '' })
+  const [form, setForm] = useState({ name: '', disciplineId: '', ssiSeedEventUrl: '' })
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState(null)
   const [expandedId, setExpandedId] = useState(null)
@@ -536,7 +546,7 @@ function TemplatesSection({ tenantId }) {
   }, [tenantId])
 
   function resetForm() {
-    setForm({ name: '', disciplineId: '', ssiSeedEventId: '' })
+    setForm({ name: '', disciplineId: '', ssiSeedEventUrl: '' })
     setShowForm(false)
     setEditingId(null)
     setStatus(null)
@@ -546,7 +556,7 @@ function TemplatesSection({ tenantId }) {
     setForm({
       name: tpl.name,
       disciplineId: tpl.disciplineId,
-      ssiSeedEventId: tpl.ssiSeedEventId || '',
+      ssiSeedEventUrl: tpl.ssiSeedEventId || '',
     })
     setEditingId(tpl.id)
     setShowForm(true)
@@ -567,10 +577,16 @@ function TemplatesSection({ tenantId }) {
     setSaving(true)
     setStatus(null)
     try {
+      const url = form.ssiSeedEventUrl.trim()
+      if (!url || !parseSsiEventUrl(url)) {
+        setStatus({ type: 'error', message: 'Valid SSI event URL is required (e.g. https://shootnscoreit.com/event/136/160/)' })
+        setSaving(false)
+        return
+      }
       const payload = {
         name: form.name.trim(),
         disciplineId: form.disciplineId,
-        ssiSeedEventId: form.ssiSeedEventId.trim() || null,
+        ssiSeedEventId: url,
       }
 
       if (editingId) {
@@ -635,7 +651,9 @@ function TemplatesSection({ tenantId }) {
                         </span>
                       </div>
                       <div className="text-xs text-gray-400">
-                        {tpl.ssiSeedEventId ? `SSI Seed: #${tpl.ssiSeedEventId}` : 'No SSI seed linked'}
+                        {tpl.ssiSeedEventId
+                          ? <a href={tpl.ssiSeedEventId.startsWith('http') ? tpl.ssiSeedEventId : `https://shootnscoreit.com/event/${tpl.ssiSeedEventId}/`} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline" onClick={e => e.stopPropagation()}>SSI Seed Event</a>
+                          : 'No SSI seed linked'}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -689,20 +707,33 @@ function TemplatesSection({ tenantId }) {
                 </div>
               </div>
               <div>
-                <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">SSI Seed Event ID</label>
+                <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">SSI Event URL *</label>
                 <input
-                  type="text" value={form.ssiSeedEventId} onChange={e => setForm(f => ({ ...f, ssiSeedEventId: e.target.value }))}
-                  placeholder="Optional — SSI event ID to use as blueprint"
-                  className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
+                  type="url" value={form.ssiSeedEventUrl} onChange={e => setForm(f => ({ ...f, ssiSeedEventUrl: e.target.value }))}
+                  required
+                  placeholder="https://shootnscoreit.com/event/136/160/"
+                  className={`w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none ${
+                    form.ssiSeedEventUrl && !parseSsiEventUrl(form.ssiSeedEventUrl) ? 'border-red-300' : ''
+                  }`}
                 />
+                {form.ssiSeedEventUrl && parseSsiEventUrl(form.ssiSeedEventUrl) && (
+                  <p className="text-xs text-green-600 mt-1">
+                    Event type: {parseSsiEventUrl(form.ssiSeedEventUrl).eventType}, Event ID: {parseSsiEventUrl(form.ssiSeedEventUrl).eventId}
+                  </p>
+                )}
+                {form.ssiSeedEventUrl && !parseSsiEventUrl(form.ssiSeedEventUrl) && (
+                  <p className="text-xs text-red-500 mt-1">
+                    URL must be a ShootNScoreIt event link (e.g. https://shootnscoreit.com/event/136/160/)
+                  </p>
+                )}
                 <p className="text-xs text-gray-400 mt-1">
-                  The SSI event whose structure will be cloned when creating new events from this template.
+                  Open the seed event in SSI and paste its URL here. The event structure will be used as a blueprint.
                 </p>
               </div>
               <div className="flex items-center justify-end gap-2 pt-1">
                 <button type="button" onClick={resetForm} className="text-sm text-gray-500 hover:text-gray-700">Cancel</button>
                 <button
-                  type="submit" disabled={saving || form.name.trim().length < 2 || !form.disciplineId}
+                  type="submit" disabled={saving || form.name.trim().length < 2 || !form.disciplineId || !parseSsiEventUrl(form.ssiSeedEventUrl)}
                   className="bg-sky-600 text-white px-4 py-1.5 rounded-md text-sm font-semibold hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {saving ? 'Saving...' : editingId ? 'Update' : 'Create'}
