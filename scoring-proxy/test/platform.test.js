@@ -51,8 +51,30 @@ class TestPgPool {
     this.tenants = new Map()
   }
 
+  /**
+   * Support connect() for withTransaction calls in createAccountWithTenant.
+   * Returns a lightweight client that delegates to pool.query() and
+   * ignores transaction control statements (BEGIN/COMMIT/ROLLBACK).
+   */
+  async connect() {
+    const pool = this
+    return {
+      query: async (text, params) => {
+        const sql = text.replace(/\s+/g, ' ').trim()
+        if (/^(BEGIN|COMMIT|ROLLBACK)$/i.test(sql)) return { rows: [] }
+        return pool.query(text, params)
+      },
+      release: () => {},
+    }
+  }
+
   async query(text, params = []) {
     const sql = text.replace(/\s+/g, ' ').trim()
+
+    if (sql.startsWith('SELECT id FROM accounts WHERE id')) {
+      const row = this.accounts.get(params[0])
+      return { rows: row ? [{ id: row.id }] : [] }
+    }
 
     if (sql.startsWith('SELECT id FROM accounts')) {
       const email = params[0]
