@@ -45,10 +45,6 @@ query EventDiscovery($ct: Int!, $id: String!) {
     component_matches {
       __typename
       id
-      squads {
-        __typename
-        id
-      }
     }
     squads {
       __typename
@@ -81,7 +77,7 @@ const SQUAD_TYPE_FIELDS = {
  * @param {string} squadTypeName - __typename of squad nodes (first found)
  * @returns {string} GraphQL query string
  */
-function buildStructureQuery(isCup, eventTypeName, squadTypeName) {
+function buildStructureQuery(isCup, eventTypeName, matchTypeName, squadTypeName) {
   const serieFields = SERIE_TYPE_FIELDS[eventTypeName] || ''
   const squadFields = SQUAD_TYPE_FIELDS[squadTypeName] || 'name starts'
 
@@ -91,6 +87,8 @@ function buildStructureQuery(isCup, eventTypeName, squadTypeName) {
 
   const squadFragment = `... on ${squadTypeName || 'GenericSquadNode'} { ${squadFields} }`
 
+  // component_matches squads field is on specific node types, not ComponentMatchInterface.
+  // Use inline fragment on the discovered match __typename to access squads.
   const matchesBlock = isCup ? `
     component_matches {
       id
@@ -102,11 +100,13 @@ function buildStructureQuery(isCup, eventTypeName, squadTypeName) {
       get_content_type_key
       description
       information
-      squads {
-        id
-        max_competitors
-        ${squadFragment}
-      }
+      ${matchTypeName ? `... on ${matchTypeName} {
+        squads {
+          id
+          max_competitors
+          ${squadFragment}
+        }
+      }` : ''}
     }` : ''
 
   return `
@@ -204,17 +204,15 @@ export async function ssiFetchEventStructure({ ssiEventUrl, credentials }) {
   const eventTypeName = discovery.event.__typename
   const isCup = (discovery.event.component_matches || []).length > 0
 
-  // Find first squad __typename (from matches or event-level squads)
-  const allSquads = [
-    ...(discovery.event.squads || []),
-    ...(discovery.event.component_matches || []).flatMap(m => m.squads || []),
-  ]
-  const squadTypeName = allSquads[0]?.__typename || 'GenericSquadNode'
+  // Find squad __typename from event-level squads (match squads not on ComponentMatchInterface)
+  const squadTypeName = (discovery.event.squads || [])[0]?.__typename || 'GenericSquadNode'
+  const matchTypeName = (discovery.event.component_matches || [])[0]?.__typename || null
 
-  log.info(`[seed-import] Discovered: event=${eventTypeName}, squad=${squadTypeName}, isCup=${isCup}`)
+  log.info(`[seed-import] Discovered: event=${eventTypeName}, match=${matchTypeName}, squad=${squadTypeName}, isCup=${isCup}`)
 
   // Step 2: Type-specific structure query
-  const structureQuery = buildStructureQuery(isCup, eventTypeName, squadTypeName)
+
+  const structureQuery = buildStructureQuery(isCup, eventTypeName, matchTypeName, squadTypeName)
   const data = await ssiGraphQL(jwt, structureQuery, vars)
 
   if (!data.event) {
