@@ -138,6 +138,8 @@ jobs:
           PR_NUMBER="${{ github.event.pull_request.number }}"
           DB_NAME="turres-ssi-tools-pr-${PR_NUMBER}-db"
           KV_NAME="turres-ssi-tools-pr-${PR_NUMBER}-redis"
+          PG_RETRIES=5   # × 10s = 50s max wait for Postgres connection string
+          KV_RETRIES=3   # × 5s  = 15s max wait for Redis connection string
 
           # --- Postgres ---
           PG_LIST=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" \
@@ -167,13 +169,16 @@ jobs:
           if [ -n "$PG_ID" ] && [ "$PG_ID" != "null" ]; then
             echo "postgres_id=${PG_ID}" >> $GITHUB_OUTPUT
             # Poll for connection string (DB may still be initialising)
-            for i in 1 2 3 4 5; do
+            for i in $(seq 1 $PG_RETRIES); do
               CONN=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" \
                 "https://api.render.com/v1/postgres/${PG_ID}/connection-info")
               DATABASE_URL=$(echo "$CONN" | jq -r '.externalConnectionString // empty' 2>/dev/null || echo "")
               [ -n "$DATABASE_URL" ] && break
               sleep 10
             done
+            if [ -z "$DATABASE_URL" ]; then
+              echo "::warning::Postgres ${PG_ID} did not return a connection string after 50s. DATABASE_URL will not be set."
+            fi
             echo "database_url=${DATABASE_URL}" >> $GITHUB_OUTPUT
           fi
 
@@ -204,9 +209,17 @@ jobs:
           REDIS_URL=""
           if [ -n "$KV_ID" ] && [ "$KV_ID" != "null" ]; then
             echo "redis_id=${KV_ID}" >> $GITHUB_OUTPUT
-            CONN=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" \
-              "https://api.render.com/v1/redis/${KV_ID}/connection-info")
-            REDIS_URL=$(echo "$CONN" | jq -r '.redisURL // .externalConnectionString // empty' 2>/dev/null || echo "")
+            # Poll for connection string (KV may still be initialising)
+            for i in $(seq 1 $KV_RETRIES); do
+              CONN=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" \
+                "https://api.render.com/v1/redis/${KV_ID}/connection-info")
+              REDIS_URL=$(echo "$CONN" | jq -r '.redisURL // .externalConnectionString // empty' 2>/dev/null || echo "")
+              [ -n "$REDIS_URL" ] && break
+              sleep 5
+            done
+            if [ -z "$REDIS_URL" ]; then
+              echo "::warning::Redis ${KV_ID} did not return a connection string. REDIS_URL will not be set; sessions will use in-memory store."
+            fi
             echo "redis_url=${REDIS_URL}" >> $GITHUB_OUTPUT
           fi
 
@@ -344,12 +357,20 @@ jobs:
           CURRENT=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" \
             "https://api.render.com/v1/services/${SERVICE_ID}/env-vars")
 
+          # Merge: update only keys for which we have a new non-empty value.
+          # If provisioning failed and a URL is empty, we leave the existing
+          # value intact so a previously working preview is not broken.
           UPDATED=$(echo "$CURRENT" | jq \
             --arg db "$DATABASE_URL" \
             --arg redis "$REDIS_URL" \
-            'map(select(.key != "DATABASE_URL" and .key != "REDIS_URL"))
-             + (if $db != "" then [{"key": "DATABASE_URL", "value": $db}] else [] end)
-             + (if $redis != "" then [{"key": "REDIS_URL", "value": $redis}] else [] end)')
+            'map(
+              if .key == "DATABASE_URL" and $db != "" then {"key": "DATABASE_URL", "value": $db}
+              elif .key == "REDIS_URL" and $redis != "" then {"key": "REDIS_URL", "value": $redis}
+              else .
+              end
+            )
+            + (if $db != "" and (map(select(.key == "DATABASE_URL")) | length) == 0 then [{"key": "DATABASE_URL", "value": $db}] else [] end)
+            + (if $redis != "" and (map(select(.key == "REDIS_URL")) | length) == 0 then [{"key": "REDIS_URL", "value": $redis}] else [] end)')
 
           UPDATE_RESP=$(curl -s -w "\n%{http_code}" -X PUT \
             -H "Authorization: Bearer ${RENDER_API_KEY}" \
