@@ -1717,7 +1717,7 @@ export async function ssiGetEventStaff(contentType, eventId, cookies) {
 // Cookie helpers
 // ============================================================
 
-function parseCookies(setCookieHeaders) {
+export function parseCookies(setCookieHeaders) {
   const cookies = {}
   for (const header of setCookieHeaders) {
     const match = header.match(/^([^=]+)=([^;]*)/)
@@ -1728,7 +1728,7 @@ function parseCookies(setCookieHeaders) {
   return cookies
 }
 
-function formatCookies(cookies) {
+export function formatCookies(cookies) {
   return Object.entries(cookies)
     .map(([k, v]) => `${k}=${v}`)
     .join('; ')
