@@ -279,7 +279,7 @@ Prefixed IDs make debugging easier (you can tell what kind of entity an ID refer
 ## 7. Security Considerations
 
 - **Passwords**: bcrypt with 12 rounds. Never stored in plaintext, never returned via API
-- **SSI credentials**: Stored encrypted in tenant config. Decrypted only when needed for SSI API calls. Encryption key from environment variable
+- **SSI credentials**: Encrypted with AES-256-GCM before storage. Each write uses a fresh random IV (96-bit). Decrypted transparently on read. Encryption key set via `PLATFORM_CREDENTIALS_KEY` env var (64 hex chars = 32 bytes)
 - **Tenant isolation**: Every query includes `tenant_id` in its WHERE clause. No shared tables without tenant scoping
 - **Session cookies**: HttpOnly, SameSite=Lax, Secure in production. Separate cookies for platform auth (`platform_sid`) and SSI auth (`ssi_session`)
 - **Data retention**: Cancelled tenant data retained 90 days for recovery, then permanently purged

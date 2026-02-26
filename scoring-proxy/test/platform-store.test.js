@@ -5,7 +5,7 @@
 // sessions. Uses in-memory mocks for both PostgreSQL and Redis.
 // ============================================================
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest'
 import { _setClient } from '../lib/session/redis.js'
 import { _setPool } from '../lib/db/postgres.js'
 import { NotFoundError } from '../lib/errors/AppError.js'
@@ -550,5 +550,109 @@ describe('platform sessions', () => {
   it('returns false when deleting non-existent session', async () => {
     const deleted = await deletePlatformSession('nonexistent')
     expect(deleted).toBe(false)
+  })
+})
+
+// ============================================================
+// SSI Credential Encryption
+// ============================================================
+
+// A deterministic 32-byte test key (64 hex chars). Never use in production.
+const TEST_CRED_KEY = 'a'.repeat(64)
+
+describe('SSI credential encryption', () => {
+  let savedKey
+
+  beforeAll(() => {
+    savedKey = process.env.PLATFORM_CREDENTIALS_KEY
+    process.env.PLATFORM_CREDENTIALS_KEY = TEST_CRED_KEY
+  })
+
+  afterAll(() => {
+    if (savedKey === undefined) {
+      delete process.env.PLATFORM_CREDENTIALS_KEY
+    } else {
+      process.env.PLATFORM_CREDENTIALS_KEY = savedKey
+    }
+  })
+
+  it('stores ssiCredentials as an encrypted envelope (not plaintext)', async () => {
+    const { accountId } = await createAccount({ email: 'enc@test.com', password: 'pass1234', name: 'Enc' })
+    const { tenantId } = await createTenant({ accountId, name: 'EncOrg' })
+
+    const creds = { email: 'ssi@example.com', password: 'ssipass', apiKey: 'key123' }
+    await updateTenant(tenantId, { ssiCredentials: creds })
+
+    // Inspect raw row in the test pool — must be an encrypted envelope, not plaintext
+    const rawRow = testPool.tenants.get(tenantId)
+    expect(rawRow.ssi_credentials).not.toBeNull()
+    expect(rawRow.ssi_credentials).toHaveProperty('iv')
+    expect(rawRow.ssi_credentials).toHaveProperty('tag')
+    expect(rawRow.ssi_credentials).toHaveProperty('data')
+    // Raw data must not contain the plaintext password
+    expect(JSON.stringify(rawRow.ssi_credentials)).not.toContain('ssipass')
+  })
+
+  it('decrypts ssiCredentials transparently on read', async () => {
+    const { accountId } = await createAccount({ email: 'dec@test.com', password: 'pass1234', name: 'Dec' })
+    const { tenantId } = await createTenant({ accountId, name: 'DecOrg' })
+
+    const creds = { email: 'ssi@example.com', password: 'ssipass', apiKey: 'key123' }
+    await updateTenant(tenantId, { ssiCredentials: creds })
+
+    const tenant = await getTenant(tenantId)
+    expect(tenant.ssiCredentials).toEqual(creds)
+  })
+
+  it('stores null ssiCredentials without encryption', async () => {
+    const { accountId } = await createAccount({ email: 'nullcred@test.com', password: 'pass1234', name: 'Null' })
+    const { tenantId } = await createTenant({ accountId, name: 'NullOrg' })
+
+    await updateTenant(tenantId, { ssiCredentials: null })
+
+    const tenant = await getTenant(tenantId)
+    expect(tenant.ssiCredentials).toBeNull()
+  })
+
+  it('each write produces a different ciphertext (random IV)', async () => {
+    const { accountId } = await createAccount({ email: 'iv@test.com', password: 'pass1234', name: 'IV' })
+    const { tenantId } = await createTenant({ accountId, name: 'IVOrg' })
+
+    const creds = { email: 'ssi@example.com', password: 'ssipass' }
+    await updateTenant(tenantId, { ssiCredentials: creds })
+    const first = testPool.tenants.get(tenantId).ssi_credentials
+
+    await updateTenant(tenantId, { ssiCredentials: creds })
+    const second = testPool.tenants.get(tenantId).ssi_credentials
+
+    // Same plaintext, different IVs → different ciphertexts (CPA security)
+    expect(first.iv).not.toBe(second.iv)
+    expect(first.data).not.toBe(second.data)
+  })
+
+  it('throws when PLATFORM_CREDENTIALS_KEY is missing', async () => {
+    delete process.env.PLATFORM_CREDENTIALS_KEY
+    try {
+      const { accountId } = await createAccount({ email: 'nokey@test.com', password: 'pass1234', name: 'NoKey' })
+      const { tenantId } = await createTenant({ accountId, name: 'NoKeyOrg' })
+      await expect(
+        updateTenant(tenantId, { ssiCredentials: { email: 'x', password: 'y' } })
+      ).rejects.toThrow('PLATFORM_CREDENTIALS_KEY')
+    } finally {
+      process.env.PLATFORM_CREDENTIALS_KEY = TEST_CRED_KEY
+    }
+  })
+
+  it('throws when PLATFORM_CREDENTIALS_KEY has wrong length', async () => {
+    process.env.PLATFORM_CREDENTIALS_KEY = 'deadbeef' // too short (8 hex chars, not 64)
+    try {
+      const { accountId } = await createAccount({ email: 'badkey@test.com', password: 'pass1234', name: 'BadKey' })
+      const { tenantId } = await createTenant({ accountId, name: 'BadKeyOrg' })
+      await expect(
+        updateTenant(tenantId, { ssiCredentials: { email: 'x', password: 'y' } })
+      ).rejects.toThrow('PLATFORM_CREDENTIALS_KEY must be exactly 64 hex characters')
+    } finally {
+      process.env.PLATFORM_CREDENTIALS_KEY = TEST_CRED_KEY
+    }
   })
 })
