@@ -28,6 +28,12 @@ import {
   listTenantDisciplines,
   updateDiscipline,
   deleteDiscipline,
+  createMatchTemplate,
+  getMatchTemplate,
+  listDisciplineTemplates,
+  listTenantTemplates,
+  updateMatchTemplate,
+  deleteMatchTemplate,
 } from '../lib/db/platform-store.js'
 
 // ---- In-memory Redis mock (for sessions) ----
@@ -58,6 +64,7 @@ class TestPgPool {
     this.accounts = new Map()
     this.tenants = new Map()
     this.disciplines = new Map()
+    this.templates = new Map()
     this.transactionCalls = [] // tracks BEGIN/COMMIT/ROLLBACK for assertions
   }
 
@@ -286,6 +293,71 @@ class TestPgPool {
       const existed = this.disciplines.has(disId)
       this.disciplines.delete(disId)
       return { rows: existed ? [{ id: disId }] : [] }
+    }
+
+    // INSERT INTO match_templates
+    if (sql.startsWith('INSERT INTO match_templates')) {
+      const now = new Date()
+      const row = {
+        id: params[0], tenant_id: params[1], discipline_id: params[2], name: params[3],
+        ssi_seed_event_id: params[4], ssi_seed_snapshot: params[5] ? JSON.parse(params[5]) : null,
+        overrides: JSON.parse(params[6]), calendar_template: JSON.parse(params[7]),
+        staffing_rules: JSON.parse(params[8]),
+        created_at: now, updated_at: now,
+      }
+      this.templates.set(row.id, row)
+      return { rows: [row] }
+    }
+
+    // SELECT * FROM match_templates WHERE id = $1
+    if (sql.startsWith('SELECT * FROM match_templates WHERE id')) {
+      const row = this.templates.get(params[0])
+      return { rows: row ? [row] : [] }
+    }
+
+    // SELECT * FROM match_templates WHERE discipline_id = $1
+    if (sql.startsWith('SELECT * FROM match_templates WHERE discipline_id')) {
+      const rows = [...this.templates.values()]
+        .filter(t => t.discipline_id === params[0])
+        .sort((a, b) => a.created_at - b.created_at)
+      return { rows }
+    }
+
+    // SELECT * FROM match_templates WHERE tenant_id = $1
+    if (sql.startsWith('SELECT * FROM match_templates WHERE tenant_id')) {
+      const rows = [...this.templates.values()]
+        .filter(t => t.tenant_id === params[0])
+        .sort((a, b) => a.created_at - b.created_at)
+      return { rows }
+    }
+
+    // UPDATE match_templates SET ... WHERE id = $1 RETURNING *
+    if (sql.startsWith('UPDATE match_templates SET')) {
+      const tplId = params[0]
+      const row = this.templates.get(tplId)
+      if (!row) return { rows: [] }
+      const setMatch = sql.match(/SET (.+) WHERE/i)
+      if (setMatch) {
+        const clauses = setMatch[1].split(',').map(c => c.trim())
+        for (const clause of clauses) {
+          if (clause === 'updated_at = NOW()') { row.updated_at = new Date(); continue }
+          const m = clause.match(/(\w+)\s*=\s*\$(\d+)/)
+          if (m) {
+            const col = m[1]
+            const val = params[parseInt(m[2]) - 1]
+            try { row[col] = JSON.parse(val) } catch { row[col] = val }
+          }
+        }
+      }
+      return { rows: [row] }
+    }
+
+    // DELETE FROM match_templates WHERE id = $1 RETURNING id
+    if (sql.startsWith('DELETE FROM match_templates WHERE id')) {
+      const tplId = params[0]
+      const existed = this.templates.has(tplId)
+      this.templates.delete(tplId)
+      return { rows: existed ? [{ id: tplId }] : [] }
     }
 
     throw new Error(`TestPgPool: unhandled query: ${sql}`)
@@ -923,6 +995,160 @@ describe('deleteDiscipline', () => {
 
   it('returns false for non-existent discipline', async () => {
     const deleted = await deleteDiscipline('dis_nonexistent')
+    expect(deleted).toBe(false)
+  })
+})
+
+// ============================================================
+// Match Template CRUD
+// ============================================================
+
+// Helper: create account + tenant + discipline for template tests
+async function createTestDiscipline() {
+  const { accountId } = await createAccount({ email: `tpl${Date.now()}@test.com`, password: 'pass1234', name: 'Tpl' })
+  const { tenantId } = await createTenant({ accountId, name: 'TplOrg' })
+  const { disciplineId } = await createDiscipline({ tenantId, name: 'sra', labelFi: 'SRA' })
+  return { accountId, tenantId, disciplineId }
+}
+
+describe('createMatchTemplate', () => {
+  it('creates a template with all fields', async () => {
+    const { tenantId, disciplineId } = await createTestDiscipline()
+
+    const { templateId, template } = await createMatchTemplate({
+      tenantId, disciplineId,
+      name: 'Kupittaa Cup Template',
+      ssiSeedEventId: '12345',
+      ssiSeedSnapshot: { stages: 3, squads: 3 },
+      overrides: { nameTemplate: 'Kupittaa CUP {date}' },
+      calendarTemplate: { title: 'Kupittaan ampumavuoro {date}' },
+      staffingRules: { minInstructors: 2 },
+    })
+
+    expect(templateId).toMatch(/^tpl_/)
+    expect(template.name).toBe('Kupittaa Cup Template')
+    expect(template.disciplineId).toBe(disciplineId)
+    expect(template.tenantId).toBe(tenantId)
+    expect(template.ssiSeedEventId).toBe('12345')
+    expect(template.ssiSeedSnapshot).toEqual({ stages: 3, squads: 3 })
+    expect(template.overrides.nameTemplate).toBe('Kupittaa CUP {date}')
+    expect(template.calendarTemplate.title).toBe('Kupittaan ampumavuoro {date}')
+    expect(template.staffingRules.minInstructors).toBe(2)
+    expect(template.createdAt).toBeTypeOf('number')
+  })
+
+  it('creates a template with minimal fields (defaults to empty objects)', async () => {
+    const { tenantId, disciplineId } = await createTestDiscipline()
+
+    const { template } = await createMatchTemplate({
+      tenantId, disciplineId,
+      name: 'Minimal Template',
+    })
+
+    expect(template.name).toBe('Minimal Template')
+    expect(template.ssiSeedEventId).toBeNull()
+    expect(template.ssiSeedSnapshot).toBeNull()
+    expect(template.overrides).toEqual({})
+    expect(template.calendarTemplate).toEqual({})
+    expect(template.staffingRules).toEqual({})
+  })
+})
+
+describe('getMatchTemplate / listDisciplineTemplates / listTenantTemplates', () => {
+  it('gets template by ID', async () => {
+    const { tenantId, disciplineId } = await createTestDiscipline()
+    const { templateId } = await createMatchTemplate({ tenantId, disciplineId, name: 'Get Test' })
+
+    const tpl = await getMatchTemplate(templateId)
+    expect(tpl.name).toBe('Get Test')
+    expect(tpl.disciplineId).toBe(disciplineId)
+  })
+
+  it('returns null for non-existent template', async () => {
+    const tpl = await getMatchTemplate('tpl_nonexistent')
+    expect(tpl).toBeNull()
+  })
+
+  it('lists templates by discipline', async () => {
+    const { tenantId, disciplineId } = await createTestDiscipline()
+    await createMatchTemplate({ tenantId, disciplineId, name: 'Tpl A' })
+    await createMatchTemplate({ tenantId, disciplineId, name: 'Tpl B' })
+
+    const list = await listDisciplineTemplates(disciplineId)
+    expect(list).toHaveLength(2)
+    expect(list.map(t => t.name).sort()).toEqual(['Tpl A', 'Tpl B'])
+  })
+
+  it('lists templates by tenant (across disciplines)', async () => {
+    const { accountId, tenantId, disciplineId: d1 } = await createTestDiscipline()
+    const { disciplineId: d2 } = await createDiscipline({ tenantId, name: 'prs', labelFi: 'PRS' })
+
+    await createMatchTemplate({ tenantId, disciplineId: d1, name: 'SRA Tpl' })
+    await createMatchTemplate({ tenantId, disciplineId: d2, name: 'PRS Tpl' })
+
+    const list = await listTenantTemplates(tenantId)
+    expect(list).toHaveLength(2)
+    expect(list.map(t => t.name).sort()).toEqual(['PRS Tpl', 'SRA Tpl'])
+  })
+
+  it('does not return other disciplines templates', async () => {
+    const { tenantId, disciplineId: d1 } = await createTestDiscipline()
+    const { disciplineId: d2 } = await createDiscipline({ tenantId, name: 'other', labelFi: 'Other' })
+
+    await createMatchTemplate({ tenantId, disciplineId: d1, name: 'Mine' })
+    await createMatchTemplate({ tenantId, disciplineId: d2, name: 'Not mine' })
+
+    const list = await listDisciplineTemplates(d1)
+    expect(list).toHaveLength(1)
+    expect(list[0].name).toBe('Mine')
+  })
+})
+
+describe('updateMatchTemplate', () => {
+  it('updates template name and JSONB fields', async () => {
+    const { tenantId, disciplineId } = await createTestDiscipline()
+    const { templateId } = await createMatchTemplate({ tenantId, disciplineId, name: 'Old' })
+
+    const updated = await updateMatchTemplate(templateId, {
+      name: 'New Name',
+      overrides: { nameTemplate: 'Updated {date}' },
+      staffingRules: { minInstructors: 3, maxInstructors: 5 },
+    })
+
+    expect(updated.name).toBe('New Name')
+    expect(updated.overrides.nameTemplate).toBe('Updated {date}')
+    expect(updated.staffingRules.minInstructors).toBe(3)
+  })
+
+  it('rejects unknown fields', async () => {
+    const { tenantId, disciplineId } = await createTestDiscipline()
+    const { templateId } = await createMatchTemplate({ tenantId, disciplineId, name: 'X' })
+
+    await expect(
+      updateMatchTemplate(templateId, { tenant_id: 'evil' })
+    ).rejects.toThrow("updateMatchTemplate: unknown field 'tenant_id'")
+  })
+
+  it('returns null for non-existent template', async () => {
+    const result = await updateMatchTemplate('tpl_nonexistent', { name: 'x' })
+    expect(result).toBeNull()
+  })
+})
+
+describe('deleteMatchTemplate', () => {
+  it('deletes a template and returns true', async () => {
+    const { tenantId, disciplineId } = await createTestDiscipline()
+    const { templateId } = await createMatchTemplate({ tenantId, disciplineId, name: 'Gone' })
+
+    const deleted = await deleteMatchTemplate(templateId)
+    expect(deleted).toBe(true)
+
+    const tpl = await getMatchTemplate(templateId)
+    expect(tpl).toBeNull()
+  })
+
+  it('returns false for non-existent template', async () => {
+    const deleted = await deleteMatchTemplate('tpl_nonexistent')
     expect(deleted).toBe(false)
   })
 })

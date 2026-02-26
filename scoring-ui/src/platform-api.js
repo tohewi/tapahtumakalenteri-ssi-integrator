@@ -177,3 +177,49 @@ export async function deleteDisciplineApi(tenantId, disciplineId) {
     method: 'DELETE',
   })
 }
+
+// ---- Match Templates ----
+
+/**
+ * List templates for a tenant. Optionally filter by disciplineId.
+ */
+export async function listTemplates(tenantId, disciplineId) {
+  const qs = disciplineId ? `?disciplineId=${disciplineId}` : ''
+  return platformFetch(`/tenants/${tenantId}/templates${qs}`)
+}
+
+/**
+ * Create a match template for a tenant.
+ */
+export async function createTemplateApi(tenantId, data) {
+  return platformFetch(`/tenants/${tenantId}/templates`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+/**
+ * Get a single match template.
+ */
+export async function getTemplateApi(tenantId, templateId) {
+  return platformFetch(`/tenants/${tenantId}/templates/${templateId}`)
+}
+
+/**
+ * Update a match template.
+ */
+export async function updateTemplateApi(tenantId, templateId, updates) {
+  return platformFetch(`/tenants/${tenantId}/templates/${templateId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  })
+}
+
+/**
+ * Delete a match template.
+ */
+export async function deleteTemplateApi(tenantId, templateId) {
+  return platformFetch(`/tenants/${tenantId}/templates/${templateId}`, {
+    method: 'DELETE',
+  })
+}

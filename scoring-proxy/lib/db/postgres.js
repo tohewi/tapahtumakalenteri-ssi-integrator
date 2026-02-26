@@ -66,6 +66,26 @@ CREATE TABLE IF NOT EXISTS disciplines (
 
 -- Index for listing disciplines by tenant
 CREATE INDEX IF NOT EXISTS idx_disciplines_tenant_id ON disciplines (tenant_id);
+
+-- Match templates (event blueprints per discipline)
+CREATE TABLE IF NOT EXISTS match_templates (
+  id                TEXT PRIMARY KEY,
+  tenant_id         TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  discipline_id     TEXT NOT NULL REFERENCES disciplines(id) ON DELETE CASCADE,
+  name              TEXT NOT NULL,
+  ssi_seed_event_id TEXT,
+  ssi_seed_snapshot JSONB,
+  overrides         JSONB DEFAULT '{}',
+  calendar_template JSONB DEFAULT '{}',
+  staffing_rules    JSONB DEFAULT '{}',
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index for listing templates by discipline
+CREATE INDEX IF NOT EXISTS idx_match_templates_discipline_id ON match_templates (discipline_id);
+-- Index for listing templates by tenant
+CREATE INDEX IF NOT EXISTS idx_match_templates_tenant_id ON match_templates (tenant_id);
 `
 
 // ---- Initialization ----

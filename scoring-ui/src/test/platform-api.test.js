@@ -11,6 +11,10 @@ import {
   updateTenant,
   updateAccountProfile,
   changeAccountPassword,
+  listTemplates,
+  createTemplateApi,
+  updateTemplateApi,
+  deleteTemplateApi,
 } from '../platform-api'
 
 const API_BASE = '/api/v1/platform'
@@ -438,6 +442,85 @@ describe('Platform API client', () => {
       const err = await changeAccountPassword({ currentPassword: 'wrong', newPassword: 'new123' }).catch(e => e)
       expect(err.status).toBe(401)
       expect(err.message).toBe('Current password is incorrect')
+    })
+  })
+
+  // ============================================================
+  // Match Templates
+  // ============================================================
+  describe('listTemplates', () => {
+    it('GETs /tenants/:id/templates', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ templates: [{ id: 'tpl_1', name: 'T1' }] }),
+      })
+
+      const result = await listTemplates('ten_1')
+      expect(fetch).toHaveBeenCalledWith(
+        `${API_BASE}/tenants/ten_1/templates`,
+        expect.objectContaining({ credentials: 'include' }),
+      )
+      expect(result.templates).toHaveLength(1)
+    })
+
+    it('passes disciplineId as query param', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ templates: [] }),
+      })
+
+      await listTemplates('ten_1', 'dis_1')
+      expect(fetch).toHaveBeenCalledWith(
+        `${API_BASE}/tenants/ten_1/templates?disciplineId=dis_1`,
+        expect.anything(),
+      )
+    })
+  })
+
+  describe('createTemplateApi', () => {
+    it('POSTs to /tenants/:id/templates', async () => {
+      const tpl = { id: 'tpl_1', name: 'New' }
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true, template: tpl }),
+      })
+
+      const result = await createTemplateApi('ten_1', { name: 'New', disciplineId: 'dis_1' })
+      expect(fetch).toHaveBeenCalledWith(
+        `${API_BASE}/tenants/ten_1/templates`,
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(result.template).toEqual(tpl)
+    })
+  })
+
+  describe('updateTemplateApi', () => {
+    it('PATCHes /tenants/:id/templates/:tplId', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true, template: { id: 'tpl_1', name: 'Updated' } }),
+      })
+
+      await updateTemplateApi('ten_1', 'tpl_1', { name: 'Updated' })
+      expect(fetch).toHaveBeenCalledWith(
+        `${API_BASE}/tenants/ten_1/templates/tpl_1`,
+        expect.objectContaining({ method: 'PATCH' }),
+      )
+    })
+  })
+
+  describe('deleteTemplateApi', () => {
+    it('DELETEs /tenants/:id/templates/:tplId', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      })
+
+      await deleteTemplateApi('ten_1', 'tpl_1')
+      expect(fetch).toHaveBeenCalledWith(
+        `${API_BASE}/tenants/ten_1/templates/tpl_1`,
+        expect.objectContaining({ method: 'DELETE' }),
+      )
     })
   })
 })

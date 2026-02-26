@@ -32,6 +32,12 @@ import {
   listTenantDisciplines,
   updateDiscipline,
   deleteDiscipline,
+  createMatchTemplate,
+  getMatchTemplate,
+  listTenantTemplates,
+  listDisciplineTemplates,
+  updateMatchTemplate,
+  deleteMatchTemplate,
 } from '../lib/db/platform-store.js'
 import { requirePlatformAuth, PLATFORM_COOKIE } from '../middleware/platform-auth.js'
 
@@ -510,6 +516,101 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
     }
 
     log.info(`[platform] Discipline deleted: ${req.params.id} from tenant ${req.params.tenantId}`)
+    res.json({ success: true })
+  })
+
+  // ============================================================
+  // Match Template CRUD — nested under /tenants/:tenantId/templates
+  // ============================================================
+
+  // GET /api/v1/platform/tenants/:tenantId/templates
+  // Optional query: ?disciplineId=dis_xxx to filter by discipline
+  router.get('/tenants/:tenantId/templates', requirePlatformAuth(), requireTenantOwnership, async (req, res) => {
+    const { disciplineId } = req.query
+    const templates = disciplineId
+      ? await listDisciplineTemplates(disciplineId)
+      : await listTenantTemplates(req.params.tenantId)
+    res.json({ templates })
+  })
+
+  // POST /api/v1/platform/tenants/:tenantId/templates
+  router.post('/tenants/:tenantId/templates', requirePlatformAuth(), requireTenantOwnership, async (req, res, next) => {
+    const { name, disciplineId, ssiSeedEventId, ssiSeedSnapshot, overrides, calendarTemplate, staffingRules } = req.body
+    if (!name || name.trim().length < 2) {
+      return res.status(400).json({ error: 'Template name is required (min 2 characters)' })
+    }
+    if (!disciplineId) {
+      return res.status(400).json({ error: 'disciplineId is required' })
+    }
+
+    // Verify discipline belongs to this tenant
+    const discipline = await getDiscipline(disciplineId)
+    if (!discipline || discipline.tenantId !== req.params.tenantId) {
+      return res.status(400).json({ error: 'Discipline not found in this tenant' })
+    }
+
+    try {
+      const { templateId, template } = await createMatchTemplate({
+        tenantId: req.params.tenantId,
+        disciplineId, name, ssiSeedEventId, ssiSeedSnapshot,
+        overrides, calendarTemplate, staffingRules,
+      })
+      log.info(`[platform] Template created: ${name} (${templateId}) for discipline ${disciplineId}`)
+      res.status(201).json({ success: true, template })
+    } catch (err) {
+      log.error('[platform] Template creation failed:', err.message)
+      return next(new AppError('Failed to create template', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // GET /api/v1/platform/tenants/:tenantId/templates/:id
+  router.get('/tenants/:tenantId/templates/:id', requirePlatformAuth(), requireTenantOwnership, async (req, res) => {
+    const template = await getMatchTemplate(req.params.id)
+    if (!template || template.tenantId !== req.params.tenantId) {
+      return res.status(404).json({ error: 'Template not found' })
+    }
+    res.json({ template })
+  })
+
+  // PATCH /api/v1/platform/tenants/:tenantId/templates/:id
+  router.patch('/tenants/:tenantId/templates/:id', requirePlatformAuth(), requireTenantOwnership, async (req, res, next) => {
+    const template = await getMatchTemplate(req.params.id)
+    if (!template || template.tenantId !== req.params.tenantId) {
+      return res.status(404).json({ error: 'Template not found' })
+    }
+
+    const allowedFields = ['name', 'ssiSeedEventId', 'ssiSeedSnapshot', 'overrides', 'calendarTemplate', 'staffingRules']
+    const updates = {}
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) updates[field] = req.body[field]
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' })
+    }
+
+    try {
+      const updated = await updateMatchTemplate(req.params.id, updates)
+      res.json({ success: true, template: updated })
+    } catch (err) {
+      log.error('[platform] Template update failed:', err.message)
+      return next(new AppError('Failed to update template', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // DELETE /api/v1/platform/tenants/:tenantId/templates/:id
+  router.delete('/tenants/:tenantId/templates/:id', requirePlatformAuth(), requireTenantOwnership, async (req, res) => {
+    const template = await getMatchTemplate(req.params.id)
+    if (!template || template.tenantId !== req.params.tenantId) {
+      return res.status(404).json({ error: 'Template not found' })
+    }
+
+    const deleted = await deleteMatchTemplate(req.params.id)
+    if (!deleted) {
+      return res.status(404).json({ error: 'Template not found' })
+    }
+
+    log.info(`[platform] Template deleted: ${req.params.id} from tenant ${req.params.tenantId}`)
     res.json({ success: true })
   })
 
