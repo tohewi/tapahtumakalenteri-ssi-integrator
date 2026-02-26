@@ -213,6 +213,17 @@ class TestPgPool {
       return { rows: [row] }
     }
 
+    // SELECT id FROM tenants WHERE LOWER(name) = LOWER($1) — duplicate name check
+    if (sql.startsWith('SELECT id FROM tenants WHERE LOWER(name)')) {
+      const name = params[0]
+      for (const row of this.tenants.values()) {
+        if (row.name.toLowerCase() === name.toLowerCase()) {
+          return { rows: [{ id: row.id }] }
+        }
+      }
+      return { rows: [] }
+    }
+
     // SELECT * FROM tenants WHERE id = $1
     if (sql.startsWith('SELECT * FROM tenants WHERE id')) {
       const row = this.tenants.get(params[0])
@@ -668,6 +679,25 @@ describe('createTenant', () => {
 
     const account = await getAccount(accountId)
     expect(account.tenants).toHaveLength(2)
+  })
+
+  it('rejects duplicate tenant name (case-insensitive)', async () => {
+    const { accountId } = await createAccount({ email: 'dup@test.com', password: 'pass1234', name: 'Dup' })
+    await createTenant({ accountId, name: 'UniqueOrg' })
+
+    await expect(
+      createTenant({ accountId, name: 'uniqueorg' })
+    ).rejects.toThrow('A tenant with this name already exists')
+  })
+
+  it('rejects duplicate tenant name across accounts', async () => {
+    const { accountId: acc1 } = await createAccount({ email: 'dup1@test.com', password: 'pass1234', name: 'Dup1' })
+    const { accountId: acc2 } = await createAccount({ email: 'dup2@test.com', password: 'pass1234', name: 'Dup2' })
+    await createTenant({ accountId: acc1, name: 'SharedName' })
+
+    await expect(
+      createTenant({ accountId: acc2, name: 'sharedname' })
+    ).rejects.toThrow('A tenant with this name already exists')
   })
 
   it('does not lose tenant IDs under concurrent creation (regression: race condition)', async () => {

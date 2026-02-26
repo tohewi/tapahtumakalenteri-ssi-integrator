@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS tenants (
 
 -- Index for listing tenants by account
 CREATE INDEX IF NOT EXISTS idx_tenants_account_id ON tenants (account_id);
+-- Unique index on tenant name (case-insensitive) — no duplicate org names
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_name_unique ON tenants (LOWER(name));
 
 -- Disciplines (competition types per tenant)
 CREATE TABLE IF NOT EXISTS disciplines (

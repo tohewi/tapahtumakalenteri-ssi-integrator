@@ -366,6 +366,15 @@ export async function createAccountWithTenant({ email, password, name, organizat
       [accountId, normalizedEmail, name.trim(), passwordHash, JSON.stringify([])]
     )
 
+    // Check for duplicate tenant name (case-insensitive)
+    const { rows: dupTenant } = await client.query(
+      'SELECT id FROM tenants WHERE LOWER(name) = LOWER($1)',
+      [organizationName.trim()]
+    )
+    if (dupTenant.length > 0) {
+      throw new Error('A tenant with this name already exists.')
+    }
+
     // Insert first tenant
     const { rows: tenantRows } = await client.query(
       `INSERT INTO tenants (id, account_id, name, subscription, disciplines)
@@ -433,6 +442,15 @@ export async function createTenant({ accountId, name }) {
     )
     if (accountRows.length === 0) {
       throw new NotFoundError('Account')
+    }
+
+    // Check for duplicate tenant name (case-insensitive)
+    const { rows: dupTenant } = await client.query(
+      'SELECT id FROM tenants WHERE LOWER(name) = LOWER($1)',
+      [name.trim()]
+    )
+    if (dupTenant.length > 0) {
+      throw new Error('A tenant with this name already exists.')
     }
 
     // Insert the new tenant

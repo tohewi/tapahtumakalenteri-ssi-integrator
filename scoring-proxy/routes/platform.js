@@ -365,6 +365,9 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
         },
       })
     } catch (err) {
+      if (err.message.includes('already exists') || err.code === '23505') {
+        return res.status(409).json({ error: 'A tenant with this name already exists' })
+      }
       log.error('[platform] Tenant creation failed:', err.message)
       return next(new AppError('Failed to create tenant', 500, 'INTERNAL_ERROR'))
     }
