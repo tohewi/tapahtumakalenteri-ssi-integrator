@@ -14,6 +14,7 @@ import {
   authenticateAccount,
   getAccount,
   updateAccount,
+  createAccountWithTenant,
   createTenant,
   getTenant,
   listAccountTenants,
@@ -384,6 +385,90 @@ describe('createTenant', () => {
     expect(err.message).toMatch(/not found/i)
   })
 })
+
+describe('createAccountWithTenant', () => {
+  it('creates account and tenant atomically and links them', async () => {
+    const { accountId, account, tenantId, tenant } = await createAccountWithTenant({
+      email: 'atomic@test.com',
+      password: 'securepass123',
+      name: 'Atomic User',
+      organizationName: 'Atomic Org',
+    })
+
+    expect(accountId).toMatch(/^acc_/)
+    expect(account.email).toBe('atomic@test.com')
+    expect(account.name).toBe('Atomic User')
+    expect(tenantId).toMatch(/^ten_/)
+    expect(tenant.name).toBe('Atomic Org')
+    expect(tenant.subscription.plan).toBe('free_trial')
+
+    // Account must have the tenant ID in its tenants list
+    const loaded = await getAccount(accountId)
+    expect(loaded.tenants).toContain(tenantId)
+  })
+
+  it('rejects duplicate email within the transaction', async () => {
+    await createAccount({ email: 'dupat@test.com', password: 'pass1234', name: 'A' })
+    await expect(
+      createAccountWithTenant({
+        email: 'dupat@test.com',
+        password: 'pass5678',
+        name: 'B',
+        organizationName: 'Org',
+      })
+    ).rejects.toThrow('already exists')
+  })
+
+  it('wraps both inserts in a single transaction (BEGIN + COMMIT)', async () => {
+    testPool.transactionCalls = []
+    await createAccountWithTenant({
+      email: 'txnboth@test.com',
+      password: 'securepass123',
+      name: 'Txn Both',
+      organizationName: 'Txn Org',
+    })
+    expect(testPool.transactionCalls).toContain('BEGIN')
+    expect(testPool.transactionCalls).toContain('COMMIT')
+    expect(testPool.transactionCalls).not.toContain('ROLLBACK')
+  })
+
+  it('issues ROLLBACK and propagates error when tenant insert fails', async () => {
+    // Build a pool whose connect() client throws on INSERT INTO tenants
+    const failPool = new TestPgPool()
+    failPool.connect = async () => {
+      const pool = failPool
+      return {
+        query: async (text, params) => {
+          const sql = text.replace(/\s+/g, ' ').trim()
+          if (/^(BEGIN|COMMIT|ROLLBACK)$/i.test(sql)) {
+            pool.transactionCalls.push(sql)
+            return { rows: [] }
+          }
+          if (sql.startsWith('INSERT INTO tenants')) {
+            throw new Error('simulated tenant insert failure')
+          }
+          return pool.query(text, params)
+        },
+        release: () => {},
+      }
+    }
+    _setPool(failPool)
+
+    await expect(
+      createAccountWithTenant({
+        email: 'failedtenant@test.com',
+        password: 'securepass123',
+        name: 'User',
+        organizationName: 'Org',
+      })
+    ).rejects.toThrow('simulated tenant insert failure')
+
+    // ROLLBACK must have been issued (not COMMIT)
+    expect(failPool.transactionCalls).toContain('ROLLBACK')
+    expect(failPool.transactionCalls).not.toContain('COMMIT')
+  })
+})
+
 
 describe('getTenant / listAccountTenants / updateTenant', () => {
   it('gets tenant by ID', async () => {

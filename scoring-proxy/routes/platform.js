@@ -15,7 +15,7 @@ import express from 'express'
 import { log } from '../lib/logger.js'
 import { AppError } from '../lib/errors/AppError.js'
 import {
-  createAccount,
+  createAccountWithTenant,
   authenticateAccount,
   getAccount,
   createTenant,
@@ -82,21 +82,17 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
     try {
       const { email, password, name, organizationName } = req.body
 
-      // 1. Create account
-      const { accountId, account } = await createAccount({ email, password, name })
-      log.info(`[platform] Account registered: ${email} (${accountId})`)
-
-      // 2. Create first tenant automatically
-      const { tenantId, tenant } = await createTenant({
-        accountId,
-        name: organizationName,
+      // Create account + first tenant atomically — if tenant creation fails
+      // the account is rolled back, preventing orphaned accounts.
+      const { accountId, account, tenantId, tenant } = await createAccountWithTenant({
+        email, password, name, organizationName,
       })
-      log.info(`[platform] Tenant created: ${organizationName} (${tenantId}) for account ${accountId}`)
+      log.info(`[platform] Account registered: ${email} (${accountId}), tenant: ${organizationName} (${tenantId})`)
 
-      // 3. Create platform session
+      // 2. Create platform session
       const { sessionId } = await createPlatformSession(accountId)
 
-      // 4. Set session cookie
+      // 3. Set session cookie
       res.cookie(PLATFORM_COOKIE, sessionId, COOKIE_OPTIONS)
 
       res.status(201).json({

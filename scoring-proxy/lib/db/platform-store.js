@@ -168,6 +168,82 @@ export async function updateAccount(accountId, updates) {
   return rowToAccount(rows[0])
 }
 
+// ---- Combined account + tenant creation ----
+
+/**
+ * Create a new account and its first tenant atomically.
+ * If tenant creation fails the whole transaction is rolled back,
+ * preventing orphaned accounts with no tenant.
+ *
+ * bcrypt hashing is done before the transaction because it is
+ * CPU-intensive and must not hold a DB connection open.
+ *
+ * @param {object} params - { email, password, name, organizationName }
+ * @returns {{ accountId, account, tenantId, tenant }}
+ */
+export async function createAccountWithTenant({ email, password, name, organizationName }) {
+  const normalizedEmail = email.toLowerCase().trim()
+  const accountId = generateId('acc')
+  const tenantId = generateId('ten')
+
+  // Hash password before the transaction — bcrypt is CPU-intensive
+  const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS)
+
+  const now = Date.now()
+  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000
+  const subscription = {
+    plan: 'free_trial',
+    status: 'trial',
+    trialEndsAt: now + THIRTY_DAYS,
+    currentPeriodEnd: null,
+    paymentMethod: null,
+    cancelledAt: null,
+    cancellationReason: null,
+  }
+
+  const { account, tenant } = await withTransaction(async (client) => {
+    // Duplicate-email check inside the transaction to avoid TOCTOU gaps
+    const { rows: existing } = await client.query(
+      'SELECT id FROM accounts WHERE LOWER(email) = $1',
+      [normalizedEmail]
+    )
+    if (existing.length > 0) {
+      throw new Error('An account with this email already exists.')
+    }
+
+    // Insert account (tenants array starts empty)
+    const { rows: accountRows } = await client.query(
+      `INSERT INTO accounts (id, email, name, password_hash, tenants)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [accountId, normalizedEmail, name.trim(), passwordHash, JSON.stringify([])]
+    )
+
+    // Insert first tenant
+    const { rows: tenantRows } = await client.query(
+      `INSERT INTO tenants (id, account_id, name, subscription, disciplines)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [tenantId, accountId, organizationName.trim(), JSON.stringify(subscription), JSON.stringify([])]
+    )
+
+    // Append tenant ID to the account's tenants array
+    await client.query(
+      `UPDATE accounts
+       SET tenants = tenants || $1::jsonb, updated_at = NOW()
+       WHERE id = $2`,
+      [JSON.stringify([tenantId]), accountId]
+    )
+
+    return {
+      account: rowToAccount(accountRows[0]),
+      tenant: rowToTenant(tenantRows[0]),
+    }
+  })
+
+  return { accountId, account, tenantId, tenant }
+}
+
 // ---- Tenant CRUD ----
 
 /**
