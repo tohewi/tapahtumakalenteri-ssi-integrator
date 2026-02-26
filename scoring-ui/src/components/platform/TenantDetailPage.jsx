@@ -518,7 +518,7 @@ function parseSsiEventUrl(input) {
   return { eventType: m[1], eventId: m[2] }
 }
 
-function TemplatesSection({ tenantId }) {
+function TemplatesSection({ tenantId, onEditTemplate }) {
   const [templates, setTemplates] = useState([])
   const [disciplines, setDisciplines] = useState([])
   const [loading, setLoading] = useState(true)
@@ -673,6 +673,9 @@ function TemplatesSection({ tenantId }) {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      {tpl.ssiSeedSnapshot && onEditTemplate && (
+                        <button onClick={() => onEditTemplate(tpl.id)} className="text-xs bg-sky-50 text-sky-700 hover:bg-sky-100 px-2 py-0.5 rounded font-medium">Open Editor</button>
+                      )}
                       <button onClick={() => startEdit(tpl)} className="text-xs text-sky-600 hover:text-sky-800">Edit</button>
                       <button onClick={() => handleDelete(tpl.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
                     </div>
@@ -847,7 +850,7 @@ function CalendarConfigSection({ tenant }) {
 
 // ---- Main Page ----
 
-export default function TenantDetailPage({ tenantId, account, onBack, onLogout }) {
+export default function TenantDetailPage({ tenantId, account, onBack, onLogout, onEditTemplate }) {
   const [tenant, setTenant] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
@@ -947,7 +950,7 @@ export default function TenantDetailPage({ tenantId, account, onBack, onLogout }
         <GeneralSection tenant={tenant} onSave={handleSave} />
         <SSICredentialsSection tenant={tenant} onSave={handleSave} />
         <DisciplinesSection tenantId={tenantId} />
-        <TemplatesSection tenantId={tenantId} />
+        <TemplatesSection tenantId={tenantId} onEditTemplate={onEditTemplate} />
         <CalendarConfigSection tenant={tenant} />
       </div>
     </div>

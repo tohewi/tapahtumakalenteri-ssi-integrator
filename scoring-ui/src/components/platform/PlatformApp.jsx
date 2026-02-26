@@ -28,6 +28,7 @@ import DashboardPage from './DashboardPage.jsx'
 import TenantCreatePage from './TenantCreatePage.jsx'
 import TenantDetailPage from './TenantDetailPage.jsx'
 import AccountSettingsPage from './AccountSettingsPage.jsx'
+import TemplateEditorPage from './TemplateEditorPage.jsx'
 
 // ---- App states ----
 const VIEW = {
@@ -38,6 +39,7 @@ const VIEW = {
   CREATE_TENANT: 'create_tenant',
   TENANT_DETAIL: 'tenant_detail',
   ACCOUNT_SETTINGS: 'account_settings',
+  TEMPLATE_EDITOR: 'template_editor',
 }
 
 export default function PlatformApp() {
@@ -46,6 +48,7 @@ export default function PlatformApp() {
   const [tenants, setTenants] = useState([])
   const [error, setError] = useState(null)
   const [selectedTenantId, setSelectedTenantId] = useState(null)
+  const [selectedTemplateId, setSelectedTemplateId] = useState(null)
 
   // Check session on mount
   useEffect(() => {
@@ -181,6 +184,16 @@ export default function PlatformApp() {
     )
   }
 
+  if (view === VIEW.TEMPLATE_EDITOR && selectedTenantId && selectedTemplateId) {
+    return (
+      <TemplateEditorPage
+        tenantId={selectedTenantId}
+        templateId={selectedTemplateId}
+        onBack={() => { setSelectedTemplateId(null); setView(VIEW.TENANT_DETAIL) }}
+      />
+    )
+  }
+
   if (view === VIEW.TENANT_DETAIL && selectedTenantId) {
     return (
       <TenantDetailPage
@@ -188,6 +201,7 @@ export default function PlatformApp() {
         account={account}
         onBack={handleBackToDashboard}
         onLogout={handleLogout}
+        onEditTemplate={(templateId) => { setSelectedTemplateId(templateId); setView(VIEW.TEMPLATE_EDITOR) }}
       />
     )
   }
