@@ -18,6 +18,8 @@ import {
   createAccountWithTenant,
   authenticateAccount,
   getAccount,
+  updateAccount,
+  changePassword,
   createTenant,
   getTenant,
   listAccountTenants,
@@ -231,6 +233,87 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
         createdAt: t.createdAt,
       })),
     })
+  })
+
+  // ============================================================
+  // PATCH /api/v1/platform/account — Update account profile
+  // ============================================================
+  router.patch('/account', requirePlatformAuth(), async (req, res, next) => {
+    const { name, email } = req.body
+    const updates = {}
+
+    if (name !== undefined) {
+      if (!name || name.trim().length < 2) {
+        return res.status(400).json({ error: 'Name must be at least 2 characters' })
+      }
+      if (name.length > MAX_NAME_LEN) {
+        return res.status(400).json({ error: `Name must be at most ${MAX_NAME_LEN} characters` })
+      }
+      updates.name = name.trim()
+    }
+
+    if (email !== undefined) {
+      if (!email || !EMAIL_RE.test(email)) {
+        return res.status(400).json({ error: 'Valid email is required' })
+      }
+      updates.email = email
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' })
+    }
+
+    try {
+      const updated = await updateAccount(req.account.id, updates)
+      if (!updated) {
+        return res.status(404).json({ error: 'Account not found' })
+      }
+      log.info(`[platform] Account updated: ${updated.email} (${updated.id})`)
+      res.json({
+        success: true,
+        account: {
+          id: updated.id,
+          email: updated.email,
+          name: updated.name,
+          createdAt: updated.createdAt,
+        },
+      })
+    } catch (err) {
+      if (err.message.includes('already exists') || err.code === '23505') {
+        return res.status(409).json({ error: 'Email is already in use by another account' })
+      }
+      log.error('[platform] Account update failed:', err.message)
+      return next(new AppError('Failed to update account', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // ============================================================
+  // POST /api/v1/platform/account/change-password
+  // ============================================================
+  router.post('/account/change-password', requirePlatformAuth(), async (req, res, next) => {
+    const { currentPassword, newPassword } = req.body
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' })
+    }
+    if (newPassword.length < MIN_PASSWORD_LEN) {
+      return res.status(400).json({ error: `New password must be at least ${MIN_PASSWORD_LEN} characters` })
+    }
+    if (newPassword.length > MAX_PASSWORD_LEN) {
+      return res.status(400).json({ error: `New password must be at most ${MAX_PASSWORD_LEN} characters` })
+    }
+
+    try {
+      await changePassword(req.account.id, currentPassword, newPassword)
+      log.info(`[platform] Password changed for account: ${req.account.email}`)
+      res.json({ success: true })
+    } catch (err) {
+      if (err.message.includes('incorrect')) {
+        return res.status(401).json({ error: 'Current password is incorrect' })
+      }
+      log.error('[platform] Password change failed:', err.message)
+      return next(new AppError('Failed to change password', 500, 'INTERNAL_ERROR'))
+    }
   })
 
   // ============================================================

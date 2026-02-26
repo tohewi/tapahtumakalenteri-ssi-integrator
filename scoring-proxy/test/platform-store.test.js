@@ -14,6 +14,7 @@ import {
   authenticateAccount,
   getAccount,
   updateAccount,
+  changePassword,
   createAccountWithTenant,
   createTenant,
   getTenant,
@@ -117,6 +118,24 @@ class TestPgPool {
         }
       }
       return { rows: [] }
+    }
+
+    // SELECT password_hash FROM accounts WHERE id = $1
+    if (sql.startsWith('SELECT password_hash FROM accounts WHERE id')) {
+      const row = this.accounts.get(params[0])
+      return { rows: row ? [{ password_hash: row.password_hash }] : [] }
+    }
+
+    // UPDATE accounts SET password_hash = $1, updated_at = NOW() WHERE id = $2
+    if (sql.startsWith('UPDATE accounts SET password_hash')) {
+      const newHash = params[0]
+      const accountId = params[1]
+      const row = this.accounts.get(accountId)
+      if (row) {
+        row.password_hash = newHash
+        row.updated_at = new Date()
+      }
+      return { rows: row ? [row] : [] }
     }
 
     // SELECT * FROM accounts WHERE id = $1
@@ -318,6 +337,41 @@ describe('getAccount / updateAccount', () => {
     await expect(
       updateAccount(accountId, { 'password_hash = $2; DROP TABLE accounts; --': 'evil' })
     ).rejects.toThrow("updateAccount: unknown field 'password_hash = $2; DROP TABLE accounts; --'")
+  })
+
+  it('updates account email with normalization', async () => {
+    const { accountId } = await createAccount({ email: 'old@test.com', password: 'pass1234', name: 'Email' })
+    const updated = await updateAccount(accountId, { email: 'NEW@Test.COM' })
+    expect(updated.email).toBe('new@test.com')
+  })
+})
+
+describe('changePassword', () => {
+  it('changes password when current password is correct', async () => {
+    const { accountId } = await createAccount({ email: 'chpw@test.com', password: 'oldpass123', name: 'ChPw' })
+
+    const result = await changePassword(accountId, 'oldpass123', 'newpass456')
+    expect(result.success).toBe(true)
+
+    // Verify new password works
+    const auth = await authenticateAccount('chpw@test.com', 'newpass456')
+    expect(auth).not.toBeNull()
+
+    // Verify old password no longer works
+    const authOld = await authenticateAccount('chpw@test.com', 'oldpass123')
+    expect(authOld).toBeNull()
+  })
+
+  it('throws when current password is incorrect', async () => {
+    const { accountId } = await createAccount({ email: 'wrongpw@test.com', password: 'correct123', name: 'Wrong' })
+    await expect(
+      changePassword(accountId, 'wrong_password', 'newpass456')
+    ).rejects.toThrow('Current password is incorrect')
+  })
+
+  it('throws NotFoundError for non-existent account', async () => {
+    const err = await changePassword('acc_nonexistent', 'old', 'new').catch(e => e)
+    expect(err).toBeInstanceOf(NotFoundError)
   })
 })
 

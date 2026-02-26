@@ -21,7 +21,7 @@ import { NotFoundError } from '../errors/AppError.js'
 const BCRYPT_ROUNDS = 12
 
 // Allowed fields for updateAccount: maps API key → DB column name
-const ACCOUNT_UPDATE_FIELDS = { name: 'name', tenants: 'tenants' }
+const ACCOUNT_UPDATE_FIELDS = { name: 'name', email: 'email', tenants: 'tenants' }
 
 // ---- SSI Credential Encryption (AES-256-GCM) ----
 //
@@ -226,7 +226,9 @@ export async function updateAccount(accountId, updates) {
 
   for (const [key, column] of Object.entries(ACCOUNT_UPDATE_FIELDS)) {
     if (updates[key] !== undefined) {
-      const value = key === 'tenants' ? JSON.stringify(updates[key]) : updates[key]
+      let value = updates[key]
+      if (key === 'tenants') value = JSON.stringify(value)
+      if (key === 'email') value = value.toLowerCase().trim()
       setClauses.push(`${column} = $${paramIndex}`)
       params.push(value)
       paramIndex++
@@ -245,6 +247,33 @@ export async function updateAccount(accountId, updates) {
   )
   if (rows.length === 0) return null
   return rowToAccount(rows[0])
+}
+
+/**
+ * Change account password after verifying the current password.
+ * @param {string} accountId
+ * @param {string} currentPassword - must match existing hash
+ * @param {string} newPassword - will be bcrypt-hashed
+ * @returns {{ success: boolean }} or throws on invalid current password
+ */
+export async function changePassword(accountId, currentPassword, newPassword) {
+  const { rows } = await query(
+    'SELECT password_hash FROM accounts WHERE id = $1',
+    [accountId]
+  )
+  if (rows.length === 0) throw new NotFoundError('Account')
+
+  const valid = await bcrypt.compare(currentPassword, rows[0].password_hash)
+  if (!valid) {
+    throw new Error('Current password is incorrect')
+  }
+
+  const newHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS)
+  await query(
+    'UPDATE accounts SET password_hash = $1, updated_at = NOW() WHERE id = $2',
+    [newHash, accountId]
+  )
+  return { success: true }
 }
 
 // ---- Combined account + tenant creation ----

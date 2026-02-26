@@ -113,3 +113,27 @@ export async function updateTenant(tenantId, updates) {
     body: JSON.stringify(updates),
   })
 }
+
+// ---- Account ----
+
+/**
+ * Update account profile (name, email).
+ * @param {{ name?, email? }} updates
+ */
+export async function updateAccountProfile(updates) {
+  return platformFetch('/account', {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  })
+}
+
+/**
+ * Change account password.
+ * @param {{ currentPassword, newPassword }} params
+ */
+export async function changeAccountPassword({ currentPassword, newPassword }) {
+  return platformFetch('/account/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ currentPassword, newPassword }),
+  })
+}

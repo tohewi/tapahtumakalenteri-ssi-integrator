@@ -27,6 +27,7 @@ import SignInPage from './SignInPage.jsx'
 import DashboardPage from './DashboardPage.jsx'
 import TenantCreatePage from './TenantCreatePage.jsx'
 import TenantDetailPage from './TenantDetailPage.jsx'
+import AccountSettingsPage from './AccountSettingsPage.jsx'
 
 // ---- App states ----
 const VIEW = {
@@ -36,6 +37,7 @@ const VIEW = {
   DASHBOARD: 'dashboard',
   CREATE_TENANT: 'create_tenant',
   TENANT_DETAIL: 'tenant_detail',
+  ACCOUNT_SETTINGS: 'account_settings',
 }
 
 export default function PlatformApp() {
@@ -135,6 +137,10 @@ export default function PlatformApp() {
     setView(VIEW.DASHBOARD)
   }, [])
 
+  const handleAccountUpdated = useCallback((updatedAccount) => {
+    setAccount(updatedAccount)
+  }, [])
+
   // ---- Render ----
 
   if (view === VIEW.LOADING) {
@@ -186,6 +192,17 @@ export default function PlatformApp() {
     )
   }
 
+  if (view === VIEW.ACCOUNT_SETTINGS) {
+    return (
+      <AccountSettingsPage
+        account={account}
+        onAccountUpdated={handleAccountUpdated}
+        onBack={handleBackToDashboard}
+        onLogout={handleLogout}
+      />
+    )
+  }
+
   // VIEW.DASHBOARD
   return (
     <DashboardPage
@@ -194,6 +211,7 @@ export default function PlatformApp() {
       onLogout={handleLogout}
       onCreateTenant={() => { setError(null); setView(VIEW.CREATE_TENANT) }}
       onSelectTenant={handleSelectTenant}
+      onAccountSettings={() => { setError(null); setView(VIEW.ACCOUNT_SETTINGS) }}
     />
   )
 }

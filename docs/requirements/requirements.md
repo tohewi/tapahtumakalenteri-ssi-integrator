@@ -374,8 +374,9 @@ Self-service account onboarding: sign up, sign in, create and manage tenants. Th
 | PA14 | **Tenant Detail UI**: Clicking a tenant card navigates to a settings page with sections for General (name edit, subscription info), SSI Credentials, and Calendar Config. Back button returns to dashboard with refreshed tenant list. Header shows account avatar and sign-out | ✅ Implemented |
 | PA15 | **SSI Credential Configuration Form**: SSI email, password, and API key fields with show/hide toggles. Saves encrypted via PATCH endpoint. Connection status indicator (configured/not configured). Clear credentials button. Form validation — requires at least email + password | ✅ Implemented |
 | PA16 | **Platform Data Hardening**: Atomic `createAccountWithTenant` (PostgreSQL transaction), row-level locking on `createTenant` (`SELECT ... FOR UPDATE`), AES-256-GCM encryption for SSI credentials (random IV per write), field allowlist guards on `updateAccount` and `updateTenant`, structured logging in platform-auth middleware | ✅ Implemented |
+| PA17 | **Account Settings UI**: Account profile editing (name, email with normalization) and password change (verify current, bcrypt new). `PATCH /api/v1/platform/account` and `POST /api/v1/platform/account/change-password` endpoints. Dashboard header avatar clickable → account settings page → back to dashboard. 8 new tests (4 backend, 4 frontend) | ✅ Implemented |
 
-### Design Decisions (PA1–PA16)
+### Design Decisions (PA1–PA17)
 
 - **Separate from SSI auth**: Platform accounts have their own identity system. SSI credentials are per-tenant, not per-account. An account may have tenants that use different SSI accounts.
 - **Redis storage (temporary)**: Currently uses Redis with `platform:` key prefix. Will migrate to PostgreSQL for persistent data — see `docs/design/platform-data-model.md` for storage strategy.
@@ -579,7 +580,7 @@ Applies if tenants are consumers or non-commercial associations (e.g., shooting 
 - **Release 7.6** (Consolidation & Completion): 18 requirements from R6.0/R7.0/R7.2/R7.5 — see `release-7.6.md`
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
-- **Release 8.0** (Platform Auth & Tenancy): 16 requirements — 16 ✅ (PA1–PA16)
+- **Release 8.0** (Platform Auth & Tenancy): 17 requirements — 17 ✅ (PA1–PA17)
 - **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
 - **Regulatory** (SaaS Platform EU/Finland): 23 requirements — 1 ✅ (REG14), 1 N/A (REG12), 21 design phase (REG1–REG23)
 

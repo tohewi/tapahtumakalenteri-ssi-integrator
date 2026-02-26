@@ -100,7 +100,7 @@ function TenantCard({ tenant, onSelect }) {
   )
 }
 
-export default function DashboardPage({ account, tenants, onLogout, onCreateTenant, onSelectTenant }) {
+export default function DashboardPage({ account, tenants, onLogout, onCreateTenant, onSelectTenant, onAccountSettings }) {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -111,10 +111,16 @@ export default function DashboardPage({ account, tenants, onLogout, onCreateTena
           </div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-sky-100 rounded-full flex items-center justify-center text-sky-700 text-sm font-semibold">
-                {account?.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
-              </div>
-              <span className="text-sm text-gray-600 hidden sm:inline">{account?.email}</span>
+              <button
+                onClick={onAccountSettings}
+                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                title="Account settings"
+              >
+                <div className="w-8 h-8 bg-sky-100 rounded-full flex items-center justify-center text-sky-700 text-sm font-semibold">
+                  {account?.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
+                </div>
+                <span className="text-sm text-gray-600 hidden sm:inline">{account?.email}</span>
+              </button>
               <button
                 onClick={onLogout}
                 className="text-xs text-gray-400 hover:text-gray-600 ml-2"

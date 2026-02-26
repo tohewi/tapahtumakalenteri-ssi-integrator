@@ -9,6 +9,8 @@ import {
   listTenants,
   getTenantDetails,
   updateTenant,
+  updateAccountProfile,
+  changeAccountPassword,
 } from '../platform-api'
 
 const API_BASE = '/api/v1/platform'
@@ -369,6 +371,73 @@ describe('Platform API client', () => {
 
       const err = await updateTenant(99, { name: 'X' }).catch(e => e)
       expect(err.status).toBe(403)
+    })
+  })
+
+  // ============================================================
+  // Account — updateAccountProfile
+  // ============================================================
+  describe('updateAccountProfile', () => {
+    it('PATCHes /account with name and email', async () => {
+      const updated = { id: 1, name: 'New Name', email: 'new@test.com' }
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true, account: updated }),
+      })
+
+      const result = await updateAccountProfile({ name: 'New Name', email: 'new@test.com' })
+
+      expect(fetch).toHaveBeenCalledWith(
+        `${API_BASE}/account`,
+        expect.objectContaining({ method: 'PATCH' }),
+      )
+      const body = JSON.parse(fetch.mock.calls[0][1].body)
+      expect(body).toEqual({ name: 'New Name', email: 'new@test.com' })
+      expect(result.account).toEqual(updated)
+    })
+
+    it('throws on 409 for duplicate email', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: () => Promise.resolve({ error: 'Email already in use' }),
+      })
+
+      const err = await updateAccountProfile({ email: 'taken@test.com' }).catch(e => e)
+      expect(err.status).toBe(409)
+    })
+  })
+
+  // ============================================================
+  // Account — changeAccountPassword
+  // ============================================================
+  describe('changeAccountPassword', () => {
+    it('POSTs to /account/change-password', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true }),
+      })
+
+      await changeAccountPassword({ currentPassword: 'old', newPassword: 'newpass123' })
+
+      expect(fetch).toHaveBeenCalledWith(
+        `${API_BASE}/account/change-password`,
+        expect.objectContaining({ method: 'POST' }),
+      )
+      const body = JSON.parse(fetch.mock.calls[0][1].body)
+      expect(body).toEqual({ currentPassword: 'old', newPassword: 'newpass123' })
+    })
+
+    it('throws on 401 for wrong current password', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({ error: 'Current password is incorrect' }),
+      })
+
+      const err = await changeAccountPassword({ currentPassword: 'wrong', newPassword: 'new123' }).catch(e => e)
+      expect(err.status).toBe(401)
+      expect(err.message).toBe('Current password is incorrect')
     })
   })
 })
