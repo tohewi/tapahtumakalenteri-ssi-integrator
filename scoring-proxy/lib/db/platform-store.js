@@ -14,8 +14,9 @@
 
 import crypto from 'node:crypto'
 import bcrypt from 'bcrypt'
-import { query } from './postgres.js'
+import { query, withTransaction } from './postgres.js'
 import { getRedisClient } from '../session/redis.js'
+import { NotFoundError } from '../errors/AppError.js'
 
 const BCRYPT_ROUNDS = 12
 
@@ -164,6 +165,10 @@ export async function updateAccount(accountId, updates) {
 /**
  * Create a new tenant for an account.
  * Starts with a 30-day free trial.
+ *
+ * Uses a transaction with SELECT ... FOR UPDATE to lock the account row,
+ * preventing race conditions when concurrent requests create tenants for
+ * the same account simultaneously.
  */
 export async function createTenant({ accountId, name }) {
   const tenantId = generateId('ten')
@@ -180,22 +185,37 @@ export async function createTenant({ accountId, name }) {
     cancellationReason: null,
   }
 
-  const { rows } = await query(
-    `INSERT INTO tenants (id, account_id, name, subscription, disciplines)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING *`,
-    [tenantId, accountId, name.trim(), JSON.stringify(subscription), JSON.stringify([])]
-  )
+  const tenant = await withTransaction(async (client) => {
+    // Lock the account row to prevent concurrent tenant creation from
+    // losing updates to the tenants array (race condition guard).
+    const { rows: accountRows } = await client.query(
+      'SELECT id FROM accounts WHERE id = $1 FOR UPDATE',
+      [accountId]
+    )
+    if (accountRows.length === 0) {
+      throw new NotFoundError('Account')
+    }
 
-  // Add tenant to account's tenants array
-  await query(
-    `UPDATE accounts
-     SET tenants = tenants || $1::jsonb, updated_at = NOW()
-     WHERE id = $2`,
-    [JSON.stringify([tenantId]), accountId]
-  )
+    // Insert the new tenant
+    const { rows } = await client.query(
+      `INSERT INTO tenants (id, account_id, name, subscription, disciplines)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [tenantId, accountId, name.trim(), JSON.stringify(subscription), JSON.stringify([])]
+    )
 
-  return { tenantId, tenant: rowToTenant(rows[0]) }
+    // Append tenant ID to the locked account's tenants array
+    await client.query(
+      `UPDATE accounts
+       SET tenants = tenants || $1::jsonb, updated_at = NOW()
+       WHERE id = $2`,
+      [JSON.stringify([tenantId]), accountId]
+    )
+
+    return rowToTenant(rows[0])
+  })
+
+  return { tenantId, tenant }
 }
 
 /**
