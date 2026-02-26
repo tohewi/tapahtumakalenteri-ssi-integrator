@@ -15,6 +15,7 @@ import express from 'express'
 import { log } from '../lib/logger.js'
 import { AppError } from '../lib/errors/AppError.js'
 import { ssiFetchEventStructure } from '../lib/ssi-core/seed-import.js'
+import { createSsiEvent } from '../lib/services/event-creation-service.js'
 import {
   createAccountWithTenant,
   authenticateAccount,
@@ -847,6 +848,68 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
 
     log.info(`[platform] Event deleted: ${req.params.id}`)
     res.json({ success: true })
+  })
+
+  // POST /api/v1/platform/tenants/:tenantId/events/:id/execute
+  // Triggers SSI event creation for a planned scheduled event.
+  // Creates cup + matches + squads in SSI, updates event status and ssiReferences.
+  // Requires: owner, tenant_admin, or match_admin
+  router.post('/tenants/:tenantId/events/:id/execute', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
+    const event = await getScheduledEvent(req.params.id)
+    if (!event || event.tenantId !== req.params.tenantId) {
+      return res.status(404).json({ error: 'Event not found' })
+    }
+
+    if (event.status !== 'planned') {
+      return res.status(400).json({ error: `Event is already ${event.status} — only planned events can be executed` })
+    }
+
+    // Load template
+    const template = await getMatchTemplate(event.templateId)
+    if (!template) {
+      return res.status(400).json({ error: 'Template not found for this event' })
+    }
+    if (!template.ssiSeedSnapshot) {
+      return res.status(400).json({ error: 'Template has no imported seed — import from SSI first' })
+    }
+
+    // Tenant must have SSI credentials
+    const tenant = req.tenant
+    if (!tenant.ssiCredentials?.email || !tenant.ssiCredentials?.password) {
+      return res.status(400).json({ error: 'Tenant SSI credentials must be configured' })
+    }
+
+    try {
+      const ssiReferences = await createSsiEvent({
+        template,
+        eventDate: event.eventDate,
+        credentials: {
+          email: tenant.ssiCredentials.email,
+          password: tenant.ssiCredentials.password,
+        },
+      })
+
+      // Update scheduled event with SSI references and status
+      const updated = await updateScheduledEvent(req.params.id, {
+        status: 'ssi_created',
+        ssiReferences,
+      })
+
+      log.info(`[platform] SSI event created for ${event.eventDate}: cup ${ssiReferences.cupId}, ${ssiReferences.matches.length} matches`)
+      res.json({ success: true, event: updated, ssiReferences })
+    } catch (err) {
+      // Mark event as failed with error details
+      await updateScheduledEvent(req.params.id, {
+        status: 'failed',
+        errorDetails: err.message,
+      }).catch(() => {}) // don't fail if status update fails
+
+      log.error(`[platform] SSI event creation failed for ${req.params.id}:`, err.message)
+      if (err.message.includes('authentication') || err.message.includes('credentials')) {
+        return res.status(401).json({ error: 'SSI authentication failed — check tenant credentials' })
+      }
+      return res.status(500).json({ error: `SSI event creation failed: ${err.message}` })
+    }
   })
 
   // ============================================================

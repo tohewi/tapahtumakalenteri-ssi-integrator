@@ -10,7 +10,7 @@
 // ============================================================
 
 import { useState, useEffect } from 'react'
-import { listTemplates, listEvents, createEventsApi, deleteEventApi } from '../../platform-api.js'
+import { listTemplates, listEvents, createEventsApi, deleteEventApi, executeEventApi } from '../../platform-api.js'
 
 // ---- Status badge colors ----
 const STATUS_COLORS = {
@@ -57,6 +57,7 @@ export default function SchedulePage({ tenantId, onBack }) {
   const [creating, setCreating] = useState(false)
   const [batchResults, setBatchResults] = useState(null)
   const [status, setStatus] = useState(null)
+  const [executingId, setExecutingId] = useState(null) // event ID being executed in SSI
 
   // Load templates and events
   useEffect(() => {
@@ -128,6 +129,23 @@ export default function SchedulePage({ tenantId, onBack }) {
       setStatus({ type: 'error', message: err.message })
     } finally {
       setCreating(false)
+    }
+  }
+
+  // Execute a planned event — create in SSI
+  async function handleExecute(eventId) {
+    if (!confirm('Create this event in SSI? This will create a real cup, matches, and squads on ShootNScoreIt.')) return
+    setExecutingId(eventId)
+    setStatus(null)
+    try {
+      const data = await executeEventApi(tenantId, eventId)
+      setStatus({ type: 'success', message: `SSI event created: ${data.ssiReferences?.cupName || 'Cup'} — ${data.ssiReferences?.matches?.length || 0} matches` })
+      await refreshEvents()
+    } catch (err) {
+      setStatus({ type: 'error', message: err.message })
+      await refreshEvents() // refresh to show failed status
+    } finally {
+      setExecutingId(null)
     }
   }
 
@@ -308,7 +326,25 @@ export default function SchedulePage({ tenantId, onBack }) {
                     </div>
                     <div className="flex items-center gap-2">
                       {evt.status === 'planned' && (
-                        <button onClick={() => handleDelete(evt.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
+                        <>
+                          <button
+                            onClick={() => handleExecute(evt.id)}
+                            disabled={executingId === evt.id}
+                            className="text-xs bg-sky-600 text-white px-2.5 py-1 rounded font-semibold hover:bg-sky-700 disabled:opacity-50 transition-colors"
+                          >
+                            {executingId === evt.id ? 'Creating in SSI...' : 'Create in SSI'}
+                          </button>
+                          <button onClick={() => handleDelete(evt.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
+                        </>
+                      )}
+                      {evt.status === 'failed' && (
+                        <button
+                          onClick={() => handleExecute(evt.id)}
+                          disabled={executingId === evt.id}
+                          className="text-xs text-sky-600 hover:text-sky-800 font-medium"
+                        >
+                          Retry
+                        </button>
                       )}
                     </div>
                   </div>

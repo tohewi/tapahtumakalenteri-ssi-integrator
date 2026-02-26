@@ -274,6 +274,15 @@ export async function updateEventApi(tenantId, eventId, updates) {
 }
 
 /**
+ * Execute a planned event — create cup/matches/squads in SSI.
+ */
+export async function executeEventApi(tenantId, eventId) {
+  return platformFetch(`/tenants/${tenantId}/events/${eventId}/execute`, {
+    method: 'POST',
+  })
+}
+
+/**
  * Delete a planned scheduled event.
  */
 export async function deleteEventApi(tenantId, eventId) {
