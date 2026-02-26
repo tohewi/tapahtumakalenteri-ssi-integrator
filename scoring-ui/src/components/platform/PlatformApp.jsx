@@ -26,6 +26,7 @@ import WelcomePage from './WelcomePage.jsx'
 import SignInPage from './SignInPage.jsx'
 import DashboardPage from './DashboardPage.jsx'
 import TenantCreatePage from './TenantCreatePage.jsx'
+import TenantDetailPage from './TenantDetailPage.jsx'
 
 // ---- App states ----
 const VIEW = {
@@ -34,6 +35,7 @@ const VIEW = {
   SIGN_IN: 'sign_in',
   DASHBOARD: 'dashboard',
   CREATE_TENANT: 'create_tenant',
+  TENANT_DETAIL: 'tenant_detail',
 }
 
 export default function PlatformApp() {
@@ -41,6 +43,7 @@ export default function PlatformApp() {
   const [account, setAccount] = useState(null)
   const [tenants, setTenants] = useState([])
   const [error, setError] = useState(null)
+  const [selectedTenantId, setSelectedTenantId] = useState(null)
 
   // Check session on mount
   useEffect(() => {
@@ -113,6 +116,25 @@ export default function PlatformApp() {
     }
   }, [])
 
+  const handleSelectTenant = useCallback((tenantId) => {
+    setError(null)
+    setSelectedTenantId(tenantId)
+    setView(VIEW.TENANT_DETAIL)
+  }, [])
+
+  const handleBackToDashboard = useCallback(async () => {
+    // Refresh tenants list when returning (tenant may have been renamed)
+    try {
+      const data = await platformStatus()
+      if (data.authenticated) {
+        setAccount(data.account)
+        setTenants(data.tenants || [])
+      }
+    } catch { /* ignore refresh errors */ }
+    setSelectedTenantId(null)
+    setView(VIEW.DASHBOARD)
+  }, [])
+
   // ---- Render ----
 
   if (view === VIEW.LOADING) {
@@ -153,6 +175,17 @@ export default function PlatformApp() {
     )
   }
 
+  if (view === VIEW.TENANT_DETAIL && selectedTenantId) {
+    return (
+      <TenantDetailPage
+        tenantId={selectedTenantId}
+        account={account}
+        onBack={handleBackToDashboard}
+        onLogout={handleLogout}
+      />
+    )
+  }
+
   // VIEW.DASHBOARD
   return (
     <DashboardPage
@@ -160,6 +193,7 @@ export default function PlatformApp() {
       tenants={tenants}
       onLogout={handleLogout}
       onCreateTenant={() => { setError(null); setView(VIEW.CREATE_TENANT) }}
+      onSelectTenant={handleSelectTenant}
     />
   )
 }

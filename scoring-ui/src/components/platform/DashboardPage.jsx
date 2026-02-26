@@ -47,7 +47,7 @@ function SubscriptionBadge({ subscription }) {
   )
 }
 
-function TenantCard({ tenant }) {
+function TenantCard({ tenant, onSelect }) {
   const sub = tenant.subscription || {}
   const isTrial = sub.status === 'trial'
   const isCancelled = sub.status === 'cancelled'
@@ -56,6 +56,7 @@ function TenantCard({ tenant }) {
 
   return (
     <div
+      onClick={() => onSelect?.(tenant.id)}
       className={`bg-white rounded-lg border p-5 transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${
         isCancelled ? 'opacity-60' : ''
       }`}
@@ -99,7 +100,7 @@ function TenantCard({ tenant }) {
   )
 }
 
-export default function DashboardPage({ account, tenants, onLogout, onCreateTenant }) {
+export default function DashboardPage({ account, tenants, onLogout, onCreateTenant, onSelectTenant }) {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -159,7 +160,7 @@ export default function DashboardPage({ account, tenants, onLogout, onCreateTena
         ) : (
           <div className="space-y-4">
             {tenants.map(tenant => (
-              <TenantCard key={tenant.id} tenant={tenant} />
+              <TenantCard key={tenant.id} tenant={tenant} onSelect={onSelectTenant} />
             ))}
           </div>
         )}
