@@ -45,6 +45,7 @@ import {
   removeTenantMember,
   hasRequiredRole,
   TENANT_ROLES,
+  countDisciplinesByTenant,
 } from '../lib/db/platform-store.js'
 import { requirePlatformAuth, PLATFORM_COOKIE } from '../middleware/platform-auth.js'
 
@@ -214,6 +215,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
     }
 
     const tenants = await listAccountTenants(session.accountId)
+    const disCounts = await countDisciplinesByTenant(tenants.map(t => t.id))
 
     res.json({
       authenticated: true,
@@ -226,6 +228,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
         id: t.id,
         name: t.name,
         subscription: t.subscription,
+        disciplineCount: disCounts.get(t.id) || 0,
         createdAt: t.createdAt,
       })),
     })
@@ -236,6 +239,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   // ============================================================
   router.get('/me', requirePlatformAuth(), async (req, res) => {
     const tenants = await listAccountTenants(req.account.id)
+    const disCounts = await countDisciplinesByTenant(tenants.map(t => t.id))
     res.json({
       account: {
         id: req.account.id,
@@ -247,7 +251,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
         id: t.id,
         name: t.name,
         subscription: t.subscription,
-        disciplines: t.disciplines || [],
+        disciplineCount: disCounts.get(t.id) || 0,
         createdAt: t.createdAt,
       })),
     })
@@ -371,12 +375,13 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   // ============================================================
   router.get('/tenants', requirePlatformAuth(), async (req, res) => {
     const tenants = await listAccountTenants(req.account.id)
+    const disCounts = await countDisciplinesByTenant(tenants.map(t => t.id))
     res.json({
       tenants: tenants.map(t => ({
         id: t.id,
         name: t.name,
         subscription: t.subscription,
-        disciplines: t.disciplines || [],
+        disciplineCount: disCounts.get(t.id) || 0,
         createdAt: t.createdAt,
         updatedAt: t.updatedAt,
       })),

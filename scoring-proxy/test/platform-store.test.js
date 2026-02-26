@@ -295,6 +295,19 @@ class TestPgPool {
       return { rows: [row] }
     }
 
+    // SELECT tenant_id, COUNT(*)::int AS count FROM disciplines WHERE tenant_id IN (...) GROUP BY tenant_id
+    if (sql.includes('FROM disciplines WHERE tenant_id IN') && sql.includes('GROUP BY')) {
+      const tenantIds = new Set(params)
+      const counts = new Map()
+      for (const d of this.disciplines.values()) {
+        if (tenantIds.has(d.tenant_id)) {
+          counts.set(d.tenant_id, (counts.get(d.tenant_id) || 0) + 1)
+        }
+      }
+      const rows = [...counts.entries()].map(([tid, c]) => ({ tenant_id: tid, count: c }))
+      return { rows }
+    }
+
     // DELETE FROM disciplines WHERE id = $1 RETURNING id
     if (sql.startsWith('DELETE FROM disciplines WHERE id')) {
       const disId = params[0]

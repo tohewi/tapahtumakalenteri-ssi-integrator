@@ -52,7 +52,7 @@ function TenantCard({ tenant, onSelect }) {
   const isTrial = sub.status === 'trial'
   const isCancelled = sub.status === 'cancelled'
   const trialDays = isTrial ? daysUntil(sub.trialEndsAt) : null
-  const disciplineCount = tenant.disciplines?.length || 0
+  const disciplineCount = tenant.disciplineCount || 0
 
   return (
     <div

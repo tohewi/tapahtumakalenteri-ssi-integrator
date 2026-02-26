@@ -713,6 +713,24 @@ export async function removeTenantMember(memberId) {
   return rows.length > 0
 }
 
+/**
+ * Get discipline counts for a list of tenant IDs in a single query.
+ * Returns a Map of tenantId → count.
+ */
+export async function countDisciplinesByTenant(tenantIds) {
+  if (!tenantIds || tenantIds.length === 0) return new Map()
+  const placeholders = tenantIds.map((_, i) => `$${i + 1}`).join(', ')
+  const { rows } = await query(
+    `SELECT tenant_id, COUNT(*)::int AS count
+     FROM disciplines WHERE tenant_id IN (${placeholders})
+     GROUP BY tenant_id`,
+    tenantIds
+  )
+  const map = new Map()
+  for (const row of rows) map.set(row.tenant_id, row.count)
+  return map
+}
+
 // ---- Discipline CRUD ----
 
 /**
