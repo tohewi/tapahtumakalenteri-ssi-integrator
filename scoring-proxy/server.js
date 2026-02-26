@@ -18,6 +18,8 @@ import { initRedis, getActiveSessionCount, isUsingRedis, touchSession } from './
 import { requireAuthV7 } from './middleware/auth-v7.js'
 import { createAuthV7Router } from './routes/auth-v7.js'
 import apiV1Router from './routes/v1/index.js'
+import { createPlatformRouter } from './routes/platform.js'
+import { initPostgres, isPostgresAvailable } from './lib/db/postgres.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -319,6 +321,26 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000)
 
+// Rate limit for platform sign-up: 5 per hour per IP
+const platformSignUpLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many sign-up attempts. Try again later.' },
+  handler: rateLimitHandler('platform-signup', 60 * 60 * 1000, { error: 'Too many sign-up attempts. Try again later.' }),
+})
+
+// Rate limit for platform login: 10 per 15 min per IP
+const platformLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts. Try again in 15 minutes.' },
+  handler: rateLimitHandler('platform-login', 15 * 60 * 1000, { error: 'Too many login attempts. Try again in 15 minutes.' }),
+})
+
 // Rate limit for registration: 5 submit attempts per 10 min per IP
 const registerLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
@@ -410,6 +432,13 @@ const reportsRouter = createReportsRouter({
 app.use(`${API_V1_BASE}/report`, reportsRouter)
 app.use(`${API_LEGACY_BASE}/report`, legacyApiAlias, reportsRouter)
 
+// Platform routes (account sign-up, login, tenant management)
+const platformRouter = createPlatformRouter({
+  platformSignUpLimiter,
+  platformLoginLimiter,
+})
+app.use(`${API_V1_BASE}/platform`, platformRouter)
+
 // Staffing routes
 const staffingRouter = createStaffingRouter({
   requireAuth,
@@ -441,13 +470,15 @@ const isDirectRun = process.argv[1] && import.meta.url.endsWith(process.argv[1].
   || process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 
 if (isDirectRun) {
-  // Initialize session store before accepting requests (Redis or in-memory fallback)
+  // Initialize data stores before accepting requests
   await initRedis()
+  const pgReady = await initPostgres()
 
   app.listen(PORT, () => {
     console.log(`Scoring proxy running on http://localhost:${PORT}`)
     console.log(`Mode: ${IS_PROD ? 'production' : 'development'}`)
     console.log(`Session backend: ${isUsingRedis() ? 'redis' : 'memory'}`)
+    console.log(`Database: ${pgReady ? 'postgresql' : 'not configured'}`)
     console.log('Endpoints:')
     console.log('  POST /api/v1/auth/login     { email, password, apiKey }')
     console.log('  GET  /api/v1/auth/status')
@@ -467,6 +498,13 @@ if (isDirectRun) {
     console.log('  POST /api/v1/manage/cup/:id/assign-squad  { shooterName, squadNumber }')
     console.log('  POST /api/v1/manage/cup/:id/fix-squad     { shooterName, targetSquad }')
     console.log('  POST /api/v1/manage/cup/:id/add-to-cup    { shooterName }')
+    console.log('  POST /api/v1/platform/register  { email, password, name, organizationName }')
+    console.log('  POST /api/v1/platform/login     { email, password }')
+    console.log('  POST /api/v1/platform/logout')
+    console.log('  GET  /api/v1/platform/status')
+    console.log('  GET  /api/v1/platform/me')
+    console.log('  GET  /api/v1/platform/tenants')
+    console.log('  POST /api/v1/platform/tenants   { name }')
     console.log('  GET  /api/v1/matches?search=')
     console.log('  POST /api/v1/report/summary       { matches }')
     console.log('  POST /api/v1/report/matches       { matchIds }')

@@ -350,6 +350,38 @@ Analysis completed 2026-02-20. Reviewed `docs/design/architecture-review.md` (20
 
 **Implementation**: Check `match.status === 'cp'` and disable all score modification operations while preserving read-only browsing capability.
 
+## Release 8.0 — Match Management Platform (Phase 0: Auth & Tenancy)
+
+Self-service account onboarding: sign up, sign in, create and manage tenants. This is the foundation for the match management platform described in `docs/design/match-management-design.md`.
+
+### Platform Auth Requirements
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| PA1 | **Account Sign-Up**: Self-service registration with email, password (bcrypt, 12 rounds), name, and organization name. Creates account + first tenant with 30-day free trial. Email uniqueness enforced (case-insensitive). Rate limited: 5/hr per IP | ✅ Implemented |
+| PA2 | **Account Sign-In**: Email + password authentication. Returns account profile + tenant list. Separate session cookie (`platform_sid`) from SSI auth. Rate limited: 10/15min per IP | ✅ Implemented |
+| PA3 | **Platform Session Management**: 24-hour sessions stored in Redis (same instance as SSI sessions). Session cookie is HttpOnly, SameSite=Lax, Secure in production. Sliding expiry on each request | ✅ Implemented |
+| PA4 | **Platform Session Status**: `GET /api/v1/platform/status` returns auth state + account profile + tenant list without creating a session. Used by frontend for session restoration on mount | ✅ Implemented |
+| PA5 | **Tenant Creation**: Authenticated accounts can create additional tenants. Each tenant starts with a 30-day free trial. Tenant data: name, subscription, SSI credentials (placeholder), calendar config (placeholder), disciplines | ✅ Implemented |
+| PA6 | **Tenant CRUD**: List, get, and update tenants. Ownership verified — accounts can only access their own tenants. Update supports name, SSI credentials, calendar config, disciplines | ✅ Implemented |
+| PA7 | **Platform Auth Middleware**: `requirePlatformAuth()` middleware validates platform session, loads account profile into `req.account`, rejects expired/missing sessions. Independent from SSI auth middleware | ✅ Implemented |
+| PA8 | **Welcome/Sign-Up UI**: Landing page at `#/platform` with feature overview (Templates, Scheduling, Roster), sign-up form, and sign-in link. TailwindCSS, responsive, matches design prototype | ✅ Implemented |
+| PA9 | **Sign-In UI**: Separate sign-in page with email/password form, error handling, link to sign-up | ✅ Implemented |
+| PA10 | **Dashboard UI**: Post-login view showing tenant cards with subscription status, trial countdown, and quick action placeholders (templates, scheduling, roster — coming soon) | ✅ Implemented |
+| PA11 | **Tenant Creation UI**: Wizard with organization name input, SSI/calendar placeholder steps (configure after creation), trial info badge. Creates tenant via API | ✅ Implemented |
+| PA12 | **Platform API Client**: Frontend `platform-api.js` module with typed fetch wrapper, credential inclusion, error handling with `platformSessionExpired` flag for session restore | ✅ Implemented |
+| PA13 | **Platform Store Tests**: 24 unit tests covering account CRUD (create, authenticate, get, update), tenant CRUD (create, get, list, update), and platform sessions (create, get, delete). Uses in-memory Redis fallback | ✅ Implemented |
+
+### Design Decisions (PA1–PA13)
+
+- **Separate from SSI auth**: Platform accounts have their own identity system. SSI credentials are per-tenant, not per-account. An account may have tenants that use different SSI accounts.
+- **Redis storage (temporary)**: Currently uses Redis with `platform:` key prefix. Will migrate to PostgreSQL for persistent data — see `docs/design/platform-data-model.md` for storage strategy.
+- **bcrypt for passwords**: Industry standard, 12 rounds. No plaintext storage.
+- **Session cookie isolation**: `platform_sid` cookie is separate from the SSI `ssi_session` cookie. Both can coexist — a user could be logged into both the platform and SSI scoring simultaneously.
+- **Free trial by default**: Every new tenant gets 30 days of full functionality. Payment integration (Stripe) is deferred to a later phase.
+- **Frontend route**: `#/platform` — keeps the existing scoring/register/manage routes unchanged.
+- **Data model**: See `docs/design/platform-data-model.md` for entity definitions, relationships, lifecycles, and storage strategy.
+
 ## Release 7.4.1 — Authentication UX Hardening
 
 Patch release focused on authentication UX consistency across protected feature domains and documentation consolidation.
@@ -541,6 +573,7 @@ Applies if tenants are consumers or non-commercial associations (e.g., shooting 
 - **Release 7.6** (Consolidation & Completion): 18 requirements from R6.0/R7.0/R7.2/R7.5 — see `release-7.6.md`
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
+- **Release 8.0** (Platform Auth & Tenancy): 13 requirements — 13 ✅ (PA1–PA13)
 - **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
 - **Regulatory** (SaaS Platform EU/Finland): 23 requirements — 1 ✅ (REG14), 1 N/A (REG12), 21 design phase (REG1–REG23)
 
