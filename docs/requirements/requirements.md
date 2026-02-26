@@ -476,6 +476,8 @@ Vision: Transform the current "link collection" home page into a structured matc
 | MP5 | **Registration Management**: Consolidate the existing registration helper (`#/register`) into the match event context. View registrations, manage squad assignments, handle re-registrations and withdrawals — all within the match event view | ⬚ Design |
 | MP6 | **Scoring Integration**: Integrate tablet scoring (`#/scoring-tablet`) and mobile scoring (`#/scoring`) into the match event context. Scoring is launched from within a match event, not as a separate top-level feature | ⬚ Design |
 | MP7 | **Reporting**: Post-match reporting — results summary, statistics (shots fired, participation), export for Tapahtumakalenteri update. Consolidate the existing summary report functionality | ⬚ Design |
+| MP8 | **Localization & Regional Settings**: Tenant-level localization configuration — city, country, timezone. These settings propagate to event creation (SSI timezone, region fields), calendar publishing (event location), and UI display. Must handle: (a) default timezone for date/time display and schedule calculations, (b) country/region for SSI event region field, (c) city/venue for event venue and calendar location, (d) locale for date/number formatting (fi-FI, en-US, etc.). Stored on tenant record, overridable per template | ⬚ Design |
+| MP9 | **Tenant Branding & Picture**: Allow tenants to upload a logo/picture for their organization. Displayed in tenant dashboard, member views, and optionally in calendar event content. Requires: (a) image upload endpoint with size/format validation (max 2MB, jpg/png/webp), (b) image storage (Render disk or S3-compatible), (c) serving via CDN-friendly URL, (d) UI for upload/preview/remove in tenant settings | ⬚ Design |
 
 ### Design Principles (v8.1)
 
@@ -587,7 +589,7 @@ Applies if tenants are consumers or non-commercial associations (e.g., shooting 
 - **Release 7.9** (GraphQL Cup Management): 7 requirements — 0 ✅, 7 pending (GQL1–GQL7)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
 - **Release 8.0** (Platform Auth & Tenancy): 21 requirements — 19 ✅, 2 ⬜ pending (PA18 MFA, PA21 Invitation Links)
-- **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
+- **Release 8.1** (Match Management Platform): 9 requirements — 0 ✅, 9 design phase (MP1–MP9)
 - **Regulatory** (SaaS Platform EU/Finland): 23 requirements — 1 ✅ (REG14), 1 N/A (REG12), 21 design phase (REG1–REG23)
 
 
