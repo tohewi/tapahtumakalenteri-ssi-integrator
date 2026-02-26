@@ -19,7 +19,7 @@ import { requireAuthV7 } from './middleware/auth-v7.js'
 import { createAuthV7Router } from './routes/auth-v7.js'
 import apiV1Router from './routes/v1/index.js'
 import { createPlatformRouter } from './routes/platform.js'
-import { initPostgres, isPostgresAvailable } from './lib/db/postgres.js'
+import { initPostgres } from './lib/db/postgres.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
