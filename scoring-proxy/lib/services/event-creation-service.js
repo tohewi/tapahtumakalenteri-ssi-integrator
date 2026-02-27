@@ -86,7 +86,10 @@ async function fetchCsrf(url, cookies) {
 async function postForm(url, body, arrayFields, csrfToken, cookies) {
   // Build URL-encoded body
   const pairs = []
-  pairs.push(`csrfmiddlewaretoken=${encodeURIComponent(csrfToken)}`)
+  // Only include CSRF token if we actually have one (SSI may not use CSRF)
+  if (csrfToken) {
+    pairs.push(`csrfmiddlewaretoken=${encodeURIComponent(csrfToken)}`)
+  }
   for (const [key, val] of Object.entries(body)) {
     pairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(val ?? '')}`)
   }
@@ -97,17 +100,22 @@ async function postForm(url, body, arrayFields, csrfToken, cookies) {
   }
   const encodedBody = pairs.join('&')
 
+  // Build headers — only include X-CSRFToken if we have one
+  const headers = {
+    'Content-Type': 'application/x-www-form-urlencoded',
+    'Cookie': formatCookies(cookies),
+    'Referer': url,
+    'Origin': SSI_BASE_URL,
+  }
+  if (csrfToken) {
+    headers['X-CSRFToken'] = csrfToken
+  }
+
   // Do NOT follow redirects — we need the Location header to detect success
   // (SSI redirects to /event/{type}/{id}/ on success, back to form on failure)
   const resp = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Cookie': formatCookies(cookies),
-      'Referer': url,
-      'Origin': SSI_BASE_URL,
-      'X-CSRFToken': csrfToken,
-    },
+    headers,
     body: encodedBody,
     redirect: 'manual',
   })
