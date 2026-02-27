@@ -43,7 +43,14 @@ function StatusBadge({ status }) {
 
 function formatEventDate(dateStr) {
   if (!dateStr) return '—'
-  const d = new Date(dateStr + 'T00:00:00')
+  // Handle both YYYY-MM-DD strings and ISO timestamps from API
+  // PostgreSQL DATE serializes as '2026-03-04T00:00:00.000Z' in JSON
+  let isoDate = dateStr
+  if (typeof dateStr === 'string' && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    isoDate = dateStr + 'T12:00:00Z' // noon UTC to avoid DST edge
+  }
+  const d = new Date(isoDate)
+  if (isNaN(d.getTime())) return 'Invalid Date'
   return d.toLocaleDateString('fi-FI', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
@@ -338,13 +345,16 @@ export default function SchedulePage({ tenantId, onBack }) {
                         </>
                       )}
                       {evt.status === 'failed' && (
-                        <button
-                          onClick={() => handleExecute(evt.id)}
-                          disabled={executingId === evt.id}
-                          className="text-xs text-sky-600 hover:text-sky-800 font-medium"
-                        >
-                          Retry
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleExecute(evt.id)}
+                            disabled={executingId === evt.id}
+                            className="text-xs text-sky-600 hover:text-sky-800 font-medium"
+                          >
+                            {executingId === evt.id ? 'Retrying...' : 'Retry'}
+                          </button>
+                          <button onClick={() => handleDelete(evt.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
+                        </>
                       )}
                     </div>
                   </div>

@@ -1161,12 +1161,14 @@ export async function updateScheduledEvent(eventId, updates) {
 }
 
 /**
- * Delete a scheduled event. Only planned events can be deleted.
+ * Delete a scheduled event. Only planned or failed events can be deleted.
+ * Events that have been created in SSI (ssi_created, etc.) cannot be deleted
+ * because they have external references that would become orphaned.
  * @returns {boolean}
  */
 export async function deleteScheduledEvent(eventId) {
   const { rows } = await query(
-    `DELETE FROM scheduled_events WHERE id = $1 AND status = 'planned' RETURNING id`,
+    `DELETE FROM scheduled_events WHERE id = $1 AND status IN ('planned', 'failed') RETURNING id`,
     [eventId]
   )
   return rows.length > 0

@@ -936,7 +936,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
 
     const deleted = await deleteScheduledEvent(req.params.id)
     if (!deleted) {
-      return res.status(400).json({ error: 'Only planned events can be deleted' })
+      return res.status(400).json({ error: 'Only planned or failed events can be deleted' })
     }
 
     log.info(`[platform] Event deleted: ${req.params.id}`)
@@ -953,8 +953,8 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       return res.status(404).json({ error: 'Event not found' })
     }
 
-    if (event.status !== 'planned') {
-      return res.status(400).json({ error: `Event is already ${event.status} — only planned events can be executed` })
+    if (event.status !== 'planned' && event.status !== 'failed') {
+      return res.status(400).json({ error: `Event is already ${event.status} — only planned or failed events can be executed` })
     }
 
     // Load template
