@@ -61,24 +61,21 @@ describe('parseSsiEventUrl', () => {
 
 describe('buildStructureQuery — Cup', () => {
   it('generates correct query for NordicSerie cup', () => {
-    const query = buildStructureQuery(true, 'NordicSerieNode', 'NordicResulMatchNode', 'NordicSquadNode')
+    const query = buildStructureQuery(true, 'NordicSerieNode', 'NordicMatchNode', 'NordicSquadNode')
 
     // Should have NordicSerieNode inline fragment with type-specific fields
-    expect(query).toContain('... on NordicSerieNode { scoring_mode match_registration_mode timezone }')
+    expect(query).toContain('... on NordicSerieNode { scoring_mode match_registration_mode level count }')
 
-    // Should have component_matches with match-type inline fragment for squads
+    // Should have component_matches with match field (link→EventInterface)
     expect(query).toContain('component_matches')
-    expect(query).toContain('... on NordicResulMatchNode {')
+    expect(query).toContain('match {')
     expect(query).toContain('squads {')
 
-    // Should have squad inline fragment with name, starts, competitors
-    expect(query).toContain('... on NordicSquadNode { name starts competitors { id } }')
+    // Should have squad inline fragment with starts, stops, competitors
+    expect(query).toContain('... on NordicSquadNode { starts stops competitors { id } }')
 
-    // Should NOT have event-level squads (cups don't have squads)
-    // Count occurrences: squads should only appear inside component_matches
-    const eventLevel = query.split('event(content_type')[1]
-    const topLevelSquads = eventLevel.split('component_matches')[0]
-    expect(topLevelSquads).not.toContain('squads')
+    // Should have squad comment field (no name field in SSI)
+    expect(query).toContain('comment')
   })
 
   it('includes common EventInterface fields', () => {
@@ -107,28 +104,28 @@ describe('buildStructureQuery — Cup', () => {
     expect(query).not.toContain('$id: ID!')
   })
 
-  it('handles null matchTypeName gracefully — no inline fragment for squads', () => {
+  it('handles null matchTypeName — still has component_matches with match field', () => {
     const query = buildStructureQuery(true, 'NordicSerieNode', null, 'NordicSquadNode')
 
-    // Should still have component_matches but without match-type inline fragment
     expect(query).toContain('component_matches')
+    expect(query).toContain('match {')
     expect(query).not.toContain('... on null')
   })
 
   it('generates correct query for PrecisionSerie cup', () => {
     const query = buildStructureQuery(true, 'PrecisionSerieNode', 'PrecisionMatchNode', 'PrecisionSquadNode')
 
-    expect(query).toContain('... on PrecisionSerieNode { scoring_mode match_registration_mode timezone }')
-    expect(query).toContain('... on PrecisionMatchNode {')
-    expect(query).toContain('... on PrecisionSquadNode { name starts competitors { id } }')
+    expect(query).toContain('... on PrecisionSerieNode { scoring_mode match_registration_mode count }')
+    expect(query).toContain('match {')
+    expect(query).toContain('... on PrecisionSquadNode { starts stops competitors { id } }')
   })
 
   it('generates correct query for IpscSerie cup — no scoring_mode', () => {
-    const query = buildStructureQuery(true, 'IpscSerieNode', 'IpscMatchNode', 'GenericSquadNode')
+    const query = buildStructureQuery(true, 'IpscSerieNode', 'IpscMatchNode', 'IpscSquadNode')
 
-    expect(query).toContain('... on IpscSerieNode { match_registration_mode timezone }')
+    expect(query).toContain('... on IpscSerieNode { match_registration_mode count }')
     expect(query).not.toContain('scoring_mode')
-    expect(query).toContain('... on GenericSquadNode { name starts }')
+    expect(query).toContain('... on IpscSquadNode { starts stops competitors { id } }')
   })
 })
 
@@ -142,7 +139,7 @@ describe('buildStructureQuery — Standalone Match', () => {
 
     // Should have squads at event level
     expect(query).toContain('squads {')
-    expect(query).toContain('... on NordicSquadNode { name starts competitors { id } }')
+    expect(query).toContain('... on NordicSquadNode { starts stops competitors { id } }')
 
     // Should NOT have component_matches
     expect(query).not.toContain('component_matches')
@@ -155,7 +152,7 @@ describe('buildStructureQuery — Standalone Match', () => {
     expect(query).not.toContain('... on UnknownSerieNode')
     // But still has squads
     expect(query).toContain('squads {')
-    expect(query).toContain('... on GenericSquadNode { name starts }')
+    expect(query).toContain('... on GenericSquadNode { starts stops }')
   })
 })
 
@@ -166,7 +163,7 @@ describe('buildStructureQuery — Standalone Match', () => {
 describe('EVENT_TO_SQUAD_TYPE', () => {
   it('maps Nordic event types to NordicSquadNode', () => {
     expect(EVENT_TO_SQUAD_TYPE['NordicSerieNode']).toBe('NordicSquadNode')
-    expect(EVENT_TO_SQUAD_TYPE['NordicResulMatchNode']).toBe('NordicSquadNode')
+    expect(EVENT_TO_SQUAD_TYPE['NordicMatchNode']).toBe('NordicSquadNode')
   })
 
   it('maps Precision event types to PrecisionSquadNode', () => {
@@ -174,9 +171,9 @@ describe('EVENT_TO_SQUAD_TYPE', () => {
     expect(EVENT_TO_SQUAD_TYPE['PrecisionMatchNode']).toBe('PrecisionSquadNode')
   })
 
-  it('maps IPSC and PPC to GenericSquadNode', () => {
-    expect(EVENT_TO_SQUAD_TYPE['IpscSerieNode']).toBe('GenericSquadNode')
-    expect(EVENT_TO_SQUAD_TYPE['PpcSerieNode']).toBe('GenericSquadNode')
+  it('maps IPSC to IpscSquadNode and PPC to PpcSquadNode', () => {
+    expect(EVENT_TO_SQUAD_TYPE['IpscSerieNode']).toBe('IpscSquadNode')
+    expect(EVENT_TO_SQUAD_TYPE['PpcSerieNode']).toBe('PpcSquadNode')
   })
 
   it('returns undefined for unknown type — caller should use fallback', () => {
@@ -211,16 +208,23 @@ describe('EVENT_TO_SQUAD_TYPE', () => {
 // ============================================================
 
 describe('SERIE_TYPE_FIELDS', () => {
-  it('NordicSerieNode has scoring_mode, match_registration_mode, timezone', () => {
+  it('NordicSerieNode has scoring_mode, match_registration_mode, level, count', () => {
     expect(SERIE_TYPE_FIELDS['NordicSerieNode']).toContain('scoring_mode')
     expect(SERIE_TYPE_FIELDS['NordicSerieNode']).toContain('match_registration_mode')
-    expect(SERIE_TYPE_FIELDS['NordicSerieNode']).toContain('timezone')
+    expect(SERIE_TYPE_FIELDS['NordicSerieNode']).toContain('level')
+    expect(SERIE_TYPE_FIELDS['NordicSerieNode']).toContain('count')
   })
 
-  it('IpscSerieNode has match_registration_mode and timezone but not scoring_mode', () => {
+  it('IpscSerieNode has match_registration_mode and count but not scoring_mode', () => {
     expect(SERIE_TYPE_FIELDS['IpscSerieNode']).toContain('match_registration_mode')
-    expect(SERIE_TYPE_FIELDS['IpscSerieNode']).toContain('timezone')
+    expect(SERIE_TYPE_FIELDS['IpscSerieNode']).toContain('count')
     expect(SERIE_TYPE_FIELDS['IpscSerieNode']).not.toContain('scoring_mode')
+  })
+
+  it('no timezone in any Serie type (not in SSI schema)', () => {
+    for (const fields of Object.values(SERIE_TYPE_FIELDS)) {
+      expect(fields).not.toContain('timezone')
+    }
   })
 })
 
@@ -229,18 +233,24 @@ describe('SERIE_TYPE_FIELDS', () => {
 // ============================================================
 
 describe('SQUAD_TYPE_FIELDS', () => {
-  it('NordicSquadNode includes competitors', () => {
+  it('NordicSquadNode includes starts, stops, competitors', () => {
     expect(SQUAD_TYPE_FIELDS['NordicSquadNode']).toContain('competitors { id }')
-    expect(SQUAD_TYPE_FIELDS['NordicSquadNode']).toContain('name')
     expect(SQUAD_TYPE_FIELDS['NordicSquadNode']).toContain('starts')
+    expect(SQUAD_TYPE_FIELDS['NordicSquadNode']).toContain('stops')
   })
 
-  it('GenericSquadNode has name and starts only', () => {
-    expect(SQUAD_TYPE_FIELDS['GenericSquadNode']).toBe('name starts')
+  it('no squad type has a name field (SSI uses comment instead)', () => {
+    for (const fields of Object.values(SQUAD_TYPE_FIELDS)) {
+      expect(fields).not.toContain('name')
+    }
   })
 
-  it('CmpSquadNode has name and starts only — no competitors', () => {
-    expect(SQUAD_TYPE_FIELDS['CmpSquadNode']).toBe('name starts')
+  it('GenericSquadNode has starts and stops only', () => {
+    expect(SQUAD_TYPE_FIELDS['GenericSquadNode']).toBe('starts stops')
+  })
+
+  it('CmpSquadNode has starts and stops only — no competitors', () => {
+    expect(SQUAD_TYPE_FIELDS['CmpSquadNode']).toBe('starts stops')
     expect(SQUAD_TYPE_FIELDS['CmpSquadNode']).not.toContain('competitors')
   })
 })
@@ -250,27 +260,17 @@ describe('SQUAD_TYPE_FIELDS', () => {
 // ============================================================
 
 describe('Business rule: Cup vs Match squad access', () => {
-  it('Cup query does NOT include event-level squads block', () => {
-    const query = buildStructureQuery(true, 'NordicSerieNode', 'NordicResulMatchNode', 'NordicSquadNode')
+  it('Cup query has squads inside match (via component_matches link), not at event level', () => {
+    const query = buildStructureQuery(true, 'NordicSerieNode', 'NordicMatchNode', 'NordicSquadNode')
 
-    // Split at component_matches to check what comes after it at event level
-    // The query structure should be: event { ...fields, ...serieFragment, component_matches {...}, NO squads }
-    const afterMatches = query.split(/\}\s*\n\s*\}$/m)
-    // Verify no standalone "squads {" at event level (only inside component_matches)
-    const lines = query.split('\n')
-    let depth = 0
-    let foundEventSquads = false
-    for (const line of lines) {
-      if (line.includes('event(content_type')) depth = 1
-      if (line.includes('component_matches')) depth = 2
-      if (depth === 1 && line.trim().startsWith('squads {')) foundEventSquads = true
-      if (line.trim() === '}') depth = Math.max(0, depth - 1)
-    }
-    expect(foundEventSquads).toBe(false)
+    // Cup query should have component_matches → match → squads
+    expect(query).toContain('component_matches')
+    expect(query).toContain('match {')
+    expect(query).toContain('squads {')
   })
 
   it('Match query includes event-level squads block', () => {
-    const query = buildStructureQuery(false, 'NordicSerieNode', null, 'NordicSquadNode')
+    const query = buildStructureQuery(false, 'NordicMatchNode', null, 'NordicSquadNode')
     expect(query).toContain('squads {')
     expect(query).not.toContain('component_matches')
   })

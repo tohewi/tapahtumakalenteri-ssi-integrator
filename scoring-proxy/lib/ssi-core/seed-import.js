@@ -6,14 +6,28 @@
 // as the blueprint for creating new events.
 //
 // Two-step discovery approach:
-//   1. Lightweight query to discover __typename of event, matches,
-//      and squads (discipline-agnostic)
+//   1. Lightweight query to discover __typename of event and
+//      component_matches (discipline-agnostic)
 //   2. Type-specific query using correct inline fragments for the
 //      discovered node types
 //
-// Known SSI node types (from schema introspection):
-//   Serie:  NordicSerieNode, PrecisionSerieNode, IpscSerieNode, PpcSerieNode
-//   Squad:  NordicSquadNode, PrecisionSquadNode, CmpSquadNode, GenericSquadNode
+// SSI Schema Key Facts (from introspection 2026-02-27):
+//   - EventInterface has: name, starts, ends, status, rule, description,
+//     information, venue, url, url_display, max_competitors, region,
+//     visibility, registration, results, currency, squads, component_matches
+//   - ComponentMatchInterface is a LINK record — only has: id, number,
+//     included, match (→ EventInterface), serie (→ EventInterface).
+//     Actual match data is accessed via the `match` field.
+//   - SquadInterface has: id, number, max_competitors, comment, registration
+//     NO `name` field — use `comment` or `get_squad_display`
+//   - NordicSquadNode adds: starts, stops, competitors, weapon_groups, etc.
+//   - NO `timezone` field exists anywhere in the schema
+//   - Serie types declare `squads` in schema but backend CRASHES when
+//     queried (SSI bug). Do NOT query squads on Serie/Cup types.
+//
+// Serie types: NordicSerieNode, PrecisionSerieNode, IpscSerieNode, PpcSerieNode
+// Squad types: NordicSquadNode, PrecisionSquadNode, CmpSquadNode, GenericSquadNode,
+//              IpscSquadNode, PpcSquadNode, IdpaSquadNode, SteelSquadNode, SassSquadNode
 //
 // Usage:
 //   const snapshot = await ssiFetchEventStructure({
@@ -36,9 +50,10 @@ const AUTH_MUTATION = `
 `
 
 // Step 1: Lightweight discovery query — get __typename and structure shape.
-// NOTE: Do NOT query `squads` here. Serie (Cup) types don't have squads
-// at the event level — only their component matches do. Standalone matches
-// have squads directly. The structure query in step 2 handles this.
+// NOTE: component_matches returns LINK records (ComponentMatchInterface).
+// We only need __typename here. The link's `match` field (→ EventInterface)
+// is queried in step 2 for actual match data.
+// Do NOT query `squads` on Serie types — backend crashes (SSI bug).
 const DISCOVERY_QUERY = `
 query EventDiscovery($ct: Int!, $id: String!) {
   event(content_type: $ct, id: $id) {
@@ -48,92 +63,128 @@ query EventDiscovery($ct: Int!, $id: String!) {
     component_matches {
       __typename
       id
+      match { __typename id }
     }
   }
 }
 `
 
-// Type-specific fields per SSI node type (serie/cup types)
+// Type-specific fields per SSI Serie node type.
+// Note: NO timezone in SSI schema. These are fields on the concrete type
+// that are NOT on EventInterface.
 const SERIE_TYPE_FIELDS = {
-  NordicSerieNode: 'scoring_mode match_registration_mode timezone',
-  PrecisionSerieNode: 'scoring_mode match_registration_mode timezone',
-  IpscSerieNode: 'match_registration_mode timezone',
-  PpcSerieNode: 'match_registration_mode timezone',
+  NordicSerieNode: 'scoring_mode match_registration_mode level count',
+  PrecisionSerieNode: 'scoring_mode match_registration_mode count',
+  IpscSerieNode: 'match_registration_mode count',
+  PpcSerieNode: 'match_registration_mode count',
 }
 
-// Type-specific fields per squad node type
+// Type-specific fields per squad node type.
+// SquadInterface has: id, number, max_competitors, comment, registration
+// These are ADDITIONAL fields on concrete squad types.
+// Note: NO `name` on any squad type — use `comment` for display name.
 const SQUAD_TYPE_FIELDS = {
-  NordicSquadNode: 'name starts competitors { id }',
-  PrecisionSquadNode: 'name starts competitors { id }',
-  CmpSquadNode: 'name starts',
-  GenericSquadNode: 'name starts',
+  NordicSquadNode: 'starts stops competitors { id }',
+  PrecisionSquadNode: 'starts stops competitors { id }',
+  IpscSquadNode: 'starts stops competitors { id }',
+  PpcSquadNode: 'starts stops',
+  CmpSquadNode: 'starts stops',
+  GenericSquadNode: 'starts stops',
 }
 
 // Map event __typename → expected squad __typename.
-// Cups (Serie) don't have squads themselves, but their matches do.
-// This mapping lets us infer squad type without querying it from the cup.
+// Cups (Serie) declare squads in schema but crash when queried.
+// This mapping lets us infer squad type for inline fragments.
 const EVENT_TO_SQUAD_TYPE = {
   NordicSerieNode: 'NordicSquadNode',
-  NordicResulMatchNode: 'NordicSquadNode',
+  NordicMatchNode: 'NordicSquadNode',
   PrecisionSerieNode: 'PrecisionSquadNode',
   PrecisionMatchNode: 'PrecisionSquadNode',
-  IpscSerieNode: 'GenericSquadNode',
-  IpscMatchNode: 'GenericSquadNode',
-  PpcSerieNode: 'GenericSquadNode',
-  PpcMatchNode: 'GenericSquadNode',
+  IpscSerieNode: 'IpscSquadNode',
+  IpscMatchNode: 'IpscSquadNode',
+  PpcSerieNode: 'PpcSquadNode',
+  PpcMatchNode: 'PpcSquadNode',
 }
 
 /**
  * Build a type-specific structure query based on discovered __typename values.
+ *
+ * SSI schema notes:
+ * - component_matches returns ComponentMatchInterface LINK records
+ * - Actual match data is on link.match (→ EventInterface)
+ * - Squads are on the match event, NOT on the component_match link
+ * - Serie types crash when querying squads (SSI bug) — skip for cups
+ * - Squad "name" is `comment` (no name field exists)
+ *
  * @param {boolean} isCup - true if event has component_matches
- * @param {string} eventTypeName - __typename of the event node
- * @param {string} squadTypeName - __typename of squad nodes (first found)
+ * @param {string} eventTypeName - __typename of the event (Serie/Match)
+ * @param {string} matchTypeName - __typename of the actual match (from link.match)
+ * @param {string} squadTypeName - inferred squad __typename
  * @returns {string} GraphQL query string
  */
 function buildStructureQuery(isCup, eventTypeName, matchTypeName, squadTypeName) {
   const serieFields = SERIE_TYPE_FIELDS[eventTypeName] || ''
-  const squadFields = SQUAD_TYPE_FIELDS[squadTypeName] || 'name starts'
+  const squadFields = SQUAD_TYPE_FIELDS[squadTypeName] || 'starts stops'
 
   const serieFragment = serieFields
     ? `... on ${eventTypeName} { ${serieFields} }`
     : ''
 
-  const squadFragment = `... on ${squadTypeName || 'GenericSquadNode'} { ${squadFields} }`
+  // SquadInterface fields: id, number, max_competitors, comment, registration
+  // Type-specific fields via inline fragment (starts, stops, competitors)
+  const squadFragment = squadTypeName
+    ? `... on ${squadTypeName} { ${squadFields} }`
+    : ''
 
-  // Business rule: Cups (Serie) do NOT have squads at the event level.
-  // Only their component matches have squads (accessed via match-type inline fragment).
-  // Standalone matches DO have squads directly on the event.
+  // Common EventInterface fields for match events
+  const matchEventFields = `
+        id
+        name
+        starts
+        ends
+        status
+        rule
+        get_content_type_key
+        get_content_type_model
+        description
+        information
+        venue
+        max_competitors
+        region
+        squads {
+          id
+          number
+          max_competitors
+          comment
+          registration
+          ${squadFragment}
+        }`
 
   let matchesBlock = ''
   let eventSquadsBlock = ''
 
   if (isCup) {
-    // Cup: squads live on matches, not the cup itself
+    // Cup: component_matches are LINK records.
+    // Match data accessed via `.match` (→ EventInterface)
+    // Squads are on the match event, not on the cup or the link.
     matchesBlock = `
     component_matches {
       id
-      name
-      starts
-      ends
-      status
-      rule
-      get_content_type_key
-      description
-      information
-      ${matchTypeName ? `... on ${matchTypeName} {
-        squads {
-          id
-          max_competitors
-          ${squadFragment}
-        }
-      }` : ''}
+      number
+      included
+      match {
+        ${matchEventFields}
+      }
     }`
   } else {
     // Standalone match: squads are on the event itself
     eventSquadsBlock = `
     squads {
       id
+      number
       max_competitors
+      comment
+      registration
       ${squadFragment}
     }`
   }
@@ -158,6 +209,7 @@ query EventStructure($ct: Int!, $id: String!) {
     registration
     results
     currency
+    serie_type
     ${serieFragment}
     ${matchesBlock}
     ${eventSquadsBlock}
@@ -191,7 +243,7 @@ async function authenticateSSI({ email, password, apiKey }) {
  * @returns {{ contentType: string, eventId: string }} or throws
  */
 // Exported for unit testing
-export { buildStructureQuery, SERIE_TYPE_FIELDS, SQUAD_TYPE_FIELDS, EVENT_TO_SQUAD_TYPE }
+export { buildStructureQuery, SERIE_TYPE_FIELDS, SQUAD_TYPE_FIELDS, EVENT_TO_SQUAD_TYPE, DISCOVERY_QUERY }
 
 export function parseSsiEventUrl(url) {
   const match = url.match(/shootnscoreit\.com\/event\/(\d+)\/(\d+)/)
@@ -199,6 +251,24 @@ export function parseSsiEventUrl(url) {
     throw new Error(`Invalid SSI event URL: ${url}. Expected format: https://shootnscoreit.com/event/{type}/{id}/`)
   }
   return { contentType: match[1], eventId: match[2] }
+}
+
+/**
+ * Map a squad GraphQL node to a snapshot squad object.
+ * SquadInterface has NO `name` field — use `comment` for display name.
+ * Type-specific fields (starts, stops, competitors) come from inline fragments.
+ */
+function mapSquad(sq) {
+  return {
+    id: sq.id,
+    number: sq.number,
+    name: sq.comment || sq.get_squad_display || `Squad ${sq.number || '?'}`,
+    maxCompetitors: sq.max_competitors,
+    registration: sq.registration || null,
+    starts: sq.starts || null,
+    stops: sq.stops || null,
+    competitorCount: sq.competitors?.length || 0,
+  }
 }
 
 /**
@@ -232,9 +302,11 @@ export async function ssiFetchEventStructure({ ssiEventUrl, credentials }) {
   const eventTypeName = discovery.event.__typename
   const isCup = (discovery.event.component_matches || []).length > 0
 
-  const matchTypeName = (discovery.event.component_matches || [])[0]?.__typename || null
+  // component_matches are LINK records; the actual match type is on .match.__typename
+  const firstLink = (discovery.event.component_matches || [])[0]
+  const matchTypeName = firstLink?.match?.__typename || null
 
-  // Infer squad type from event type (cups don't expose squads for discovery)
+  // Infer squad type from the actual match type (or event type for standalone matches)
   const squadTypeName = EVENT_TO_SQUAD_TYPE[matchTypeName] || EVENT_TO_SQUAD_TYPE[eventTypeName] || 'GenericSquadNode'
 
   log.info(`[seed-import] Discovered: event=${eventTypeName}, match=${matchTypeName}, squad=${squadTypeName} (inferred), isCup=${isCup}`)
@@ -272,6 +344,9 @@ export async function ssiFetchEventStructure({ ssiEventUrl, credentials }) {
     url: event.url || '',
     urlDisplay: event.url_display || '',
 
+    // Serie type (resul, etc.) — from EventInterface
+    serieType: event.serie_type || null,
+
     // Settings
     settings: {
       maxCompetitors: event.max_competitors,
@@ -279,41 +354,49 @@ export async function ssiFetchEventStructure({ ssiEventUrl, credentials }) {
       visibility: event.visibility,
       registration: event.registration,
       results: event.results,
-      scoringMode: event.scoring_mode,
+      scoringMode: event.scoring_mode || null,
       matchRegistrationMode: event.match_registration_mode || null,
-      timezone: event.timezone,
+      level: event.level || null,
+      count: event.count || null,
       currency: event.currency,
+      // Note: timezone does NOT exist in SSI GraphQL schema
     },
 
     // Squads — only present for standalone matches (cups have squads on matches)
-    squads: (event.squads || []).map(sq => ({
-      id: sq.id,
-      name: sq.name || null,
-      maxCompetitors: sq.max_competitors,
-      starts: sq.starts || null,
-    })),
+    // SquadInterface has no `name` field — use `comment` for display name
+    squads: (event.squads || []).map(mapSquad),
   }
 
   // Component matches (cups only)
+  // component_matches are LINK records (ComponentMatchInterface).
+  // Actual match data is accessed via link.match (→ EventInterface).
   if (isCup && event.component_matches) {
-    snapshot.matches = event.component_matches.map(m => ({
-      id: m.id,
-      name: m.name,
-      contentTypeKey: m.get_content_type_key,
-      starts: m.starts,
-      ends: m.ends,
-      status: m.status,
-      rule: m.rule,
-      description: m.description || '',
-      information: m.information || '',
-      squads: (m.squads || []).map(sq => ({
-        id: sq.id,
-        name: sq.name,
-        maxCompetitors: sq.max_competitors,
-        starts: sq.starts,
-        competitorCount: sq.competitors?.length || 0,
-      })),
-    }))
+    snapshot.matches = event.component_matches
+      .filter(link => link.match) // skip broken links
+      .map(link => {
+        const m = link.match
+        return {
+          // Link metadata
+          linkId: link.id,
+          number: link.number,
+          included: link.included,
+          // Match event data (from link.match → EventInterface)
+          id: m.id,
+          name: m.name,
+          contentTypeKey: m.get_content_type_key,
+          contentTypeModel: m.get_content_type_model,
+          starts: m.starts,
+          ends: m.ends,
+          status: m.status,
+          rule: m.rule,
+          description: m.description || '',
+          information: m.information || '',
+          venue: m.venue || '',
+          maxCompetitors: m.max_competitors,
+          region: m.region,
+          squads: (m.squads || []).map(mapSquad),
+        }
+      })
     snapshot.matchCount = snapshot.matches.length
   }
 
