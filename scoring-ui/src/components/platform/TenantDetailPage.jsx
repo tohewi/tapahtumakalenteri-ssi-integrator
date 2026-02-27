@@ -657,25 +657,28 @@ function TemplatesSection({ tenantId, onEditTemplate }) {
                 <div key={tpl.id} className="bg-gray-50 rounded-lg px-4 py-3">
                   <div className="flex items-center justify-between">
                     <div
-                      className="flex-1 cursor-pointer"
+                      className="flex-1 cursor-pointer flex items-center gap-2 group"
                       onClick={() => setExpandedId(expandedId === tpl.id ? null : tpl.id)}
                     >
-                      <div className="font-medium text-sm text-gray-900">
-                        {tpl.name}
-                        <span className="text-gray-400 text-xs ml-2">
-                          ({disMap[tpl.disciplineId] || tpl.disciplineId})
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {tpl.ssiSeedEventId
-                          ? <a href={tpl.ssiSeedEventId.startsWith('http') ? tpl.ssiSeedEventId : `https://shootnscoreit.com/event/${tpl.ssiSeedEventId}/`} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline" onClick={e => e.stopPropagation()}>SSI Seed Event</a>
-                          : 'No SSI seed linked'}
+                      {/* Chevron indicator for expand/collapse */}
+                      <svg className={`w-4 h-4 text-gray-400 transition-transform duration-200 flex-shrink-0 ${expandedId === tpl.id ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                      <div>
+                        <div className="font-medium text-sm text-gray-900 group-hover:text-sky-700 transition-colors">
+                          {tpl.name}
+                          <span className="text-gray-400 text-xs ml-2">
+                            ({disMap[tpl.disciplineId] || tpl.disciplineId})
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {tpl.ssiSeedEventId
+                            ? <a href={tpl.ssiSeedEventId.startsWith('http') ? tpl.ssiSeedEventId : `https://shootnscoreit.com/event/${tpl.ssiSeedEventId}/`} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline" onClick={e => e.stopPropagation()}>Open seed event in SSI ↗</a>
+                            : 'No SSI seed linked'}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {tpl.ssiSeedSnapshot && onEditTemplate && (
-                        <button onClick={() => onEditTemplate(tpl.id)} className="text-xs bg-sky-50 text-sky-700 hover:bg-sky-100 px-2 py-0.5 rounded font-medium">Open Editor</button>
-                      )}
                       <button onClick={() => startEdit(tpl)} className="text-xs text-sky-600 hover:text-sky-800">Edit</button>
                       <button onClick={() => handleDelete(tpl.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
                     </div>
@@ -738,6 +741,16 @@ function TemplatesSection({ tenantId, onEditTemplate }) {
                             {importing === tpl.id ? 'Importing...' : 'Import from SSI'}
                           </button>
                         </div>
+                      )}
+
+                      {/* Open Template Editor — only when seed is imported */}
+                      {tpl.ssiSeedSnapshot && onEditTemplate && (
+                        <button
+                          onClick={() => onEditTemplate(tpl.id)}
+                          className="w-full text-sm bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-200 px-3 py-2 rounded-md font-medium transition-colors"
+                        >
+                          Open Template Editor
+                        </button>
                       )}
 
                       {/* Config sections */}

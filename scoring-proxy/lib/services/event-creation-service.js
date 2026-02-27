@@ -105,13 +105,40 @@ function extractEventIds(url) {
 }
 
 // ---- Date/Time Helpers ----
+// All date arithmetic uses pure string manipulation on YYYY-MM-DD
+// to avoid timezone pitfalls. The server runs in UTC but events
+// are in Europe/Helsinki. SSI expects dates as YYYY-MM-DD and
+// times as HH:mm.
 
 /**
- * Format a date string (YYYY-MM-DD) for display in Finnish format (dd.MM.yyyy).
+ * Normalize an event date to YYYY-MM-DD string.
+ * PostgreSQL DATE columns return JS Date objects, not strings.
+ * Also accepts YYYY-MM-DD strings, ISO timestamps, or Date objects.
+ */
+function normalizeDate(dateInput) {
+  if (!dateInput) throw new Error('Event date is required')
+  if (typeof dateInput === 'string') {
+    // Already a YYYY-MM-DD string
+    const match = dateInput.match(/^(\d{4}-\d{2}-\d{2})/)
+    if (match) return match[1]
+  }
+  if (dateInput instanceof Date) {
+    // PostgreSQL DATE → extract YYYY-MM-DD in UTC
+    const y = dateInput.getUTCFullYear()
+    const m = String(dateInput.getUTCMonth() + 1).padStart(2, '0')
+    const d = String(dateInput.getUTCDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+  throw new Error(`Invalid event date: ${dateInput}`)
+}
+
+/**
+ * Format a YYYY-MM-DD date for display in Finnish format (dd.MM.yyyy).
+ * Uses pure string manipulation — no Date object needed.
  */
 function formatDisplayDate(isoDate) {
-  const d = new Date(isoDate + 'T00:00:00')
-  return d.toLocaleDateString('fi-FI', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const [y, m, d] = normalizeDate(isoDate).split('-')
+  return `${d}.${m}.${y}`
 }
 
 /**
@@ -123,29 +150,43 @@ function toSsiTime(finnishTime) {
 }
 
 /**
+ * Subtract days from a YYYY-MM-DD date string.
+ * Returns YYYY-MM-DD. Uses UTC to avoid DST issues.
+ */
+function subtractDays(isoDate, days) {
+  const d = new Date(isoDate + 'T12:00:00Z') // noon UTC to avoid DST edge
+  d.setUTCDate(d.getUTCDate() - days)
+  return d.toISOString().split('T')[0]
+}
+
+/**
  * Calculate registration dates and times from template overrides and event date.
+ * All date arithmetic is timezone-safe (UTC-based string manipulation).
+ * SSI expects: dates as YYYY-MM-DD, times as HH:mm.
  */
 function calculateSchedule(eventDate, overrides) {
+  const isoDate = normalizeDate(eventDate)
   const startTime = toSsiTime(overrides.startTime || '09.00')
   const endTime = toSsiTime(overrides.endTime || '12.00')
   const regDaysBefore = overrides.registrationDaysBeforeEvent || 7
   const regStartTime = toSsiTime(overrides.registrationStartTime || '00.00')
 
-  const eventDateObj = new Date(eventDate + 'T00:00:00')
-  const regStartDateObj = new Date(eventDateObj)
-  regStartDateObj.setDate(regStartDateObj.getDate() - regDaysBefore)
-  const regStartDate = regStartDateObj.toISOString().split('T')[0]
+  const regStartDate = subtractDays(isoDate, regDaysBefore)
 
   // Registration closes 12 hours before start
   const [startH, startM] = startTime.split(':').map(Number)
-  const regCloseDateObj = new Date(eventDateObj)
-  regCloseDateObj.setHours(startH - 12, startM, 0, 0)
-  const regCloseDate = regCloseDateObj.toISOString().split('T')[0]
-  const regCloseTime = `${String(regCloseDateObj.getHours()).padStart(2, '0')}:${String(regCloseDateObj.getMinutes()).padStart(2, '0')}`
+  let regCloseH = startH - 12
+  let regCloseDate = isoDate
+  if (regCloseH < 0) {
+    // Wraps to previous day
+    regCloseH += 24
+    regCloseDate = subtractDays(isoDate, 1)
+  }
+  const regCloseTime = `${String(regCloseH).padStart(2, '0')}:${String(startM).padStart(2, '0')}`
 
   return {
-    isoDate: eventDate,
-    displayDate: formatDisplayDate(eventDate),
+    isoDate,
+    displayDate: formatDisplayDate(isoDate),
     startTime, endTime,
     regStartDate, regStartTime,
     regCloseDate, regCloseTime,
@@ -153,7 +194,7 @@ function calculateSchedule(eventDate, overrides) {
 }
 
 // Exported for unit testing
-export { extractEventIds, formatDisplayDate, toSsiTime, calculateSchedule }
+export { extractEventIds, formatDisplayDate, toSsiTime, calculateSchedule, normalizeDate, subtractDays }
 
 // ---- Main Service ----
 

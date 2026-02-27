@@ -12,7 +12,69 @@ import {
   formatDisplayDate,
   toSsiTime,
   calculateSchedule,
+  normalizeDate,
+  subtractDays,
 } from '../lib/services/event-creation-service.js'
+
+// ============================================================
+// normalizeDate — handles PostgreSQL DATE objects and strings
+// ============================================================
+
+describe('normalizeDate', () => {
+  it('passes through YYYY-MM-DD string unchanged', () => {
+    expect(normalizeDate('2026-03-15')).toBe('2026-03-15')
+  })
+
+  it('extracts date from ISO timestamp string', () => {
+    expect(normalizeDate('2026-03-15T14:30:00.000Z')).toBe('2026-03-15')
+  })
+
+  it('converts JS Date object (PostgreSQL DATE) to YYYY-MM-DD', () => {
+    const pgDate = new Date('2026-03-15T00:00:00Z')
+    expect(normalizeDate(pgDate)).toBe('2026-03-15')
+  })
+
+  it('handles Date object at midnight UTC correctly', () => {
+    const d = new Date(Date.UTC(2026, 2, 15)) // March 15
+    expect(normalizeDate(d)).toBe('2026-03-15')
+  })
+
+  it('throws on null/undefined', () => {
+    expect(() => normalizeDate(null)).toThrow('Event date is required')
+    expect(() => normalizeDate(undefined)).toThrow('Event date is required')
+  })
+
+  it('throws on invalid string', () => {
+    expect(() => normalizeDate('not-a-date')).toThrow('Invalid event date')
+  })
+})
+
+// ============================================================
+// subtractDays — timezone-safe date arithmetic
+// ============================================================
+
+describe('subtractDays', () => {
+  it('subtracts days correctly', () => {
+    expect(subtractDays('2026-03-15', 7)).toBe('2026-03-08')
+  })
+
+  it('handles month boundary', () => {
+    expect(subtractDays('2026-03-03', 7)).toBe('2026-02-24')
+  })
+
+  it('handles year boundary', () => {
+    expect(subtractDays('2026-01-05', 7)).toBe('2025-12-29')
+  })
+
+  it('handles zero days', () => {
+    expect(subtractDays('2026-03-15', 0)).toBe('2026-03-15')
+  })
+
+  it('handles DST transition (March)', () => {
+    // Finland DST starts last Sunday of March
+    expect(subtractDays('2026-03-30', 1)).toBe('2026-03-29')
+  })
+})
 
 // ============================================================
 // extractEventIds
@@ -120,32 +182,24 @@ describe('calculateSchedule', () => {
     expect(result.endTime).toBe('12:00')
   })
 
-  // Helper: compute expected date same way the code does (timezone-safe)
-  function expectedDateMinusDays(isoDate, days) {
-    const d = new Date(isoDate + 'T00:00:00')
-    d.setDate(d.getDate() - days)
-    return d.toISOString().split('T')[0]
-  }
-
   it('calculates registration start date 7 days before event', () => {
     const result = calculateSchedule('2026-03-15', defaultOverrides)
-    expect(result.regStartDate).toBe(expectedDateMinusDays('2026-03-15', 7))
+    expect(result.regStartDate).toBe('2026-03-08')
     expect(result.regStartTime).toBe('00:00')
   })
 
   it('calculates registration close 12 hours before start', () => {
     const result = calculateSchedule('2026-03-15', defaultOverrides)
-    // regCloseTime is startTime minus 12h
-    // Exact date/time depends on timezone, just verify it's set
-    expect(result.regCloseDate).toBeTruthy()
-    expect(result.regCloseTime).toMatch(/^\d{2}:\d{2}$/)
+    // Start 09:00 minus 12h = 21:00 previous day
+    expect(result.regCloseDate).toBe('2026-03-14')
+    expect(result.regCloseTime).toBe('21:00')
   })
 
   it('uses default values when overrides are empty', () => {
     const result = calculateSchedule('2026-06-01', {})
     expect(result.startTime).toBe('09:00')
     expect(result.endTime).toBe('12:00')
-    expect(result.regStartDate).toBe(expectedDateMinusDays('2026-06-01', 7))
+    expect(result.regStartDate).toBe('2026-05-25')
   })
 
   it('handles custom registration days before event', () => {
@@ -153,25 +207,34 @@ describe('calculateSchedule', () => {
       ...defaultOverrides,
       registrationDaysBeforeEvent: 14,
     })
-    expect(result.regStartDate).toBe(expectedDateMinusDays('2026-03-15', 14))
+    expect(result.regStartDate).toBe('2026-03-01')
   })
 
-  it('handles afternoon start time — reg close adjusts', () => {
+  it('handles afternoon start time — reg close same day', () => {
     const result = calculateSchedule('2026-03-15', {
       ...defaultOverrides,
       startTime: '14.00',
     })
-    // 14:00 minus 12 hours = 02:00 — just verify format
-    expect(result.regCloseTime).toMatch(/^\d{2}:\d{2}$/)
+    // 14:00 minus 12 hours = 02:00 same day
+    expect(result.regCloseDate).toBe('2026-03-15')
+    expect(result.regCloseTime).toBe('02:00')
   })
 
   it('handles month boundary correctly', () => {
     const result = calculateSchedule('2026-03-03', defaultOverrides)
-    expect(result.regStartDate).toBe(expectedDateMinusDays('2026-03-03', 7))
+    expect(result.regStartDate).toBe('2026-02-24')
   })
 
   it('handles year boundary correctly', () => {
     const result = calculateSchedule('2026-01-05', defaultOverrides)
-    expect(result.regStartDate).toBe(expectedDateMinusDays('2026-01-05', 7))
+    expect(result.regStartDate).toBe('2025-12-29')
+  })
+
+  it('handles PostgreSQL Date object as eventDate', () => {
+    const pgDate = new Date('2026-03-15T00:00:00Z')
+    const result = calculateSchedule(pgDate, defaultOverrides)
+    expect(result.isoDate).toBe('2026-03-15')
+    expect(result.displayDate).toBe('15.03.2026')
+    expect(result.regStartDate).toBe('2026-03-08')
   })
 })
