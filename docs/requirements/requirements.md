@@ -350,7 +350,7 @@ Analysis completed 2026-02-20. Reviewed `docs/design/architecture-review.md` (20
 
 **Implementation**: Check `match.status === 'cp'` and disable all score modification operations while preserving read-only browsing capability.
 
-## Release 8.0 — Match Management Platform (Phase 0: Auth & Tenancy)
+## Release 8.1 — Match Management Platform (Phase 0: Auth & Tenancy)
 
 Self-service account onboarding: sign up, sign in, create and manage tenants. This is the foundation for the match management platform described in `docs/design/match-management-design.md`.
 
