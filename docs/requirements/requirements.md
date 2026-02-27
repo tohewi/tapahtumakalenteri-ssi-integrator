@@ -478,6 +478,7 @@ Vision: Transform the current "link collection" home page into a structured matc
 | MP7 | **Reporting**: Post-match reporting — results summary, statistics (shots fired, participation), export for Tapahtumakalenteri update. Consolidate the existing summary report functionality | ⬚ Design |
 | MP8 | **Localization & Regional Settings**: Tenant-level localization configuration — city, country, timezone. These settings propagate to event creation (SSI timezone, region fields), calendar publishing (event location), and UI display. Must handle: (a) default timezone for date/time display and schedule calculations, (b) country/region for SSI event region field, (c) city/venue for event venue and calendar location, (d) locale for date/number formatting (fi-FI, en-US, etc.). Stored on tenant record, overridable per template | ⬚ Design |
 | MP9 | **Tenant Branding & Picture**: Allow tenants to upload a logo/picture for their organization. Displayed in tenant dashboard, member views, and optionally in calendar event content. Requires: (a) image upload endpoint with size/format validation (max 2MB, jpg/png/webp), (b) image storage (Render disk or S3-compatible), (c) serving via CDN-friendly URL, (d) UI for upload/preview/remove in tenant settings | ⬚ Design |
+| MP10 | **Cascading Event Deletion**: Deleting a scheduled event must cascade to external systems. If the event has been created in SSI (`ssi_created` status), delete the cup and all component matches from SSI via web scraping (POST to event delete URL with confirmation). If the event has been published to Tapahtumakalenteri (`calendar_published` status), delete or unpublish the WordPress calendar event via REST API. The UI must show a confirmation dialog listing what will be deleted (e.g., "This will delete: SSI Cup #176 + 3 matches, Calendar event"). Deletion must be allowed for all statuses. Partial failure handling: if SSI deletion succeeds but calendar deletion fails (or vice versa), mark event with error details but still allow retry. The SSI `can_be_deleted` field (from EventInterface) should be checked before attempting deletion — warn if competitors are registered | ⬚ Design |
 
 ### Design Principles (v8.1)
 
@@ -589,7 +590,7 @@ Applies if tenants are consumers or non-commercial associations (e.g., shooting 
 - **Release 7.9** (GraphQL Cup Management): 7 requirements — 0 ✅, 7 pending (GQL1–GQL7)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
 - **Release 8.0** (Platform Auth & Tenancy): 21 requirements — 19 ✅, 2 ⬜ pending (PA18 MFA, PA21 Invitation Links)
-- **Release 8.1** (Match Management Platform): 9 requirements — 0 ✅, 9 design phase (MP1–MP9)
+- **Release 8.1** (Match Management Platform): 10 requirements — 0 ✅, 10 design phase (MP1–MP10)
 - **Regulatory** (SaaS Platform EU/Finland): 23 requirements — 1 ✅ (REG14), 1 N/A (REG12), 21 design phase (REG1–REG23)
 
 
