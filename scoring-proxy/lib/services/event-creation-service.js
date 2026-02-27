@@ -152,6 +152,9 @@ function calculateSchedule(eventDate, overrides) {
   }
 }
 
+// Exported for unit testing
+export { extractEventIds, formatDisplayDate, toSsiTime, calculateSchedule }
+
 // ---- Main Service ----
 
 /**

@@ -190,6 +190,9 @@ async function authenticateSSI({ email, password, apiKey }) {
  * @param {string} url - SSI event URL
  * @returns {{ contentType: string, eventId: string }} or throws
  */
+// Exported for unit testing
+export { buildStructureQuery, SERIE_TYPE_FIELDS, SQUAD_TYPE_FIELDS, EVENT_TO_SQUAD_TYPE }
+
 export function parseSsiEventUrl(url) {
   const match = url.match(/shootnscoreit\.com\/event\/(\d+)\/(\d+)/)
   if (!match) {
