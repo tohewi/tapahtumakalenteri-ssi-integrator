@@ -104,6 +104,33 @@ function extractEventIds(url) {
   return { typeId: m[1], eventId: m[2] }
 }
 
+/**
+ * Extract validation errors from SSI's Django form HTML response.
+ * When a form POST fails validation, SSI returns the form page with
+ * <ul class="errorlist"><li>Error message</li></ul> elements.
+ */
+function extractFormErrors(html) {
+  if (!html) return []
+  const errors = []
+  // Django errorlist pattern: <ul class="errorlist"><li>message</li></ul>
+  const errorListRe = /<ul\s+class="errorlist"[^>]*>([\s\S]*?)<\/ul>/gi
+  let match
+  while ((match = errorListRe.exec(html)) !== null) {
+    const liRe = /<li>([^<]+)<\/li>/gi
+    let li
+    while ((li = liRe.exec(match[1])) !== null) {
+      errors.push(li[1].trim())
+    }
+  }
+  // Also check for non-field errors
+  const nonFieldRe = /<div\s+class="[^"]*error[^"]*"[^>]*>([^<]+)<\/div>/gi
+  while ((match = nonFieldRe.exec(html)) !== null) {
+    const msg = match[1].trim()
+    if (msg && !errors.includes(msg)) errors.push(msg)
+  }
+  return errors
+}
+
 // ---- Date/Time Helpers ----
 // All date arithmetic uses pure string manipulation on YYYY-MM-DD
 // to avoid timezone pitfalls. The server runs in UTC but events
@@ -282,6 +309,14 @@ export async function createSsiEvent({ template, eventDate, credentials, onProgr
   const cupResult = await postForm(cupCreateUrl, cupBody, cupArrayFields, cupCsrf, cupPageCookies)
   const cupIds = extractEventIds(cupResult.finalUrl)
   if (!cupIds) {
+    // Form validation failed — extract SSI error messages from HTML
+    const ssiErrors = extractFormErrors(cupResult.html)
+    if (ssiErrors.length > 0) {
+      log.error(`[event-creation] SSI form validation errors: ${ssiErrors.join('; ')}`)
+      throw new Error(`SSI rejected cup creation: ${ssiErrors.join('; ')}`)
+    }
+    // Log first 2000 chars of HTML for debugging
+    log.error(`[event-creation] Cup form response (first 2000 chars): ${cupResult.html?.substring(0, 2000)}`)
     throw new Error(`Cup creation failed — redirect URL did not contain event IDs: ${cupResult.finalUrl}`)
   }
 
