@@ -324,25 +324,26 @@ export async function createSsiEvent({ template, eventDate, credentials, onProgr
   log.info(`[event-creation] CSRF token: ${cupCsrf ? cupCsrf.substring(0, 10) + '...' : 'MISSING'}`)
   log.info(`[event-creation] Cookies: ${Object.keys(cupPageCookies).join(', ')}`)
 
-  // DEBUG: Send EXACTLY the same fields as PowerShell New-KupittaaCup.ps1
-  // Values from kupittaa-cup-config.yml — proven to work on 2026-02-27
+  // Cup form body — matches PowerShell New-KupittaaCup.ps1 field structure.
+  // csrfmiddlewaretoken must be in body (even empty), group and organizer
+  // are required by SSI (imported from seed snapshot via GraphQL).
   const cupBody = {
     csrfmiddlewaretoken: cupCsrf || '',
-    group: '25874',
+    group: snapshot.settings?.groupId || '',
     name: cupName,
-    organizer: '1215',
-    visibility: 'pub',
+    organizer: snapshot.settings?.organizerId || '',
+    visibility: snapshot.settings?.visibility || 'pub',
     status: 'on',
-    results: 'cmp',
-    registration: 'op',
-    max_competitors: '25',
+    results: snapshot.settings?.results || 'cmp',
+    registration: snapshot.settings?.registration || 'op',
+    max_competitors: String(snapshot.settings?.maxCompetitors || 25),
     description: (overrides.description || snapshot.description || '').trim(),
     information: (overrides.information || snapshot.information || '').trim(),
-    region: 'FIN',
-    scoring_mode: 'pts',
-    match_registration_mode: 'all',
+    region: snapshot.settings?.region || 'FIN',
+    scoring_mode: snapshot.settings?.scoringMode || 'pts',
+    match_registration_mode: snapshot.settings?.matchRegistrationMode || 'all',
     has_accepted_event_data_ass_agreement: 'on',
-    count: '3',
+    count: String(snapshot.settings?.count || snapshot.matchCount || 3),
     starts_date: schedule.isoDate,
     starts_time: schedule.startTime,
     ends_date: schedule.isoDate,
@@ -350,10 +351,10 @@ export async function createSsiEvent({ template, eventDate, credentials, onProgr
     reg_start_date: schedule.regStartDate,
     reg_start_time: schedule.regStartTime,
     timezone: 'Europe/Helsinki',
-    currency: 'EUR',
-    venue: 'Kupittaan urheiluhalli, Tahkonkuja 5, 20520 TURKU',
-    url: 'https://turun-reservialiupseerit-turun-reservilaiset.reservilaisliitto.fi/toiminta/ammunta/reservilaisammunta/',
-    url_display: 'Lisätietoa',
+    currency: snapshot.settings?.currency || 'EUR',
+    venue: (overrides.venue || snapshot.venue || '').trim(),
+    url: overrides.url || snapshot.url || '',
+    url_display: overrides.urlDisplay || snapshot.urlDisplay || '',
     reg_close_date: schedule.regCloseDate,
     reg_close_time: schedule.regCloseTime,
     sq_start_date: '',
