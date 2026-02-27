@@ -28,23 +28,50 @@ import { log } from '../logger.js'
  * Returns { cookies (merged), csrfToken, html }.
  */
 async function fetchCsrf(url, cookies) {
-  const resp = await fetch(url, {
-    headers: { 'Cookie': formatCookies(cookies) },
-    redirect: 'follow',
-  })
-  if (!resp.ok) throw new Error(`SSI page HTTP ${resp.status} for ${url}`)
+  // Follow redirects manually to capture set-cookie headers at each step.
+  // Node.js fetch with redirect:'follow' doesn't expose intermediate
+  // set-cookie headers, so we'd lose the csrftoken cookie that SSI
+  // sets during redirect chains.
+  let merged = { ...cookies }
+  let currentUrl = url
+  const maxRedirects = 10
 
-  const html = await resp.text()
-  const setCookies = resp.headers.getSetCookie?.() || []
-  const newCookies = parseCookies(setCookies)
-  const merged = { ...cookies, ...newCookies }
+  for (let i = 0; i < maxRedirects; i++) {
+    const resp = await fetch(currentUrl, {
+      headers: { 'Cookie': formatCookies(merged) },
+      redirect: 'manual',
+    })
 
-  // CSRF token from cookie or hidden field
-  const csrfToken = merged.csrftoken
-    || html.match(/name="csrfmiddlewaretoken"\s+value="([^"]+)"/)?.[1]
-    || null
+    // Capture cookies from this response
+    const setCookies = resp.headers.getSetCookie?.() || []
+    const newCookies = parseCookies(setCookies)
+    merged = { ...merged, ...newCookies }
 
-  return { cookies: merged, csrfToken, html }
+    // Follow redirects
+    if (resp.status >= 300 && resp.status < 400) {
+      const location = resp.headers.get('location')
+      if (location) {
+        currentUrl = location.startsWith('http') ? location : `${SSI_BASE_URL}${location}`
+        continue
+      }
+    }
+
+    if (resp.status !== 200) {
+      throw new Error(`SSI page HTTP ${resp.status} for ${currentUrl}`)
+    }
+
+    const html = await resp.text()
+
+    // CSRF token from cookie or hidden field
+    const csrfToken = merged.csrftoken
+      || html.match(/name="csrfmiddlewaretoken"\s+value="([^"]+)"/)?.[1]
+      || html.match(/csrfmiddlewaretoken['"]\s*value=['"]([\w]+)['"]/)?.[1]
+      || null
+
+    return { cookies: merged, csrfToken, html }
+  }
+
+  throw new Error(`Too many redirects fetching ${url}`)
 }
 
 /**
