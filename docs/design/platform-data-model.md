@@ -1,7 +1,7 @@
 # Platform Data Model
 
-**Status:** v1.0 — Implemented (Phase 0)  
-**Date:** 2026-02-26  
+**Status:** v1.1 — Implemented (Phase 0 + Phase 1)  
+**Date:** 2026-02-27  
 **Relates to:** `match-management-design.md` (domain model section)
 
 ---
@@ -64,7 +64,7 @@ An isolated organization or club. All operational data is scoped to a tenant.
 - SSI credentials are per-tenant — different tenants may use different SSI accounts
 - First tenant is created automatically during account sign-up
 
-### 2.3 Discipline (Future — Phase 1)
+### 2.3 Discipline
 
 A type of competition event within a tenant.
 
@@ -78,7 +78,7 @@ A type of competition event within a tenant.
 | `ssi_group_id` | string | SSI group reference |
 | `ssi_organizer_id` | string | SSI organizer reference |
 
-### 2.4 Event Template (Future — Phase 1)
+### 2.4 Event Template
 
 A reusable blueprint for creating events. Imported from an SSI "seed" event.
 
@@ -94,7 +94,7 @@ A reusable blueprint for creating events. Imported from an SSI "seed" event.
 | `calendar_template` | object | Title template, content HTML, location, taxonomy IDs |
 | `staffing_rules` | object | Min/max instructors, required roles |
 
-### 2.5 Scheduled Event (Future — Phase 1)
+### 2.5 Scheduled Event
 
 An instance of a template for a specific date. Created by the scheduling workflow.
 
@@ -227,7 +227,7 @@ Every tenant has a subscription. The system enforces access based on subscriptio
 | `past_due` | Read-only (no new events) | 14-day grace period |
 | `cancelled` | No access (data retained) | 90-day retention, then purge |
 
-### 3.2 Scheduled Event Lifecycle (Future — Phase 1)
+### 3.2 Scheduled Event Lifecycle
 
 ```
   ┌─────────┐     ┌──────────────┐     ┌─────────────────────┐
@@ -358,8 +358,8 @@ Prefixed IDs make debugging easier (you can tell what kind of entity an ID refer
 
 | Phase | Entities added | Storage |
 |-------|---------------|---------|
-| **Phase 0** (current) | Account, Tenant, Subscription | PostgreSQL |
-| **Phase 1** | Discipline, Event Template, Scheduled Event | PostgreSQL |
+| **Phase 0** ✅ | Account, Tenant, Subscription | PostgreSQL |
+| **Phase 1** ✅ | Discipline, Event Template, Scheduled Event | PostgreSQL |
 | **Phase 2** | Instructor | PostgreSQL |
 | **Phase 2.5** | Tenant Members (RBAC) — roles, permissions, membership | PostgreSQL |
 | **Phase 3** | Full multi-tenancy (invitation flow, role management UI) | PostgreSQL |
