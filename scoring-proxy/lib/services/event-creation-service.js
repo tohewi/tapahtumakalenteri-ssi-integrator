@@ -289,6 +289,10 @@ export async function createSsiEvent({ template, eventDate, credentials, onProgr
   const cupCreateUrl = `${SSI_BASE_URL}/series/nordic/create-resul-cup/`
   const { csrfToken: cupCsrf, cookies: cupPageCookies } = await fetchCsrf(cupCreateUrl, cookies)
 
+  // Diagnostic: log CSRF and cookie state
+  log.info(`[event-creation] CSRF token: ${cupCsrf ? cupCsrf.substring(0, 10) + '...' : 'MISSING'}`)
+  log.info(`[event-creation] Cookies: ${Object.keys(cupPageCookies).join(', ')}`)
+
   const cupBody = {
     group: snapshot.settings?.groupId || '',
     name: cupName,
