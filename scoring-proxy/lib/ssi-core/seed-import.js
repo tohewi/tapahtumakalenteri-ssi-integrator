@@ -83,13 +83,16 @@ const SERIE_TYPE_FIELDS = {
 // SquadInterface has: id, number, max_competitors, comment, registration
 // These are ADDITIONAL fields on concrete squad types.
 // Note: NO `name` on any squad type — use `comment` for display name.
+// Note: `starts`/`stops` are NOT queried — SSI backend crashes with
+//   "Cannot return null for non-nullable field NordicSquadNode.starts"
+//   when squads have no start time set. Squad timing derived from match.
 const SQUAD_TYPE_FIELDS = {
-  NordicSquadNode: 'starts stops competitors { id }',
-  PrecisionSquadNode: 'starts stops competitors { id }',
-  IpscSquadNode: 'starts stops competitors { id }',
-  PpcSquadNode: 'starts stops',
-  CmpSquadNode: 'starts stops',
-  GenericSquadNode: 'starts stops',
+  NordicSquadNode: 'competitors { id }',
+  PrecisionSquadNode: 'competitors { id }',
+  IpscSquadNode: 'competitors { id }',
+  PpcSquadNode: '',
+  CmpSquadNode: '',
+  GenericSquadNode: '',
 }
 
 // Map event __typename → expected squad __typename.
@@ -124,15 +127,15 @@ const EVENT_TO_SQUAD_TYPE = {
  */
 function buildStructureQuery(isCup, eventTypeName, matchTypeName, squadTypeName) {
   const serieFields = SERIE_TYPE_FIELDS[eventTypeName] || ''
-  const squadFields = SQUAD_TYPE_FIELDS[squadTypeName] || 'starts stops'
+  const squadFields = SQUAD_TYPE_FIELDS[squadTypeName] || ''
 
   const serieFragment = serieFields
     ? `... on ${eventTypeName} { ${serieFields} }`
     : ''
 
   // SquadInterface fields: id, number, max_competitors, comment, registration
-  // Type-specific fields via inline fragment (starts, stops, competitors)
-  const squadFragment = squadTypeName
+  // Type-specific fields via inline fragment (competitors only — starts/stops crash SSI)
+  const squadFragment = (squadTypeName && squadFields)
     ? `... on ${squadTypeName} { ${squadFields} }`
     : ''
 
@@ -266,7 +269,7 @@ function mapSquad(sq) {
     maxCompetitors: sq.max_competitors,
     registration: sq.registration || null,
     starts: sq.starts || null,
-    stops: sq.stops || null,
+    // starts/stops not queried — SSI crashes when squad has no start time
     competitorCount: sq.competitors?.length || 0,
   }
 }

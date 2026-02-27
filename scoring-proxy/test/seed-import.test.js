@@ -71,8 +71,8 @@ describe('buildStructureQuery — Cup', () => {
     expect(query).toContain('match {')
     expect(query).toContain('squads {')
 
-    // Should have squad inline fragment with starts, stops, competitors
-    expect(query).toContain('... on NordicSquadNode { starts stops competitors { id } }')
+    // Should have squad inline fragment with competitors (no starts/stops — SSI crashes)
+    expect(query).toContain('... on NordicSquadNode { competitors { id } }')
 
     // Should have squad comment field (no name field in SSI)
     expect(query).toContain('comment')
@@ -117,7 +117,7 @@ describe('buildStructureQuery — Cup', () => {
 
     expect(query).toContain('... on PrecisionSerieNode { scoring_mode match_registration_mode count }')
     expect(query).toContain('match {')
-    expect(query).toContain('... on PrecisionSquadNode { starts stops competitors { id } }')
+    expect(query).toContain('... on PrecisionSquadNode { competitors { id } }')
   })
 
   it('generates correct query for IpscSerie cup — no scoring_mode', () => {
@@ -125,7 +125,7 @@ describe('buildStructureQuery — Cup', () => {
 
     expect(query).toContain('... on IpscSerieNode { match_registration_mode count }')
     expect(query).not.toContain('scoring_mode')
-    expect(query).toContain('... on IpscSquadNode { starts stops competitors { id } }')
+    expect(query).toContain('... on IpscSquadNode { competitors { id } }')
   })
 })
 
@@ -139,7 +139,7 @@ describe('buildStructureQuery — Standalone Match', () => {
 
     // Should have squads at event level
     expect(query).toContain('squads {')
-    expect(query).toContain('... on NordicSquadNode { starts stops competitors { id } }')
+    expect(query).toContain('... on NordicSquadNode { competitors { id } }')
 
     // Should NOT have component_matches
     expect(query).not.toContain('component_matches')
@@ -152,7 +152,8 @@ describe('buildStructureQuery — Standalone Match', () => {
     expect(query).not.toContain('... on UnknownSerieNode')
     // But still has squads
     expect(query).toContain('squads {')
-    expect(query).toContain('... on GenericSquadNode { starts stops }')
+    // GenericSquadNode has no type-specific fields — no inline fragment
+    expect(query).not.toContain('... on GenericSquadNode')
   })
 })
 
@@ -233,10 +234,10 @@ describe('SERIE_TYPE_FIELDS', () => {
 // ============================================================
 
 describe('SQUAD_TYPE_FIELDS', () => {
-  it('NordicSquadNode includes starts, stops, competitors', () => {
+  it('NordicSquadNode has competitors only (starts/stops crash SSI)', () => {
     expect(SQUAD_TYPE_FIELDS['NordicSquadNode']).toContain('competitors { id }')
-    expect(SQUAD_TYPE_FIELDS['NordicSquadNode']).toContain('starts')
-    expect(SQUAD_TYPE_FIELDS['NordicSquadNode']).toContain('stops')
+    expect(SQUAD_TYPE_FIELDS['NordicSquadNode']).not.toContain('starts')
+    expect(SQUAD_TYPE_FIELDS['NordicSquadNode']).not.toContain('stops')
   })
 
   it('no squad type has a name field (SSI uses comment instead)', () => {
@@ -245,12 +246,12 @@ describe('SQUAD_TYPE_FIELDS', () => {
     }
   })
 
-  it('GenericSquadNode has starts and stops only', () => {
-    expect(SQUAD_TYPE_FIELDS['GenericSquadNode']).toBe('starts stops')
+  it('GenericSquadNode has empty fields (no type-specific data)', () => {
+    expect(SQUAD_TYPE_FIELDS['GenericSquadNode']).toBe('')
   })
 
-  it('CmpSquadNode has starts and stops only — no competitors', () => {
-    expect(SQUAD_TYPE_FIELDS['CmpSquadNode']).toBe('starts stops')
+  it('CmpSquadNode has empty fields — no competitors', () => {
+    expect(SQUAD_TYPE_FIELDS['CmpSquadNode']).toBe('')
     expect(SQUAD_TYPE_FIELDS['CmpSquadNode']).not.toContain('competitors')
   })
 })
