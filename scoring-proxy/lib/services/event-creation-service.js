@@ -121,23 +121,41 @@ function extractEventIds(url) {
 function extractFormErrors(html) {
   if (!html) return []
   const errors = []
-  // Django errorlist pattern: <ul class="errorlist"><li>message</li></ul>
-  const errorListRe = /<ul\s+class="errorlist"[^>]*>([\s\S]*?)<\/ul>/gi
+
+  // Django errorlist: <ul class="errorlist"><li>message</li></ul>
+  const errorListRe = /<ul[^>]*class="[^"]*errorlist[^"]*"[^>]*>([\s\S]*?)<\/ul>/gi
   let match
   while ((match = errorListRe.exec(html)) !== null) {
-    const liRe = /<li>([^<]+)<\/li>/gi
+    const liRe = /<li>([\s\S]*?)<\/li>/gi
     let li
     while ((li = liRe.exec(match[1])) !== null) {
-      errors.push(li[1].trim())
+      const text = li[1].replace(/<[^>]+>/g, '').trim()
+      if (text) errors.push(text)
     }
   }
-  // Also check for non-field errors
-  const nonFieldRe = /<div\s+class="[^"]*error[^"]*"[^>]*>([^<]+)<\/div>/gi
-  while ((match = nonFieldRe.exec(html)) !== null) {
-    const msg = match[1].trim()
-    if (msg && !errors.includes(msg)) errors.push(msg)
+
+  // Django alert/message boxes
+  const alertRe = /<div[^>]*class="[^"]*(?:alert|error|message)[^"]*"[^>]*>([\s\S]*?)<\/div>/gi
+  while ((match = alertRe.exec(html)) !== null) {
+    const text = match[1].replace(/<[^>]+>/g, '').trim()
+    if (text && text.length < 200 && !errors.includes(text)) errors.push(text)
   }
+
+  // Check for login page (session expired)
+  if (html.includes('id="id_password"') || html.includes('name="password"') && html.includes('Log in')) {
+    errors.push('SSI session expired — redirected to login page')
+  }
+
   return errors
+}
+
+/**
+ * Extract the <title> from an HTML page for diagnostics.
+ */
+function extractPageTitle(html) {
+  if (!html) return 'empty response'
+  const m = html.match(/<title[^>]*>([^<]+)<\/title>/i)
+  return m ? m[1].trim() : 'no title'
 }
 
 // ---- Date/Time Helpers ----
@@ -318,15 +336,14 @@ export async function createSsiEvent({ template, eventDate, credentials, onProgr
   const cupResult = await postForm(cupCreateUrl, cupBody, cupArrayFields, cupCsrf, cupPageCookies)
   const cupIds = extractEventIds(cupResult.finalUrl)
   if (!cupIds) {
-    // Form validation failed — extract SSI error messages from HTML
+    // Form submission failed — extract SSI error messages from HTML
     const ssiErrors = extractFormErrors(cupResult.html)
+    const pageTitle = extractPageTitle(cupResult.html)
+    log.error(`[event-creation] Cup creation failed. HTTP ${cupResult.status}, page: "${pageTitle}", finalUrl: ${cupResult.finalUrl}, errors: ${ssiErrors.length > 0 ? ssiErrors.join('; ') : 'none extracted'}, HTML length: ${cupResult.html?.length || 0}`)
     if (ssiErrors.length > 0) {
-      log.error(`[event-creation] SSI form validation errors: ${ssiErrors.join('; ')}`)
       throw new Error(`SSI rejected cup creation: ${ssiErrors.join('; ')}`)
     }
-    // Log first 2000 chars of HTML for debugging
-    log.error(`[event-creation] Cup form response (first 2000 chars): ${cupResult.html?.substring(0, 2000)}`)
-    throw new Error(`Cup creation failed — redirect URL did not contain event IDs: ${cupResult.finalUrl}`)
+    throw new Error(`Cup creation failed (HTTP ${cupResult.status}, page: "${pageTitle}") — redirect URL: ${cupResult.finalUrl}`)
   }
 
   const cupUrl = `${SSI_BASE_URL}/event/${cupIds.typeId}/${cupIds.eventId}/`
