@@ -213,7 +213,6 @@ query EventStructure($ct: Int!, $id: String!) {
     results
     currency
     serie_type
-    group { id }
     organizer { id }
     ${serieFragment}
     ${matchesBlock}
@@ -354,7 +353,6 @@ export async function ssiFetchEventStructure({ ssiEventUrl, credentials }) {
 
     // Settings
     settings: {
-      groupId: event.group?.id || '',
       organizerId: event.organizer?.id || '',
       maxCompetitors: event.max_competitors,
       region: event.region,
