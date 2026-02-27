@@ -320,22 +320,31 @@ export async function createSsiEvent({ template, eventDate, credentials, onProgr
   const cupCreateUrl = `${SSI_BASE_URL}/series/nordic/create-resul-cup/`
   const { csrfToken: cupCsrf, cookies: cupPageCookies, html: cupFormHtml } = await fetchCsrf(cupCreateUrl, cookies)
 
-  // Extract group ID from form HTML — can't be queried from GraphQL (DjangoModelType)
-  // The form has <select name="group"> with the user's groups as options
-  const groupMatch = cupFormHtml?.match(/<select[^>]*name="group"[^>]*>[\s\S]*?<option[^>]*value="(\d+)"[^>]*selected/i)
-    || cupFormHtml?.match(/<select[^>]*name="group"[^>]*>[\s\S]*?<option[^>]*value="(\d+)"/i)
-  const groupId = groupMatch?.[1] || ''
+  // Extract group and organizer from form HTML — these are <select> elements
+  // group: DjangoModelType, can't query via GraphQL. Values:
+  //   - numeric ID (e.g. "25874") = managed by that group
+  //   - "xxx" = self-administered ("itself" in UI)
+  // organizer: OrganizationNode. Values:
+  //   - numeric ID (e.g. "1215") = arranged by that club
+  //   - "" (empty) = not arranged by a club
+  const groupMatch = cupFormHtml?.match(/<select[^>]*name="group"[^>]*>[\s\S]*?<option[^>]*value="([^"]+)"[^>]*selected/i)
+    || cupFormHtml?.match(/<select[^>]*name="group"[^>]*>[\s\S]*?<option[^>]*value="([^"]+)"/i)
+  const groupId = groupMatch?.[1] || 'xxx'
 
-  log.info(`[event-creation] CSRF: ${cupCsrf ? cupCsrf.substring(0, 10) + '...' : 'none'}, group: ${groupId}, cookies: ${Object.keys(cupPageCookies).join(', ')}`)
+  const organizerMatch = cupFormHtml?.match(/<select[^>]*name="organizer"[^>]*>[\s\S]*?<option[^>]*value="([^"]+)"[^>]*selected/i)
+  const organizerId = snapshot.settings?.organizerId || organizerMatch?.[1] || ''
+
+  log.info(`[event-creation] CSRF: ${cupCsrf ? cupCsrf.substring(0, 10) + '...' : 'none'}, group: ${groupId}, organizer: ${organizerId}, cookies: ${Object.keys(cupPageCookies).join(', ')}`)
 
   // Cup form body — matches PowerShell New-KupittaaCup.ps1 field structure.
-  // csrfmiddlewaretoken must be in body (even empty), group and organizer
-  // are required by SSI (scraped from form or imported via GraphQL).
+  // csrfmiddlewaretoken must be in body (even empty string).
+  // group: "xxx" = self-administered, numeric ID = managed by group
+  // organizer: "" = not arranged by club, numeric ID = arranged by club
   const cupBody = {
     csrfmiddlewaretoken: cupCsrf || '',
     group: groupId,
     name: cupName,
-    organizer: snapshot.settings?.organizerId || '',
+    organizer: organizerId,
     visibility: snapshot.settings?.visibility || 'pub',
     status: 'on',
     results: snapshot.settings?.results || 'cmp',

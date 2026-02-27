@@ -245,7 +245,39 @@ EVENT_TO_SQUAD_TYPE = {
 }
 ```
 
-## 7. Event Creation — Form URLs by Discipline
+## 7. Event Creation — Form Fields: group & organizer
+
+These fields are `<select>` elements on the SSI create event form. They **cannot be queried via GraphQL** (`group` is `DjangoModelType`, `organizer` is `OrganizationNode` — neither exposes a usable ID in GraphQL queries).
+
+### group — "Administered by"
+
+| Value | UI Label | Meaning |
+|-------|----------|---------|
+| `xxx` | "itself" | Self-administered — no group manages this event |
+| Numeric ID (e.g. `25874`) | Group name | Managed by that group (club/organization) |
+
+- Default for events not managed by a group: `xxx`
+- The group ID is scraped from the create form's `<select name="group">` element
+- Config reference: `kupittaa-cup-config.yml → management.groupId`
+
+### organizer — "Arranged by"
+
+| Value | UI Label | Meaning |
+|-------|----------|---------|
+| `""` (empty) | "not arranged by a club" | No organizing club |
+| Numeric ID (e.g. `1215`) | Club name | Arranged by that club/organization |
+
+- Default for events not arranged by a club: `""` (empty string)
+- Can be imported via GraphQL: `organizer { id }` on EventInterface returns `OrganizationNode`
+- Falls back to scraping from form's `<select name="organizer">` selected value
+- Config reference: `kupittaa-cup-config.yml → management.organizerId`
+
+### How the code resolves these
+
+1. **group**: Scraped from form HTML (`<option selected>` in `<select name="group">`). Falls back to `"xxx"` (self-administered).
+2. **organizer**: First checks `snapshot.settings.organizerId` (from GraphQL seed import). Falls back to scraping from form HTML. Falls back to `""` (not arranged by club).
+
+## 8. Event Creation — Form URLs by Discipline
 
 | Discipline | Cup Create URL | Match Create URL |
 |-----------|---------------|-----------------|
