@@ -177,26 +177,18 @@ export default function SchedulePage({ tenantId, onBack }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex items-center justify-center py-12">
         <div className="text-gray-400 text-sm">Loading schedule...</div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+    <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button onClick={onBack} className="text-gray-400 hover:text-gray-600 text-sm">
-              ← Back
-            </button>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Event Schedule</h1>
-              <p className="text-sm text-gray-400">Create and manage scheduled events</p>
-            </div>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Event Schedule</h1>
+          <p className="text-sm text-gray-400">Create and manage scheduled events</p>
         </div>
 
         {/* Status message */}
@@ -363,7 +355,6 @@ export default function SchedulePage({ tenantId, onBack }) {
             </div>
           )}
         </div>
-      </div>
     </div>
   )
 }

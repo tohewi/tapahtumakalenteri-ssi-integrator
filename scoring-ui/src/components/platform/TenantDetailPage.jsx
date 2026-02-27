@@ -893,20 +893,22 @@ export default function TenantDetailPage({ tenantId, account, onBack, onLogout, 
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-400 text-sm">Loading tenant...</div>
+      <div className={sectionsFilter ? 'flex items-center justify-center py-12' : 'min-h-screen bg-gray-50 flex items-center justify-center'}>
+        <div className="text-gray-400 text-sm">Loading...</div>
       </div>
     )
   }
 
   if (loadError) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className={sectionsFilter ? 'flex items-center justify-center py-12' : 'min-h-screen bg-gray-50 flex items-center justify-center'}>
         <div className="text-center">
           <div className="text-red-500 text-sm mb-4">{loadError}</div>
-          <button onClick={onBack} className="text-sky-600 text-sm hover:underline">
-            Back to dashboard
-          </button>
+          {!sectionsFilter && (
+            <button onClick={onBack} className="text-sky-600 text-sm hover:underline">
+              Back to dashboard
+            </button>
+          )}
         </div>
       </div>
     )
