@@ -182,7 +182,20 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
       try {
         const data = await getTemplateApi(tenantId, templateId)
         setTemplate(data.template)
-        setOverrides(data.template.overrides || {})
+
+        // Merge overrides with seed snapshot defaults so text fields
+        // show current values (editable) instead of empty with placeholder.
+        // Only seed-sourced fields are pre-populated; user overrides take precedence.
+        const snap = data.template.ssiSeedSnapshot || {}
+        const saved = data.template.overrides || {}
+        setOverrides({
+          description: saved.description ?? snap.description ?? '',
+          information: saved.information ?? snap.information ?? '',
+          venue: saved.venue ?? snap.venue ?? '',
+          url: saved.url ?? snap.url ?? '',
+          urlDisplay: saved.urlDisplay ?? snap.urlDisplay ?? '',
+          ...saved, // user-set overrides always win
+        })
         setCalendarTemplate(data.template.calendarTemplate || {})
         setStaffingRules(data.template.staffingRules || {})
       } catch (err) {
