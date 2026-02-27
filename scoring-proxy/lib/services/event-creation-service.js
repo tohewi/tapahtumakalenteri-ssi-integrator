@@ -318,18 +318,22 @@ export async function createSsiEvent({ template, eventDate, credentials, onProgr
 
   // Step 3: Create Cup
   const cupCreateUrl = `${SSI_BASE_URL}/series/nordic/create-resul-cup/`
-  const { csrfToken: cupCsrf, cookies: cupPageCookies } = await fetchCsrf(cupCreateUrl, cookies)
+  const { csrfToken: cupCsrf, cookies: cupPageCookies, html: cupFormHtml } = await fetchCsrf(cupCreateUrl, cookies)
 
-  // Diagnostic: log CSRF and cookie state
-  log.info(`[event-creation] CSRF token: ${cupCsrf ? cupCsrf.substring(0, 10) + '...' : 'MISSING'}`)
-  log.info(`[event-creation] Cookies: ${Object.keys(cupPageCookies).join(', ')}`)
+  // Extract group ID from form HTML — can't be queried from GraphQL (DjangoModelType)
+  // The form has <select name="group"> with the user's groups as options
+  const groupMatch = cupFormHtml?.match(/<select[^>]*name="group"[^>]*>[\s\S]*?<option[^>]*value="(\d+)"[^>]*selected/i)
+    || cupFormHtml?.match(/<select[^>]*name="group"[^>]*>[\s\S]*?<option[^>]*value="(\d+)"/i)
+  const groupId = groupMatch?.[1] || ''
+
+  log.info(`[event-creation] CSRF: ${cupCsrf ? cupCsrf.substring(0, 10) + '...' : 'none'}, group: ${groupId}, cookies: ${Object.keys(cupPageCookies).join(', ')}`)
 
   // Cup form body — matches PowerShell New-KupittaaCup.ps1 field structure.
   // csrfmiddlewaretoken must be in body (even empty), group and organizer
-  // are required by SSI (imported from seed snapshot via GraphQL).
+  // are required by SSI (scraped from form or imported via GraphQL).
   const cupBody = {
     csrfmiddlewaretoken: cupCsrf || '',
-    group: snapshot.settings?.groupId || '',
+    group: groupId,
     name: cupName,
     organizer: snapshot.settings?.organizerId || '',
     visibility: snapshot.settings?.visibility || 'pub',
