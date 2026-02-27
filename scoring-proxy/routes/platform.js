@@ -733,6 +733,99 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   })
 
   // ============================================================
+  // SSI Schema Introspection — temporary endpoint for GQL7
+  // ============================================================
+
+  // GET /api/v1/platform/tenants/:tenantId/ssi-schema
+  // Introspects SSI GraphQL schema to discover available fields on key types.
+  // Used for debugging and GQL7 (GraphQL viability testing).
+  router.get('/tenants/:tenantId/ssi-schema', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res, next) => {
+    const tenant = req.tenant
+    if (!tenant.ssiCredentials?.email || !tenant.ssiCredentials?.password) {
+      return res.status(400).json({ error: 'Tenant SSI credentials required' })
+    }
+
+    try {
+      const { ssiGraphQL } = await import('../lib/ssi-core/graphql.js')
+
+      // Authenticate
+      const authResult = await ssiGraphQL(null, `
+        mutation Auth($email: String!, $password: String!) {
+          token_auth(email: $email, password: $password) {
+            token { token }
+          }
+        }
+      `, { email: tenant.ssiCredentials.email, password: tenant.ssiCredentials.password })
+
+      const jwt = authResult.token_auth?.token?.token
+      if (!jwt) return res.status(401).json({ error: 'SSI auth failed' })
+
+      // Introspect key types
+      const typesToIntrospect = [
+        'EventInterface',
+        'NordicSerieNode',
+        'ComponentMatchInterface',
+        'NordicComponentMatchNode',
+        'SquadInterface',
+        'NordicSquadNode',
+        'PrecisionSerieNode',
+        'IpscSerieNode',
+      ]
+
+      const INTROSPECT_QUERY = `
+        query IntrospectType($typeName: String!) {
+          __type(name: $typeName) {
+            name
+            kind
+            fields {
+              name
+              type {
+                name
+                kind
+                ofType { name kind }
+              }
+            }
+            interfaces {
+              name
+            }
+            possibleTypes {
+              name
+            }
+          }
+        }
+      `
+
+      const schema = {}
+      for (const typeName of typesToIntrospect) {
+        try {
+          const result = await ssiGraphQL(jwt, INTROSPECT_QUERY, { typeName })
+          if (result.__type) {
+            schema[typeName] = {
+              kind: result.__type.kind,
+              fields: (result.__type.fields || []).map(f => ({
+                name: f.name,
+                type: f.type?.name || f.type?.ofType?.name || f.type?.kind,
+              })),
+              interfaces: (result.__type.interfaces || []).map(i => i.name),
+              possibleTypes: (result.__type.possibleTypes || []).map(t => t.name),
+            }
+          } else {
+            schema[typeName] = null
+          }
+        } catch (err) {
+          schema[typeName] = { error: err.message }
+        }
+      }
+
+      log.info(`[platform] SSI schema introspected: ${Object.keys(schema).filter(k => schema[k] && !schema[k].error).length} types found`)
+      res.json({ schema })
+    } catch (err) {
+      log.error(`[platform] SSI schema introspection failed:`, err.message)
+      return next(new AppError('SSI schema introspection failed', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // ============================================================
   // Scheduled Events — nested under /tenants/:tenantId/events
   // ============================================================
 
