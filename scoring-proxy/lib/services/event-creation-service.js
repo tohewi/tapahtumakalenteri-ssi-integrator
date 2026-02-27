@@ -70,6 +70,8 @@ async function postForm(url, body, arrayFields, csrfToken, cookies) {
   }
   const encodedBody = pairs.join('&')
 
+  // Do NOT follow redirects — we need the Location header to detect success
+  // (SSI redirects to /event/{type}/{id}/ on success, back to form on failure)
   const resp = await fetch(url, {
     method: 'POST',
     headers: {
@@ -80,18 +82,25 @@ async function postForm(url, body, arrayFields, csrfToken, cookies) {
       'X-CSRFToken': csrfToken,
     },
     body: encodedBody,
-    redirect: 'follow',
+    redirect: 'manual',
   })
 
-  const html = await resp.text()
   const setCookies = resp.headers.getSetCookie?.() || []
   const newCookies = parseCookies(setCookies)
   const merged = { ...cookies, ...newCookies }
 
-  // Final URL after redirects
-  const finalUrl = resp.url || url
+  // Check for redirect (302/303) — success means redirect to event page
+  const location = resp.headers.get('location') || ''
+  if (resp.status >= 300 && resp.status < 400 && location) {
+    const finalUrl = location.startsWith('http') ? location : `${SSI_BASE_URL}${location}`
+    log.info(`[event-creation] Form POST ${resp.status} → ${finalUrl}`)
+    return { finalUrl, html: '', cookies: merged, status: resp.status }
+  }
 
-  return { finalUrl, html, cookies: merged }
+  // No redirect — form validation failed, read the HTML for errors
+  const html = await resp.text()
+  log.info(`[event-creation] Form POST ${resp.status}, no redirect (${html.length} chars HTML)`)
+  return { finalUrl: url, html, cookies: merged, status: resp.status }
 }
 
 /**
