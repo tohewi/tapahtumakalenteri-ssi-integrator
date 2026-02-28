@@ -28,14 +28,15 @@ function getArg(name, envName) {
   return process.env[envName] || null
 }
 
-const BASE_URL = getArg('base-url', 'PLATFORM_BASE_URL') || 'https://turres-ssi-tools-pr-138.onrender.com'
+const BASE_URL = getArg('base-url', 'PLATFORM_BASE_URL') || 'http://localhost:3001'
 const EMAIL = getArg('email', 'PLATFORM_EMAIL')
 const PASSWORD = getArg('password', 'PLATFORM_PASSWORD')
-const TENANT_ID = getArg('tenant-id', 'PLATFORM_TENANT_ID') || 'ten_666e216286d04d8d'
-const TEMPLATE_ID = getArg('template-id', 'PLATFORM_TEMPLATE_ID') || 'tpl_1ebfd2dfeb14466b'
+const TENANT_ID = getArg('tenant-id', 'PLATFORM_TENANT_ID')
+const TEMPLATE_ID = getArg('template-id', 'PLATFORM_TEMPLATE_ID')
 
-if (!EMAIL || !PASSWORD) {
-  console.error('Usage: node test-platform-e2e.mjs --email <email> --password <password>')
+if (!EMAIL || !PASSWORD || !TENANT_ID || !TEMPLATE_ID) {
+  console.error('Usage: node test-platform-e2e.mjs --base-url <url> --email <email> --password <password> --tenant-id <id> --template-id <id>')
+  console.error('  Or set PLATFORM_BASE_URL, PLATFORM_EMAIL, PLATFORM_PASSWORD, PLATFORM_TENANT_ID, PLATFORM_TEMPLATE_ID')
   process.exit(2)
 }
 
