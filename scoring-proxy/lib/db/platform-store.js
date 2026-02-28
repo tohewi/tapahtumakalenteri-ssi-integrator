@@ -1508,22 +1508,20 @@ export async function resetPasswordWithToken(token, newPassword) {
  */
 export async function invalidateAccountSessions(accountId) {
   const redis = getRedisClient()
-  // Scan for all platform session keys
-  const keys = []
-  for await (const key of redis.scanIterator({ MATCH: 'platform:session:*', COUNT: 100 })) {
-    keys.push(key)
-  }
-  for (const key of keys) {
-    try {
-      const raw = await redis.get(key)
-      if (raw) {
-        const session = JSON.parse(raw)
-        if (session.accountId === accountId) {
-          await redis.del(key)
+  try {
+    const keys = await redis.keys('platform:session:*')
+    for (const key of keys) {
+      try {
+        const raw = await redis.get(key)
+        if (raw) {
+          const session = JSON.parse(raw)
+          if (session.accountId === accountId) {
+            await redis.del(key)
+          }
         }
-      }
-    } catch { /* skip malformed sessions */ }
-  }
+      } catch { /* skip malformed sessions */ }
+    }
+  } catch { /* Redis unavailable — sessions will expire naturally */ }
 }
 
 // ---- Platform Sessions (Redis — ephemeral, 24h TTL) ----
