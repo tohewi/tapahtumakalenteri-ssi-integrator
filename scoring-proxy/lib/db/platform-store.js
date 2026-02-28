@@ -1407,7 +1407,7 @@ const PLATFORM_SESSION_TTL = 24 * 60 * 60 // 24 hours in seconds
 /**
  * Create a platform session after successful account login.
  */
-export async function createPlatformSession(accountId) {
+export async function createPlatformSession(accountId, options = {}) {
   const redis = getRedisClient()
   const sessionId = crypto.randomUUID()
   const now = Date.now()
@@ -1418,11 +1418,40 @@ export async function createPlatformSession(accountId) {
     lastUsed: now,
   }
 
+  // MFA pending sessions are short-lived (5 min) and block normal access
+  if (options.mfaPending) {
+    sessionData.mfaPending = true
+  }
+
+  const ttl = options.mfaPending ? 300 : PLATFORM_SESSION_TTL // 5 min for MFA challenge
   await redis.set(platformSessionKey(sessionId), JSON.stringify(sessionData), {
-    EX: PLATFORM_SESSION_TTL,
+    EX: ttl,
   })
 
   return { sessionId }
+}
+
+/**
+ * Upgrade an MFA-pending session to a full session after successful MFA verification.
+ */
+export async function upgradeMfaSession(sessionId) {
+  if (!sessionId) return false
+  const redis = getRedisClient()
+  const raw = await redis.get(platformSessionKey(sessionId))
+  if (!raw) return false
+
+  try {
+    const session = JSON.parse(raw)
+    if (!session.mfaPending) return false
+    delete session.mfaPending
+    session.lastUsed = Date.now()
+    await redis.set(platformSessionKey(sessionId), JSON.stringify(session), {
+      EX: PLATFORM_SESSION_TTL,
+    })
+    return true
+  } catch {
+    return false
+  }
 }
 
 /**

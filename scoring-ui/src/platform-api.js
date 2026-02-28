@@ -138,6 +138,48 @@ export async function changeAccountPassword({ currentPassword, newPassword }) {
   })
 }
 
+// ---- MFA ----
+
+/**
+ * Verify MFA code during login challenge.
+ * @param {{ code?, recoveryCode? }} params
+ */
+export async function mfaVerify({ code, recoveryCode }) {
+  return platformFetch('/mfa/verify', {
+    method: 'POST',
+    body: JSON.stringify({ code, recoveryCode }),
+  })
+}
+
+/**
+ * Initiate MFA setup — returns QR code and recovery codes.
+ */
+export async function mfaSetup() {
+  return platformFetch('/account/mfa/setup', { method: 'POST' })
+}
+
+/**
+ * Confirm MFA setup with a TOTP code from the authenticator app.
+ * @param {{ code }} params
+ */
+export async function mfaConfirm({ code }) {
+  return platformFetch('/account/mfa/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  })
+}
+
+/**
+ * Disable MFA. Requires current password.
+ * @param {{ password }} params
+ */
+export async function mfaDisable({ password }) {
+  return platformFetch('/account/mfa/disable', {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  })
+}
+
 // ---- Disciplines ----
 
 /**

@@ -1,6 +1,5 @@
 // ============================================================
 // Platform Routes — Account Registration, Login, Tenant CRUD
-//
 // These routes handle the self-service onboarding flow:
 //   1. User signs up (email + password + org name) → account created
 //   2. User signs in → gets platform session cookie
@@ -17,10 +16,12 @@ import { AppError } from '../lib/errors/AppError.js'
 import { sendEmail } from '../lib/email.js'
 import { ssiFetchEventStructure, ssiSearchEvents } from '../lib/ssi-core/seed-import.js'
 import { createSsiEvent, deleteSsiEvent } from '../lib/services/event-creation-service.js'
+import { generateMfaSetup, verifyTotpCode, hashRecoveryCodes, verifyRecoveryCode } from '../lib/services/mfa-service.js'
 import {
   createAccountWithTenant,
   authenticateAccount,
   getAccount,
+  getAccountWithMfaSecrets,
   updateAccount,
   changePassword,
   createTenant,
@@ -30,6 +31,7 @@ import {
   createPlatformSession,
   deletePlatformSession,
   getPlatformSession,
+  upgradeMfaSession,
   createDiscipline,
   getDiscipline,
   listTenantDisciplines,
@@ -169,6 +171,19 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       }
 
       const { accountId, account } = result
+
+      // Check if MFA is enabled — if so, return a challenge instead of session
+      if (account.mfaEnabled) {
+        // Create a temporary MFA challenge token (short-lived, stored in session store)
+        const { sessionId: mfaChallengeId } = await createPlatformSession(accountId, { mfaPending: true })
+        res.cookie(PLATFORM_COOKIE, mfaChallengeId, COOKIE_OPTIONS)
+        log.info(`[platform] MFA challenge issued for: ${email}`)
+        return res.json({
+          success: true,
+          mfaRequired: true,
+        })
+      }
+
       const { sessionId } = await createPlatformSession(accountId)
 
       res.cookie(PLATFORM_COOKIE, sessionId, COOKIE_OPTIONS)
@@ -184,6 +199,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
           id: account.id,
           email: account.email,
           name: account.name,
+          mfaEnabled: account.mfaEnabled || false,
         },
         tenants: tenants.map(t => ({
           id: t.id,
@@ -224,6 +240,11 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       return res.json({ authenticated: false })
     }
 
+    // MFA-pending sessions are not fully authenticated
+    if (session.mfaPending) {
+      return res.json({ authenticated: false, mfaPending: true })
+    }
+
     const account = await getAccount(session.accountId)
     if (!account) {
       return res.json({ authenticated: false })
@@ -238,6 +259,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
         id: account.id,
         email: account.email,
         name: account.name,
+        mfaEnabled: account.mfaEnabled || false,
       },
       tenants: tenants.map(t => ({
         id: t.id,
@@ -350,6 +372,184 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       }
       log.error('[platform] Password change failed:', err.message)
       return next(new AppError('Failed to change password', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // ============================================================
+  // POST /api/v1/platform/mfa/verify — Complete MFA challenge during login
+  // Called after login returns mfaRequired: true
+  // ============================================================
+  router.post('/mfa/verify', async (req, res, next) => {
+    const { code, recoveryCode } = req.body
+    const sessionId = req.cookies?.[PLATFORM_COOKIE]
+
+    if (!sessionId) {
+      return res.status(401).json({ error: 'No active MFA challenge. Please log in again.' })
+    }
+
+    // Get session — must be mfaPending
+    const session = await getPlatformSession(sessionId)
+    if (!session || !session.mfaPending) {
+      return res.status(401).json({ error: 'No active MFA challenge. Please log in again.' })
+    }
+
+    try {
+      const account = await getAccountWithMfaSecrets(session.accountId)
+      if (!account || !account.mfaEnabled) {
+        return res.status(400).json({ error: 'MFA is not enabled on this account' })
+      }
+
+      let verified = false
+
+      if (code) {
+        // TOTP code verification
+        verified = verifyTotpCode(account.mfaSecret, code)
+      } else if (recoveryCode) {
+        // Recovery code verification
+        const result = await verifyRecoveryCode(account.mfaRecoveryCodes, recoveryCode)
+        if (result.valid) {
+          verified = true
+          // Save remaining recovery codes
+          await updateAccount(account.id, { mfaRecoveryCodes: result.remainingCodes })
+          log.info(`[platform] MFA recovery code used by ${account.email} (${result.remainingCodes.length} remaining)`)
+        }
+      } else {
+        return res.status(400).json({ error: 'Either code or recoveryCode is required' })
+      }
+
+      if (!verified) {
+        return res.status(401).json({ error: 'Invalid verification code' })
+      }
+
+      // Upgrade the MFA-pending session to a full session
+      const upgraded = await upgradeMfaSession(sessionId)
+      if (!upgraded) {
+        return res.status(401).json({ error: 'MFA session expired. Please log in again.' })
+      }
+
+      log.info(`[platform] MFA verified for ${account.email}`)
+
+      // Return full login response
+      const tenants = await listAccountTenants(account.id)
+      res.json({
+        success: true,
+        account: {
+          id: account.id,
+          email: account.email,
+          name: account.name,
+        },
+        tenants: tenants.map(t => ({
+          id: t.id,
+          name: t.name,
+          subscription: t.subscription,
+          createdAt: t.createdAt,
+        })),
+      })
+    } catch (err) {
+      log.error('[platform] MFA verify failed:', err.message)
+      return next(new AppError('MFA verification failed', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // ============================================================
+  // POST /api/v1/platform/account/mfa/setup — Initiate MFA setup
+  // Returns QR code and recovery codes (not yet enabled)
+  // ============================================================
+  router.post('/account/mfa/setup', requirePlatformAuth(), async (req, res, next) => {
+    try {
+      const account = await getAccount(req.account.id)
+      if (account.mfaEnabled) {
+        return res.status(400).json({ error: 'MFA is already enabled. Disable it first to reconfigure.' })
+      }
+
+      const { secret, qrCodeDataUrl, recoveryCodes } = await generateMfaSetup(account.email)
+
+      // Store secret + hashed recovery codes in account (mfaEnabled stays false until confirm)
+      const hashedCodes = await hashRecoveryCodes(recoveryCodes)
+      await updateAccount(req.account.id, {
+        mfaSecret: secret,
+        mfaRecoveryCodes: hashedCodes,
+      })
+
+      res.json({
+        success: true,
+        qrCodeDataUrl,
+        recoveryCodes, // Show only once — user must save these
+      })
+    } catch (err) {
+      log.error('[platform] MFA setup failed:', err.message)
+      return next(new AppError('Failed to initiate MFA setup', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // ============================================================
+  // POST /api/v1/platform/account/mfa/confirm — Confirm MFA setup
+  // Verifies the TOTP code and enables MFA on the account
+  // ============================================================
+  router.post('/account/mfa/confirm', requirePlatformAuth(), async (req, res, next) => {
+    const { code } = req.body
+    if (!code || typeof code !== 'string' || code.length !== 6) {
+      return res.status(400).json({ error: 'A 6-digit verification code is required' })
+    }
+
+    try {
+      // Get account with MFA secrets to verify the code against the pending secret
+      const account = await getAccountWithMfaSecrets(req.account.id)
+      if (!account) {
+        return res.status(404).json({ error: 'Account not found' })
+      }
+      if (account.mfaEnabled) {
+        return res.status(400).json({ error: 'MFA is already enabled' })
+      }
+      if (!account.mfaSecret) {
+        return res.status(400).json({ error: 'Call /account/mfa/setup first' })
+      }
+
+      const verified = verifyTotpCode(account.mfaSecret, code)
+      if (!verified) {
+        return res.status(401).json({ error: 'Invalid code. Scan the QR code with your authenticator app and enter the 6-digit code.' })
+      }
+
+      // Enable MFA
+      await updateAccount(req.account.id, { mfaEnabled: true })
+      log.info(`[platform] MFA enabled for ${account.email}`)
+
+      res.json({ success: true, mfaEnabled: true })
+    } catch (err) {
+      log.error('[platform] MFA confirm failed:', err.message)
+      return next(new AppError('Failed to confirm MFA setup', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // ============================================================
+  // POST /api/v1/platform/account/mfa/disable — Disable MFA
+  // Requires current password for security
+  // ============================================================
+  router.post('/account/mfa/disable', requirePlatformAuth(), async (req, res, next) => {
+    const { password } = req.body
+    if (!password) {
+      return res.status(400).json({ error: 'Current password is required to disable MFA' })
+    }
+
+    try {
+      // Verify password
+      const authResult = await authenticateAccount(req.account.email, password)
+      if (!authResult) {
+        return res.status(401).json({ error: 'Incorrect password' })
+      }
+
+      // Clear MFA data
+      await updateAccount(req.account.id, {
+        mfaEnabled: false,
+        mfaSecret: null,
+        mfaRecoveryCodes: null,
+      })
+
+      log.info(`[platform] MFA disabled for ${req.account.email}`)
+      res.json({ success: true, mfaEnabled: false })
+    } catch (err) {
+      log.error('[platform] MFA disable failed:', err.message)
+      return next(new AppError('Failed to disable MFA', 500, 'INTERNAL_ERROR'))
     }
   })
 

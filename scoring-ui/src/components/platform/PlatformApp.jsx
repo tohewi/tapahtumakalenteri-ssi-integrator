@@ -27,10 +27,12 @@ import WelcomePage from './WelcomePage.jsx'
 import SignInPage from './SignInPage.jsx'
 import TenantCreatePage from './TenantCreatePage.jsx'
 import JoinInvitePage from './JoinInvitePage.jsx'
+import MfaChallengePage from './MfaChallengePage.jsx'
 
 // ---- Sub-views (sidebar content) ----
 import TenantDetailPage from './TenantDetailPage.jsx'
 import AccountSettingsPage from './AccountSettingsPage.jsx'
+import MembersPage from './MembersPage.jsx'
 import TemplateEditorPage from './TemplateEditorPage.jsx'
 import SchedulePage from './SchedulePage.jsx'
 
@@ -56,6 +58,7 @@ const NAV_SECTIONS = [
     label: 'Admin',
     items: [
       { id: 'my-tenants', icon: '📊', label: 'My Tenants' },
+      { id: 'members', icon: '🤝', label: 'Members' },
       { id: 'settings', icon: '⚙', label: 'Settings' },
     ],
   },
@@ -69,6 +72,7 @@ const AUTH = {
   CREATE_TENANT: 'create_tenant',
   APP: 'app', // authenticated, sidebar layout
   JOIN_INVITE: 'join_invite', // accepting an invite
+  MFA_CHALLENGE: 'mfa_challenge', // MFA verification after login
 }
 
 // ---- Placeholder views for unimplemented sections ----
@@ -247,6 +251,11 @@ export default function PlatformApp({ route }) {
     setError(null)
     try {
       const data = await platformLogin({ email, password })
+      if (data.mfaRequired) {
+        // MFA is enabled — show challenge screen
+        setAuthState(AUTH.MFA_CHALLENGE)
+        return
+      }
       setAccount(data.account)
       setTenants(data.tenants || [])
       if (data.tenants?.length > 0) setSelectedTenantId(data.tenants[0].id)
@@ -308,6 +317,22 @@ export default function PlatformApp({ route }) {
 
   if (authState === AUTH.CREATE_TENANT) {
     return <TenantCreatePage error={error} onCreateTenant={handleCreateTenant} onCancel={() => { setError(null); setAuthState(AUTH.APP) }} />
+  }
+
+  if (authState === AUTH.MFA_CHALLENGE) {
+    return (
+      <MfaChallengePage
+        onComplete={({ account, tenants }) => {
+          setAccount(account)
+          setTenants(tenants || [])
+          if (tenants?.length > 0) setSelectedTenantId(tenants[0].id)
+          setAuthState(AUTH.APP)
+        }}
+        onCancel={() => {
+          handleLogout()
+        }}
+      />
+    )
   }
 
   if (authState === AUTH.JOIN_INVITE) {
@@ -393,6 +418,14 @@ export default function PlatformApp({ route }) {
             onEditTemplate={(templateId) => { setSelectedTemplateId(templateId); setActiveView('templates') }}
             onSchedule={() => setActiveView('schedule')}
             sectionsFilter="tenant-info"
+          />
+        )
+
+      case 'members':
+        return (
+          <MembersPage
+            tenantId={selectedTenantId}
+            currentAccountId={account?.id}
           />
         )
 

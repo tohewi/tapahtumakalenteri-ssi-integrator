@@ -1,7 +1,7 @@
 import * as OTPAuth from 'otpauth'
 import qrcode from 'qrcode'
 import crypto from 'crypto'
-import bcrypt from 'bcryptjs'
+import bcrypt from 'bcrypt'
 
 const ISSUER = 'SSI TurRes Tools'
 

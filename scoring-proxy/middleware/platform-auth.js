@@ -35,6 +35,14 @@ export function requirePlatformAuth() {
         })
       }
 
+      // Block MFA-pending sessions from accessing protected routes
+      if (session.mfaPending) {
+        return res.status(401).json({
+          error: 'MFA verification required. Please complete the MFA challenge.',
+          mfaRequired: true,
+        })
+      }
+
       const account = await getAccount(session.accountId)
       if (!account) {
         return res.status(401).json({
