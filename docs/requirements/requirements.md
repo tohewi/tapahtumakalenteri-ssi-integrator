@@ -464,6 +464,56 @@ Migrate Cup creation and maintenance from web scraping to SSI GraphQL API. The l
 - **WordPress integration**: Calendar event creation (Tapahtumakalenteri) remains web scraping — WordPress REST API requires separate auth. This is out of scope for R7.9.
 - **Offline-capable**: Design for intermittent connectivity at shooting ranges. Critical paths (scoring) must work offline with sync.
 
+## Release 8.2 — Platform Authorization & Workflows
+
+Strengthen the RBAC model to enforce hierarchical role assignment rules: higher-privilege roles must not be assignable by lower-privilege actors. This release also covers match event workflows (MP5–MP7, deferred from R8.1).
+
+### Authorization Requirements
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| RBAC1 | **Hierarchical Role Assignment Authorization**: Enforce strict rules on which roles each actor can assign to other members (via invitation or role update). The assignment matrix defines a ceiling — no actor can grant a privilege they do not themselves hold. The matrix must be enforced in **both** the invitation creation endpoint (`POST /tenants/:tenantId/invitations`) and the member role update endpoint (`PATCH /tenants/:tenantId/members/:id`). **Backend**: A single `ROLE_ASSIGNMENT_MATRIX` constant (object or Map) defines allowed assignable roles per actor role. `requireTenantRole` middleware already resolves the actor's roles; the assignment check validates `requestedRoles ⊆ allowedAssignableRoles(actorRoles)`. **Frontend**: The invite form and role editor must only show roles the current user is allowed to assign. Attempting to assign a disallowed role returns `403 Forbidden` with a clear message. | ⬜ Design |
+
+#### Role Assignment Matrix
+
+Who can assign whom — each row is the **actor's highest role**, each column is the **target role** being assigned. ✅ = can assign, ❌ = cannot assign.
+
+| Actor Role ↓ \ Target Role → | owner | tenant_admin | discipline_admin | instructor_admin | match_admin | instructor |
+|-------------------------------|:-----:|:------------:|:----------------:|:----------------:|:-----------:|:----------:|
+| **owner**                     | ✅    | ✅           | ✅               | ✅               | ✅          | ✅         |
+| **tenant_admin**              | ❌    | ❌           | ✅               | ✅               | ✅          | ✅         |
+| **instructor_admin**          | ❌    | ❌           | ❌               | ❌               | ✅          | ✅         |
+| **discipline_admin**          | ❌    | ❌           | ❌               | ❌               | ❌          | ❌         |
+| **match_admin**               | ❌    | ❌           | ❌               | ❌               | ❌          | ❌         |
+| **instructor**                | ❌    | ❌           | ❌               | ❌               | ❌          | ❌         |
+
+#### Invitation Permission (who can invite)
+
+| Actor Role | Can Invite? | Assignable Roles in Invitation |
+|------------|:-----------:|-------------------------------|
+| **owner**           | ✅ | Any role |
+| **tenant_admin**    | ✅ | discipline_admin, instructor_admin, match_admin, instructor |
+| **instructor_admin**| ✅ | match_admin, instructor |
+| **discipline_admin**| ❌ | — |
+| **match_admin**     | ❌ | — |
+| **instructor**      | ❌ | — |
+
+#### Design Notes
+
+- **Implicit escalation preserved**: The existing `hasRequiredRole` logic (owner satisfies all, tenant_admin satisfies all except owner-only) continues to work for **resource access**. The assignment matrix is a **separate concern** — it controls role propagation, not resource access.
+- **Multi-role actors**: If an actor holds multiple roles (e.g., `[tenant_admin, instructor_admin]`), the assignable set is the **union** of all their role assignment rights.
+- **Self-role protection**: An actor cannot remove their own last `owner` role (existing PA20 protection). An actor also cannot demote themselves below the level needed to manage the tenant.
+- **Extensibility**: The `ROLE_ASSIGNMENT_MATRIX` is a data structure, not hard-coded if/else logic. Adding new roles or adjusting permissions requires only updating the matrix constant. The matrix should live in `platform-store.js` alongside the existing `TENANT_ROLES` constant.
+- **Current gap**: Today, the only assignment check is in the invitation route: "Only an owner can invite another owner." RBAC1 generalizes this to a full matrix enforced on both invitations and role updates.
+
+### Match Event Workflow Requirements
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| MP5 | **Event Execution Workflow**: Execute a planned scheduled event — create cup/matches/squads in SSI from template + overrides. Status transitions: `planned` → `creating` → `ssi_created` (success) or `failed` (error with retry). Progress tracking per sub-operation | ⬜ Design |
+| MP6 | **Event Status Dashboard**: Visual status indicators for each scheduled event (planned, creating, active, completed, cancelled). Batch status view for upcoming week/month | ⬜ Design |
+| MP7 | **Event Cancellation**: Cancel a scheduled event — optionally delete from SSI if already created. Status: `ssi_created` → `cancelled`. Requires confirmation dialog with impact summary | ⬜ Design |
+
 ## Regulatory Requirements — SaaS Platform (EU/Finland)
 
 This section covers the key regulatory obligations for operating a self-service SaaS platform in the EU (Finland) that processes personal data and handles payments. These apply to the Match Management Platform (R8.1) once it becomes a commercial multi-tenant service.
@@ -568,7 +618,7 @@ Applies if tenants are consumers or non-commercial associations (e.g., shooting 
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
 - **Release 8.0** (Platform Auth & Tenancy): 21 requirements — 21 ✅ (PA1–PA21)
 - **Release 8.1** (Match Management Platform): 8 requirements — 5 ✅ (MP1, MP2, MP4, MP10, MP12), 3 design phase (MP3, MP8, MP9). **MP12 — SSI Event Import**: Search existing SSI events via GraphQL (name, sport, date range, region filters) and import selected events as local scheduled_events with `ssi_created` status. Backend: `ssiSearchEvents` in seed-import.js, `importSsiEvent` in platform-store.js, `/ssi-search` + `/ssi-import` API routes. Frontend: `ImportSsiEventsModal` component in SchedulePage with search form, results table with checkboxes, and batch import action. Schema: `template_id` made nullable, `event_name` column added to `scheduled_events` for imported events without templates
-- **Release 8.2** (Match Event Workflows): 3 requirements — 0 ✅, 3 design phase (MP5, MP6, MP7)
+- **Release 8.2** (Platform Authorization & Workflows): 4 requirements — 0 ✅, 4 design phase (RBAC1, MP5, MP6, MP7)
 - **Release 8.3** (Calendar Integration): 1 requirement — 0 ✅, 1 design phase (MP11)
 - **Regulatory** (SaaS Platform EU/Finland): 23 requirements — 1 ✅ (REG14), 1 N/A (REG12), 21 design phase (REG1–REG23)
 
