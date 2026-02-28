@@ -224,57 +224,24 @@ function PasswordSection() {
 // ---- Main Page ----
 
 export default function AccountSettingsPage({ account, onAccountUpdated, onBack, onLogout }) {
+  const initials = account?.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b shadow-sm sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto flex items-center justify-between px-4 h-14">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-              title="Back to dashboard"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <div className="text-lg font-bold text-sky-700">Match Management</div>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-sky-100 rounded-full flex items-center justify-center text-sky-700 text-sm font-semibold">
-                {account?.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
-              </div>
-              <span className="text-sm text-gray-600 hidden sm:inline">{account?.email}</span>
-              <button
-                onClick={onLogout}
-                className="text-xs text-gray-400 hover:text-gray-600 ml-2"
-              >
-                Sign out
-              </button>
-            </div>
-          </div>
+    <div>
+      {/* Page header */}
+      <div className="flex items-center gap-4 mb-8">
+        <div className="w-14 h-14 bg-sky-100 rounded-lg flex items-center justify-center text-sky-700 text-xl font-bold">
+          {initials}
         </div>
-      </header>
-
-      {/* Main content */}
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        {/* Page header */}
-        <div className="flex items-center gap-4 mb-8">
-          <div className="w-14 h-14 bg-sky-100 rounded-lg flex items-center justify-center text-sky-700 text-xl font-bold">
-            {account?.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'}
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Account Settings</h1>
-            <p className="text-sm text-gray-500">Manage your profile and security</p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Account Settings</h1>
+          <p className="text-sm text-gray-500">Manage your profile and security</p>
         </div>
-
-        {/* Settings sections */}
-        <ProfileSection account={account} onAccountUpdated={onAccountUpdated} />
-        <PasswordSection />
       </div>
+
+      {/* Settings sections */}
+      <ProfileSection account={account} onAccountUpdated={onAccountUpdated} />
+      <PasswordSection />
     </div>
   )
 }
