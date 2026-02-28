@@ -18,7 +18,9 @@
     "express": "^5.1.0",
     "express-rate-limit": "^8.2.1",
     "helmet": "^8.1.0",
+    "otpauth": "^9.5.0",
     "pg": "^8.19.0",
+    "qrcode": "^1.5.4",
     "redis": "^5.10.0",
     "resend": "^6.9.1",
     "yaml": "^2.8.2"

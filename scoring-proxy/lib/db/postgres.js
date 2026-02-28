@@ -27,6 +27,9 @@ CREATE TABLE IF NOT EXISTS accounts (
   email         TEXT UNIQUE NOT NULL,
   name          TEXT NOT NULL,
   password_hash TEXT NOT NULL,
+  mfa_enabled   BOOLEAN DEFAULT FALSE,
+  mfa_secret    TEXT,
+  mfa_recovery_codes TEXT[],
   tenants       JSONB DEFAULT '[]',
   created_at    TIMESTAMPTZ DEFAULT NOW(),
   updated_at    TIMESTAMPTZ DEFAULT NOW()
@@ -202,6 +205,13 @@ export async function initPostgres() {
       } catch (err) {
         log.warn('[postgres] Could not update scheduled_events unique index:', err.message)
       }
+
+      // M4: Add MFA columns to accounts table
+      try {
+        await client.query('ALTER TABLE accounts ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN DEFAULT FALSE')
+        await client.query('ALTER TABLE accounts ADD COLUMN IF NOT EXISTS mfa_secret TEXT')
+        await client.query('ALTER TABLE accounts ADD COLUMN IF NOT EXISTS mfa_recovery_codes TEXT[]')
+      } catch { /* columns already exist or table doesn't exist yet */ }
 
       // Optional unique constraints — may fail on existing data with duplicates.
       // App-level checks in createTenant/createAccountWithTenant still prevent new duplicates.

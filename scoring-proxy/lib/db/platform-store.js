@@ -60,7 +60,14 @@ export function hasRequiredRole(memberRoles, requiredRoles) {
 }
 
 // Allowed fields for updateAccount: maps API key → DB column name
-const ACCOUNT_UPDATE_FIELDS = { name: 'name', email: 'email', tenants: 'tenants' }
+const ACCOUNT_UPDATE_FIELDS = { 
+  name: 'name', 
+  email: 'email', 
+  tenants: 'tenants',
+  mfaEnabled: 'mfa_enabled',
+  mfaSecret: 'mfa_secret',
+  mfaRecoveryCodes: 'mfa_recovery_codes',
+}
 
 // ---- SSI Credential Encryption (AES-256-GCM) ----
 //
@@ -154,6 +161,7 @@ function rowToAccount(row) {
     id: row.id,
     email: row.email,
     name: row.name,
+    mfaEnabled: row.mfa_enabled || false,
     tenants: row.tenants || [],
     createdAt: new Date(row.created_at).getTime(),
     updatedAt: new Date(row.updated_at).getTime(),
@@ -249,6 +257,28 @@ export async function getAccount(accountId) {
 }
 
 /**
+ * Get account with full MFA secrets for verification.
+ * Only use this internally for MFA verification!
+ */
+export async function getAccountWithMfaSecrets(accountId) {
+  const { rows } = await query(
+    'SELECT * FROM accounts WHERE id = $1',
+    [accountId]
+  )
+  if (rows.length === 0) return null
+  
+  const account = rowToAccount(rows[0])
+  const mfaSecret = rows[0].mfa_secret ? decrypt(rows[0].mfa_secret) : null
+  const mfaRecoveryCodes = rows[0].mfa_recovery_codes || []
+  
+  return {
+    ...account,
+    mfaSecret,
+    mfaRecoveryCodes,
+  }
+}
+
+/**
  * Update account fields (e.g., name, tenants list).
  */
 export async function updateAccount(accountId, updates) {
@@ -268,6 +298,12 @@ export async function updateAccount(accountId, updates) {
       let value = updates[key]
       if (key === 'tenants') value = JSON.stringify(value)
       if (key === 'email') value = value.toLowerCase().trim()
+      
+      // MFA secrets need encryption
+      if (key === 'mfaSecret' && value) {
+        value = encrypt(value)
+      }
+      
       setClauses.push(`${column} = $${paramIndex}`)
       params.push(value)
       paramIndex++
