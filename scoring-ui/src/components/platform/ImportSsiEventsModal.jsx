@@ -7,8 +7,8 @@
 //   - Import button to create local scheduled_events
 // ============================================================
 
-import { useState } from 'react'
-import { ssiSearchEventsApi, ssiImportEventsApi } from '../../platform-api.js'
+import { useState, useEffect } from 'react'
+import { ssiSearchEventsApi, ssiImportEventsApi, listDisciplines } from '../../platform-api.js'
 
 // Known SSI sport/rule codes for the filter dropdown
 const SPORT_OPTIONS = [
@@ -43,6 +43,20 @@ function sportLabel(rule) {
 }
 
 export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) {
+  // Disciplines for the tenant (loaded on mount)
+  const [disciplines, setDisciplines] = useState([])
+  const [selectedDisciplineId, setSelectedDisciplineId] = useState('')
+
+  // Load disciplines on mount
+  useEffect(() => {
+    listDisciplines(tenantId).then(data => {
+      const discs = data.disciplines || []
+      setDisciplines(discs)
+      // Auto-select if only one discipline
+      if (discs.length === 1) setSelectedDisciplineId(discs[0].id)
+    }).catch(() => {})
+  }, [tenantId])
+
   // Search form state
   const [search, setSearch] = useState('')
   const [sport, setSport] = useState('')
@@ -126,7 +140,7 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
     setImportError(null)
 
     try {
-      const data = await ssiImportEventsApi(tenantId, eventsToImport)
+      const data = await ssiImportEventsApi(tenantId, eventsToImport, selectedDisciplineId || null)
       setImportResults(data)
 
       // If all imported successfully, notify parent to refresh
@@ -323,17 +337,32 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
             </div>
 
             {/* Import Action */}
-            <div className="flex items-center justify-between mt-4">
-              <span className="text-sm text-gray-500">
+            <div className="flex items-center justify-between mt-4 gap-3">
+              <span className="text-sm text-gray-500 flex-shrink-0">
                 {selected.size} event{selected.size !== 1 ? 's' : ''} selected
               </span>
-              <button
-                onClick={handleImport}
-                disabled={selected.size === 0 || importing}
-                className="bg-sky-600 text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-sky-700 disabled:opacity-50 transition-colors"
-              >
-                {importing ? 'Importing...' : `Import ${selected.size} Event${selected.size !== 1 ? 's' : ''}`}
-              </button>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-500 whitespace-nowrap">Discipline:</label>
+                  <select
+                    value={selectedDisciplineId}
+                    onChange={e => setSelectedDisciplineId(e.target.value)}
+                    className="border rounded-md px-2 py-1.5 text-sm focus:ring-sky-500 focus:border-sky-500 min-w-[140px]"
+                  >
+                    <option value="">Select discipline...</option>
+                    {disciplines.map(d => (
+                      <option key={d.id} value={d.id}>{d.labelFi || d.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={handleImport}
+                  disabled={selected.size === 0 || importing || !selectedDisciplineId}
+                  className="bg-sky-600 text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-sky-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                >
+                  {importing ? 'Importing...' : `Import ${selected.size} Event${selected.size !== 1 ? 's' : ''}`}
+                </button>
+              </div>
             </div>
           </div>
         )}

@@ -229,6 +229,12 @@ export async function initPostgres() {
         await client.query('CREATE INDEX IF NOT EXISTS idx_prt_token ON password_reset_tokens (token_hash)')
       } catch { /* table already exists */ }
 
+      // M7: Add discipline_id to scheduled_events (direct link, not only via template)
+      try {
+        await client.query('ALTER TABLE scheduled_events ADD COLUMN IF NOT EXISTS discipline_id TEXT REFERENCES disciplines(id)')
+        await client.query('CREATE INDEX IF NOT EXISTS idx_scheduled_events_discipline ON scheduled_events (discipline_id)')
+      } catch { /* column already exists */ }
+
       // Optional unique constraints — may fail on existing data with duplicates.
       // App-level checks in createTenant/createAccountWithTenant still prevent new duplicates.
       try {

@@ -505,35 +505,39 @@ class TestPgPool {
     // INSERT INTO scheduled_events
     if (sql.startsWith('INSERT INTO scheduled_events')) {
       const now = new Date()
-      // Detect param layout: with event_name (7 params) or without (5-6 params)
-      const hasEventName = sql.includes('event_name')
-      const templateIdx = 2
-      const eventNameIdx = hasEventName ? 3 : null
-      const eventDateIdx = hasEventName ? 4 : 3
-      const statusOrCreatedByIdx = hasEventName ? 5 : 4
+      // Parse column names and VALUES placeholders
+      const colMatch = sql.match(/\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)/i)
+      const columns = colMatch ? colMatch[1].split(',').map(c => c.trim()) : []
+      const valueParts = colMatch ? colMatch[2].split(',').map(v => v.trim()) : []
+
+      // Build row: map $N placeholders to params, keep literals as-is
+      const row = {
+        calendar_reference: {}, assigned_staff: [], error_details: null,
+        discipline_id: null,
+        created_at: now, updated_at: now,
+      }
+      columns.forEach((col, i) => {
+        const placeholder = valueParts[i]
+        if (placeholder && placeholder.startsWith('$')) {
+          const paramIdx = parseInt(placeholder.substring(1)) - 1
+          let val = params[paramIdx]
+          if (col === 'ssi_references' && typeof val === 'string') val = JSON.parse(val)
+          row[col] = val !== undefined ? val : null
+        } else if (placeholder) {
+          // Hardcoded literal like 'planned'
+          row[col] = placeholder.replace(/'/g, '')
+        }
+      })
 
       // Check for unique constraint (template_id + event_date)
-      for (const e of this.events.values()) {
-        if (e.template_id === params[templateIdx] && e.event_date === params[eventDateIdx] && e.status !== 'deleted') {
-          const err = new Error('duplicate key value violates unique constraint')
-          err.code = '23505'
-          throw err
+      if (row.template_id) {
+        for (const e of this.events.values()) {
+          if (e.template_id === row.template_id && e.event_date === row.event_date && e.status !== 'deleted') {
+            const err = new Error('duplicate key value violates unique constraint')
+            err.code = '23505'
+            throw err
+          }
         }
-      }
-      const row = {
-        id: params[0],
-        tenant_id: params[1],
-        template_id: params[templateIdx],
-        event_name: eventNameIdx !== null ? params[eventNameIdx] : null,
-        event_date: params[eventDateIdx],
-        status: sql.includes("'planned'") ? 'planned' : (sql.includes("'ssi_created'") ? 'ssi_created' : 'planned'),
-        ssi_references: hasEventName && params.length > eventDateIdx + 2 ? (typeof params[eventDateIdx + 1] === 'string' ? JSON.parse(params[eventDateIdx + 1]) : params[eventDateIdx + 1]) : {},
-        calendar_reference: {},
-        assigned_staff: [],
-        error_details: null,
-        created_by: params[params.length - 1],
-        created_at: now,
-        updated_at: now,
       }
       this.events.set(row.id, row)
       return { rows: [row] }

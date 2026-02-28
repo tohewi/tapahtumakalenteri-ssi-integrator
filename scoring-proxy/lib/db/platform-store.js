@@ -1341,6 +1341,7 @@ function rowToEvent(row) {
     id: row.id,
     tenantId: row.tenant_id,
     templateId: row.template_id || null,
+    disciplineId: row.discipline_id || null,
     eventName: row.event_name || null,
     eventDate: row.event_date,
     status: row.status,
@@ -1359,13 +1360,13 @@ function rowToEvent(row) {
  * @param {object} params - { tenantId, templateId, eventDate, createdBy }
  * @returns {{ eventId, event }}
  */
-export async function createScheduledEvent({ tenantId, templateId, eventDate, createdBy, eventName = null }) {
+export async function createScheduledEvent({ tenantId, templateId, disciplineId = null, eventDate, createdBy, eventName = null }) {
   const eventId = generateId('evt')
   const { rows } = await query(
-    `INSERT INTO scheduled_events (id, tenant_id, template_id, event_name, event_date, status, created_by)
-     VALUES ($1, $2, $3, $4, $5, 'planned', $6)
+    `INSERT INTO scheduled_events (id, tenant_id, template_id, discipline_id, event_name, event_date, status, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, 'planned', $7)
      RETURNING *`,
-    [eventId, tenantId, templateId, eventName, eventDate, createdBy]
+    [eventId, tenantId, templateId, disciplineId, eventName, eventDate, createdBy]
   )
   return { eventId, event: rowToEvent(rows[0]) }
 }
@@ -1397,7 +1398,7 @@ export async function getImportedSsiEventIds(tenantId) {
   return new Set(rows.map(r => r.ssi_event_id))
 }
 
-export async function importSsiEvent({ tenantId, eventName, eventDate, ssiReferences, createdBy, templateId = null }) {
+export async function importSsiEvent({ tenantId, eventName, eventDate, ssiReferences, createdBy, templateId = null, disciplineId = null }) {
   // Prevent duplicate imports: check if this SSI event is already imported for this tenant
   if (ssiReferences?.ssiEventId) {
     const { rows: existing } = await query(
@@ -1411,10 +1412,10 @@ export async function importSsiEvent({ tenantId, eventName, eventDate, ssiRefere
 
   const eventId = generateId('evt')
   const { rows } = await query(
-    `INSERT INTO scheduled_events (id, tenant_id, template_id, event_name, event_date, status, ssi_references, created_by)
-     VALUES ($1, $2, $3, $4, $5, 'ssi_created', $6, $7)
+    `INSERT INTO scheduled_events (id, tenant_id, template_id, discipline_id, event_name, event_date, status, ssi_references, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, 'ssi_created', $7, $8)
      RETURNING *`,
-    [eventId, tenantId, templateId, eventName, eventDate, JSON.stringify(ssiReferences), createdBy]
+    [eventId, tenantId, templateId, disciplineId, eventName, eventDate, JSON.stringify(ssiReferences), createdBy]
   )
   return { eventId, event: rowToEvent(rows[0]) }
 }

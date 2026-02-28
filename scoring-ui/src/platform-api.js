@@ -423,10 +423,10 @@ export async function ssiSearchEventsApi(tenantId, filters) {
  * @param {string} tenantId
  * @param {Array<object>} events - SSI event objects from search results
  */
-export async function ssiImportEventsApi(tenantId, events) {
+export async function ssiImportEventsApi(tenantId, events, disciplineId = null) {
   return platformFetch(`/tenants/${tenantId}/ssi-import`, {
     method: 'POST',
-    body: JSON.stringify({ events }),
+    body: JSON.stringify({ events, disciplineId }),
   })
 }
 

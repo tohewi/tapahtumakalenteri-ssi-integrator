@@ -1178,6 +1178,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
         const { eventId, event } = await createScheduledEvent({
           tenantId: req.params.tenantId,
           templateId,
+          disciplineId: template.disciplineId || null,
           eventDate: dates[0],
           eventName: template.name || null,
           createdBy: req.account.id,
@@ -1409,7 +1410,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   // Body: { events: [{ ssiEventId, name, starts, contentTypeKey, url, rule, region }] }
   // Requires: owner, tenant_admin, or match_admin
   router.post('/tenants/:tenantId/ssi-import', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
-    const { events } = req.body
+    const { events, disciplineId } = req.body
 
     if (!events || !Array.isArray(events) || events.length === 0) {
       return res.status(400).json({ error: 'events array is required (at least one event to import)' })
@@ -1447,6 +1448,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
           eventName: ssiEvent.name,
           eventDate,
           ssiReferences,
+          disciplineId: disciplineId || null,
           createdBy: req.account.id,
         })
 
