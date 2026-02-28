@@ -14,7 +14,8 @@ import { ssiSearchEventsApi, ssiImportEventsApi } from '../../platform-api.js'
 const SPORT_OPTIONS = [
   { value: '', label: 'Any' },
   { value: 'rl', label: 'RESUL' },
-  { value: 'ip', label: 'SRA / IPSC' },
+  { value: 'sr', label: 'SRA' },
+  { value: 'ip', label: 'IPSC' },
   { value: 'nd', label: 'Nordic' },
   { value: 'pc', label: 'Precision' },
 ]
