@@ -1359,13 +1359,13 @@ function rowToEvent(row) {
  * @param {object} params - { tenantId, templateId, eventDate, createdBy }
  * @returns {{ eventId, event }}
  */
-export async function createScheduledEvent({ tenantId, templateId, eventDate, createdBy }) {
+export async function createScheduledEvent({ tenantId, templateId, eventDate, createdBy, eventName = null }) {
   const eventId = generateId('evt')
   const { rows } = await query(
-    `INSERT INTO scheduled_events (id, tenant_id, template_id, event_date, status, created_by)
-     VALUES ($1, $2, $3, $4, 'planned', $5)
+    `INSERT INTO scheduled_events (id, tenant_id, template_id, event_name, event_date, status, created_by)
+     VALUES ($1, $2, $3, $4, $5, 'planned', $6)
      RETURNING *`,
-    [eventId, tenantId, templateId, eventDate, createdBy]
+    [eventId, tenantId, templateId, eventName, eventDate, createdBy]
   )
   return { eventId, event: rowToEvent(rows[0]) }
 }

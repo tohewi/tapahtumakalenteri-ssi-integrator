@@ -1178,6 +1178,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
           tenantId: req.params.tenantId,
           templateId,
           eventDate: dates[0],
+          eventName: template.name || null,
           createdBy: req.account.id,
         })
         log.info(`[platform] Event scheduled: ${eventId} for ${dates[0]} (template ${templateId})`)

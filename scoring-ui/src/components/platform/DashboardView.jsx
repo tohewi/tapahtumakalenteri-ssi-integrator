@@ -98,8 +98,11 @@ export default function DashboardView({ tenantId, onNavigate }) {
               const day = d.getDate()
               const weekday = d.toLocaleString('fi-FI', { weekday: 'short' }).substring(0, 2)
               
-              // Try to extract match count from template if possible, or fallback
-              const matchCount = evt.ssiReferences?.matches?.length || 1
+              // Match count: from executed events (matches array) or imported metadata
+              const matchCount = evt.ssiReferences?.matches?.length
+                || evt.ssiReferences?.componentMatchCount
+                || (evt.ssiReferences?.matches ? 0 : null)
+                || 1
 
               return (
                 <div key={evt.id} className="px-4 py-3 flex items-center gap-4 hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => onNavigate('schedule')}>
@@ -109,14 +112,14 @@ export default function DashboardView({ tenantId, onNavigate }) {
                     <div className="text-xs text-gray-400 capitalize">{weekday}</div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-gray-900 truncate">{evt.eventName || 'Unnamed Event'}</div>
+                    <div className="font-medium text-gray-900 truncate">{evt.eventName || evt.ssiReferences?.name || 'Unnamed Event'}</div>
                     <div className="text-sm text-gray-500 mt-0.5 flex items-center gap-2">
                       <span>{matchCount} match{matchCount > 1 ? 'es' : ''}</span>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
                     {getStatusBadge(evt.status)}
-                    <span className="text-xs text-gray-400 font-mono">{evt.ssiReferences?.cupId ? `#${evt.ssiReferences.cupId}` : 'No SSI ID'}</span>
+                    <span className="text-xs text-gray-400 font-mono">{evt.ssiReferences?.cupId ? `#${evt.ssiReferences.cupId}` : evt.ssiReferences?.ssiEventId ? `#${evt.ssiReferences.ssiEventId}` : 'No SSI ID'}</span>
                   </div>
                 </div>
               )

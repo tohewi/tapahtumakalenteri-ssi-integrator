@@ -123,7 +123,11 @@ export async function ssiSearchEvents({ credentials, search, sport, startsAfter,
     rule: e.rule,
     region: e.region,
     visibility: e.visibility,
-    url: e.get_full_absolute_url ? `${SSI_BASE_URL}${e.get_full_absolute_url}` : null,
+    url: e.get_full_absolute_url
+      ? (e.get_full_absolute_url.startsWith('http') ? e.get_full_absolute_url
+        : e.get_full_absolute_url.startsWith('/') ? `${SSI_BASE_URL}${e.get_full_absolute_url}`
+        : `${SSI_BASE_URL}/${e.get_full_absolute_url}`)
+      : null,
     contentTypeKey: e.get_content_type_key,
   }))
 }
