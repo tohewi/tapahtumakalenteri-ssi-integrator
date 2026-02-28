@@ -506,6 +506,12 @@ Who can assign whom — each row is the **actor's highest role**, each column is
 - **Extensibility**: The `ROLE_ASSIGNMENT_MATRIX` is a data structure, not hard-coded if/else logic. Adding new roles or adjusting permissions requires only updating the matrix constant. The matrix should live in `platform-store.js` alongside the existing `TENANT_ROLES` constant.
 - **Current gap**: Today, the only assignment check is in the invitation route: "Only an owner can invite another owner." RBAC1 generalizes this to a full matrix enforced on both invitations and role updates.
 
+### Account Management Requirements
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| ACCT1 | **Password Reset (Forgot Password)**: Users who have lost their password can reset it from the Sign In page. **Flow**: (1) User clicks "Forgot password?" link on the Sign In page. (2) Enters their email address. (3) Backend looks up the account — if found, generates a single-use, time-limited reset token (e.g., 1 hour expiry), hashes it (SHA-256) and stores in a `password_reset_tokens` table with `account_id`, `token_hash`, `expires_at`, `used_at`. Sends an email with a reset link `#/platform/reset-password/:token`. If email not found, still returns success (no user enumeration). (4) User clicks the link, enters a new password (min 8 chars) + confirmation. (5) Backend verifies the token (not expired, not used), updates the password (bcrypt), marks the token as used, and invalidates all existing platform sessions for that account (force re-login). **Security**: Token is crypto-random (32 bytes hex), hashed in DB. One active reset token per account (creating a new one revokes the previous). Rate-limited: 3 reset requests per hour per email. **Email**: Sent via Resend API (existing `lib/email.js`). Includes account email (read-only), expiry notice, and a note that the link can only be used once. **UI**: ForgotPasswordPage (email input form), ResetPasswordPage (new password + confirm form). Both are full-page views (no sidebar, no auth required). **MFA interaction**: If MFA is enabled, password reset does NOT bypass MFA — user must still complete MFA challenge on next login after resetting. | ⬜ Design |
+
 ### Match Event Workflow Requirements
 
 | # | Requirement | Status |
@@ -618,7 +624,7 @@ Applies if tenants are consumers or non-commercial associations (e.g., shooting 
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
 - **Release 8.0** (Platform Auth & Tenancy): 21 requirements — 21 ✅ (PA1–PA21)
 - **Release 8.1** (Match Management Platform): 8 requirements — 5 ✅ (MP1, MP2, MP4, MP10, MP12), 3 design phase (MP3, MP8, MP9). **MP12 — SSI Event Import**: Search existing SSI events via GraphQL (name, sport, date range, region filters) and import selected events as local scheduled_events with `ssi_created` status. Backend: `ssiSearchEvents` in seed-import.js, `importSsiEvent` in platform-store.js, `/ssi-search` + `/ssi-import` API routes. Frontend: `ImportSsiEventsModal` component in SchedulePage with search form, results table with checkboxes, and batch import action. Schema: `template_id` made nullable, `event_name` column added to `scheduled_events` for imported events without templates
-- **Release 8.2** (Platform Authorization & Workflows): 4 requirements — 0 ✅, 4 design phase (RBAC1, MP5, MP6, MP7)
+- **Release 8.2** (Platform Authorization & Workflows): 5 requirements — 0 ✅, 5 design phase (RBAC1, ACCT1, MP5, MP6, MP7)
 - **Release 8.3** (Calendar Integration): 1 requirement — 0 ✅, 1 design phase (MP11)
 - **Regulatory** (SaaS Platform EU/Finland): 23 requirements — 1 ✅ (REG14), 1 N/A (REG12), 21 design phase (REG1–REG23)
 
