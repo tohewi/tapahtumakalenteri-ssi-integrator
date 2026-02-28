@@ -143,6 +143,28 @@ function decryptCredentials(envelope) {
   return JSON.parse(decrypted.toString('utf8'))
 }
 
+/**
+ * Encrypt a plain string value for database storage.
+ * Wraps encryptCredentials by storing the string in a { value } object.
+ * @param {string} plaintext
+ * @returns {string} JSON-encoded encrypted envelope
+ */
+function encrypt(plaintext) {
+  const envelope = encryptCredentials({ value: plaintext })
+  return JSON.stringify(envelope)
+}
+
+/**
+ * Decrypt a string value from a stored JSON envelope.
+ * @param {string} stored - JSON-encoded { iv, tag, data } envelope
+ * @returns {string} decrypted plaintext
+ */
+function decrypt(stored) {
+  const envelope = typeof stored === 'string' ? JSON.parse(stored) : stored
+  const decrypted = decryptCredentials(envelope)
+  return decrypted.value
+}
+
 // ---- Helpers ----
 
 function generateId(prefix) {

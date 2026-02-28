@@ -1583,11 +1583,19 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
           accountId = authResult.accountId
           accountEmail = authResult.account.email
         } else if (name) {
-          // Create a new account inline for the invited email
-          const created = await createAccount({ email: invite.email, password, name })
-          accountId = created.accountId
-          accountEmail = created.account.email
-          log.info(`[platform] Inline account created via invitation: ${accountEmail}`)
+          // No existing auth — try to create a new account
+          try {
+            const created = await createAccount({ email: invite.email, password, name })
+            accountId = created.accountId
+            accountEmail = created.account.email
+            log.info(`[platform] Inline account created via invitation: ${accountEmail}`)
+          } catch (createErr) {
+            if (createErr.message.includes('already exists')) {
+              // Account exists but password was wrong
+              return res.status(401).json({ error: 'An account with this email already exists. Please enter the correct password, or sign in first.' })
+            }
+            throw createErr
+          }
         } else {
           return res.status(401).json({ error: 'Invalid password for existing account' })
         }
