@@ -289,11 +289,12 @@ export { extractEventIds, formatDisplayDate, toSsiTime, calculateSchedule, norma
  * @param {object} params
  * @param {object} params.template - match_templates row (with ssiSeedSnapshot + overrides)
  * @param {string} params.eventDate - YYYY-MM-DD
- * @param {object} params.credentials - { email, password } for SSI login
+ * @param {object} params.credentials - { email, password }
+ * @param {object} params.discipline - optional: { ssiGroupId, ssiOrganizerId }
  * @param {function} params.onProgress - optional callback: (step, detail) => void
  * @returns {object} ssiReferences - { cupId, cupUrl, cupTypeId, matches: [{ id, url, typeId, name }] }
  */
-export async function createSsiEvent({ template, eventDate, credentials, onProgress }) {
+export async function createSsiEvent({ template, eventDate, credentials, discipline, onProgress }) {
   const snapshot = template.ssiSeedSnapshot
   if (!snapshot) throw new Error('Template has no imported seed snapshot')
 
@@ -327,14 +328,26 @@ export async function createSsiEvent({ template, eventDate, credentials, onProgr
   // organizer: OrganizationNode. Values:
   //   - numeric ID (e.g. "1215") = arranged by that club
   //   - "" (empty) = not arranged by a club
-  const groupMatch = cupFormHtml?.match(/<select[^>]*name="group"[^>]*>[\s\S]*?<option[^>]*value="([^"]+)"[^>]*selected/i)
-    || cupFormHtml?.match(/<select[^>]*name="group"[^>]*>[\s\S]*?<option[^>]*value="([^"]+)"/i)
-  const groupId = groupMatch?.[1] || 'xxx'
+  
+  // Discipline overrides take precedence over seed snapshot settings
+  const targetGroupId = discipline?.ssiGroupId || snapshot.settings?.groupId
+  const targetOrgId = discipline?.ssiOrganizerId || snapshot.settings?.organizerId
 
-  const organizerMatch = cupFormHtml?.match(/<select[^>]*name="organizer"[^>]*>[\s\S]*?<option[^>]*value="([^"]+)"[^>]*selected/i)
-  const organizerId = snapshot.settings?.organizerId || organizerMatch?.[1] || ''
+  // Fallback 1: Try to match the target ID exactly in the dropdown
+  // Fallback 2: Try to find the pre-selected option if target is empty
+  const groupMatch = targetGroupId ? cupFormHtml?.match(new RegExp(`<select[^>]*name="group"[^>]*>[\\s\\S]*?<option[^>]*value="(${targetGroupId})"`, 'i'))
+    : cupFormHtml?.match(/<select[^>]*name="group"[^>]*>[\s\S]*?<option[^>]*value="([^"]+)"[^>]*selected/i)
+  
+  // If no match found, and no target specified, fallback to "xxx"
+  const groupId = targetGroupId || groupMatch?.[1] || 'xxx'
 
-  log.info(`[event-creation] CSRF: ${cupCsrf ? cupCsrf.substring(0, 10) + '...' : 'none'}, group: ${groupId}, organizer: ${organizerId}, cookies: ${Object.keys(cupPageCookies).join(', ')}`)
+  const organizerMatch = targetOrgId ? cupFormHtml?.match(new RegExp(`<select[^>]*name="organizer"[^>]*>[\\s\\S]*?<option[^>]*value="(${targetOrgId})"`, 'i'))
+    : cupFormHtml?.match(/<select[^>]*name="organizer"[^>]*>[\s\S]*?<option[^>]*value="([^"]+)"[^>]*selected/i)
+  
+  // If no target specified and no selected option found, fallback to empty string
+  const organizerId = targetOrgId || organizerMatch?.[1] || ''
+
+  log.info(`[event-creation] CSRF: ${cupCsrf ? cupCsrf.substring(0, 10) + '...' : 'none'}, target group: ${targetGroupId}, target org: ${targetOrgId}, resolved group: ${groupId}, resolved org: ${organizerId}`)
 
   // Cup form body — matches PowerShell New-KupittaaCup.ps1 field structure.
   // csrfmiddlewaretoken must be in body (even empty string).

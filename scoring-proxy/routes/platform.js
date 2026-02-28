@@ -972,6 +972,9 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       return res.status(400).json({ error: 'Tenant SSI credentials must be configured' })
     }
 
+    // Find discipline to pass group/org fallbacks
+    const discipline = (tenant.disciplines || []).find(d => d.id === template.disciplineId)
+
     try {
       const ssiReferences = await createSsiEvent({
         template,
@@ -980,6 +983,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
           email: tenant.ssiCredentials.email,
           password: tenant.ssiCredentials.password,
         },
+        discipline,
       })
 
       // Update scheduled event with SSI references and status
