@@ -28,6 +28,8 @@ import SignInPage from './SignInPage.jsx'
 import TenantCreatePage from './TenantCreatePage.jsx'
 import JoinInvitePage from './JoinInvitePage.jsx'
 import MfaChallengePage from './MfaChallengePage.jsx'
+import ForgotPasswordPage from './ForgotPasswordPage.jsx'
+import ResetPasswordPage from './ResetPasswordPage.jsx'
 
 // ---- Sub-views (sidebar content) ----
 import TenantDetailPage from './TenantDetailPage.jsx'
@@ -73,6 +75,8 @@ const AUTH = {
   APP: 'app', // authenticated, sidebar layout
   JOIN_INVITE: 'join_invite', // accepting an invite
   MFA_CHALLENGE: 'mfa_challenge', // MFA verification after login
+  FORGOT_PASSWORD: 'forgot_password',
+  RESET_PASSWORD: 'reset_password', // from email link
 }
 
 // ---- Placeholder views for unimplemented sections ----
@@ -196,6 +200,7 @@ export default function PlatformApp({ route }) {
   const [activeView, setActiveView] = useState('dashboard')
   const [selectedTemplateId, setSelectedTemplateId] = useState(null)
   const [inviteToken, setInviteToken] = useState(null)
+  const [resetToken, setResetToken] = useState(null)
 
   // Check session and route on mount
   useEffect(() => {
@@ -206,6 +211,16 @@ export default function PlatformApp({ route }) {
         setInviteToken(token)
         setAuthState(AUTH.JOIN_INVITE)
         return // skip session check for invite flow (it handles its own auth state)
+      }
+    }
+
+    // Check if this is a password reset link: #/platform/reset-password/:token
+    if (route && route.startsWith('#/platform/reset-password/')) {
+      const token = route.split('/').pop()
+      if (token) {
+        setResetToken(token)
+        setAuthState(AUTH.RESET_PASSWORD)
+        return
       }
     }
 
@@ -312,7 +327,36 @@ export default function PlatformApp({ route }) {
   }
 
   if (authState === AUTH.SIGN_IN) {
-    return <SignInPage error={error} onLogin={handleLogin} onSwitchToSignUp={() => { setError(null); setAuthState(AUTH.WELCOME) }} />
+    return (
+      <SignInPage
+        error={error}
+        onLogin={handleLogin}
+        onSwitchToSignUp={() => { setError(null); setAuthState(AUTH.WELCOME) }}
+        onForgotPassword={() => { setError(null); setAuthState(AUTH.FORGOT_PASSWORD) }}
+      />
+    )
+  }
+
+  if (authState === AUTH.FORGOT_PASSWORD) {
+    return <ForgotPasswordPage onBack={() => { setAuthState(AUTH.SIGN_IN) }} />
+  }
+
+  if (authState === AUTH.RESET_PASSWORD) {
+    return (
+      <ResetPasswordPage
+        token={resetToken}
+        onComplete={() => {
+          window.location.hash = '#/platform'
+          setResetToken(null)
+          setAuthState(AUTH.SIGN_IN)
+        }}
+        onCancel={() => {
+          window.location.hash = '#/platform'
+          setResetToken(null)
+          setAuthState(AUTH.SIGN_IN)
+        }}
+      />
+    )
   }
 
   if (authState === AUTH.CREATE_TENANT) {

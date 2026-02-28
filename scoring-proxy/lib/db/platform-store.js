@@ -1422,6 +1422,110 @@ export async function deleteScheduledEvent(eventId) {
   return rows.length > 0
 }
 
+// ---- Password Reset Tokens ----
+
+const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000 // 1 hour
+
+/**
+ * Create a password reset token for an account.
+ * Revokes any existing unused tokens for the same account.
+ * @param {string} email
+ * @returns {{ token: string } | null} plaintext token (to include in email), or null if email not found
+ */
+export async function createPasswordResetToken(email) {
+  const normalizedEmail = email.toLowerCase().trim()
+  const { rows: accounts } = await query(
+    'SELECT id FROM accounts WHERE LOWER(email) = $1',
+    [normalizedEmail]
+  )
+  if (accounts.length === 0) return null // no user enumeration
+
+  const accountId = accounts[0].id
+  const token = crypto.randomBytes(32).toString('hex')
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
+  const id = generateId('prt')
+  const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS)
+
+  // Revoke any existing unused tokens for this account
+  await query(
+    `UPDATE password_reset_tokens SET used_at = NOW() WHERE account_id = $1 AND used_at IS NULL`,
+    [accountId]
+  )
+
+  await query(
+    `INSERT INTO password_reset_tokens (id, account_id, token_hash, expires_at)
+     VALUES ($1, $2, $3, $4)`,
+    [id, accountId, tokenHash, expiresAt]
+  )
+
+  return { token }
+}
+
+/**
+ * Verify a password reset token and reset the password.
+ * @param {string} token - plaintext token from the email link
+ * @param {string} newPassword - new password (plain text, will be hashed)
+ * @returns {{ success: boolean, error?: string }}
+ */
+export async function resetPasswordWithToken(token, newPassword) {
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
+
+  const { rows } = await query(
+    `SELECT * FROM password_reset_tokens WHERE token_hash = $1`,
+    [tokenHash]
+  )
+  if (rows.length === 0) {
+    return { success: false, error: 'Invalid or expired reset link.' }
+  }
+
+  const resetRow = rows[0]
+  if (resetRow.used_at) {
+    return { success: false, error: 'This reset link has already been used.' }
+  }
+  if (new Date(resetRow.expires_at) < new Date()) {
+    return { success: false, error: 'This reset link has expired. Please request a new one.' }
+  }
+
+  // Hash new password and update account
+  const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS)
+  await query(
+    `UPDATE accounts SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+    [passwordHash, resetRow.account_id]
+  )
+
+  // Mark token as used
+  await query(
+    `UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1`,
+    [resetRow.id]
+  )
+
+  return { success: true, accountId: resetRow.account_id }
+}
+
+/**
+ * Delete all platform sessions for an account (force re-login after password reset).
+ * Scans Redis for platform:session:* keys belonging to this account.
+ */
+export async function invalidateAccountSessions(accountId) {
+  const redis = getRedisClient()
+  // Scan for all platform session keys
+  const keys = []
+  for await (const key of redis.scanIterator({ MATCH: 'platform:session:*', COUNT: 100 })) {
+    keys.push(key)
+  }
+  for (const key of keys) {
+    try {
+      const raw = await redis.get(key)
+      if (raw) {
+        const session = JSON.parse(raw)
+        if (session.accountId === accountId) {
+          await redis.del(key)
+        }
+      }
+    } catch { /* skip malformed sessions */ }
+  }
+}
+
 // ---- Platform Sessions (Redis — ephemeral, 24h TTL) ----
 
 const PLATFORM_SESSION_TTL = 24 * 60 * 60 // 24 hours in seconds

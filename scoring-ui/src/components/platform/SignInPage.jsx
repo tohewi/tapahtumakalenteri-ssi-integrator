@@ -4,7 +4,7 @@
 
 import { useState } from 'react'
 
-export default function SignInPage({ error, onLogin, onSwitchToSignUp }) {
+export default function SignInPage({ error, onLogin, onSwitchToSignUp, onForgotPassword }) {
   const [form, setForm] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [localError, setLocalError] = useState(null)
@@ -86,6 +86,13 @@ export default function SignInPage({ error, onLogin, onSwitchToSignUp }) {
               autoComplete="current-password"
               className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
             />
+            {onForgotPassword && (
+              <div className="text-right mt-1">
+                <button type="button" onClick={onForgotPassword} className="text-xs text-sky-600 hover:underline">
+                  Forgot password?
+                </button>
+              </div>
+            )}
           </div>
           <button
             type="submit"

@@ -213,6 +213,22 @@ export async function initPostgres() {
         await client.query('ALTER TABLE accounts ADD COLUMN IF NOT EXISTS mfa_recovery_codes TEXT[]')
       } catch { /* columns already exist or table doesn't exist yet */ }
 
+      // M5: Add password_reset_tokens table
+      try {
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id          TEXT PRIMARY KEY,
+            account_id  TEXT NOT NULL REFERENCES accounts(id),
+            token_hash  TEXT NOT NULL,
+            expires_at  TIMESTAMPTZ NOT NULL,
+            used_at     TIMESTAMPTZ,
+            created_at  TIMESTAMPTZ DEFAULT NOW()
+          )
+        `)
+        await client.query('CREATE INDEX IF NOT EXISTS idx_prt_account ON password_reset_tokens (account_id)')
+        await client.query('CREATE INDEX IF NOT EXISTS idx_prt_token ON password_reset_tokens (token_hash)')
+      } catch { /* table already exists */ }
+
       // Optional unique constraints — may fail on existing data with duplicates.
       // App-level checks in createTenant/createAccountWithTenant still prevent new duplicates.
       try {

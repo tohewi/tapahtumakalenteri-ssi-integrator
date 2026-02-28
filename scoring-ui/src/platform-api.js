@@ -180,6 +180,30 @@ export async function mfaDisable({ password }) {
   })
 }
 
+// ---- Password Reset ----
+
+/**
+ * Request a password reset email.
+ * @param {{ email }} params
+ */
+export async function forgotPassword({ email }) {
+  return platformFetch('/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  })
+}
+
+/**
+ * Reset password using a token from the reset email.
+ * @param {{ token, newPassword }} params
+ */
+export async function resetPassword({ token, newPassword }) {
+  return platformFetch('/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, newPassword }),
+  })
+}
+
 // ---- Disciplines ----
 
 /**

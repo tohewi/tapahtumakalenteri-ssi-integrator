@@ -21,6 +21,9 @@ import {
   createAccountWithTenant,
   createAccount,
   authenticateAccount,
+  createPasswordResetToken,
+  resetPasswordWithToken,
+  invalidateAccountSessions,
   getAccount,
   getAccountWithMfaSecrets,
   updateAccount,
@@ -225,6 +228,86 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
     }
     res.clearCookie(PLATFORM_COOKIE, { path: '/' })
     res.json({ success: true })
+  })
+
+  // ============================================================
+  // POST /api/v1/platform/forgot-password — Request password reset email
+  // No auth required. Always returns success (no user enumeration).
+  // ============================================================
+  router.post('/forgot-password', platformLoginLimiter, async (req, res, next) => {
+    const { email } = req.body
+    if (!email || !EMAIL_RE.test(email)) {
+      return res.status(400).json({ error: 'A valid email address is required' })
+    }
+
+    try {
+      const result = await createPasswordResetToken(email)
+
+      // Send email only if account exists (but always return success)
+      if (result) {
+        const origin = req.headers.origin || `https://${req.headers.host}`
+        const resetUrl = `${origin}/#/platform/reset-password/${result.token}`
+
+        await sendEmail({
+          to: email.trim(),
+          subject: 'Password Reset — SSI TurRes Tools',
+          html: `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+              <h2 style="color: #0284c7;">Password Reset</h2>
+              <p>We received a request to reset the password for your account (<strong>${email.trim()}</strong>).</p>
+              <p>Click the button below to set a new password:</p>
+              <div style="margin: 30px 0;">
+                <a href="${resetUrl}" style="background-color: #0ea5e9; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Reset Password</a>
+              </div>
+              <p style="color: #666; font-size: 0.9em;">This link will expire in 1 hour and can only be used once.</p>
+              <p style="color: #666; font-size: 0.9em;">If you did not request this, you can safely ignore this email.</p>
+              <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+              <p style="color: #999; font-size: 0.8em;">If the button doesn't work, copy and paste this URL into your browser:<br/>${resetUrl}</p>
+            </div>
+          `
+        })
+        log.info(`[platform] Password reset email sent to ${email.trim()}`)
+      }
+
+      // Always return success — no user enumeration
+      res.json({ success: true, message: 'If an account with that email exists, a reset link has been sent.' })
+    } catch (err) {
+      log.error('[platform] Forgot password failed:', err.message)
+      return next(new AppError('Failed to process password reset request', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // ============================================================
+  // POST /api/v1/platform/reset-password — Reset password with token
+  // No auth required.
+  // ============================================================
+  router.post('/reset-password', async (req, res, next) => {
+    const { token, newPassword } = req.body
+    if (!token) {
+      return res.status(400).json({ error: 'Reset token is required' })
+    }
+    if (!newPassword || newPassword.length < MIN_PASSWORD_LEN) {
+      return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD_LEN} characters` })
+    }
+    if (newPassword.length > MAX_PASSWORD_LEN) {
+      return res.status(400).json({ error: `Password must be at most ${MAX_PASSWORD_LEN} characters` })
+    }
+
+    try {
+      const result = await resetPasswordWithToken(token, newPassword)
+      if (!result.success) {
+        return res.status(400).json({ error: result.error })
+      }
+
+      // Invalidate all existing sessions for this account (force re-login)
+      await invalidateAccountSessions(result.accountId)
+      log.info(`[platform] Password reset completed for account ${result.accountId}`)
+
+      res.json({ success: true, message: 'Password has been reset. Please sign in with your new password.' })
+    } catch (err) {
+      log.error('[platform] Reset password failed:', err.message)
+      return next(new AppError('Failed to reset password', 500, 'INTERNAL_ERROR'))
+    }
   })
 
   // ============================================================
