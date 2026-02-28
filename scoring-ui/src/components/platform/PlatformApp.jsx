@@ -22,6 +22,7 @@ import {
 } from '../../platform-api.js'
 
 import DashboardView from './DashboardView.jsx'
+import RosterView from './RosterView.jsx'
 import WelcomePage from './WelcomePage.jsx'
 import SignInPage from './SignInPage.jsx'
 import TenantCreatePage from './TenantCreatePage.jsx'
@@ -335,7 +336,7 @@ export default function PlatformApp() {
         return <SchedulePage tenantId={selectedTenantId} onBack={() => setActiveView('dashboard')} />
 
       case 'roster':
-        return <PlaceholderView title="Instructor Roster" description="Manage the pool of qualified instructors. Approve registrations, assign disciplines and roles." />
+        return <RosterView />
 
       case 'join':
         return <PlaceholderView title="Join as Instructor" description="Register to join the instructor roster for this organization." />
