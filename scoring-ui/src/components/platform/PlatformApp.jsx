@@ -26,6 +26,7 @@ import RosterView from './RosterView.jsx'
 import WelcomePage from './WelcomePage.jsx'
 import SignInPage from './SignInPage.jsx'
 import TenantCreatePage from './TenantCreatePage.jsx'
+import JoinInvitePage from './JoinInvitePage.jsx'
 
 // ---- Sub-views (sidebar content) ----
 import TenantDetailPage from './TenantDetailPage.jsx'
@@ -67,6 +68,7 @@ const AUTH = {
   SIGN_IN: 'sign_in',
   CREATE_TENANT: 'create_tenant',
   APP: 'app', // authenticated, sidebar layout
+  JOIN_INVITE: 'join_invite', // accepting an invite
 }
 
 // ---- Placeholder views for unimplemented sections ----
@@ -181,7 +183,7 @@ function MobileNav({ activeView, onNavigate }) {
 
 // ---- Main App ----
 
-export default function PlatformApp() {
+export default function PlatformApp({ route }) {
   const [authState, setAuthState] = useState(AUTH.LOADING)
   const [account, setAccount] = useState(null)
   const [tenants, setTenants] = useState([])
@@ -189,11 +191,22 @@ export default function PlatformApp() {
   const [selectedTenantId, setSelectedTenantId] = useState(null)
   const [activeView, setActiveView] = useState('dashboard')
   const [selectedTemplateId, setSelectedTemplateId] = useState(null)
+  const [inviteToken, setInviteToken] = useState(null)
 
-  // Check session on mount
+  // Check session and route on mount
   useEffect(() => {
+    // Check if this is an invite link: #/platform/invite/:token
+    if (route && route.startsWith('#/platform/invite/')) {
+      const token = route.split('/').pop()
+      if (token) {
+        setInviteToken(token)
+        setAuthState(AUTH.JOIN_INVITE)
+        return // skip session check for invite flow (it handles its own auth state)
+      }
+    }
+
     checkSession()
-  }, [])
+  }, [route])
 
   async function checkSession() {
     try {
@@ -295,6 +308,25 @@ export default function PlatformApp() {
 
   if (authState === AUTH.CREATE_TENANT) {
     return <TenantCreatePage error={error} onCreateTenant={handleCreateTenant} onCancel={() => { setError(null); setAuthState(AUTH.APP) }} />
+  }
+
+  if (authState === AUTH.JOIN_INVITE) {
+    return (
+      <JoinInvitePage
+        token={inviteToken}
+        onComplete={({ account, tenants, selectedTenantId }) => {
+          setAccount(account)
+          setTenants(tenants)
+          setSelectedTenantId(selectedTenantId)
+          setAuthState(AUTH.APP)
+          window.location.hash = '#/platform' // clear the invite token from URL
+        }}
+        onCancel={() => {
+          window.location.hash = '#/platform'
+          checkSession()
+        }}
+      />
+    )
   }
 
   // ---- Render: App shell with sidebar ----

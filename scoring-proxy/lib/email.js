@@ -120,3 +120,35 @@ Tämä viesti on lähetetty automaattisesti.`
     return { success: false, error: err.message }
   }
 }
+
+/**
+ * Send a generic email.
+ * @param {object} params - { to, subject, text, html }
+ */
+export async function sendEmail({ to, subject, text, html }) {
+  if (!resend) {
+    console.warn('[email] RESEND_API_KEY not configured — skipping email send')
+    return { success: false, error: 'Email not configured' }
+  }
+
+  try {
+    const result = await resend.emails.send({
+      from: FROM_EMAIL,
+      to,
+      subject,
+      html,
+      text: text || html.replace(/<[^>]*>?/gm, ''), // fallback strip html
+    })
+
+    if (result.error) {
+      console.error('[email] Send failed:', result.error)
+      return { success: false, error: result.error.message || 'Send failed' }
+    }
+
+    console.log(`[email] Sent to ${to} (id: ${result.data?.id})`)
+    return { success: true }
+  } catch (err) {
+    console.error('[email] Send error:', err.message)
+    return { success: false, error: err.message }
+  }
+}

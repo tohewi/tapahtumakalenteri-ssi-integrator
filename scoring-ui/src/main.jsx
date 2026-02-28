@@ -71,8 +71,8 @@ function Router() {
   if (route === '#/staffing') {
     return <StaffingPage />
   }
-  if (route === '#/platform') {
-    return <PlatformApp />
+  if (route === '#/platform' || route.startsWith('#/platform/')) {
+    return <PlatformApp route={route} />
   }
   return <HomePage />
 }
