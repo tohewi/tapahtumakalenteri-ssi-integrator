@@ -1161,14 +1161,13 @@ export async function updateScheduledEvent(eventId, updates) {
 }
 
 /**
- * Delete a scheduled event. Only planned or failed events can be deleted.
- * Events that have been created in SSI (ssi_created, etc.) cannot be deleted
- * because they have external references that would become orphaned.
+ * Delete a scheduled event. Allows deleting events in any status (planned, failed, ssi_created, calendar_published).
+ * The caller should handle cascading deletions to external systems before calling this.
  * @returns {boolean}
  */
 export async function deleteScheduledEvent(eventId) {
   const { rows } = await query(
-    `DELETE FROM scheduled_events WHERE id = $1 AND status IN ('planned', 'failed') RETURNING id`,
+    `DELETE FROM scheduled_events WHERE id = $1 RETURNING id`,
     [eventId]
   )
   return rows.length > 0

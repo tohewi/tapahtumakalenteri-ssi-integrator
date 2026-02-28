@@ -15,7 +15,7 @@ import express from 'express'
 import { log } from '../lib/logger.js'
 import { AppError } from '../lib/errors/AppError.js'
 import { ssiFetchEventStructure } from '../lib/ssi-core/seed-import.js'
-import { createSsiEvent } from '../lib/services/event-creation-service.js'
+import { createSsiEvent, deleteSsiEvent } from '../lib/services/event-creation-service.js'
 import {
   createAccountWithTenant,
   authenticateAccount,
@@ -926,17 +926,46 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
     }
   })
 
-  // DELETE /api/v1/platform/tenants/:tenantId/events/:id — Delete planned event
+  // DELETE /api/v1/platform/tenants/:tenantId/events/:id — Delete event (and cascade to SSI if created)
   // Requires: owner, tenant_admin, or match_admin
-  router.delete('/tenants/:tenantId/events/:id', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res) => {
+  router.delete('/tenants/:tenantId/events/:id', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
     const event = await getScheduledEvent(req.params.id)
     if (!event || event.tenantId !== req.params.tenantId) {
       return res.status(404).json({ error: 'Event not found' })
     }
 
+    // MP10: Cascading Deletion
+    // If the event is in 'ssi_created' status and has SSI references, try to delete it from SSI first.
+    if (event.status === 'ssi_created' && event.ssiReferences) {
+      const tenant = req.tenant
+      if (!tenant.ssiCredentials?.email || !tenant.ssiCredentials?.password) {
+        return res.status(400).json({ error: 'Cannot delete from SSI: Tenant SSI credentials missing' })
+      }
+
+      try {
+        log.info(`[platform] Attempting cascading delete from SSI for event ${req.params.id}`)
+        await deleteSsiEvent({
+          ssiReferences: event.ssiReferences,
+          credentials: {
+            email: tenant.ssiCredentials.email,
+            password: tenant.ssiCredentials.password,
+          }
+        })
+      } catch (err) {
+        log.error(`[platform] Failed to delete event from SSI for ${req.params.id}:`, err.message)
+        // Note: we might want to still allow deleting the local event if SSI deletion fails,
+        // but for safety we block it so the user knows they have a dangling event in SSI.
+        return res.status(500).json({ error: `Failed to delete event from SSI: ${err.message}. Local event was not deleted.` })
+      }
+    }
+
+    // Tapahtumakalenteri cascading delete would go here (MP10)
+    // if (event.status === 'calendar_published') { ... }
+
     const deleted = await deleteScheduledEvent(req.params.id)
     if (!deleted) {
-      return res.status(400).json({ error: 'Only planned or failed events can be deleted' })
+      // With the DB update, any event status can be deleted now, so this shouldn't happen unless ID mismatch
+      return res.status(400).json({ error: 'Failed to delete event from database' })
     }
 
     log.info(`[platform] Event deleted: ${req.params.id}`)

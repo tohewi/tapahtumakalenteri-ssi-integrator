@@ -284,6 +284,83 @@ export { extractEventIds, formatDisplayDate, toSsiTime, calculateSchedule, norma
 // ---- Main Service ----
 
 /**
+ * Deletes an event from SSI via web scraping.
+ * @param {object} ssiReferences - The references to the SSI event (cupId, cupTypeId)
+ * @param {object} credentials - SSI login credentials
+ * @returns {Promise<void>}
+ */
+export async function deleteSsiEvent({ ssiReferences, credentials }) {
+  if (!ssiReferences || (!ssiReferences.cupId && !ssiReferences.id)) {
+    throw new Error('No SSI reference ID provided for deletion')
+  }
+
+  // Handle both single matches and cups. Prefer cup if both exist.
+  const eventId = ssiReferences.cupId || ssiReferences.id
+  const typeId = ssiReferences.cupTypeId || ssiReferences.typeId
+
+  if (!eventId || !typeId) {
+    throw new Error(`Missing SSI eventId or typeId in references: ${JSON.stringify(ssiReferences)}`)
+  }
+
+  log.info(`[event-deletion] Logging in to SSI to delete event ${eventId}...`)
+  const cookies = await ssiLogin(credentials.email, credentials.password)
+
+  const deleteUrl = `${SSI_BASE_URL}/event/${typeId}/${eventId}/delete/`
+  log.info(`[event-deletion] Fetching delete confirmation page: ${deleteUrl}`)
+
+  // Get the delete form to verify it exists
+  const resp = await fetch(deleteUrl, {
+    headers: { 'Cookie': formatCookies(cookies) },
+  })
+  
+  if (resp.status === 404) {
+    log.info(`[event-deletion] Event ${eventId} not found on SSI (already deleted)`)
+    return
+  }
+
+  if (!resp.ok) {
+    throw new Error(`Failed to access delete page for event ${eventId}: HTTP ${resp.status}`)
+  }
+
+  const html = await resp.text()
+
+  // Extract event name from the confirmation page to be safe
+  const nameMatch = html.match(/Are you sure you want to delete:\s*(.+?)\s*</)
+  const eventName = nameMatch ? nameMatch[1].trim() : 'Unknown Event'
+  
+  log.info(`[event-deletion] Confirming deletion of: "${eventName}"`)
+
+  // POST to confirm deletion
+  // The SSI form just needs remove=Delete
+  const postResp = await fetch(deleteUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': formatCookies(cookies),
+      'Referer': deleteUrl,
+      'Origin': SSI_BASE_URL,
+    },
+    body: 'remove=Delete',
+    redirect: 'manual',
+  })
+
+  // We expect a redirect after successful deletion
+  if (postResp.status >= 300 && postResp.status < 400) {
+    log.info(`[event-deletion] Successfully deleted event ${eventId} ("${eventName}")`)
+    return
+  }
+
+  // If no redirect, check if it failed or if we're still on the delete page
+  const resultHtml = await postResp.text()
+  if (resultHtml.includes('Are you sure you want to delete')) {
+     log.warn(`[event-deletion] Deletion may have failed for event ${eventId}, still on confirmation page.`)
+     throw new Error(`Failed to delete event ${eventId} on SSI (no redirect received)`)
+  }
+  
+  log.info(`[event-deletion] Successfully deleted event ${eventId} ("${eventName}") (Status ${postResp.status})`)
+}
+
+/**
  * Create an SSI event (cup + matches + squads) from a template for a specific date.
  *
  * @param {object} params

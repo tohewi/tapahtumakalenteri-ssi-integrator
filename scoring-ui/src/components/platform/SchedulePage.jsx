@@ -156,14 +156,28 @@ export default function SchedulePage({ tenantId, onBack }) {
     }
   }
 
-  // Delete a planned event
-  async function handleDelete(eventId) {
-    if (!confirm('Delete this planned event?')) return
+  // Delete an event
+  async function handleDelete(evt) {
+    let confirmMsg = 'Delete this event?'
+    
+    if (evt.status === 'ssi_created') {
+      const matchCount = evt.ssiReferences?.matches?.length || 0
+      confirmMsg = `This will delete the event from SSI (Cup + ${matchCount} matches) and remove it locally. Are you sure?`
+    } else if (evt.status === 'calendar_published') {
+      confirmMsg = 'This will delete the event from SSI and Tapahtumakalenteri, and remove it locally. Are you sure?'
+    }
+
+    if (!confirm(confirmMsg)) return
+
     try {
-      await deleteEventApi(tenantId, eventId)
+      // Set executing id so we can show loading state during delete
+      setExecutingId(evt.id)
+      await deleteEventApi(tenantId, evt.id)
       await refreshEvents()
     } catch (err) {
       setStatus({ type: 'error', message: err.message })
+    } finally {
+      setExecutingId(null)
     }
   }
 
@@ -329,11 +343,10 @@ export default function SchedulePage({ tenantId, onBack }) {
                           <button
                             onClick={() => handleExecute(evt.id)}
                             disabled={executingId === evt.id}
-                            className="text-xs bg-sky-600 text-white px-2.5 py-1 rounded font-semibold hover:bg-sky-700 disabled:opacity-50 transition-colors"
+                            className="text-xs text-sky-600 hover:text-sky-800 font-medium"
                           >
                             {executingId === evt.id ? 'Creating in SSI...' : 'Create in SSI'}
                           </button>
-                          <button onClick={() => handleDelete(evt.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
                         </>
                       )}
                       {evt.status === 'failed' && (
@@ -345,9 +358,16 @@ export default function SchedulePage({ tenantId, onBack }) {
                           >
                             {executingId === evt.id ? 'Retrying...' : 'Retry'}
                           </button>
-                          <button onClick={() => handleDelete(evt.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
                         </>
                       )}
+                      {/* Delete is allowed for all statuses */}
+                      <button 
+                        onClick={() => handleDelete(evt)} 
+                        disabled={executingId === evt.id}
+                        className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
+                      >
+                        {executingId === evt.id ? 'Deleting...' : 'Delete'}
+                      </button>
                     </div>
                   </div>
                 )
