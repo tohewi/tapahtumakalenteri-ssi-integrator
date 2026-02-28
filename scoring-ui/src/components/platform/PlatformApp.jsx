@@ -59,7 +59,7 @@ const NAV_SECTIONS = [
   {
     label: 'Admin',
     items: [
-      { id: 'my-tenants', icon: '📊', label: 'My Tenants' },
+      { id: 'my-tenants', icon: '📊', label: 'Tenant' },
       { id: 'members', icon: '🤝', label: 'Members' },
       { id: 'settings', icon: '⚙', label: 'Settings' },
     ],

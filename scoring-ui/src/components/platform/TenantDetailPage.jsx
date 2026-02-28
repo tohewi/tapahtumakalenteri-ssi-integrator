@@ -981,7 +981,7 @@ export default function TenantDetailPage({ tenantId, account, onBack, onLogout, 
       <div className="space-y-0">
         {sectionsFilter === 'tenant-info' && (
           <>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">My Tenant</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Tenant</h1>
             <p className="text-sm text-gray-400 mb-6">Organization details and subscription.</p>
             <GeneralSection tenant={tenant} onSave={handleSave} />
           </>
