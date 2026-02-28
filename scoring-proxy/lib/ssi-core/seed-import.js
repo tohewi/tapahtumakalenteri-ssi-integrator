@@ -37,7 +37,96 @@
 // ============================================================
 
 import { ssiGraphQL } from './graphql.js'
+import { SSI_BASE_URL } from './constants.js'
 import { log } from '../logger.js'
+
+// ---- SSI Event Search ----
+
+// GraphQL query for searching events.
+// SSI `events(search:)` does text search on event names.
+// Additional filtering (rule/sport, date range, region) is applied client-side.
+const SEARCH_EVENTS_QUERY = `
+query SearchEvents($search: String!) {
+  events(search: $search) {
+    id
+    name
+    starts
+    ends
+    status
+    rule
+    region
+    visibility
+    get_full_absolute_url
+    get_content_type_key
+  }
+}
+`
+
+/**
+ * Search SSI events via GraphQL with client-side filtering.
+ *
+ * SSI GraphQL only supports text-based search (name). Filters for
+ * sport/rule, date range, and region are applied after fetching results.
+ *
+ * @param {object} params
+ * @param {object} params.credentials - { email, password, apiKey }
+ * @param {string} params.search - Text search term (name)
+ * @param {string} [params.sport] - Filter by rule code (e.g. 'rl' for RESUL, 'ip' for IPSC/SRA)
+ * @param {string} [params.startsAfter] - ISO date string, exclude events starting before this
+ * @param {string} [params.startsBefore] - ISO date string, exclude events starting after this
+ * @param {string} [params.region] - Filter by region code (e.g. 'FIN', 'SWE')
+ * @returns {Array<object>} Filtered list of SSI events
+ */
+export async function ssiSearchEvents({ credentials, search, sport, startsAfter, startsBefore, region }) {
+  if (!search || search.trim().length < 2) {
+    throw new Error('Search term must be at least 2 characters')
+  }
+
+  // Authenticate with SSI
+  const jwt = await authenticateSSI(credentials)
+
+  log.info(`[ssi-search] Searching SSI events: "${search}" sport=${sport || 'any'} region=${region || 'any'}`)
+
+  const data = await ssiGraphQL(jwt, SEARCH_EVENTS_QUERY, { search: search.trim() })
+  let events = data.events || []
+
+  log.info(`[ssi-search] SSI returned ${events.length} events for "${search}"`)
+
+  // Client-side filtering
+  if (sport) {
+    events = events.filter(e => e.rule && e.rule.toLowerCase() === sport.toLowerCase())
+  }
+
+  if (region) {
+    events = events.filter(e => e.region && e.region.toLowerCase() === region.toLowerCase())
+  }
+
+  if (startsAfter) {
+    const afterDate = new Date(startsAfter)
+    events = events.filter(e => e.starts && new Date(e.starts) >= afterDate)
+  }
+
+  if (startsBefore) {
+    const beforeDate = new Date(startsBefore)
+    events = events.filter(e => e.starts && new Date(e.starts) <= beforeDate)
+  }
+
+  log.info(`[ssi-search] After filtering: ${events.length} events`)
+
+  // Normalize results
+  return events.map(e => ({
+    ssiEventId: e.id,
+    name: e.name,
+    starts: e.starts,
+    ends: e.ends,
+    status: e.status,
+    rule: e.rule,
+    region: e.region,
+    visibility: e.visibility,
+    url: e.get_full_absolute_url ? `${SSI_BASE_URL}${e.get_full_absolute_url}` : null,
+    contentTypeKey: e.get_content_type_key,
+  }))
+}
 
 // SSI GraphQL auth mutation (same as auth-v7.js)
 const AUTH_MUTATION = `

@@ -731,6 +731,172 @@ export async function removeTenantMember(memberId) {
   return rows.length > 0
 }
 
+// ============================================================
+// Tenant Invitations (DB)
+// ============================================================
+
+function rowToInvitation(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    email: row.email,
+    roles: row.roles,
+    invitedBy: row.invited_by,
+    status: row.status,
+    expiresAt: new Date(row.expires_at).getTime(),
+    usedAt: row.used_at ? new Date(row.used_at).getTime() : null,
+    createdAt: new Date(row.created_at).getTime(),
+    updatedAt: new Date(row.updated_at).getTime(),
+  }
+}
+
+/**
+ * Create an invitation for a user to join a tenant.
+ * Resolves to a securely random token + id.
+ */
+export async function createTenantInvitation({ tenantId, email, roles, invitedBy, expiresInDays = 7 }) {
+  for (const role of roles) {
+    if (!TENANT_ROLES.includes(role)) {
+      throw new Error(`createTenantInvitation: invalid role '${role}'`)
+    }
+  }
+
+  const id = generateId('inv')
+  // Generate secure random token
+  const tokenBuffer = crypto.randomBytes(32)
+  const token = tokenBuffer.toString('hex')
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
+
+  const normalizedEmail = email.toLowerCase().trim()
+  const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
+
+  const { rows } = await query(
+    `INSERT INTO tenant_invitations (id, tenant_id, email, roles, token_hash, invited_by, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING *`,
+    [id, tenantId, normalizedEmail, roles, tokenHash, invitedBy, expiresAt]
+  )
+
+  // Return the plaintext token to be emailed — it cannot be recovered later
+  return { invitation: rowToInvitation(rows[0]), token }
+}
+
+/**
+ * Get an invitation by plaintext token.
+ * Only returns 'pending' invitations that haven't expired.
+ */
+export async function getInvitationByToken(token) {
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
+  const { rows } = await query(
+    `SELECT ti.*, t.name as tenant_name, a.name as inviter_name
+     FROM tenant_invitations ti
+     JOIN tenants t ON t.id = ti.tenant_id
+     JOIN accounts a ON a.id = ti.invited_by
+     WHERE ti.token_hash = $1
+       AND ti.status = 'pending'
+       AND ti.expires_at > NOW()`,
+    [tokenHash]
+  )
+  if (rows.length === 0) return null
+
+  const inv = rowToInvitation(rows[0])
+  inv.tenantName = rows[0].tenant_name
+  inv.inviterName = rows[0].inviter_name
+  return inv
+}
+
+/**
+ * Accept an invitation and add the user to the tenant.
+ * Performs atomical check-and-update.
+ */
+export async function acceptTenantInvitation(token, accountId, accountEmail) {
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
+
+  return await withTransaction(async (client) => {
+    // 1. Lock the invitation row to prevent double-use
+    const { rows: invRows } = await client.query(
+      `SELECT * FROM tenant_invitations
+       WHERE token_hash = $1 FOR UPDATE`,
+      [tokenHash]
+    )
+    
+    if (invRows.length === 0) {
+      throw new Error('Invitation not found or invalid token')
+    }
+
+    const inv = invRows[0]
+
+    if (inv.status !== 'pending') {
+      throw new Error(`Invitation is already ${inv.status}`)
+    }
+    
+    if (new Date(inv.expires_at) < new Date()) {
+      await client.query(`UPDATE tenant_invitations SET status = 'expired' WHERE id = $1`, [inv.id])
+      throw new Error('Invitation has expired')
+    }
+
+    // Check email match (rudimentary safeguard, optionally strict)
+    if (inv.email !== accountEmail.toLowerCase().trim()) {
+      throw new Error(`This invitation was sent to ${inv.email}, but you are logged in as ${accountEmail}`)
+    }
+
+    // 2. Add membership
+    const memberId = generateId('mbr')
+    await client.query(
+      `INSERT INTO tenant_members (id, tenant_id, account_id, roles, invited_by, status)
+       VALUES ($1, $2, $3, $4, $5, 'active')
+       ON CONFLICT (tenant_id, account_id) DO UPDATE
+         SET roles = (
+               SELECT ARRAY(SELECT DISTINCT unnest(tenant_members.roles || $4))
+             ),
+             status = 'active',
+             updated_at = NOW()`,
+      [memberId, inv.tenant_id, accountId, inv.roles, inv.invited_by]
+    )
+
+    // 3. Mark invitation used
+    await client.query(
+      `UPDATE tenant_invitations SET status = 'accepted', used_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      [inv.id]
+    )
+
+    return inv.tenant_id
+  })
+}
+
+/**
+ * List pending invitations for a tenant.
+ */
+export async function listPendingInvitations(tenantId) {
+  const { rows } = await query(
+    `SELECT ti.*, a.name as inviter_name
+     FROM tenant_invitations ti
+     JOIN accounts a ON a.id = ti.invited_by
+     WHERE ti.tenant_id = $1 AND ti.status = 'pending' AND ti.expires_at > NOW()
+     ORDER BY ti.created_at DESC`,
+    [tenantId]
+  )
+  return rows.map(r => ({
+    ...rowToInvitation(r),
+    inviterName: r.inviter_name,
+  }))
+}
+
+/**
+ * Revoke a pending invitation.
+ */
+export async function revokeTenantInvitation(tenantId, invitationId) {
+  const { rows } = await query(
+    `UPDATE tenant_invitations 
+     SET status = 'revoked', updated_at = NOW()
+     WHERE id = $1 AND tenant_id = $2 AND status = 'pending'
+     RETURNING id`,
+    [invitationId, tenantId]
+  )
+  return rows.length > 0
+}
+
 /**
  * Get discipline counts for a list of tenant IDs in a single query.
  * Returns a Map of tenantId → count.
@@ -1025,7 +1191,8 @@ function rowToEvent(row) {
   return {
     id: row.id,
     tenantId: row.tenant_id,
-    templateId: row.template_id,
+    templateId: row.template_id || null,
+    eventName: row.event_name || null,
     eventDate: row.event_date,
     status: row.status,
     ssiReferences: row.ssi_references || {},
@@ -1050,6 +1217,30 @@ export async function createScheduledEvent({ tenantId, templateId, eventDate, cr
      VALUES ($1, $2, $3, $4, 'planned', $5)
      RETURNING *`,
     [eventId, tenantId, templateId, eventDate, createdBy]
+  )
+  return { eventId, event: rowToEvent(rows[0]) }
+}
+
+/**
+ * Import an existing SSI event as a scheduled event (no template required).
+ * The event is created with 'ssi_created' status and populated ssi_references.
+ *
+ * @param {object} params
+ * @param {string} params.tenantId
+ * @param {string} params.eventName - SSI event name
+ * @param {string} params.eventDate - YYYY-MM-DD
+ * @param {object} params.ssiReferences - { ssiEventId, contentType, url, rule, name }
+ * @param {string} params.createdBy - account ID
+ * @param {string} [params.templateId] - optional template association
+ * @returns {{ eventId, event }}
+ */
+export async function importSsiEvent({ tenantId, eventName, eventDate, ssiReferences, createdBy, templateId = null }) {
+  const eventId = generateId('evt')
+  const { rows } = await query(
+    `INSERT INTO scheduled_events (id, tenant_id, template_id, event_name, event_date, status, ssi_references, created_by)
+     VALUES ($1, $2, $3, $4, $5, 'ssi_created', $6, $7)
+     RETURNING *`,
+    [eventId, tenantId, templateId, eventName, eventDate, JSON.stringify(ssiReferences), createdBy]
   )
   return { eventId, event: rowToEvent(rows[0]) }
 }

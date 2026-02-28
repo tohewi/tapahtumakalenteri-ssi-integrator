@@ -14,7 +14,8 @@
 import express from 'express'
 import { log } from '../lib/logger.js'
 import { AppError } from '../lib/errors/AppError.js'
-import { ssiFetchEventStructure } from '../lib/ssi-core/seed-import.js'
+import { sendEmail } from '../lib/email.js'
+import { ssiFetchEventStructure, ssiSearchEvents } from '../lib/ssi-core/seed-import.js'
 import { createSsiEvent, deleteSsiEvent } from '../lib/services/event-creation-service.js'
 import {
   createAccountWithTenant,
@@ -45,6 +46,11 @@ import {
   addTenantMember,
   updateMemberRoles,
   removeTenantMember,
+  createTenantInvitation,
+  getInvitationByToken,
+  acceptTenantInvitation,
+  listPendingInvitations,
+  revokeTenantInvitation,
   hasRequiredRole,
   TENANT_ROLES,
   countDisciplinesByTenant,
@@ -54,6 +60,7 @@ import {
   listScheduledEvents,
   updateScheduledEvent,
   deleteScheduledEvent,
+  importSsiEvent,
 } from '../lib/db/platform-store.js'
 import { requirePlatformAuth, PLATFORM_COOKIE } from '../middleware/platform-auth.js'
 
@@ -1039,6 +1046,109 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   })
 
   // ============================================================
+  // SSI Event Search & Import
+  // Search existing SSI events via GraphQL, then import selected
+  // events as local scheduled_events with ssi_created status.
+  // ============================================================
+
+  // POST /api/v1/platform/tenants/:tenantId/ssi-search
+  // Search SSI events via GraphQL with filtering.
+  // Body: { search, sport?, startsAfter?, startsBefore?, region? }
+  // Requires: owner, tenant_admin, or match_admin
+  router.post('/tenants/:tenantId/ssi-search', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
+    const { search, sport, startsAfter, startsBefore, region } = req.body
+
+    if (!search || search.trim().length < 2) {
+      return res.status(400).json({ error: 'Search term must be at least 2 characters' })
+    }
+
+    // Tenant must have SSI credentials configured
+    const tenant = req.tenant
+    if (!tenant.ssiCredentials?.email || !tenant.ssiCredentials?.password) {
+      return res.status(400).json({ error: 'Tenant SSI credentials must be configured before searching SSI events' })
+    }
+
+    try {
+      const events = await ssiSearchEvents({
+        credentials: {
+          email: tenant.ssiCredentials.email,
+          password: tenant.ssiCredentials.password,
+          apiKey: tenant.ssiCredentials.apiKey || null,
+        },
+        search,
+        sport: sport || null,
+        startsAfter: startsAfter || null,
+        startsBefore: startsBefore || null,
+        region: region || null,
+      })
+
+      log.info(`[platform] SSI search for "${search}": ${events.length} results`)
+      res.json({ events })
+    } catch (err) {
+      log.error(`[platform] SSI search failed:`, err.message)
+      if (err.message.includes('authentication') || err.message.includes('credentials')) {
+        return res.status(401).json({ error: 'SSI authentication failed — check tenant credentials' })
+      }
+      return next(new AppError('SSI event search failed', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // POST /api/v1/platform/tenants/:tenantId/ssi-import
+  // Import selected SSI events as local scheduled_events.
+  // Body: { events: [{ ssiEventId, name, starts, contentTypeKey, url, rule, region }] }
+  // Requires: owner, tenant_admin, or match_admin
+  router.post('/tenants/:tenantId/ssi-import', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
+    const { events } = req.body
+
+    if (!events || !Array.isArray(events) || events.length === 0) {
+      return res.status(400).json({ error: 'events array is required (at least one event to import)' })
+    }
+
+    if (events.length > 50) {
+      return res.status(400).json({ error: 'Cannot import more than 50 events at once' })
+    }
+
+    const results = []
+    for (const ssiEvent of events) {
+      try {
+        if (!ssiEvent.ssiEventId || !ssiEvent.name || !ssiEvent.starts) {
+          results.push({ success: false, name: ssiEvent.name || '?', error: 'Missing required fields (ssiEventId, name, starts)' })
+          continue
+        }
+
+        // Extract date from starts (ISO datetime → YYYY-MM-DD)
+        const eventDate = ssiEvent.starts.substring(0, 10)
+
+        const ssiReferences = {
+          ssiEventId: ssiEvent.ssiEventId,
+          contentTypeKey: ssiEvent.contentTypeKey || null,
+          url: ssiEvent.url || null,
+          name: ssiEvent.name,
+          rule: ssiEvent.rule || null,
+          region: ssiEvent.region || null,
+          importedFrom: 'ssi_search',
+        }
+
+        const { eventId, event } = await importSsiEvent({
+          tenantId: req.params.tenantId,
+          eventName: ssiEvent.name,
+          eventDate,
+          ssiReferences,
+          createdBy: req.account.id,
+        })
+
+        results.push({ success: true, eventId, event, name: ssiEvent.name })
+      } catch (err) {
+        results.push({ success: false, name: ssiEvent.name || '?', error: err.message })
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length
+    log.info(`[platform] SSI import: ${successCount}/${events.length} events imported for tenant ${req.params.tenantId}`)
+    res.status(201).json({ success: true, results, imported: successCount, total: events.length })
+  })
+
+  // ============================================================
   // Member Management — nested under /tenants/:tenantId/members
   // Requires: owner or tenant_admin
   // ============================================================
@@ -1133,6 +1243,174 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       }
       log.error('[platform] Remove member failed:', err.message)
       return next(new AppError('Failed to remove member', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // ============================================================
+  // Tenant Invitations — nested under /tenants/:tenantId/invitations
+  // Requires: owner or tenant_admin
+  // ============================================================
+
+  // GET /api/v1/platform/tenants/:tenantId/invitations
+  router.get('/tenants/:tenantId/invitations', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res) => {
+    const invites = await listPendingInvitations(req.params.tenantId)
+    res.json({ invitations: invites })
+  })
+
+  // POST /api/v1/platform/tenants/:tenantId/invitations
+  router.post('/tenants/:tenantId/invitations', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
+    const { email, roles } = req.body
+    if (!email || !EMAIL_RE.test(email)) {
+      return res.status(400).json({ error: 'A valid email is required' })
+    }
+    if (!roles || !Array.isArray(roles) || roles.length === 0) {
+      return res.status(400).json({ error: 'roles array is required (at least one role)' })
+    }
+
+    // Validate role names
+    const invalidRoles = roles.filter(r => !TENANT_ROLES.includes(r))
+    if (invalidRoles.length > 0) {
+      return res.status(400).json({ error: `Invalid roles: ${invalidRoles.join(', ')}` })
+    }
+
+    // tenant_admin cannot invite someone as an owner
+    if (roles.includes('owner') && !hasRequiredRole(req.membership.roles, ['owner'])) {
+      return res.status(403).json({ error: 'Only an owner can invite another owner' })
+    }
+
+    try {
+      const { invitation, token } = await createTenantInvitation({
+        tenantId: req.params.tenantId,
+        email,
+        roles,
+        invitedBy: req.account.id,
+      })
+
+      // Send the email
+      const origin = req.headers.origin || `https://${req.headers.host}`
+      const inviteUrl = `${origin}/#/platform/invite/${token}`
+      const tenant = await getTenant(req.params.tenantId)
+
+      await sendEmail({
+        to: email,
+        subject: `Invitation to join ${tenant.name} on SSI TurRes Tools`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+            <h2 style="color: #0284c7;">You've been invited!</h2>
+            <p><strong>${req.account.name}</strong> has invited you to join <strong>${tenant.name}</strong> on the SSI TurRes Tools platform.</p>
+            <p>Click the link below to accept the invitation and set up your account:</p>
+            <div style="margin: 30px 0;">
+              <a href="${inviteUrl}" style="background-color: #0ea5e9; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Accept Invitation</a>
+            </div>
+            <p style="color: #666; font-size: 0.9em;">This link will expire in 7 days.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+            <p style="color: #999; font-size: 0.8em;">If the button doesn't work, copy and paste this URL into your browser:<br/>${inviteUrl}</p>
+          </div>
+        `
+      })
+
+      log.info(`[platform] Invitation created for ${email} by ${req.account.email} for tenant ${req.params.tenantId}`)
+      res.status(201).json({ success: true, invitation })
+    } catch (err) {
+      log.error('[platform] Create invitation failed:', err.message)
+      return next(new AppError('Failed to create invitation', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // DELETE /api/v1/platform/tenants/:tenantId/invitations/:id
+  router.delete('/tenants/:tenantId/invitations/:id', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
+    try {
+      const revoked = await revokeTenantInvitation(req.params.tenantId, req.params.id)
+      if (!revoked) {
+        return res.status(404).json({ error: 'Pending invitation not found' })
+      }
+      res.json({ success: true })
+    } catch (err) {
+      log.error('[platform] Revoke invitation failed:', err.message)
+      return next(new AppError('Failed to revoke invitation', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // ============================================================
+  // Public Invitation Endpoints (No auth required)
+  // ============================================================
+
+  // GET /api/v1/platform/invitations/:token
+  router.get('/invitations/:token', async (req, res) => {
+    const invite = await getInvitationByToken(req.params.token)
+    if (!invite) {
+      return res.status(404).json({ error: 'Invitation not found, already used, or expired' })
+    }
+    res.json({ invitation: invite })
+  })
+
+  // POST /api/v1/platform/invitations/:token/accept
+  // Requires user to be logged in to platform OR creates account inline if password/name provided
+  router.post('/invitations/:token/accept', async (req, res, next) => {
+    try {
+      const invite = await getInvitationByToken(req.params.token)
+      if (!invite) {
+        return res.status(404).json({ error: 'Invitation not found, already used, or expired' })
+      }
+
+      let accountId
+      let accountEmail
+      let sessionId = req.cookies?.[PLATFORM_COOKIE]
+
+      // Check if user is already logged in
+      if (sessionId) {
+        const session = await getPlatformSession(sessionId)
+        if (session) {
+          const account = await getAccount(session.accountId)
+          if (account) {
+            accountId = account.id
+            accountEmail = account.email
+          }
+        }
+      }
+
+      // If not logged in, they must provide registration or login details
+      if (!accountId) {
+        const { password, name } = req.body
+        if (!password) {
+          return res.status(401).json({ error: 'Not authenticated and no password provided for registration/login' })
+        }
+
+        // Try to authenticate existing account with this email
+        const authResult = await authenticateAccount(invite.email, password)
+        if (authResult) {
+          accountId = authResult.accountId
+          accountEmail = authResult.account.email
+        } else if (name) {
+          // Attempt registration - user must use standard register endpoint first
+          return res.status(400).json({ error: 'Inline registration not supported. Please create an account or log in first.' })
+        } else {
+          return res.status(401).json({ error: 'Invalid password for existing account' })
+        }
+
+        // Create session
+        if (accountId) {
+          const newSession = await createPlatformSession(accountId)
+          res.cookie(PLATFORM_COOKIE, newSession.sessionId, COOKIE_OPTIONS)
+        }
+      }
+
+      // We have an authenticated account. Process acceptance.
+      if (accountEmail.toLowerCase() !== invite.email.toLowerCase()) {
+         return res.status(403).json({ error: `Invitation is for ${invite.email}, but you are logged in as ${accountEmail}.` })
+      }
+
+      const acceptedTenantId = await acceptTenantInvitation(req.params.token, accountId, accountEmail)
+      
+      log.info(`[platform] Account ${accountEmail} accepted invitation to tenant ${acceptedTenantId}`)
+      res.json({ success: true, tenantId: acceptedTenantId })
+
+    } catch (err) {
+      if (err.message.includes('expired') || err.message.includes('not found')) {
+        return res.status(400).json({ error: err.message })
+      }
+      log.error('[platform] Accept invitation failed:', err.message)
+      return next(new AppError('Failed to accept invitation', 500, 'INTERNAL_ERROR'))
     }
   })
 

@@ -87,11 +87,12 @@ CREATE INDEX IF NOT EXISTS idx_match_templates_discipline_id ON match_templates 
 -- Index for listing templates by tenant
 CREATE INDEX IF NOT EXISTS idx_match_templates_tenant_id ON match_templates (tenant_id);
 
--- Scheduled events (instances of templates for specific dates)
+-- Scheduled events (instances of templates for specific dates, or imported SSI events)
 CREATE TABLE IF NOT EXISTS scheduled_events (
   id                  TEXT PRIMARY KEY,
   tenant_id           TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  template_id         TEXT NOT NULL REFERENCES match_templates(id) ON DELETE CASCADE,
+  template_id         TEXT REFERENCES match_templates(id) ON DELETE CASCADE,
+  event_name          TEXT,
   event_date          DATE NOT NULL,
   status              TEXT NOT NULL DEFAULT 'planned',
   ssi_references      JSONB DEFAULT '{}',
@@ -109,8 +110,8 @@ CREATE INDEX IF NOT EXISTS idx_scheduled_events_tenant_id ON scheduled_events (t
 CREATE INDEX IF NOT EXISTS idx_scheduled_events_template_id ON scheduled_events (template_id);
 -- Index for date-based queries (upcoming events)
 CREATE INDEX IF NOT EXISTS idx_scheduled_events_date ON scheduled_events (event_date);
--- Prevent duplicate events on the same date for the same template
-CREATE UNIQUE INDEX IF NOT EXISTS idx_scheduled_events_template_date ON scheduled_events (template_id, event_date);
+-- Prevent duplicate events on the same date for the same template (only for template-based events)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scheduled_events_template_date ON scheduled_events (template_id, event_date) WHERE template_id IS NOT NULL;
 
 -- Tenant members (RBAC — links accounts to tenants with roles)
 CREATE TABLE IF NOT EXISTS tenant_members (
@@ -129,6 +130,24 @@ CREATE TABLE IF NOT EXISTS tenant_members (
 CREATE INDEX IF NOT EXISTS idx_tenant_members_tenant_id ON tenant_members (tenant_id);
 -- Index for listing memberships by account (dashboard: "my tenants")
 CREATE INDEX IF NOT EXISTS idx_tenant_members_account_id ON tenant_members (account_id);
+
+CREATE TABLE IF NOT EXISTS tenant_invitations (
+  id          TEXT PRIMARY KEY,
+  tenant_id   TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  email       TEXT NOT NULL,
+  roles       TEXT[] NOT NULL DEFAULT '{}',
+  token_hash  TEXT NOT NULL UNIQUE,
+  invited_by  TEXT NOT NULL REFERENCES accounts(id),
+  status      TEXT NOT NULL DEFAULT 'pending', -- pending, accepted, expired, revoked
+  expires_at  TIMESTAMPTZ NOT NULL,
+  used_at     TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tenant_invitations_tenant_id ON tenant_invitations (tenant_id);
+CREATE INDEX IF NOT EXISTS idx_tenant_invitations_email ON tenant_invitations (email);
+CREATE INDEX IF NOT EXISTS idx_tenant_invitations_token_hash ON tenant_invitations (token_hash);
 `
 
 // ---- Initialization ----
@@ -163,6 +182,26 @@ export async function initPostgres() {
       // Run schema migrations
       await client.query(SCHEMA_SQL)
       log.info('[postgres] Schema initialized')
+
+      // ---- Incremental migrations for existing databases ----
+
+      // M1: Make scheduled_events.template_id nullable (for SSI imports without a template)
+      try {
+        await client.query('ALTER TABLE scheduled_events ALTER COLUMN template_id DROP NOT NULL')
+      } catch { /* already nullable or table doesn't exist yet */ }
+
+      // M2: Add event_name column to scheduled_events (for imported SSI events)
+      try {
+        await client.query('ALTER TABLE scheduled_events ADD COLUMN IF NOT EXISTS event_name TEXT')
+      } catch { /* column already exists */ }
+
+      // M3: Replace old unique index with partial index (only for template-based events)
+      try {
+        await client.query('DROP INDEX IF EXISTS idx_scheduled_events_template_date')
+        await client.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_scheduled_events_template_date ON scheduled_events (template_id, event_date) WHERE template_id IS NOT NULL')
+      } catch (err) {
+        log.warn('[postgres] Could not update scheduled_events unique index:', err.message)
+      }
 
       // Optional unique constraints — may fail on existing data with duplicates.
       // App-level checks in createTenant/createAccountWithTenant still prevent new duplicates.

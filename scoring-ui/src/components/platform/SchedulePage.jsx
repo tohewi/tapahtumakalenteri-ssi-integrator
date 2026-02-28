@@ -11,6 +11,7 @@
 
 import { useState, useEffect } from 'react'
 import { listTemplates, listEvents, createEventsApi, deleteEventApi, executeEventApi } from '../../platform-api.js'
+import ImportSsiEventsModal from './ImportSsiEventsModal.jsx'
 
 // ---- Status badge colors ----
 const STATUS_COLORS = {
@@ -65,6 +66,7 @@ export default function SchedulePage({ tenantId, onBack }) {
   const [batchResults, setBatchResults] = useState(null)
   const [status, setStatus] = useState(null)
   const [executingId, setExecutingId] = useState(null) // event ID being executed in SSI
+  const [showImportModal, setShowImportModal] = useState(false)
 
   // Load templates and events
   useEffect(() => {
@@ -200,9 +202,17 @@ export default function SchedulePage({ tenantId, onBack }) {
   return (
     <div className="space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Event Schedule</h1>
-          <p className="text-sm text-gray-400">Create and manage scheduled events</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Event Schedule</h1>
+            <p className="text-sm text-gray-400">Create and manage scheduled events</p>
+          </div>
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="bg-white border border-sky-300 text-sky-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-sky-50 transition-colors whitespace-nowrap"
+          >
+            Import from SSI
+          </button>
         </div>
 
         {/* Status message */}
@@ -325,9 +335,9 @@ export default function SchedulePage({ tenantId, onBack }) {
                         <StatusBadge status={evt.status} />
                       </div>
                       <div className="text-xs text-gray-400 mt-0.5">
-                        {tpl?.name || evt.templateId}
-                        {evt.ssiReferences?.cupUrl && (
-                          <span> • <a href={evt.ssiReferences.cupUrl} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">SSI</a></span>
+                        {evt.eventName || tpl?.name || evt.templateId || 'Imported'}
+                        {(evt.ssiReferences?.cupUrl || evt.ssiReferences?.url) && (
+                          <span> • <a href={evt.ssiReferences.cupUrl || evt.ssiReferences.url} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">SSI</a></span>
                         )}
                         {evt.calendarReference?.calendarUrl && (
                           <span> • <a href={evt.calendarReference.calendarUrl} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">Calendar</a></span>
@@ -375,6 +385,14 @@ export default function SchedulePage({ tenantId, onBack }) {
             </div>
           )}
         </div>
+        {/* Import from SSI Modal */}
+        {showImportModal && (
+          <ImportSsiEventsModal
+            tenantId={tenantId}
+            onClose={() => setShowImportModal(false)}
+            onImported={refreshEvents}
+          />
+        )}
     </div>
   )
 }

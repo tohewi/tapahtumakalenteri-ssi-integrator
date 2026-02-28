@@ -336,7 +336,7 @@ export default function PlatformApp() {
         return <SchedulePage tenantId={selectedTenantId} onBack={() => setActiveView('dashboard')} />
 
       case 'roster':
-        return <RosterView />
+        return <RosterView tenantId={selectedTenantId} />
 
       case 'join':
         return <PlaceholderView title="Join as Instructor" description="Register to join the instructor roster for this organization." />

@@ -178,6 +178,53 @@ export async function deleteDisciplineApi(tenantId, disciplineId) {
   })
 }
 
+// ---- Members & Invitations ----
+
+export async function listMembers(tenantId) {
+  return platformFetch(`/tenants/${tenantId}/members`)
+}
+
+export async function updateMemberRoles(tenantId, memberId, roles) {
+  return platformFetch(`/tenants/${tenantId}/members/${memberId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ roles }),
+  })
+}
+
+export async function removeMember(tenantId, memberId) {
+  return platformFetch(`/tenants/${tenantId}/members/${memberId}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function listInvitations(tenantId) {
+  return platformFetch(`/tenants/${tenantId}/invitations`)
+}
+
+export async function createInvitation(tenantId, { email, roles }) {
+  return platformFetch(`/tenants/${tenantId}/invitations`, {
+    method: 'POST',
+    body: JSON.stringify({ email, roles }),
+  })
+}
+
+export async function revokeInvitation(tenantId, invitationId) {
+  return platformFetch(`/tenants/${tenantId}/invitations/${invitationId}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function getInvitationByToken(token) {
+  return platformFetch(`/invitations/${token}`)
+}
+
+export async function acceptInvitation(token, { password, name } = {}) {
+  return platformFetch(`/invitations/${token}/accept`, {
+    method: 'POST',
+    body: JSON.stringify({ password, name }),
+  })
+}
+
 // ---- Match Templates ----
 
 /**
@@ -290,3 +337,30 @@ export async function deleteEventApi(tenantId, eventId) {
     method: 'DELETE',
   })
 }
+
+// ---- SSI Event Search & Import ----
+
+/**
+ * Search SSI events via GraphQL with optional filters.
+ * @param {string} tenantId
+ * @param {{ search, sport?, startsAfter?, startsBefore?, region? }} filters
+ */
+export async function ssiSearchEventsApi(tenantId, filters) {
+  return platformFetch(`/tenants/${tenantId}/ssi-search`, {
+    method: 'POST',
+    body: JSON.stringify(filters),
+  })
+}
+
+/**
+ * Import selected SSI events as local scheduled events.
+ * @param {string} tenantId
+ * @param {Array<object>} events - SSI event objects from search results
+ */
+export async function ssiImportEventsApi(tenantId, events) {
+  return platformFetch(`/tenants/${tenantId}/ssi-import`, {
+    method: 'POST',
+    body: JSON.stringify({ events }),
+  })
+}
+
