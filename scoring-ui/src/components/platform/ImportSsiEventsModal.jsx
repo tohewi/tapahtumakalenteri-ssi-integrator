@@ -90,7 +90,13 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
     }
   }
 
+  // Only importable events (not already imported)
+  const importableResults = (results || []).filter(e => !e.alreadyImported)
+
   function toggleSelect(ssiEventId) {
+    // Don't allow selecting already-imported events
+    const evt = (results || []).find(e => e.ssiEventId === ssiEventId)
+    if (evt?.alreadyImported) return
     setSelected(prev => {
       const next = new Set(prev)
       if (next.has(ssiEventId)) {
@@ -104,10 +110,10 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
 
   function toggleSelectAll() {
     if (!results) return
-    if (selected.size === results.length) {
+    if (selected.size === importableResults.length) {
       setSelected(new Set())
     } else {
-      setSelected(new Set(results.map(e => e.ssiEventId)))
+      setSelected(new Set(importableResults.map(e => e.ssiEventId)))
     }
   }
 
@@ -252,8 +258,9 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
                     <th className="px-3 py-2.5 w-10">
                       <input
                         type="checkbox"
-                        checked={selected.size === results.length}
+                        checked={importableResults.length > 0 && selected.size === importableResults.length}
                         onChange={toggleSelectAll}
+                        disabled={importableResults.length === 0}
                         className="rounded text-sky-600"
                       />
                     </th>
@@ -270,7 +277,7 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
                     <tr
                       key={evt.ssiEventId}
                       onClick={() => toggleSelect(evt.ssiEventId)}
-                      className={`cursor-pointer transition-colors ${selected.has(evt.ssiEventId) ? 'bg-sky-50' : 'hover:bg-gray-50'}`}
+                      className={`transition-colors ${evt.alreadyImported ? 'opacity-50 cursor-default' : 'cursor-pointer'} ${selected.has(evt.ssiEventId) ? 'bg-sky-50' : evt.alreadyImported ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
                     >
                       <td className="px-3 py-2.5">
                         <input
@@ -278,10 +285,14 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
                           checked={selected.has(evt.ssiEventId)}
                           onChange={() => toggleSelect(evt.ssiEventId)}
                           onClick={e => e.stopPropagation()}
+                          disabled={evt.alreadyImported}
                           className="rounded text-sky-600"
                         />
                       </td>
-                      <td className="px-3 py-2.5 font-medium text-gray-900">{evt.name}</td>
+                      <td className="px-3 py-2.5 font-medium text-gray-900">
+                        {evt.name}
+                        {evt.alreadyImported && <span className="ml-2 text-xs text-green-600 font-normal">Imported</span>}
+                      </td>
                       <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{formatDate(evt.starts)}</td>
                       <td className="px-3 py-2.5 text-gray-600">{sportLabel(evt.rule)}</td>
                       <td className="px-3 py-2.5 text-gray-600">{evt.region || '—'}</td>

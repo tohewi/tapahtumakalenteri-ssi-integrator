@@ -69,6 +69,7 @@ import {
   updateScheduledEvent,
   deleteScheduledEvent,
   importSsiEvent,
+  getImportedSsiEventIds,
 } from '../lib/db/platform-store.js'
 import { requirePlatformAuth, PLATFORM_COOKIE } from '../middleware/platform-auth.js'
 
@@ -1385,8 +1386,15 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
         region: region || null,
       })
 
-      log.info(`[platform] SSI search for "${search}": ${events.length} results`)
-      res.json({ events })
+      // Check which events are already imported for this tenant
+      const importedIds = await getImportedSsiEventIds(req.params.tenantId)
+      const enriched = events.map(e => ({
+        ...e,
+        alreadyImported: importedIds.has(String(e.ssiEventId)),
+      }))
+
+      log.info(`[platform] SSI search for "${search}": ${events.length} results (${importedIds.size} already imported)`)
+      res.json({ events: enriched })
     } catch (err) {
       log.error(`[platform] SSI search failed:`, err.message)
       if (err.message.includes('authentication') || err.message.includes('credentials')) {

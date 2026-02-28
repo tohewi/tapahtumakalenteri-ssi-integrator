@@ -1383,7 +1383,32 @@ export async function createScheduledEvent({ tenantId, templateId, eventDate, cr
  * @param {string} [params.templateId] - optional template association
  * @returns {{ eventId, event }}
  */
+/**
+ * Get the set of SSI event IDs that are already imported for a tenant.
+ * Used to mark already-imported events in search results.
+ */
+export async function getImportedSsiEventIds(tenantId) {
+  const { rows } = await query(
+    `SELECT ssi_references->>'ssiEventId' as ssi_event_id
+     FROM scheduled_events
+     WHERE tenant_id = $1 AND ssi_references->>'ssiEventId' IS NOT NULL`,
+    [tenantId]
+  )
+  return new Set(rows.map(r => r.ssi_event_id))
+}
+
 export async function importSsiEvent({ tenantId, eventName, eventDate, ssiReferences, createdBy, templateId = null }) {
+  // Prevent duplicate imports: check if this SSI event is already imported for this tenant
+  if (ssiReferences?.ssiEventId) {
+    const { rows: existing } = await query(
+      `SELECT id FROM scheduled_events WHERE tenant_id = $1 AND ssi_references->>'ssiEventId' = $2`,
+      [tenantId, String(ssiReferences.ssiEventId)]
+    )
+    if (existing.length > 0) {
+      throw new Error(`Already imported: "${eventName}" (SSI #${ssiReferences.ssiEventId})`)
+    }
+  }
+
   const eventId = generateId('evt')
   const { rows } = await query(
     `INSERT INTO scheduled_events (id, tenant_id, template_id, event_name, event_date, status, ssi_references, created_by)
