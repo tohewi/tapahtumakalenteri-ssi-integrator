@@ -19,6 +19,7 @@ import { createSsiEvent, deleteSsiEvent } from '../lib/services/event-creation-s
 import { generateMfaSetup, verifyTotpCode, hashRecoveryCodes, verifyRecoveryCode } from '../lib/services/mfa-service.js'
 import {
   createAccountWithTenant,
+  createAccount,
   authenticateAccount,
   getAccount,
   getAccountWithMfaSecrets,
@@ -1582,8 +1583,11 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
           accountId = authResult.accountId
           accountEmail = authResult.account.email
         } else if (name) {
-          // Attempt registration - user must use standard register endpoint first
-          return res.status(400).json({ error: 'Inline registration not supported. Please create an account or log in first.' })
+          // Create a new account inline for the invited email
+          const created = await createAccount({ email: invite.email, password, name })
+          accountId = created.accountId
+          accountEmail = created.account.email
+          log.info(`[platform] Inline account created via invitation: ${accountEmail}`)
         } else {
           return res.status(401).json({ error: 'Invalid password for existing account' })
         }
