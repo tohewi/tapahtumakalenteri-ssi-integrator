@@ -58,6 +58,7 @@ query SearchEvents($search: String!) {
     visibility
     get_full_absolute_url
     get_content_type_key
+    component_matches { id }
   }
 }
 `
@@ -130,6 +131,8 @@ export async function ssiSearchEvents({ credentials, search, sport, startsAfter,
         : `${SSI_BASE_URL}/${e.get_full_absolute_url}`)
       : null,
     contentTypeKey: e.get_content_type_key,
+    componentMatchCount: (e.component_matches || []).length,
+    isCup: (e.component_matches || []).length > 0,
   }))
 }
 

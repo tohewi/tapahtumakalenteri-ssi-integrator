@@ -1429,6 +1429,8 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
           name: ssiEvent.name,
           rule: ssiEvent.rule || null,
           region: ssiEvent.region || null,
+          componentMatchCount: ssiEvent.componentMatchCount || 0,
+          isCup: ssiEvent.isCup || false,
           importedFrom: 'ssi_search',
         }
 
