@@ -1,4 +1,5 @@
 import { Resend } from 'resend'
+import { log } from './logger.js'
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -27,7 +28,7 @@ const MY_REGISTRATIONS_URL = 'https://shootnscoreit.com/my-registrations/'
  */
 export async function sendRegistrationConfirmation(to, shooterName, cupName, matchSquads) {
   if (!resend) {
-    console.warn('[email] RESEND_API_KEY not configured — skipping confirmation email')
+    log.warn('[email] RESEND_API_KEY not configured — skipping confirmation email')
     return { success: false, error: 'Email not configured' }
   }
 
@@ -109,14 +110,14 @@ Tämä viesti on lähetetty automaattisesti.`
     })
 
     if (result.error) {
-      console.error('[email] Send failed:', result.error)
+      log.error('[email] Send failed:', result.error)
       return { success: false, error: result.error.message || 'Send failed' }
     }
 
-    console.log(`[email] Confirmation sent to ${to} (id: ${result.data?.id})`)
+    log.info(`[email] Confirmation sent to ${to} (id: ${result.data?.id})`)
     return { success: true }
   } catch (err) {
-    console.error('[email] Send error:', err.message)
+    log.error('[email] Send error:', err.message)
     return { success: false, error: err.message }
   }
 }
@@ -127,7 +128,7 @@ Tämä viesti on lähetetty automaattisesti.`
  */
 export async function sendEmail({ to, subject, text, html }) {
   if (!resend) {
-    console.warn('[email] RESEND_API_KEY not configured — skipping email send')
+    log.warn('[email] RESEND_API_KEY not configured — skipping email send')
     return { success: false, error: 'Email not configured' }
   }
 
@@ -141,14 +142,14 @@ export async function sendEmail({ to, subject, text, html }) {
     })
 
     if (result.error) {
-      console.error('[email] Send failed:', result.error)
+      log.error('[email] Send failed:', result.error)
       return { success: false, error: result.error.message || 'Send failed' }
     }
 
-    console.log(`[email] Sent to ${to} (id: ${result.data?.id})`)
+    log.info(`[email] Sent to ${to} (id: ${result.data?.id})`)
     return { success: true }
   } catch (err) {
-    console.error('[email] Send error:', err.message)
+    log.error('[email] Send error:', err.message)
     return { success: false, error: err.message }
   }
 }
