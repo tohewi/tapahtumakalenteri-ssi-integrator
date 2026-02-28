@@ -228,7 +228,7 @@ function InvitationsList({ tenantId, invitations, onRefresh }) {
                 {(inv.roles || []).map(r => <RoleBadge key={r} role={r} />)}
               </div>
               <div className="text-xs text-gray-400 mt-1">
-                Expires: {new Date(inv.expiresAt).toLocaleDateString('fi-FI')}
+                Expires: {inv.expiresAt ? new Date(inv.expiresAt).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}
               </div>
             </div>
             <button

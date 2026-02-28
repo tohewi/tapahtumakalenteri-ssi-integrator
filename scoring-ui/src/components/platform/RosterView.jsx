@@ -17,6 +17,14 @@ const AVAILABLE_ROLES = [
   { id: 'instructor', label: 'Instructor', desc: 'Can act as match staff/RO' },
 ]
 
+// Format a date string or timestamp for display using browser locale
+function formatDate(value) {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
 export default function RosterView({ tenantId }) {
   const [members, setMembers] = useState([])
   const [invitations, setInvitations] = useState([])
@@ -178,7 +186,7 @@ export default function RosterView({ tenantId }) {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-gray-500">
-                      {new Date(inv.createdAt).toLocaleDateString()}
+                      {formatDate(inv.createdAt)}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button
@@ -255,7 +263,7 @@ export default function RosterView({ tenantId }) {
                     )}
                   </td>
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
-                    {new Date(member.joinedAt).toLocaleDateString()}
+                    {formatDate(member.joinedAt)}
                   </td>
                   <td className="px-4 py-3 text-right">
                     {editingMember !== member.memberId && (

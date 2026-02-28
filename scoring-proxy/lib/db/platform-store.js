@@ -630,13 +630,15 @@ function rowToMember(row) {
   if (!row) return null
   return {
     id: row.id,
+    memberId: row.id, // alias used by frontend
     tenantId: row.tenant_id,
     accountId: row.account_id,
     roles: row.roles || [],
     invitedBy: row.invited_by || null,
     status: row.status,
-    createdAt: new Date(row.created_at).getTime(),
-    updatedAt: new Date(row.updated_at).getTime(),
+    joinedAt: new Date(row.created_at).toISOString(),
+    createdAt: new Date(row.created_at).toISOString(),
+    updatedAt: new Date(row.updated_at).toISOString(),
   }
 }
 
@@ -802,10 +804,10 @@ function rowToInvitation(row) {
     roles: row.roles,
     invitedBy: row.invited_by,
     status: row.status,
-    expiresAt: new Date(row.expires_at).getTime(),
-    usedAt: row.used_at ? new Date(row.used_at).getTime() : null,
-    createdAt: new Date(row.created_at).getTime(),
-    updatedAt: new Date(row.updated_at).getTime(),
+    expiresAt: new Date(row.expires_at).toISOString(),
+    usedAt: row.used_at ? new Date(row.used_at).toISOString() : null,
+    createdAt: new Date(row.created_at).toISOString(),
+    updatedAt: new Date(row.updated_at).toISOString(),
   }
 }
 
