@@ -20,35 +20,31 @@ export function requirePlatformAuth() {
   return async (req, res, next) => {
     const sessionId = req.cookies?.[PLATFORM_COOKIE]
     if (!sessionId) {
-      return res.status(401).json({
-        error: 'Platform authentication required.',
-        platformSessionExpired: true,
-      })
+      const err = new AppError('Platform authentication required.', 401, 'UNAUTHORIZED')
+      err.platformSessionExpired = true
+      return next(err)
     }
 
     try {
       const session = await getPlatformSession(sessionId)
       if (!session) {
-        return res.status(401).json({
-          error: 'Platform session expired. Please sign in again.',
-          platformSessionExpired: true,
-        })
+        const err = new AppError('Platform session expired. Please sign in again.', 401, 'SESSION_EXPIRED')
+        err.platformSessionExpired = true
+        return next(err)
       }
 
       // Block MFA-pending sessions from accessing protected routes
       if (session.mfaPending) {
-        return res.status(401).json({
-          error: 'MFA verification required. Please complete the MFA challenge.',
-          mfaRequired: true,
-        })
+        const err = new AppError('MFA verification required. Please complete the MFA challenge.', 401, 'MFA_REQUIRED')
+        err.mfaRequired = true
+        return next(err)
       }
 
       const account = await getAccount(session.accountId)
       if (!account) {
-        return res.status(401).json({
-          error: 'Account not found.',
-          platformSessionExpired: true,
-        })
+        const err = new AppError('Account not found.', 401, 'ACCOUNT_NOT_FOUND')
+        err.platformSessionExpired = true
+        return next(err)
       }
 
       req.account = account
