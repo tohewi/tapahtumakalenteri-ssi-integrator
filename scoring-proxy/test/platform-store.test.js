@@ -231,6 +231,12 @@ class TestPgPool {
       return { rows: [] }
     }
 
+    // SELECT ssi_credentials FROM tenants WHERE id = $1
+    if (sql.startsWith('SELECT ssi_credentials FROM tenants WHERE id')) {
+      const row = this.tenants.get(params[0])
+      return { rows: row ? [{ ssi_credentials: row.ssi_credentials }] : [] }
+    }
+
     // SELECT * FROM tenants WHERE id = $1
     if (sql.startsWith('SELECT * FROM tenants WHERE id')) {
       const row = this.tenants.get(params[0])
@@ -1032,7 +1038,7 @@ describe('SSI credential encryption', () => {
     expect(JSON.stringify(rawRow.ssi_credentials)).not.toContain('ssipass')
   })
 
-  it('decrypts ssiCredentials transparently on read', async () => {
+  it('returns masked ssiCredentials on read (write-only security)', async () => {
     const { accountId } = await createAccount({ email: 'dec@test.com', password: 'pass1234', name: 'Dec' })
     const { tenantId } = await createTenant({ accountId, name: 'DecOrg' })
 
@@ -1040,7 +1046,12 @@ describe('SSI credential encryption', () => {
     await updateTenant(tenantId, { ssiCredentials: creds })
 
     const tenant = await getTenant(tenantId)
-    expect(tenant.ssiCredentials).toEqual(creds)
+    // getTenant returns masked credentials — password/apiKey are NOT returned
+    expect(tenant.ssiCredentials).toEqual({
+      email: 'ssi@example.com',
+      hasPassword: true,
+      hasApiKey: true,
+    })
   })
 
   it('stores null ssiCredentials without encryption', async () => {

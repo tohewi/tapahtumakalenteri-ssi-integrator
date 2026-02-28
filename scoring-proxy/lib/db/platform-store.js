@@ -194,12 +194,26 @@ function rowToAccount(row) {
  * Convert a PostgreSQL tenant row to the API format.
  * ssi_credentials is stored as an encrypted envelope and decrypted here.
  */
-function rowToTenant(row) {
+function rowToTenant(row, { includeCredentials = false } = {}) {
   if (!row) return null
+
+  // SSI credentials: by default, return only metadata (email + configured flags).
+  // Full credentials are only returned when includeCredentials is true (internal use).
   let ssiCredentials = null
   if (row.ssi_credentials) {
-    ssiCredentials = decryptCredentials(row.ssi_credentials)
+    const decrypted = decryptCredentials(row.ssi_credentials)
+    if (includeCredentials) {
+      ssiCredentials = decrypted
+    } else {
+      // Masked response: show email (not secret), flag password/apiKey as configured
+      ssiCredentials = {
+        email: decrypted.email || null,
+        hasPassword: !!decrypted.password,
+        hasApiKey: !!decrypted.apiKey,
+      }
+    }
   }
+
   return {
     id: row.id,
     accountId: row.account_id,
@@ -554,6 +568,20 @@ export async function getTenant(tenantId) {
 }
 
 /**
+ * Get tenant by ID with full decrypted SSI credentials.
+ * INTERNAL USE ONLY — for SSI operations that need actual password/apiKey.
+ * Never expose this directly in API responses.
+ */
+export async function getTenantWithCredentials(tenantId) {
+  const { rows } = await query(
+    'SELECT * FROM tenants WHERE id = $1',
+    [tenantId]
+  )
+  if (rows.length === 0) return null
+  return rowToTenant(rows[0], { includeCredentials: true })
+}
+
+/**
  * List all tenants where the account has an active membership.
  * Falls back to account_id ownership for backward compatibility with
  * tenants created before the RBAC migration.
@@ -591,13 +619,29 @@ export async function updateTenant(tenantId, updates) {
   const setClauses = []
   const params = [tenantId]
   let paramIndex = 2
+  let row_ssi_credentials_cache
 
   for (const [key, column] of Object.entries(allowedFields)) {
     if (updates[key] !== undefined) {
       let value
       if (key === 'ssiCredentials' && updates[key] !== null) {
-        // Encrypt SSI credentials before storing — see encryptCredentials()
-        value = JSON.stringify(encryptCredentials(updates[key]))
+        // Merge with existing credentials — omitted fields keep their current values
+        // This supports write-only password/apiKey: frontend sends only changed fields
+        let merged = updates[key]
+        if (row_ssi_credentials_cache === undefined) {
+          const { rows: currentRows } = await query('SELECT ssi_credentials FROM tenants WHERE id = $1', [tenantId])
+          row_ssi_credentials_cache = currentRows[0]?.ssi_credentials || null
+        }
+        if (row_ssi_credentials_cache) {
+          const existing = decryptCredentials(row_ssi_credentials_cache)
+          merged = {
+            email: updates[key].email ?? existing.email,
+            password: updates[key].password || existing.password,
+            apiKey: updates[key].apiKey ?? existing.apiKey,
+          }
+        }
+        // Encrypt merged credentials before storing
+        value = JSON.stringify(encryptCredentials(merged))
       } else {
         value = typeof updates[key] === 'object' ? JSON.stringify(updates[key]) : updates[key]
       }

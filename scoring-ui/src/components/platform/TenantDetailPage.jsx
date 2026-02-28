@@ -139,42 +139,49 @@ function GeneralSection({ tenant, onSave }) {
 
 function SSICredentialsSection({ tenant, onSave }) {
   const creds = tenant.ssiCredentials || {}
+  // Backend returns masked credentials: { email, hasPassword, hasApiKey }
+  // Password and API key values are NEVER returned — write-only fields
   const [form, setForm] = useState({
     email: creds.email || '',
-    password: creds.password || '',
-    apiKey: creds.apiKey || '',
+    password: '',
+    apiKey: '',
   })
-  const [showPassword, setShowPassword] = useState(false)
-  const [showApiKey, setShowApiKey] = useState(false)
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState(null)
 
-  // Reset form when tenant changes
+  // Reset form when tenant changes — only email comes from backend
   useEffect(() => {
     const c = tenant.ssiCredentials || {}
-    setForm({ email: c.email || '', password: c.password || '', apiKey: c.apiKey || '' })
+    setForm({ email: c.email || '', password: '', apiKey: '' })
   }, [tenant.id, tenant.ssiCredentials])
 
   function handleChange(e) {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
   }
 
-  const hasCredentials = creds.email && creds.password
-  const hasChanges = form.email !== (creds.email || '') ||
-    form.password !== (creds.password || '') ||
-    form.apiKey !== (creds.apiKey || '')
+  const hasCredentials = creds.email && creds.hasPassword
+  const hasChanges = form.email !== (creds.email || '') || form.password || form.apiKey
 
   async function handleSave(e) {
     e.preventDefault()
     setSaving(true)
     setStatus(null)
     try {
-      // Send null if all fields are empty (clear credentials)
-      const value = form.email || form.password || form.apiKey
-        ? { email: form.email.trim(), password: form.password, apiKey: form.apiKey.trim() }
-        : null
-      await onSave({ ssiCredentials: value })
-      setStatus({ type: 'success', message: 'SSI credentials saved (encrypted)' })
+      // Only send fields that have values — empty password/apiKey means "keep existing"
+      const value = { email: form.email.trim() }
+      if (form.password) value.password = form.password
+      if (form.apiKey) value.apiKey = form.apiKey.trim()
+
+      // If no email and no password, clear everything
+      if (!form.email && !form.password) {
+        await onSave({ ssiCredentials: null })
+        setForm({ email: '', password: '', apiKey: '' })
+        setStatus({ type: 'success', message: 'SSI credentials cleared' })
+      } else {
+        await onSave({ ssiCredentials: value })
+        setForm(prev => ({ ...prev, password: '', apiKey: '' })) // Clear write-only fields after save
+        setStatus({ type: 'success', message: 'SSI credentials saved (encrypted)' })
+      }
     } catch (err) {
       setStatus({ type: 'error', message: err.message })
     } finally {
@@ -209,6 +216,7 @@ function SSICredentialsSection({ tenant, onSave }) {
       }`}>
         <span className={`w-2 h-2 rounded-full ${hasCredentials ? 'bg-green-500' : 'bg-gray-400'}`} />
         {hasCredentials ? 'Credentials configured' : 'Not configured'}
+        {hasCredentials && creds.hasApiKey && <span className="text-green-600 text-xs ml-1">(+ API key)</span>}
       </div>
 
       <form onSubmit={handleSave} className="space-y-4">
@@ -228,49 +236,31 @@ function SSICredentialsSection({ tenant, onSave }) {
         </div>
         <div>
           <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
-            SSI Password
+            SSI Password {creds.hasPassword && <span className="normal-case text-green-600 font-normal">(saved)</span>}
           </label>
-          <div className="relative">
-            <input
-              type={showPassword ? 'text' : 'password'}
-              name="password"
-              value={form.password}
-              onChange={handleChange}
-              placeholder="SSI account password"
-              autoComplete="new-password"
-              className="w-full border rounded-md px-3 py-2 pr-16 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600 px-1"
-            >
-              {showPassword ? 'Hide' : 'Show'}
-            </button>
-          </div>
+          <input
+            type="password"
+            name="password"
+            value={form.password}
+            onChange={handleChange}
+            placeholder={creds.hasPassword ? 'Leave blank to keep current password' : 'SSI account password'}
+            autoComplete="new-password"
+            className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
+          />
         </div>
         <div>
           <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
-            SSI API Key
+            SSI API Key {creds.hasApiKey && <span className="normal-case text-green-600 font-normal">(saved)</span>}
           </label>
-          <div className="relative">
-            <input
-              type={showApiKey ? 'text' : 'password'}
-              name="apiKey"
-              value={form.apiKey}
-              onChange={handleChange}
-              placeholder="API key (optional)"
-              autoComplete="off"
-              className="w-full border rounded-md px-3 py-2 pr-16 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={() => setShowApiKey(!showApiKey)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600 px-1"
-            >
-              {showApiKey ? 'Hide' : 'Show'}
-            </button>
-          </div>
+          <input
+            type="password"
+            name="apiKey"
+            value={form.apiKey}
+            onChange={handleChange}
+            placeholder={creds.hasApiKey ? 'Leave blank to keep current API key' : 'API key (optional)'}
+            autoComplete="off"
+            className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
+          />
           <p className="text-xs text-gray-400 mt-1">
             Found in SSI under My Account &rarr; API Keys.
           </p>
@@ -290,7 +280,7 @@ function SSICredentialsSection({ tenant, onSave }) {
           <div className={hasCredentials ? '' : 'ml-auto'}>
             <button
               type="submit"
-              disabled={saving || !hasChanges || (!form.email && !form.password)}
+              disabled={saving || !hasChanges}
               className="bg-sky-600 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {saving ? 'Saving...' : 'Save Credentials'}

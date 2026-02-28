@@ -31,6 +31,7 @@ import {
   changePassword,
   createTenant,
   getTenant,
+  getTenantWithCredentials,
   listAccountTenants,
   updateTenant,
   createPlatformSession,
@@ -1005,9 +1006,9 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       return res.status(400).json({ error: 'Template has no SSI event URL configured' })
     }
 
-    // Tenant must have SSI credentials configured
-    const tenant = req.tenant
-    if (!tenant.ssiCredentials?.email || !tenant.ssiCredentials?.password) {
+    // Fetch full credentials for SSI operation (req.tenant has masked credentials)
+    const tenantFull = await getTenantWithCredentials(req.params.tenantId)
+    if (!tenantFull?.ssiCredentials?.email || !tenantFull?.ssiCredentials?.password) {
       return res.status(400).json({ error: 'Tenant SSI credentials must be configured before importing seed events' })
     }
 
@@ -1015,9 +1016,9 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       const snapshot = await ssiFetchEventStructure({
         ssiEventUrl: template.ssiSeedEventId,
         credentials: {
-          email: tenant.ssiCredentials.email,
-          password: tenant.ssiCredentials.password,
-          apiKey: tenant.ssiCredentials.apiKey || null,
+          email: tenantFull.ssiCredentials.email,
+          password: tenantFull.ssiCredentials.password,
+          apiKey: tenantFull.ssiCredentials.apiKey || null,
         },
       })
 
@@ -1048,8 +1049,8 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   // Introspects SSI GraphQL schema to discover available fields on key types.
   // Used for debugging and GQL7 (GraphQL viability testing).
   router.get('/tenants/:tenantId/ssi-schema', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res, next) => {
-    const tenant = req.tenant
-    if (!tenant.ssiCredentials?.email || !tenant.ssiCredentials?.password) {
+    const tenantFull = await getTenantWithCredentials(req.params.tenantId)
+    if (!tenantFull?.ssiCredentials?.email || !tenantFull?.ssiCredentials?.password) {
       return res.status(400).json({ error: 'Tenant SSI credentials required' })
     }
 
@@ -1063,7 +1064,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
             token { token }
           }
         }
-      `, { email: tenant.ssiCredentials.email, password: tenant.ssiCredentials.password })
+      `, { email: tenantFull.ssiCredentials.email, password: tenantFull.ssiCredentials.password })
 
       const jwt = authResult.token_auth?.token?.token
       if (!jwt) return res.status(401).json({ error: 'SSI auth failed' })
@@ -1245,8 +1246,8 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
     // MP10: Cascading Deletion
     // If the event is in 'ssi_created' status and has SSI references, try to delete it from SSI first.
     if (event.status === 'ssi_created' && event.ssiReferences) {
-      const tenant = req.tenant
-      if (!tenant.ssiCredentials?.email || !tenant.ssiCredentials?.password) {
+      const tenantFull = await getTenantWithCredentials(req.params.tenantId)
+      if (!tenantFull?.ssiCredentials?.email || !tenantFull?.ssiCredentials?.password) {
         return res.status(400).json({ error: 'Cannot delete from SSI: Tenant SSI credentials missing' })
       }
 
@@ -1255,8 +1256,8 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
         await deleteSsiEvent({
           ssiReferences: event.ssiReferences,
           credentials: {
-            email: tenant.ssiCredentials.email,
-            password: tenant.ssiCredentials.password,
+            email: tenantFull.ssiCredentials.email,
+            password: tenantFull.ssiCredentials.password,
           }
         })
       } catch (err) {
@@ -1303,22 +1304,22 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       return res.status(400).json({ error: 'Template has no imported seed — import from SSI first' })
     }
 
-    // Tenant must have SSI credentials
-    const tenant = req.tenant
-    if (!tenant.ssiCredentials?.email || !tenant.ssiCredentials?.password) {
+    // Fetch full credentials for SSI operation
+    const tenantFull = await getTenantWithCredentials(req.params.tenantId)
+    if (!tenantFull?.ssiCredentials?.email || !tenantFull?.ssiCredentials?.password) {
       return res.status(400).json({ error: 'Tenant SSI credentials must be configured' })
     }
 
     // Find discipline to pass group/org fallbacks
-    const discipline = (tenant.disciplines || []).find(d => d.id === template.disciplineId)
+    const discipline = (tenantFull.disciplines || []).find(d => d.id === template.disciplineId)
 
     try {
       const ssiReferences = await createSsiEvent({
         template,
         eventDate: event.eventDate,
         credentials: {
-          email: tenant.ssiCredentials.email,
-          password: tenant.ssiCredentials.password,
+          email: tenantFull.ssiCredentials.email,
+          password: tenantFull.ssiCredentials.password,
         },
         discipline,
       })
@@ -1363,18 +1364,18 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       return res.status(400).json({ error: 'Search term must be at least 2 characters' })
     }
 
-    // Tenant must have SSI credentials configured
-    const tenant = req.tenant
-    if (!tenant.ssiCredentials?.email || !tenant.ssiCredentials?.password) {
+    // Fetch full credentials for SSI operation
+    const tenantFull = await getTenantWithCredentials(req.params.tenantId)
+    if (!tenantFull?.ssiCredentials?.email || !tenantFull?.ssiCredentials?.password) {
       return res.status(400).json({ error: 'Tenant SSI credentials must be configured before searching SSI events' })
     }
 
     try {
       const events = await ssiSearchEvents({
         credentials: {
-          email: tenant.ssiCredentials.email,
-          password: tenant.ssiCredentials.password,
-          apiKey: tenant.ssiCredentials.apiKey || null,
+          email: tenantFull.ssiCredentials.email,
+          password: tenantFull.ssiCredentials.password,
+          apiKey: tenantFull.ssiCredentials.apiKey || null,
         },
         search,
         sport: sport || null,
