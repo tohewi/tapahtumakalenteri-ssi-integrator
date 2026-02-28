@@ -227,15 +227,17 @@ try {
     record('Execute Event (Create in SSI)', true, `Skipped — event status is ${event.status}`)
   }
 
-  // Test 6: Cleanup — delete test event if it's still planned or failed
+  // Test 6: Cleanup — delete test event (tests cascading delete if ssi_created)
   if (testEventId) {
-    // Re-fetch to check current status
     const evtRes = await apiCall('GET', `/api/v1/platform/tenants/${TENANT_ID}/events/${testEventId}`, { cookie })
     const currentStatus = evtRes.data.event?.status
-    if (currentStatus === 'planned' || currentStatus === 'failed') {
-      await testDeleteEvent(cookie, testEventId)
-    } else {
-      record('Delete Event (cleanup)', true, `Skipped — status is ${currentStatus}`)
+    const ssiRef = evtRes.data.event?.ssiReferences?.cupId
+    if (currentStatus) {
+      console.log(`\n--- Test 6: Deleting event ${testEventId} (status: ${currentStatus}) ---`)
+      const ok = await testDeleteEvent(cookie, testEventId)
+      if (ok && currentStatus === 'ssi_created') {
+        record('Cascading Delete (SSI)', true, `Deleted SSI cup ${ssiRef}`)
+      }
     }
   }
 
