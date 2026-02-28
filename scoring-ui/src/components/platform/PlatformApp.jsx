@@ -21,7 +21,7 @@ import {
   createTenant,
 } from '../../platform-api.js'
 
-// ---- Sub-views (auth flow — full page) ----
+import DashboardView from './DashboardView.jsx'
 import WelcomePage from './WelcomePage.jsx'
 import SignInPage from './SignInPage.jsx'
 import TenantCreatePage from './TenantCreatePage.jsx'
@@ -77,22 +77,6 @@ function PlaceholderView({ title, description }) {
       <div className="bg-amber-50 border border-dashed border-amber-300 rounded-lg p-6 text-center text-amber-700 text-sm">
         This view is coming soon. The structure is defined in the UI prototype.
       </div>
-    </div>
-  )
-}
-
-// ---- Dashboard placeholder (will be replaced with real dashboard) ----
-function DashboardView({ tenantId }) {
-  return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white rounded-lg border p-4"><div className="text-sm text-gray-500">Upcoming Events</div><div className="text-3xl font-bold text-sky-700 mt-1">—</div><div className="text-xs text-gray-400 mt-1">Next 30 days</div></div>
-        <div className="bg-white rounded-lg border p-4"><div className="text-sm text-gray-500">Staffing Gaps</div><div className="text-3xl font-bold text-amber-600 mt-1">—</div><div className="text-xs text-gray-400 mt-1">Events need instructors</div></div>
-        <div className="bg-white rounded-lg border p-4"><div className="text-sm text-gray-500">Active Templates</div><div className="text-3xl font-bold text-gray-700 mt-1">—</div><div className="text-xs text-gray-400 mt-1">Across disciplines</div></div>
-        <div className="bg-white rounded-lg border p-4"><div className="text-sm text-gray-500">Instructors</div><div className="text-3xl font-bold text-gray-700 mt-1">—</div><div className="text-xs text-gray-400 mt-1">Active roster</div></div>
-      </div>
-      <div className="text-sm text-gray-400">Dashboard will show upcoming events with staffing status, quick actions, and recent activity.</div>
     </div>
   )
 }
@@ -322,7 +306,7 @@ export default function PlatformApp() {
 
     switch (activeView) {
       case 'dashboard':
-        return <DashboardView tenantId={selectedTenantId} />
+        return <DashboardView tenantId={selectedTenantId} onNavigate={navigate} />
 
       case 'templates':
         if (selectedTemplateId) {
