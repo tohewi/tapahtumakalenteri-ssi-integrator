@@ -24,6 +24,7 @@ import {
   createPasswordResetToken,
   resetPasswordWithToken,
   invalidateAccountSessions,
+  autoAcceptPendingInvitations,
   getAccount,
   getAccountWithMfaSecrets,
   updateAccount,
@@ -194,7 +195,15 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
 
       log.info(`[platform] Account logged in: ${email}`)
 
-      // Fetch tenants for response
+      // Auto-accept any pending invitations for this email
+      try {
+        const joined = await autoAcceptPendingInvitations(accountId, account.email)
+        if (joined.length > 0) {
+          log.info(`[platform] Auto-accepted ${joined.length} pending invitation(s) for ${account.email}`)
+        }
+      } catch { /* non-blocking — don't fail login */ }
+
+      // Fetch tenants for response (includes any just-joined tenants)
       const tenants = await listAccountTenants(accountId)
 
       res.json({
@@ -512,6 +521,14 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       }
 
       log.info(`[platform] MFA verified for ${account.email}`)
+
+      // Auto-accept any pending invitations for this email
+      try {
+        const joined = await autoAcceptPendingInvitations(account.id, account.email)
+        if (joined.length > 0) {
+          log.info(`[platform] Auto-accepted ${joined.length} pending invitation(s) for ${account.email}`)
+        }
+      } catch { /* non-blocking */ }
 
       // Return full login response
       const tenants = await listAccountTenants(account.id)

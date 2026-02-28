@@ -924,6 +924,51 @@ export async function acceptTenantInvitation(token, accountId, accountEmail) {
 }
 
 /**
+ * Auto-accept all pending invitations for a given email address.
+ * Called on login — silently creates memberships for any matching invitations.
+ * @param {string} accountId
+ * @param {string} email
+ * @returns {string[]} tenant IDs that were joined
+ */
+export async function autoAcceptPendingInvitations(accountId, email) {
+  const normalizedEmail = email.toLowerCase().trim()
+  const { rows: pending } = await query(
+    `SELECT * FROM tenant_invitations
+     WHERE LOWER(email) = $1 AND status = 'pending' AND expires_at > NOW()`,
+    [normalizedEmail]
+  )
+
+  const joinedTenantIds = []
+  for (const inv of pending) {
+    try {
+      // Add membership (upsert — merge roles if already a member)
+      const memberId = generateId('mbr')
+      await query(
+        `INSERT INTO tenant_members (id, tenant_id, account_id, roles, invited_by, status)
+         VALUES ($1, $2, $3, $4, $5, 'active')
+         ON CONFLICT (tenant_id, account_id) DO UPDATE
+           SET roles = (
+                 SELECT ARRAY(SELECT DISTINCT unnest(tenant_members.roles || $4))
+               ),
+               status = 'active',
+               updated_at = NOW()`,
+        [memberId, inv.tenant_id, accountId, inv.roles, inv.invited_by]
+      )
+
+      // Mark invitation as accepted
+      await query(
+        `UPDATE tenant_invitations SET status = 'accepted', used_at = NOW(), updated_at = NOW() WHERE id = $1`,
+        [inv.id]
+      )
+
+      joinedTenantIds.push(inv.tenant_id)
+    } catch { /* skip individual failures — don't block login */ }
+  }
+
+  return joinedTenantIds
+}
+
+/**
  * List pending invitations for a tenant.
  */
 export async function listPendingInvitations(tenantId) {
