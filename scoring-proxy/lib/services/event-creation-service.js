@@ -385,12 +385,18 @@ export async function createSsiEvent({ template, eventDate, credentials, onProgr
     competence_classes: ['1', '2', '3', 'D1', 'D2', 'D3', 'J1', 'J2', 'J3', 'VY', 'VO'],
   }
 
+  log.debug(`[event-creation] Cup POST payload: group='${cupBody.group}', organizer='${cupBody.organizer}', visibility='${cupBody.visibility}'`)
+
   const cupResult = await postForm(cupCreateUrl, cupBody, cupArrayFields, cupCsrf, cupPageCookies)
   const cupIds = extractEventIds(cupResult.finalUrl)
   if (!cupIds) {
     // Form submission failed — extract SSI error messages from HTML
     const ssiErrors = extractFormErrors(cupResult.html)
     const pageTitle = extractPageTitle(cupResult.html)
+    
+    // Dump full payload on failure if debug is enabled
+    log.debug(`[event-creation] Cup creation payload that failed: ${JSON.stringify({ ...cupBody, csrfmiddlewaretoken: '***' }, null, 2)}`)
+    
     log.error(`[event-creation] Cup creation failed. HTTP ${cupResult.status}, page: "${pageTitle}", finalUrl: ${cupResult.finalUrl}, errors: ${ssiErrors.length > 0 ? ssiErrors.join('; ') : 'none extracted'}, HTML length: ${cupResult.html?.length || 0}`)
     if (ssiErrors.length > 0) {
       throw new Error(`SSI rejected cup creation: ${ssiErrors.join('; ')}`)
