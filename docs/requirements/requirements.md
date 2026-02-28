@@ -462,29 +462,6 @@ Migrate Cup creation and maintenance from web scraping to SSI GraphQL API. The l
 - **Form field discovery**: SSI's `form_input` is an opaque `JSON` scalar — required fields are not in the GraphQL schema. Use web scraping to discover fields (see AGENTS.md § "SSI GraphQL — Discovering Form Fields").
 - **Config compatibility**: GraphQL scripts must use the same `kupittaa-cup-config.yml` as the legacy scripts. Field name mapping (e.g., `matchCount` → `count`) is handled in the script, not in the config.
 - **WordPress integration**: Calendar event creation (Tapahtumakalenteri) remains web scraping — WordPress REST API requires separate auth. This is out of scope for R7.9.
-
-## Release 8.1 — Match Management Platform (Roadmap)
-
-Vision: Transform the current "link collection" home page into a structured match management platform. This requires significant UI design and architecture work before implementation.
-
-| # | Requirement | Status |
-|---|-------------|--------|
-| MP1 | **UI Architecture Design**: Design the overall application navigation and information architecture. Replace the current static link collection with a structured app shell supporting the functional areas below. Mobile-first, responsive design. Define navigation patterns, page hierarchy, and user flows | ⬚ Design |
-| MP2 | **Training Type Definitions**: Define and manage training types (e.g., Kupittaa CUP, SRA Training) — how they map to SSI event structures (Cup/Match/Squad hierarchy) and to Tapahtumakalenteri calendar events. Configuration-driven, not hardcoded | ⬚ Design |
-| MP3 | **Match Personnel Management**: Extend the existing staffing MVP (SRA Training staffing) into a general-purpose match personnel system. Define roles per training type, manage availability, handle signup/resign workflows. Personnel assignments visible in match event context | ⬚ Design |
-| MP4 | **Match Event Management**: Unified interface for creating, viewing, and managing match events. Covers the full lifecycle: create Cup+Matches+Squads → open registration → manage registrations and squadding → run scoring → close and report. Integrates with SSI (GraphQL + web scraping) and Tapahtumakalenteri | ⬚ Design |
-| MP5 | **Registration Management**: Consolidate the existing registration helper (`#/register`) into the match event context. View registrations, manage squad assignments, handle re-registrations and withdrawals — all within the match event view | ⬚ Design |
-| MP6 | **Scoring Integration**: Integrate tablet scoring (`#/scoring-tablet`) and mobile scoring (`#/scoring`) into the match event context. Scoring is launched from within a match event, not as a separate top-level feature | ⬚ Design |
-| MP7 | **Reporting**: Post-match reporting — results summary, statistics (shots fired, participation), export for Tapahtumakalenteri update. Consolidate the existing summary report functionality | ⬚ Design |
-| MP8 | **Localization & Regional Settings**: Tenant-level localization configuration — city, country, timezone. These settings propagate to event creation (SSI timezone, region fields), calendar publishing (event location), and UI display. Must handle: (a) default timezone for date/time display and schedule calculations, (b) country/region for SSI event region field, (c) city/venue for event venue and calendar location, (d) locale for date/number formatting (fi-FI, en-US, etc.). Stored on tenant record, overridable per template | ⬚ Design |
-| MP9 | **Tenant Branding & Picture**: Allow tenants to upload a logo/picture for their organization. Displayed in tenant dashboard, member views, and optionally in calendar event content. Requires: (a) image upload endpoint with size/format validation (max 2MB, jpg/png/webp), (b) image storage (Render disk or S3-compatible), (c) serving via CDN-friendly URL, (d) UI for upload/preview/remove in tenant settings | ⬚ Design |
-| MP10 | **Cascading Event Deletion**: Deleting a scheduled event must cascade to external systems. If the event has been created in SSI (`ssi_created` status), delete the cup and all component matches from SSI via web scraping (POST to event delete URL with confirmation). If the event has been published to Tapahtumakalenteri (`calendar_published` status), delete or unpublish the WordPress calendar event via REST API. The UI must show a confirmation dialog listing what will be deleted (e.g., "This will delete: SSI Cup #176 + 3 matches, Calendar event"). Deletion must be allowed for all statuses. Partial failure handling: if SSI deletion succeeds but calendar deletion fails (or vice versa), mark event with error details but still allow retry. The SSI `can_be_deleted` field (from EventInterface) should be checked before attempting deletion — warn if competitors are registered | ⬚ Design |
-
-### Design Principles (v8.1)
-
-- **Event-centric navigation**: Everything revolves around match events. Users navigate to an event and access all related functions (personnel, registration, scoring, reporting) from there.
-- **Training type as template**: Training types define the structure (how many matches, what disciplines, squad configuration, personnel roles). Creating a new event from a training type pre-fills all settings.
-- **Progressive disclosure**: Show simple views by default, reveal complexity on demand. A range officer sees different things than an administrator.
 - **Offline-capable**: Design for intermittent connectivity at shooting ranges. Critical paths (scoring) must work offline with sync.
 
 ## Regulatory Requirements — SaaS Platform (EU/Finland)
@@ -589,8 +566,10 @@ Applies if tenants are consumers or non-commercial associations (e.g., shooting 
 - **Release 7.6** (Consolidation & Completion): 18 requirements from R6.0/R7.0/R7.2/R7.5 — see `release-7.6.md`
 - **Release 7.9** (GraphQL Cup Management): 7 requirements — 0 ✅, 7 pending (GQL1–GQL7)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
-- **Release 8.0** (Platform Auth & Tenancy): 21 requirements — 19 ✅, 2 ⬜ pending (PA18 MFA, PA21 Invitation Links)
-- **Release 8.1** (Match Management Platform): 10 requirements — 0 ✅, 10 design phase (MP1–MP10)
+- **Release 8.0** (Platform Auth & Tenancy): 21 requirements — 20 ✅, 1 ⬜ pending (PA18 MFA)
+- **Release 8.1** (Match Management Platform): 7 requirements — 4 ✅ (MP1, MP2, MP4, MP10), 3 design phase (MP3, MP8, MP9)
+- **Release 8.2** (Match Event Workflows): 3 requirements — 0 ✅, 3 design phase (MP5, MP6, MP7)
+- **Release 8.3** (Calendar Integration): 1 requirement — 0 ✅, 1 design phase (MP11)
 - **Regulatory** (SaaS Platform EU/Finland): 23 requirements — 1 ✅ (REG14), 1 N/A (REG12), 21 design phase (REG1–REG23)
 
 
