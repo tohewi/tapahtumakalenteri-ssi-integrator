@@ -60,6 +60,7 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
   // Import state
   const [importing, setImporting] = useState(false)
   const [importResults, setImportResults] = useState(null)
+  const [importError, setImportError] = useState(null)
 
   async function handleSearch(e) {
     e.preventDefault()
@@ -67,6 +68,7 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
 
     setSearching(true)
     setSearchError(null)
+    setImportError(null)
     setResults(null)
     setSelected(new Set())
     setImportResults(null)
@@ -114,6 +116,7 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
     const eventsToImport = results.filter(e => selected.has(e.ssiEventId))
     setImporting(true)
     setImportResults(null)
+    setImportError(null)
 
     try {
       const data = await ssiImportEventsApi(tenantId, eventsToImport)
@@ -124,7 +127,7 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
         onImported()
       }
     } catch (err) {
-      setSearchError(err.message)
+      setImportError(err.message)
     } finally {
       setImporting(false)
     }
@@ -224,10 +227,17 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
           </div>
         </form>
 
-        {/* Error */}
+        {/* Search Error */}
         {searchError && (
           <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
-            {searchError}
+            Search failed: {searchError}
+          </div>
+        )}
+
+        {/* Import Error */}
+        {importError && (
+          <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
+            Import failed: {importError}
           </div>
         )}
 
