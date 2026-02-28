@@ -229,6 +229,20 @@ export async function initPostgres() {
         await client.query('CREATE INDEX IF NOT EXISTS idx_prt_token ON password_reset_tokens (token_hash)')
       } catch { /* table already exists */ }
 
+      // M6: One-time cleanup — delete SSI-imported events so they can be re-imported with fixed data
+      // These events were imported with incorrect match counts and broken URLs.
+      // Safe to remove: they are local references only, NOT deleting from SSI.
+      try {
+        const { rowCount } = await client.query(
+          `DELETE FROM scheduled_events WHERE ssi_references::text LIKE '%"importedFrom":"ssi_search"%'`
+        )
+        if (rowCount > 0) {
+          log.info(`[postgres] M6: Deleted ${rowCount} SSI-imported events for re-import`)
+        }
+      } catch (err) {
+        log.warn('[postgres] M6 cleanup skipped:', err.message)
+      }
+
       // Optional unique constraints — may fail on existing data with duplicates.
       // App-level checks in createTenant/createAccountWithTenant still prevent new duplicates.
       try {
