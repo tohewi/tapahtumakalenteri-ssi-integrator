@@ -352,7 +352,7 @@ export default function MembersPage({ tenantId, currentAccountId }) {
 
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Roles</label>
-                <div className="space-y-2 max-h-48 overflow-y-auto p-1">
+                <div className="space-y-2 p-1">
                   {AVAILABLE_ROLES.filter(r => r.id !== 'owner').map(role => (
                     <label key={role.id} className="flex items-start gap-2 p-2 border rounded-md hover:bg-gray-50 cursor-pointer">
                       <input
