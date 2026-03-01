@@ -610,11 +610,17 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
     const dangerRe = /<ul[^>]*class="[^"]*(?:text-danger|errorlist)[^"]*"[^>]*>[\s\S]*?<\/ul>/gi
     let dangerMatch
     while ((dangerMatch = dangerRe.exec(createResult.html)) !== null) {
-      const before = createResult.html.substring(Math.max(0, dangerMatch.index - 200), dangerMatch.index)
-      const labelMatch = before.match(/<label[^>]*>[^<]+<\/label>/gi)
-      const field = labelMatch ? labelMatch[labelMatch.length - 1].replace(/<[^>]+>/g, '').trim() : '?'
+      // Grab raw context before the error to find the field name/id
+      const rawBefore = createResult.html.substring(Math.max(0, dangerMatch.index - 500), dangerMatch.index)
+      const labelMatch = rawBefore.match(/<label[^>]*>[^<]+<\/label>/gi)
+      const nameMatch = rawBefore.match(/name="([^"]+)"/gi)
+      const idMatch = rawBefore.match(/id="([^"]+)"/gi)
+      const field = labelMatch ? labelMatch[labelMatch.length - 1].replace(/<[^>]+>/g, '').trim()
+        : nameMatch ? nameMatch[nameMatch.length - 1] : idMatch ? idMatch[idMatch.length - 1] : '?'
       const errText = dangerMatch[0].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
-      dangerSnippets.push(`[${field}] ${errText}`)
+      // Also log the last 150 chars of raw HTML before the error for context
+      const contextSnippet = rawBefore.substring(rawBefore.length - 150).replace(/\s+/g, ' ').trim()
+      dangerSnippets.push(`[${field}] ${errText} (context: ...${contextSnippet})`)
     }
     log.info(`[event-creation] Validation errors (${dangerSnippets.length}): ${dangerSnippets.join(' | ') || '(none found)'}`)
     log.error(`[event-creation] Event creation failed. HTTP ${createResult.status}, page: "${pageTitle}", finalUrl: ${createResult.finalUrl}, errors: ${ssiErrors.length > 0 ? ssiErrors.join('; ') : 'none'}, HTML: ${createResult.html?.length || 0} chars`)
