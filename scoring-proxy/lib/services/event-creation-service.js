@@ -546,14 +546,16 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
   const { fields: formDefaults, arrayFields: formDefaultArrays } = parseFormFields(formHtml)
 
   log.info(`[event-creation] Parsed ${Object.keys(formDefaults).length} fields, ${Object.keys(formDefaultArrays).length} array fields from SSI form`)
-  // Debug: find the actual agreement/accept field name in the HTML
-  const agreementFields = Object.keys(formDefaults).filter(k => /agree|accept|dpa|processing/i.test(k))
-  const agreementArrays = Object.keys(formDefaultArrays).filter(k => /agree|accept|dpa|processing/i.test(k))
-  log.info(`[event-creation] Agreement-like fields: scalars=[${agreementFields.join(',')}], arrays=[${agreementArrays.join(',')}]`)
-  // Also search raw HTML for agreement checkbox
-  const agreeInputs = formHtml.match(/<input[^>]*(?:agree|accept|dpa|processing)[^>]*>/gi) || []
-  log.info(`[event-creation] Agreement inputs in HTML (${agreeInputs.length}): ${agreeInputs.map(t => t.substring(0, 120)).join(' | ')}`)
-  // Log ALL field names to find missing required fields
+
+  // Discover the actual agreement checkbox name from the HTML.
+  // Nordic forms use 'has_accepted_event_data_ass_agreement', SRA may differ.
+  // Search for any checkbox whose name contains 'agree' or 'accept'.
+  const agreementMatch = formHtml.match(/<input[^>]*type="checkbox"[^>]*name="([^"]*(?:agree|accept)[^"]*)"/i)
+    || formHtml.match(/<input[^>]*name="([^"]*(?:agree|accept)[^"]*)"[^>]*type="checkbox"/i)
+  const agreementFieldName = agreementMatch ? agreementMatch[1] : 'has_accepted_event_data_ass_agreement'
+  log.info(`[event-creation] Agreement field discovered: '${agreementFieldName}' (from HTML: ${!!agreementMatch})`)
+
+  // Log ALL field names for debugging
   const allFieldNames = [...Object.keys(formDefaults), ...Object.keys(formDefaultArrays)].sort()
   log.info(`[event-creation] All ${allFieldNames.length} field names: ${allFieldNames.join(', ')}`)
 
@@ -571,9 +573,9 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
     // Group and organizer
     group: groupId,
     organizer: organizerId,
-    // Status and agreement
+    // Status and agreement (agreement field name discovered from form HTML)
     status: 'on',
-    has_accepted_event_data_ass_agreement: 'on',
+    [agreementFieldName]: 'on',
     // Dates and times
     starts_date: schedule.isoDate,
     starts_time: schedule.startTime,
@@ -605,8 +607,16 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
   // Array fields: use SSI page defaults (discipline-specific weapon_groups, categories, etc.)
   const arrayFields = { ...formDefaultArrays }
 
-  log.info(`[event-creation] CSRF: ${csrfToken ? csrfToken.substring(0, 10) + '...' : 'none'}, group: ${groupId}, organizer: ${organizerId || '(empty)'}`)
-  log.info(`[event-creation] Key values: starts_date=${body.starts_date}, visibility=${body.visibility}, status=${body.status}, agreement=${body.has_accepted_event_data_ass_agreement}`)
+  log.info(`[event-creation] group: ${groupId}, organizer: ${organizerId || '(empty)'}, agreement field: ${agreementFieldName}=${body[agreementFieldName]}`)
+  // Compare template snapshot to POST payload
+  const snapshotFields = { rule: snapshot.rule, serieType: snapshot.serieType, visibility: snapshot.settings?.visibility, registration: snapshot.settings?.registration, results: snapshot.settings?.results, region: snapshot.settings?.region, currency: snapshot.settings?.currency, organizerId: snapshot.settings?.organizerId, scoringMode: snapshot.settings?.scoringMode, matchRegistrationMode: snapshot.settings?.matchRegistrationMode, count: snapshot.settings?.count, maxCompetitors: snapshot.settings?.maxCompetitors }
+  log.info(`[event-creation] Template snapshot: ${JSON.stringify(snapshotFields)}`)
+  // Fields in POST body that differ from form defaults (our overrides)
+  const overridden = Object.entries(body).filter(([k, v]) => formDefaults[k] !== undefined && formDefaults[k] !== v).map(([k, v]) => `${k}='${String(v).substring(0, 30)}'`)
+  // Fields in POST body that DON'T exist in form defaults (added by us)
+  const added = Object.keys(body).filter(k => !(k in formDefaults) && !(k in formDefaultArrays)).sort()
+  log.info(`[event-creation] Overridden (${overridden.length}): ${overridden.join(', ')}`)
+  log.info(`[event-creation] Added (not in form): ${added.join(', ') || '(none)'}`)
   log.info(`[event-creation] Array fields: ${Object.entries(arrayFields).map(([k, v]) => `${k}=[${v.join(',')}]`).join(', ') || '(none)'}`)
   log.debug(`[event-creation] POST payload keys: ${Object.keys(body).join(', ')}`)
 

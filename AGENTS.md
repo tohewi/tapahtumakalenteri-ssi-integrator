@@ -256,11 +256,17 @@ $values = [regex]::Matches($formPage.Content, '<input[^>]+name="weapon_groups"[^
 
 ### Common pitfalls
 
+- **CSRF token is NEVER the issue.** SSI web forms work without a CSRF token — do not waste time investigating CSRF. The `csrfmiddlewaretoken` field can be empty and the form will still work. Focus on actual form field validation errors instead.
+- **Different disciplines have different form structures.** Nordic/RESUL forms use `<select multiple>` for weapon groups. SRA forms use multiple hidden `<input>` elements with the same `name` attribute for division arrays, and checkboxes for categories/firearms. The form parser must handle both patterns.
+- **SSI validation errors use `class="list-unstyled text-danger"`**, NOT Django's standard `class="errorlist"`. Always check for both patterns when extracting form errors.
+- **Field names may differ between disciplines.** The agreement checkbox, division fields, and other form elements can have different `name` attributes in SRA vs Nordic forms. Always scrape the actual form to discover field names — do not assume they match across disciplines.
+- **Radio buttons** must only send the checked value. Do not promote radio buttons to arrays like checkboxes.
 - **`count` not `match_count`** — the cup match count field is `count`
 - **`reg_start_date`/`reg_start_time`** — registration dates use `reg_start_*` prefix, not `registration_starts_*`
 - **Array fields** (`weapon_groups`, `categories`, `competence_classes`) must be present with valid enum values scraped from the form
-- **`has_accepted_event_data_ass_agreement`** must be `"on"`
+- **`has_accepted_event_data_ass_agreement`** must be `"on"` (Nordic cups — SRA may use a different field name)
 - **`group`** and `ends_date`/`ends_time` are accepted but not required
+- **When debugging SSI form submission failures:** Look for `text-danger` validation errors in the response HTML with the preceding `<label>` to identify which field failed. Do not chase CSRF — it is never the problem.
 
 ## Important Constraints
 
