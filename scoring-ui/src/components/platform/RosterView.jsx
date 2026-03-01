@@ -80,7 +80,8 @@ export default function RosterView({ tenantId, account }) {
       // If events were skipped and no default template was used, offer template picker
       if (result.skippedCount > 0 && !defaultTemplateId) {
         try {
-          const templates = await listTemplates(tenantId)
+          const resp = await listTemplates(tenantId)
+          const templates = resp.templates || resp
           const withRoles = templates.filter(t => t.staffingRules?.roles?.length > 0)
           if (withRoles.length > 0) {
             setTemplatePicker({ templates: withRoles, skippedCount: result.skippedCount })
