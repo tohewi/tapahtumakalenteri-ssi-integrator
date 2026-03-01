@@ -423,28 +423,80 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
           />
         </SectionCard>
 
-        {/* Section 4: Staffing Rules */}
-        <SectionCard title="Staffing Rules" description="Instructor requirements for events created from this template.">
-          <div className="grid grid-cols-2 gap-4">
-            <NumberInput
-              label="Minimum Instructors"
-              value={staffingRules.minInstructors}
-              onChange={v => updateStaffing('minInstructors', v)}
-              min={0} max={20} placeholder="2"
-            />
-            <NumberInput
-              label="Maximum Instructors"
-              value={staffingRules.maxInstructors}
-              onChange={v => updateStaffing('maxInstructors', v)}
-              min={0} max={50} placeholder="4"
-            />
-          </div>
-          <TextInput
-            label="Required Roles" hint="Comma-separated, e.g. lead, equipment"
-            value={(staffingRules.requiredRoles || []).join(', ')}
-            onChange={v => updateStaffing('requiredRoles', v.split(',').map(s => s.trim()).filter(Boolean))}
-            placeholder="lead, equipment"
-          />
+        {/* Section 4: Staffing Rules — roles array */}
+        <SectionCard title="Staffing Rules" description="Roles and counts auto-populated to every event created from this template.">
+          {(staffingRules.roles || []).length === 0 ? (
+            <div className="text-sm text-gray-500 text-center py-4">
+              No staffing roles defined. Add roles so events know how many volunteers they need.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {(staffingRules.roles || []).map((role, idx) => (
+                <div key={idx} className="bg-gray-50 rounded-md p-3 border border-gray-200">
+                  <div className="grid grid-cols-12 gap-2 items-end">
+                    <div className="col-span-3">
+                      <FieldLabel label="Key" hint="internal ID" />
+                      <input type="text" value={role.key || ''} onChange={e => {
+                        const updated = [...staffingRules.roles]
+                        updated[idx] = { ...updated[idx], key: e.target.value }
+                        updateStaffing('roles', updated)
+                      }} placeholder="ro" className="w-full border rounded-md px-2 py-1 text-sm" />
+                    </div>
+                    <div className="col-span-4">
+                      <FieldLabel label="Label" hint="display name" />
+                      <input type="text" value={role.label || ''} onChange={e => {
+                        const updated = [...staffingRules.roles]
+                        updated[idx] = { ...updated[idx], label: e.target.value }
+                        updateStaffing('roles', updated)
+                      }} placeholder="Range Officer" className="w-full border rounded-md px-2 py-1 text-sm" />
+                    </div>
+                    <div className="col-span-2">
+                      <FieldLabel label="Min" />
+                      <input type="number" value={role.min ?? ''} min={0} max={20} onChange={e => {
+                        const updated = [...staffingRules.roles]
+                        updated[idx] = { ...updated[idx], min: parseInt(e.target.value) || 0 }
+                        updateStaffing('roles', updated)
+                      }} className="w-full border rounded-md px-2 py-1 text-sm" />
+                    </div>
+                    <div className="col-span-2">
+                      <FieldLabel label="Max" />
+                      <input type="number" value={role.max ?? ''} min={0} max={50} onChange={e => {
+                        const updated = [...staffingRules.roles]
+                        updated[idx] = { ...updated[idx], max: parseInt(e.target.value) || 1 }
+                        updateStaffing('roles', updated)
+                      }} className="w-full border rounded-md px-2 py-1 text-sm" />
+                    </div>
+                    <div className="col-span-1 flex justify-end">
+                      <button onClick={() => {
+                        const updated = staffingRules.roles.filter((_, i) => i !== idx)
+                        updateStaffing('roles', updated)
+                      }} className="text-red-400 hover:text-red-600 text-lg leading-none pb-1" title="Remove role">×</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <button onClick={() => {
+            const roles = [...(staffingRules.roles || []), { key: '', label: '', min: 1, max: 1 }]
+            updateStaffing('roles', roles)
+          }} className="mt-2 text-sm text-sky-600 hover:text-sky-800 font-medium">
+            + Add Role
+          </button>
+
+          {/* Quick-add SRA defaults */}
+          {(staffingRules.roles || []).length === 0 && (
+            <button onClick={() => {
+              updateStaffing('roles', [
+                { key: 'match_director', label: 'Match Director', min: 1, max: 1 },
+                { key: 'ro', label: 'Range Officer', min: 2, max: 4 },
+                { key: 'safety', label: 'Safety Officer', min: 1, max: 1 },
+                { key: 'scorer', label: 'Scorer', min: 1, max: 2 },
+              ])
+            }} className="ml-4 text-sm text-gray-400 hover:text-gray-600">
+              or load SRA defaults
+            </button>
+          )}
         </SectionCard>
 
         {/* Sticky save bar */}
