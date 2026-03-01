@@ -2064,7 +2064,7 @@ export async function backfillStaffingNeeds(tenantId) {
   // Find upcoming events with no staffing needs rows yet
   // Includes events WITH template_id and events WITHOUT (e.g. SSI imports)
   const { rows: events } = await query(`
-    SELECT e.id as event_id, e.template_id, e.discipline_id
+    SELECT e.id as event_id, e.event_name, e.template_id, e.discipline_id, e.event_date
     FROM scheduled_events e
     LEFT JOIN event_staffing_needs n ON e.id = n.event_id
     WHERE e.tenant_id = $1
@@ -2072,10 +2072,21 @@ export async function backfillStaffingNeeds(tenantId) {
       AND e.event_date >= CURRENT_DATE
   `, [tenantId])
 
+  console.log(`[backfill] Found ${events.length} events without staffing needs for tenant ${tenantId}`)
+  for (const e of events) {
+    console.log(`[backfill]   event=${e.event_id} name="${e.event_name}" date=${e.event_date} tpl=${e.template_id} disc=${e.discipline_id}`)
+  }
+
   // Pre-load all templates for this tenant (keyed by id and by discipline_id)
   const { rows: tplRows } = await query(
-    `SELECT id, discipline_id, staffing_rules FROM match_templates WHERE tenant_id = $1`, [tenantId]
+    `SELECT id, name, discipline_id, staffing_rules FROM match_templates WHERE tenant_id = $1`, [tenantId]
   )
+  console.log(`[backfill] Found ${tplRows.length} templates for tenant`)
+  for (const t of tplRows) {
+    const rolesCount = Array.isArray(t.staffing_rules?.roles) ? t.staffing_rules.roles.length : 0
+    console.log(`[backfill]   tpl=${t.id} name="${t.name}" disc=${t.discipline_id} roles=${rolesCount} staffing_rules=${JSON.stringify(t.staffing_rules)}`)
+  }
+
   const templatesById = {}
   const templatesByDiscipline = {}
   for (const t of tplRows) {
@@ -2096,17 +2107,21 @@ export async function backfillStaffingNeeds(tenantId) {
     try {
       // Resolve template: direct link first, then match by discipline
       let tpl = evt.template_id ? templatesById[evt.template_id] : null
+      let matchMethod = evt.template_id ? 'template_id' : 'none'
       if (!tpl && evt.discipline_id) {
         tpl = templatesByDiscipline[evt.discipline_id]
-        // Auto-link the template to this event for future consistency
         if (tpl) {
+          matchMethod = 'discipline_id'
+          // Auto-link the template to this event for future consistency
           await query('UPDATE scheduled_events SET template_id = $1 WHERE id = $2', [tpl.id, evt.event_id])
         }
       }
+      console.log(`[backfill]   processing event=${evt.event_id}: matched=${matchMethod} tpl=${tpl?.id || 'NONE'}`)
 
       const staffingRules = tpl?.staffing_rules || {}
       const roles = staffingRules?.roles
       if (!Array.isArray(roles) || roles.length === 0) {
+        console.log(`[backfill]   SKIP event=${evt.event_id}: no roles in staffing_rules (keys: ${Object.keys(staffingRules).join(',')})`)
         skippedCount++
         continue
       }
