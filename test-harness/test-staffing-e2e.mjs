@@ -104,9 +104,11 @@ async function run() {
     })
     console.log(`✅ Logged in as ${loginRes.account.name}`)
 
-    // 2. Schedule a test event from the template (14 days in future)
+    // 2. Schedule a test event from the template (random 60-90 days in future to avoid collisions)
     console.log('\n2. Scheduling test event...')
     const targetDate = new Date()
+    const dayOffset = 60 + Math.floor(Math.random() * 30)
+    targetDate.setDate(targetDate.getDate() + dayOffset - 14) // subtract the 14 that gets added below
     targetDate.setDate(targetDate.getDate() + 14)
     const dateStr = targetDate.toISOString().split('T')[0]
     
