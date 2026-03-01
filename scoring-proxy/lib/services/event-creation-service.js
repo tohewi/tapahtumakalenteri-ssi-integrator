@@ -167,6 +167,24 @@ function extractFormErrors(html) {
     }
   }
 
+  // SSI/SRA error pattern: <ul class="list-unstyled text-danger"><li>message</li></ul>
+  // These appear after a <label> identifying the field
+  const sraErrorRe = /<ul[^>]*class="[^"]*text-danger[^"]*"[^>]*>([\s\S]*?)<\/ul>/gi
+  while ((match = sraErrorRe.exec(html)) !== null) {
+    // Try to find the preceding label for context
+    const before = html.substring(Math.max(0, match.index - 300), match.index)
+    const labelMatch = before.match(/<label[^>]*>([^<]+)<\/label>/gi)
+    const fieldName = labelMatch ? labelMatch[labelMatch.length - 1].replace(/<[^>]+>/g, '').trim() : ''
+    const liRe = /<li>([\s\S]*?)<\/li>/gi
+    let li
+    while ((li = liRe.exec(match[1])) !== null) {
+      const text = li[1].replace(/<[^>]+>/g, '').trim()
+      if (text && !errors.includes(text)) {
+        errors.push(fieldName ? `${fieldName}: ${text}` : text)
+      }
+    }
+  }
+
   // Django alert/message boxes
   const alertRe = /<div[^>]*class="[^"]*(?:alert|error|message)[^"]*"[^>]*>([\s\S]*?)<\/div>/gi
   while ((match = alertRe.exec(html)) !== null) {
@@ -587,11 +605,18 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
     // Log key payload values (not just keys)
     log.info(`[event-creation] Failed payload values: name=${body.name}, group=${body.group}, organizer=${body.organizer}, starts_date=${body.starts_date}, csrfmiddlewaretoken=${body.csrfmiddlewaretoken ? body.csrfmiddlewaretoken.substring(0, 10) + '...' : 'EMPTY'}`)
     // Log a snippet of the response HTML around errorlist / error / alert
-    const errorSnippet = createResult.html?.match(/class="[^"]*error[^"]*"[\s\S]{0,500}/gi)?.slice(0, 3) || []
-    log.info(`[event-creation] HTML error snippets (${errorSnippet.length}): ${errorSnippet.map(s => s.substring(0, 200)).join(' ||| ')}`)
-    // Log first 1000 chars of <form> tag to see structure
-    const formSnippet = createResult.html?.match(/<form[\s\S]{0,1000}/i)?.[0] || ''
-    log.info(`[event-creation] Form snippet: ${formSnippet.substring(0, 500)}`)
+    // Log all text-danger / errorlist occurrences with surrounding context
+    const dangerSnippets = []
+    const dangerRe = /<ul[^>]*class="[^"]*(?:text-danger|errorlist)[^"]*"[^>]*>[\s\S]*?<\/ul>/gi
+    let dangerMatch
+    while ((dangerMatch = dangerRe.exec(createResult.html)) !== null) {
+      const before = createResult.html.substring(Math.max(0, dangerMatch.index - 200), dangerMatch.index)
+      const labelMatch = before.match(/<label[^>]*>[^<]+<\/label>/gi)
+      const field = labelMatch ? labelMatch[labelMatch.length - 1].replace(/<[^>]+>/g, '').trim() : '?'
+      const errText = dangerMatch[0].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+      dangerSnippets.push(`[${field}] ${errText}`)
+    }
+    log.info(`[event-creation] Validation errors (${dangerSnippets.length}): ${dangerSnippets.join(' | ') || '(none found)'}`)
     log.error(`[event-creation] Event creation failed. HTTP ${createResult.status}, page: "${pageTitle}", finalUrl: ${createResult.finalUrl}, errors: ${ssiErrors.length > 0 ? ssiErrors.join('; ') : 'none'}, HTML: ${createResult.html?.length || 0} chars`)
     if (ssiErrors.length > 0) {
       throw new Error(`SSI rejected event creation: ${ssiErrors.join('; ')}`)
