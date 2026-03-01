@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { listEvents, getUpcomingStaffingApi } from '../../platform-api.js'
+import { listEvents, getUpcomingStaffingApi, getStaffingLeaderboardApi } from '../../platform-api.js'
 
 function getStatusBadge(status) {
   switch (status) {
@@ -17,15 +17,18 @@ function getStatusBadge(status) {
 export default function DashboardView({ tenantId, onNavigate }) {
   const [events, setEvents] = useState([])
   const [staffingGaps, setStaffingGaps] = useState(0)
+  const [leaderboard, setLeaderboard] = useState([])
+  const [leaderboardPeriod, setLeaderboardPeriod] = useState('all')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function loadData() {
       setLoading(true)
       try {
-        const [eventsData, staffingData] = await Promise.all([
+        const [eventsData, staffingData, lbData] = await Promise.all([
           listEvents(tenantId),
-          getUpcomingStaffingApi(tenantId).catch(() => []) // fail gracefully if not permitted
+          getUpcomingStaffingApi(tenantId).catch(() => []),
+          getStaffingLeaderboardApi(tenantId, leaderboardPeriod).catch(() => [])
         ])
         
         setEvents(eventsData.events || [])
@@ -35,6 +38,10 @@ export default function DashboardView({ tenantId, onNavigate }) {
           const understaffedCount = staffingData.filter(e => e.isUnderstaffed).length
           setStaffingGaps(understaffedCount)
         }
+
+        if (Array.isArray(lbData)) {
+          setLeaderboard(lbData)
+        }
       } catch (err) {
         console.error('Failed to load dashboard data:', err)
       } finally {
@@ -42,7 +49,7 @@ export default function DashboardView({ tenantId, onNavigate }) {
       }
     }
     loadData()
-  }, [tenantId])
+  }, [tenantId, leaderboardPeriod])
 
   // Calculate stats
   const now = new Date()
@@ -128,6 +135,66 @@ export default function DashboardView({ tenantId, onNavigate }) {
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
                     {getStatusBadge(evt.status)}
                     <span className="text-xs text-gray-400 font-mono">{evt.ssiReferences?.cupId ? `#${evt.ssiReferences.cupId}` : evt.ssiReferences?.ssiEventId ? `#${evt.ssiReferences.ssiEventId}` : 'No SSI ID'}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Volunteer Activity Leaderboard */}
+      <div className="bg-white rounded-lg border mb-6 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b flex items-center justify-between bg-gray-50/50">
+          <h2 className="font-semibold text-gray-800">Volunteer Activity</h2>
+          <select
+            value={leaderboardPeriod}
+            onChange={e => setLeaderboardPeriod(e.target.value)}
+            className="text-sm border rounded px-2 py-1 text-gray-600 bg-white"
+          >
+            <option value="all">All time</option>
+            <option value="12m">Last 12 months</option>
+            <option value="6m">Last 6 months</option>
+            <option value="3m">Last 3 months</option>
+          </select>
+        </div>
+
+        {loading ? (
+          <div className="p-8 text-center text-sm text-gray-500">Loading...</div>
+        ) : leaderboard.length === 0 ? (
+          <div className="p-8 text-center">
+            <p className="text-sm text-gray-500">No staffing activity yet.</p>
+            <p className="text-xs text-gray-400 mt-1">Activity will appear here as members sign up for event roles.</p>
+          </div>
+        ) : (
+          <div className="divide-y">
+            {leaderboard.map((entry, idx) => {
+              // Simple bar width based on max events staffed
+              const maxEvents = leaderboard[0]?.eventsStaffed || 1
+              const barPct = Math.round((entry.eventsStaffed / maxEvents) * 100)
+
+              return (
+                <div key={entry.accountId} className="px-4 py-3 flex items-center gap-3">
+                  {/* Rank */}
+                  <div className="w-8 text-center flex-shrink-0">
+                    <span className={`text-sm font-bold ${idx === 0 ? 'text-amber-500' : idx === 1 ? 'text-gray-400' : idx === 2 ? 'text-orange-400' : 'text-gray-300'}`}>
+                      {idx + 1}
+                    </span>
+                  </div>
+                  {/* Name + roles */}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-900 text-sm truncate">{entry.accountName}</div>
+                    <div className="text-xs text-gray-400 truncate">{entry.roles.join(', ')}</div>
+                  </div>
+                  {/* Activity bar + count */}
+                  <div className="w-32 flex-shrink-0 hidden sm:block">
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-sky-500 rounded-full transition-all" style={{ width: `${barPct}%` }} />
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0 w-16">
+                    <div className="text-sm font-bold text-gray-800">{entry.eventsStaffed}</div>
+                    <div className="text-xs text-gray-400">events</div>
                   </div>
                 </div>
               )

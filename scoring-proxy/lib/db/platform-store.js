@@ -2004,9 +2004,54 @@ export async function signupForEventStaffing(tenantId, eventId, needId, accountI
 }
 
 /**
- * Withdraw from a staffing role.
- * Validates signup belongs to the user and is currently confirmed.
+ * Get staffing leaderboard for a tenant.
+ * Aggregates confirmed staff_signups per account, counting distinct events staffed
+ * and total role signups. Neutral framing — "volunteer activity", not competition.
+ * @param {string} tenantId
+ * @param {object} [options] - { period: 'all' | '12m' | '6m' | '3m' }
+ * @returns {Array<{ accountId, accountName, eventsStaffed, totalSignups, roles }>}
  */
+export async function getStaffingLeaderboard(tenantId, options = {}) {
+  const { period = 'all' } = options
+
+  let dateFilter = ''
+  const params = [tenantId]
+
+  if (period === '12m') {
+    dateFilter = " AND e.event_date >= CURRENT_DATE - INTERVAL '12 months'"
+  } else if (period === '6m') {
+    dateFilter = " AND e.event_date >= CURRENT_DATE - INTERVAL '6 months'"
+  } else if (period === '3m') {
+    dateFilter = " AND e.event_date >= CURRENT_DATE - INTERVAL '3 months'"
+  }
+
+  const result = await query(`
+    SELECT
+      s.account_id,
+      a.name as account_name,
+      COUNT(DISTINCT s.event_id) as events_staffed,
+      COUNT(s.id) as total_signups,
+      ARRAY_AGG(DISTINCT n.role_label ORDER BY n.role_label) as roles
+    FROM staff_signups s
+    JOIN scheduled_events e ON s.event_id = e.id
+    JOIN event_staffing_needs n ON s.need_id = n.id
+    JOIN accounts a ON s.account_id = a.id
+    WHERE e.tenant_id = $1
+      AND s.status = 'confirmed'
+      ${dateFilter}
+    GROUP BY s.account_id, a.name
+    ORDER BY events_staffed DESC, total_signups DESC, a.name ASC
+  `, params)
+
+  return result.rows.map(row => ({
+    accountId: row.account_id,
+    accountName: row.account_name,
+    eventsStaffed: parseInt(row.events_staffed),
+    totalSignups: parseInt(row.total_signups),
+    roles: row.roles || [],
+  }))
+}
+
 export async function withdrawFromEventStaffing(tenantId, eventId, signupId, accountId) {
   const res = await query(
     "SELECT s.id FROM staff_signups s JOIN scheduled_events e ON s.event_id = e.id WHERE s.id = $1 AND e.id = $2 AND e.tenant_id = $3 AND s.account_id = $4 AND s.status = 'confirmed'",

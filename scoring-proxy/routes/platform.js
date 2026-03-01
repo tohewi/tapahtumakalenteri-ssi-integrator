@@ -78,6 +78,7 @@ import {
   updateEventStaffingNeeds,
   signupForEventStaffing,
   withdrawFromEventStaffing,
+  getStaffingLeaderboard,
 } from '../lib/db/platform-store.js'
 import { requirePlatformAuth, PLATFORM_COOKIE } from '../middleware/platform-auth.js'
 
@@ -1789,6 +1790,24 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
     } catch (err) {
       log.error(`[platform] GET /tenants/${req.params.id}/staffing/my-assignments failed:`, err.message)
       return next(new AppError('Failed to fetch your staffing assignments', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  /**
+   * GET /tenants/:id/staffing/leaderboard
+   * Get volunteer activity leaderboard — aggregates confirmed signups per member.
+   * Supports ?period=all|12m|6m|3m query param.
+   * Access: Any tenant member
+   */
+  router.get('/tenants/:id/staffing/leaderboard', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor'), async (req, res, next) => {
+    try {
+      const tenantId = req.params.id
+      const period = req.query.period || 'all'
+      const data = await getStaffingLeaderboard(tenantId, { period })
+      res.json(data)
+    } catch (err) {
+      log.error(`[platform] GET /tenants/${req.params.id}/staffing/leaderboard failed:`, err.message)
+      return next(new AppError('Failed to fetch staffing leaderboard', 500, 'INTERNAL_ERROR'))
     }
   })
 

@@ -466,3 +466,12 @@ export async function withdrawFromEventStaffingApi(tenantId, eventId, signupId) 
   })
 }
 
+/**
+ * Get staffing leaderboard (volunteer activity summary).
+ * @param {string} tenantId
+ * @param {string} [period='all'] - 'all' | '12m' | '6m' | '3m'
+ */
+export async function getStaffingLeaderboardApi(tenantId, period = 'all') {
+  return platformFetch(`/tenants/${tenantId}/staffing/leaderboard?period=${period}`)
+}
+
