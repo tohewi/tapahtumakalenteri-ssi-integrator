@@ -36,7 +36,7 @@
 //   })
 // ============================================================
 
-import { ssiGraphQL } from './graphql.js'
+import { ssiGraphQL, ssiGraphQLAuth } from './graphql.js'
 import { SSI_BASE_URL } from './constants.js'
 import { log } from '../logger.js'
 
@@ -84,7 +84,7 @@ export async function ssiSearchEvents({ credentials, search, sport, startsAfter,
   }
 
   // Authenticate with SSI
-  const jwt = await authenticateSSI(credentials)
+  const jwt = await ssiGraphQLAuth(credentials)
 
   log.info(`[ssi-search] Searching SSI events: "${search}" sport=${sport || 'any'} region=${region || 'any'}`)
 
@@ -319,22 +319,6 @@ query EventStructure($ct: Int!, $id: String!) {
 `
 }
 
-/**
- * Authenticate with SSI and get a JWT token.
- * Uses tenant's stored SSI credentials.
- *
- * @param {{ email: string, password: string, apiKey?: string }} credentials
- * @returns {string} JWT token
- */
-async function authenticateSSI({ email, password, apiKey }) {
-  const result = await ssiGraphQL(null, AUTH_MUTATION, { email, password }, apiKey || null)
-
-  if (!result.token_auth?.token?.token) {
-    throw new Error('SSI authentication failed — check tenant SSI credentials')
-  }
-
-  return result.token_auth.token.token
-}
 
 /**
  * Parse an SSI event URL into content type and event ID.
@@ -388,7 +372,7 @@ export async function ssiFetchEventStructure({ ssiEventUrl, credentials }) {
   log.info(`[seed-import] Fetching event structure: CT=${contentType} ID=${eventId}`)
 
   // Authenticate with SSI
-  const jwt = await authenticateSSI(credentials)
+  const jwt = await ssiGraphQLAuth(credentials)
 
   const vars = { ct: parseInt(contentType, 10), id: eventId }
 

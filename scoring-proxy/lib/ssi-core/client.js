@@ -63,6 +63,31 @@ export async function ssiRefreshJWT(refreshToken) {
 }
 
 // ============================================================
+// GraphQL Authentication
+// ============================================================
+
+const AUTH_MUTATION = `
+mutation TokenAuth($email: String!, $password: String!) {
+  token_auth(email: $email, password: $password) {
+    token { token }
+    refresh_token { token }
+    success
+    errors
+  }
+}
+`
+
+export async function ssiGraphQLAuth({ email, password, apiKey }) {
+  const result = await ssiGraphQL(null, AUTH_MUTATION, { email, password }, apiKey || null)
+
+  if (!result.token_auth?.token?.token) {
+    throw new Error('SSI GraphQL Authentication failed')
+  }
+
+  return result.token_auth.token.token
+}
+
+// ============================================================
 // Web login (session cookies for form POSTs)
 //
 // NOTE: SSI does NOT use CSRF tokens. Neither the login page

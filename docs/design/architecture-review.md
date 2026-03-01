@@ -244,9 +244,23 @@ The UI test suite has a failing test (`shared.test.js:379`) that checks `isToday
 
 **Fix:** Use `vi.useFakeTimers()` to pin the date in time-dependent tests. Never assert against hardcoded dates without controlling the clock.
 
+## 5. Event Creation Architecture
+
+With the introduction of the GraphQL API in SSI, the monolithic web-scraping event creation service was becoming difficult to maintain and test safely. In early March 2026, the logic was modularized.
+
+### 5.1 The Builder Registry
+
+Event creation is now handled by `lib/services/event-builders/index.js`, which acts as a registry.
+- **SRA GraphQL Builder**: Used for standalone SRA matches. Directly uses `ssiCreateEvent` with a JSON payload via GraphQL.
+- **Legacy Web Builder**: The old web scraping implementation, used as a fallback for Nordic matches, Cups, and other disciplines not yet migrated.
+
+This pattern allows us to migrate event types to GraphQL one by one without risking regressions in working disciplines.
+
+For full details on this architectural pattern, see `docs/design/event-builder-architecture.md`.
+
 ---
 
-## 5. Agentic Guidelines Additions
+## 6. Agentic Guidelines Additions
 
 The following rules should be added to `AGENTS.md` and `.github/copilot-instructions.md`:
 

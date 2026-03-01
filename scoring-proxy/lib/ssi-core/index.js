@@ -16,5 +16,7 @@ export * from './scoring.js'
 export * from './participants.js'
 export * from './management.js'
 export * from './http-helpers.js'
+export * from './seed-import.js'
+export * from './event-creation.js'
 // NOTE: seed-import.js is NOT re-exported here.
 // Import directly: import { ... } from '../lib/ssi-core/seed-import.js'

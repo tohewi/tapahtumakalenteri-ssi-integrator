@@ -19,6 +19,7 @@
 
 import { SSI_BASE_URL } from '../ssi-core/constants.js'
 import { ssiLogin, parseCookies, formatCookies } from '../ssi-core/client.js'
+import { createEventWithBuilder } from './event-builders/index.js'
 import { log } from '../logger.js'
 
 // ---- CSRF + Form Helpers ----
@@ -509,10 +510,8 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
   
   log.info(`[event-creation] Mode: ${isCup ? 'cup' : 'standalone match'}, createUrl: ${createUrl}`)
 
-  // Step 1: Authenticate
-  progress('auth', 'Authenticating with SSI...')
-  log.info(`[event-creation] Authenticating as ${credentials.email}`)
-  const cookies = await ssiLogin(credentials.email, credentials.password)
+  // Step 1: Initialize Progress
+  progress('init', 'Preparing to create event...')
 
   // Step 2: Build event name from template
   const nameTemplate = overrides.nameTemplate || snapshot.name
@@ -524,138 +523,28 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
   progress('create_event', `Creating ${isCup ? 'cup' : 'match'}: ${eventName}`)
   log.info(`[event-creation] Creating ${isCup ? 'cup' : 'match'}: ${eventName} for ${schedule.isoDate}`)
 
-  // Step 3: Fetch creation page and extract form defaults
-  const { csrfToken, cookies: pageCookies, html: formHtml } = await fetchCsrf(createUrl, cookies)
-
-  // Debug: analyze the GET page structure
-  const getPageTitle = extractPageTitle(formHtml)
-  const selectCount = (formHtml.match(/<select\b/gi) || []).length
-  const multiSelectCount = (formHtml.match(/<select[^>]*multiple/gi) || []).length
-  const checkboxCount = (formHtml.match(/<input[^>]*type="checkbox"/gi) || []).length
-  log.info(`[event-creation] GET page: "${getPageTitle}", ${formHtml.length} chars, ${selectCount} selects (${multiSelectCount} multiple), ${checkboxCount} checkboxes`)
-
-  // Debug: log how division fields appear in the HTML
-  const divFields = ['handgun_divs', 'rifle_divs', 'categories', 'firearms']
-  for (const f of divFields) {
-    const selectMatch = formHtml.match(new RegExp(`<select[^>]*name="${f}"[^>]*>`, 'i'))
-    const inputMatch = formHtml.match(new RegExp(`<input[^>]*name="${f}"[^>]*>`, 'i'))
-    log.info(`[event-creation] Field "${f}": select=${selectMatch ? selectMatch[0].substring(0, 100) : 'no'}, input=${inputMatch ? inputMatch[0].substring(0, 100) : 'no'}`)
+  // Use the builder registry to create the event
+  const builderParams = {
+    snapshot,
+    overrides,
+    schedule,
+    credentials,
+    discipline,
+    progress,
+    eventName,
+    createUrl,
+    isCup,
+    // Provide dependencies needed by legacy builders
+    fetchCsrf,
+    parseFormFields,
+    postForm,
+    extractEventIds,
+    extractFormErrors,
+    extractPageTitle
   }
 
-  // Parse ALL form fields from the SSI page — discipline-specific defaults preserved
-  const { fields: formDefaults, arrayFields: formDefaultArrays } = parseFormFields(formHtml)
-
-  log.info(`[event-creation] Parsed ${Object.keys(formDefaults).length} fields, ${Object.keys(formDefaultArrays).length} array fields from SSI form`)
-
-  // Discover the actual agreement checkbox name from the HTML.
-  // Nordic forms use 'has_accepted_event_data_ass_agreement', SRA may differ.
-  // Search for any checkbox whose name contains 'agree' or 'accept'.
-  const agreementMatch = formHtml.match(/<input[^>]*type="checkbox"[^>]*name="([^"]*(?:agree|accept)[^"]*)"/i)
-    || formHtml.match(/<input[^>]*name="([^"]*(?:agree|accept)[^"]*)"[^>]*type="checkbox"/i)
-  const agreementFieldName = agreementMatch ? agreementMatch[1] : 'has_accepted_event_data_ass_agreement'
-  log.info(`[event-creation] Agreement field discovered: '${agreementFieldName}' (from HTML: ${!!agreementMatch})`)
-
-  // Log ALL field names for debugging
-  const allFieldNames = [...Object.keys(formDefaults), ...Object.keys(formDefaultArrays)].sort()
-  log.info(`[event-creation] All ${allFieldNames.length} field names: ${allFieldNames.join(', ')}`)
-
-  // Resolve group and organizer IDs
-  // group: discipline config → snapshot settings → "xxx" (self-administered)
-  // organizer: discipline config → snapshot settings → "" (not arranged by club)
-  const groupId = discipline?.ssiGroupId || snapshot.settings?.groupId || 'xxx'
-  const organizerId = discipline?.ssiOrganizerId || snapshot.settings?.organizerId || ''
-
-  // Build the form body — SSI defaults + our overrides for common fields
-  const body = {
-    ...formDefaults,
-    csrfmiddlewaretoken: csrfToken || formDefaults.csrfmiddlewaretoken || '',
-    name: eventName,
-    // Group and organizer
-    group: groupId,
-    organizer: organizerId,
-    // Status and agreement (agreement field name discovered from form HTML)
-    status: 'on',
-    [agreementFieldName]: 'on',
-    // Dates and times
-    starts_date: schedule.isoDate,
-    starts_time: schedule.startTime,
-    ends_date: schedule.isoDate,
-    ends_time: schedule.endTime,
-    reg_start_date: schedule.regStartDate,
-    reg_start_time: schedule.regStartTime,
-    reg_close_date: schedule.regCloseDate,
-    reg_close_time: schedule.regCloseTime,
-    timezone: 'Europe/Helsinki',
-    // Content
-    description: (overrides.description || snapshot.description || '').trim(),
-    information: (overrides.information || snapshot.information || '').trim(),
-    venue: (overrides.venue || snapshot.venue || '').trim(),
-    url: overrides.url || snapshot.url || '',
-    url_display: overrides.urlDisplay || snapshot.urlDisplay || '',
-    // Settings from snapshot (override only if present)
-    ...(snapshot.settings?.visibility && { visibility: snapshot.settings.visibility }),
-    ...(snapshot.settings?.registration && { registration: snapshot.settings.registration }),
-    ...(snapshot.settings?.results && { results: snapshot.settings.results }),
-    ...(snapshot.settings?.maxCompetitors && { max_competitors: String(snapshot.settings.maxCompetitors) }),
-    ...(snapshot.settings?.region && { region: snapshot.settings.region }),
-    ...(snapshot.settings?.currency && { currency: snapshot.settings.currency }),
-    ...(snapshot.settings?.scoringMode && { scoring_mode: snapshot.settings.scoringMode }),
-    ...(snapshot.settings?.matchRegistrationMode && { match_registration_mode: snapshot.settings.matchRegistrationMode }),
-    ...(snapshot.settings?.count && { count: String(snapshot.settings.count) }),
-  }
-
-  // Array fields: use SSI page defaults (discipline-specific weapon_groups, categories, etc.)
-  const arrayFields = { ...formDefaultArrays }
-
-  log.info(`[event-creation] group: ${groupId}, organizer: ${organizerId || '(empty)'}, agreement field: ${agreementFieldName}=${body[agreementFieldName]}`)
-  // Compare template snapshot to POST payload
-  const snapshotFields = { rule: snapshot.rule, serieType: snapshot.serieType, visibility: snapshot.settings?.visibility, registration: snapshot.settings?.registration, results: snapshot.settings?.results, region: snapshot.settings?.region, currency: snapshot.settings?.currency, organizerId: snapshot.settings?.organizerId, scoringMode: snapshot.settings?.scoringMode, matchRegistrationMode: snapshot.settings?.matchRegistrationMode, count: snapshot.settings?.count, maxCompetitors: snapshot.settings?.maxCompetitors }
-  log.info(`[event-creation] Template snapshot: ${JSON.stringify(snapshotFields)}`)
-  // Fields in POST body that differ from form defaults (our overrides)
-  const overridden = Object.entries(body).filter(([k, v]) => formDefaults[k] !== undefined && formDefaults[k] !== v).map(([k, v]) => `${k}='${String(v).substring(0, 30)}'`)
-  // Fields in POST body that DON'T exist in form defaults (added by us)
-  const added = Object.keys(body).filter(k => !(k in formDefaults) && !(k in formDefaultArrays)).sort()
-  log.info(`[event-creation] Overridden (${overridden.length}): ${overridden.join(', ')}`)
-  log.info(`[event-creation] Added (not in form): ${added.join(', ') || '(none)'}`)
-  log.info(`[event-creation] Array fields: ${Object.entries(arrayFields).map(([k, v]) => `${k}=[${v.join(',')}]`).join(', ') || '(none)'}`)
-  log.debug(`[event-creation] POST payload keys: ${Object.keys(body).join(', ')}`)
-
-  // Step 4: Submit the creation form
-  const createResult = await postForm(createUrl, body, arrayFields, csrfToken, pageCookies)
-  const eventIds = extractEventIds(createResult.finalUrl)
-  if (!eventIds) {
-    const ssiErrors = extractFormErrors(createResult.html)
-    const pageTitle = extractPageTitle(createResult.html)
-    // Log key payload values (not just keys)
-    log.info(`[event-creation] Failed payload values: name=${body.name}, group=${body.group}, organizer=${body.organizer}, starts_date=${body.starts_date}, csrfmiddlewaretoken=${body.csrfmiddlewaretoken ? body.csrfmiddlewaretoken.substring(0, 10) + '...' : 'EMPTY'}`)
-    // Log a snippet of the response HTML around errorlist / error / alert
-    // Log all text-danger / errorlist occurrences with surrounding context
-    const dangerSnippets = []
-    const dangerRe = /<ul[^>]*class="[^"]*(?:text-danger|errorlist)[^"]*"[^>]*>[\s\S]*?<\/ul>/gi
-    let dangerMatch
-    while ((dangerMatch = dangerRe.exec(createResult.html)) !== null) {
-      // Grab raw context before the error to find the field name/id
-      const rawBefore = createResult.html.substring(Math.max(0, dangerMatch.index - 500), dangerMatch.index)
-      const labelMatch = rawBefore.match(/<label[^>]*>[^<]+<\/label>/gi)
-      const nameMatch = rawBefore.match(/name="([^"]+)"/gi)
-      const idMatch = rawBefore.match(/id="([^"]+)"/gi)
-      const field = labelMatch ? labelMatch[labelMatch.length - 1].replace(/<[^>]+>/g, '').trim()
-        : nameMatch ? nameMatch[nameMatch.length - 1] : idMatch ? idMatch[idMatch.length - 1] : '?'
-      const errText = dangerMatch[0].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
-      // Also log the last 150 chars of raw HTML before the error for context
-      const contextSnippet = rawBefore.substring(rawBefore.length - 150).replace(/\s+/g, ' ').trim()
-      dangerSnippets.push(`[${field}] ${errText} (context: ...${contextSnippet})`)
-    }
-    log.info(`[event-creation] Validation errors (${dangerSnippets.length}): ${dangerSnippets.join(' | ') || '(none found)'}`)
-    log.error(`[event-creation] Event creation failed. HTTP ${createResult.status}, page: "${pageTitle}", finalUrl: ${createResult.finalUrl}, errors: ${ssiErrors.length > 0 ? ssiErrors.join('; ') : 'none'}, HTML: ${createResult.html?.length || 0} chars`)
-    if (ssiErrors.length > 0) {
-      throw new Error(`SSI rejected event creation: ${ssiErrors.join('; ')}`)
-    }
-    throw new Error(`Event creation failed (HTTP ${createResult.status}, page: "${pageTitle}") — redirect URL: ${createResult.finalUrl}`)
-  }
-
-  const eventUrl = `${SSI_BASE_URL}/event/${eventIds.typeId}/${eventIds.eventId}/`
-  log.info(`[event-creation] ${isCup ? 'Cup' : 'Match'} created: ${eventName} → ${eventUrl}`)
+  const { eventIds, eventUrl, cookies: createResultCookies } = await createEventWithBuilder(builderParams)
+  
   progress('event_created', `${isCup ? 'Cup' : 'Match'} created: ${eventUrl}`)
 
   // Step 5: Create component matches (cups only)
@@ -672,16 +561,20 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
       // Default: Nordic 25m Kuvio Pistol
       const matchCreateUrl = `${SSI_BASE_URL}/nordic/create-resul-25-kuvio-pistol/`
 
-      const { csrfToken: matchCsrf, cookies: matchCookies, html: matchFormHtml } = await fetchCsrf(matchCreateUrl, createResult.cookies)
+      const { csrfToken: matchCsrf, cookies: matchCookies, html: matchFormHtml } = await fetchCsrf(matchCreateUrl, createResultCookies)
 
       // Parse match form defaults and override common fields
       const { fields: matchDefaults, arrayFields: matchDefaultArrays } = parseFormFields(matchFormHtml)
+      // Determine group and organizer
+      const groupId = discipline?.ssiGroupId || snapshot.settings?.groupId || 'xxx'
+      const organizerId = discipline?.ssiOrganizerId || snapshot.settings?.organizerId || ''
+
       const matchBody = {
         ...matchDefaults,
         csrfmiddlewaretoken: matchCsrf || matchDefaults.csrfmiddlewaretoken || '',
         name: matchName,
-        ...(targetGroupId && { group: targetGroupId }),
-        ...(targetOrgId && { organizer: targetOrgId }),
+        ...(groupId && { group: groupId }),
+        ...(organizerId && { organizer: organizerId }),
         status: 'on',
         has_accepted_event_data_ass_agreement: 'on',
         results: 'org',
@@ -724,7 +617,7 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
       let matchNumber = 1
 
       for (const match of createdMatches) {
-        const { csrfToken: linkCsrf, cookies: linkCookies } = await fetchCsrf(linkUrl, createResult.cookies)
+        const { csrfToken: linkCsrf, cookies: linkCookies } = await fetchCsrf(linkUrl, createResultCookies)
 
         await postForm(linkUrl, {
           number: String(matchNumber),
@@ -743,14 +636,24 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
   // For cups: squads on each component match
   // For standalone matches: squads on the main event
   const squadTargets = isCup
-    ? createdMatches.map(m => ({ eventId: m.eventId, squads: (snapshot.matches?.find(sm => sm.name === m.name))?.squads || [] }))
-    : [{ eventId: eventIds.eventId, squads: snapshot.squads || [] }]
+    ? createdMatches.map(m => ({ eventId: m.eventId, typeId: m.typeId, squads: (snapshot.matches?.find(sm => sm.name === m.name))?.squads || [] }))
+    : [{ eventId: eventIds.eventId, typeId: eventIds.typeId, squads: snapshot.squads || [] }]
 
   for (const target of squadTargets) {
     if (target.squads.length === 0) continue
 
     progress('create_squads', `Creating ${target.squads.length} squads...`)
-    const squadUrl = `${SSI_BASE_URL}/nordic/match/${target.eventId}/add-squads/`
+    
+    let squadUrl
+    
+    const isSRA = snapshot.rule === 'sr' || discipline?.sportCode === 'sr' || discipline?.sport === 'SRA'
+    if (target.typeId === '22' || target.typeId === '23' || isSRA) {
+      // IPSC/SRA matches use generic event endpoint for squads
+      squadUrl = `${SSI_BASE_URL}/event/${target.typeId}/${target.eventId}/add-squads/`
+    } else {
+      // Nordic/RESUL matches use specific endpoint
+      squadUrl = `${SSI_BASE_URL}/nordic/match/${target.eventId}/add-squads/`
+    }
 
     for (const squad of target.squads) {
       const squadBody = {
@@ -774,7 +677,7 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
       }
 
       try {
-        await postForm(squadUrl, squadBody, squadArrayFields, '', createResult.cookies)
+        await postForm(squadUrl, squadBody, squadArrayFields, '', createResultCookies)
         log.info(`[event-creation] Squad created: ${squad.name} (max ${squad.maxCompetitors})`)
       } catch (err) {
         log.error(`[event-creation] Squad creation failed for ${squad.name}: ${err.message}`)

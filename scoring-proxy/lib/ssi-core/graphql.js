@@ -3,4 +3,4 @@
 // Re-exports from client.js for domain-specific imports.
 // ============================================================
 
-export { ssiGraphQL, ssiRefreshJWT, ssiLogin } from './client.js'
+export { ssiGraphQL, ssiGraphQLAuth, ssiRefreshJWT, ssiLogin } from './client.js'
