@@ -269,6 +269,11 @@ export async function initPostgres() {
         log.warn('[postgres] Could not create staffing tables:', err.message)
       }
 
+      // M9: Add ssi_create_url to disciplines (SSI event creation URL per discipline)
+      try {
+        await client.query('ALTER TABLE disciplines ADD COLUMN IF NOT EXISTS ssi_create_url TEXT')
+      } catch { /* column already exists */ }
+
       // Optional unique constraints — may fail on existing data with duplicates.
       // App-level checks in createTenant/createAccountWithTenant still prevent new duplicates.
       try {

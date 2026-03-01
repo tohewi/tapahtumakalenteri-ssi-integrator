@@ -299,7 +299,7 @@ function DisciplinesSection({ tenantId }) {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
-  const [form, setForm] = useState({ name: '', labelFi: '', labelEn: '', ssiGroupId: '', ssiOrganizerId: '' })
+  const [form, setForm] = useState({ name: '', labelFi: '', labelEn: '', ssiGroupId: '', ssiOrganizerId: '', ssiCreateUrl: '' })
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState(null)
 
@@ -316,7 +316,7 @@ function DisciplinesSection({ tenantId }) {
   }, [tenantId])
 
   function resetForm() {
-    setForm({ name: '', labelFi: '', labelEn: '', ssiGroupId: '', ssiOrganizerId: '' })
+    setForm({ name: '', labelFi: '', labelEn: '', ssiGroupId: '', ssiOrganizerId: '', ssiCreateUrl: '' })
     setShowForm(false)
     setEditingId(null)
     setStatus(null)
@@ -329,6 +329,7 @@ function DisciplinesSection({ tenantId }) {
       labelEn: dis.labelEn || '',
       ssiGroupId: dis.ssiGroupId || '',
       ssiOrganizerId: dis.ssiOrganizerId || '',
+      ssiCreateUrl: dis.ssiCreateUrl || '',
     })
     setEditingId(dis.id)
     setShowForm(true)
@@ -346,6 +347,7 @@ function DisciplinesSection({ tenantId }) {
         labelEn: form.labelEn.trim(),
         ssiGroupId: form.ssiGroupId.trim() || null,
         ssiOrganizerId: form.ssiOrganizerId.trim() || null,
+        ssiCreateUrl: form.ssiCreateUrl.trim() || null,
       }
 
       if (editingId) {
@@ -401,6 +403,7 @@ function DisciplinesSection({ tenantId }) {
                       <div className="text-xs text-gray-400">
                         {dis.name}
                         {dis.ssiGroupId && <span> · SSI Group: {dis.ssiGroupId}</span>}
+                        {dis.ssiCreateUrl && <span> · Create URL: {dis.ssiCreateUrl}</span>}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -467,6 +470,15 @@ function DisciplinesSection({ tenantId }) {
                             className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
                           />
                         </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">SSI Create URL</label>
+                          <input
+                            type="text" value={form.ssiCreateUrl} onChange={e => setForm(f => ({ ...f, ssiCreateUrl: e.target.value }))}
+                            placeholder="e.g. /series/nordic/create-sra-match/"
+                            className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
+                          />
+                          <p className="text-xs text-gray-400 mt-0.5">SSI form URL for creating events in this discipline</p>
+                        </div>
                         <div className="flex items-center justify-end gap-2 pt-1">
                           <button type="button" onClick={resetForm} className="text-sm text-gray-500 hover:text-gray-700">Cancel</button>
                           <button
@@ -530,6 +542,15 @@ function DisciplinesSection({ tenantId }) {
                   placeholder="Optional"
                   className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
                 />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">SSI Create URL</label>
+                <input
+                  type="text" value={form.ssiCreateUrl} onChange={e => setForm(f => ({ ...f, ssiCreateUrl: e.target.value }))}
+                  placeholder="e.g. /series/nordic/create-sra-match/"
+                  className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
+                />
+                <p className="text-xs text-gray-400 mt-0.5">SSI form URL for creating events in this discipline</p>
               </div>
               <div className="flex items-center justify-end gap-2 pt-1">
                 <button type="button" onClick={resetForm} className="text-sm text-gray-500 hover:text-gray-700">

@@ -832,7 +832,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   // POST /api/v1/platform/tenants/:tenantId/disciplines
   // Requires: owner, tenant_admin, or discipline_admin
   router.post('/tenants/:tenantId/disciplines', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'discipline_admin'), async (req, res, next) => {
-    const { name, labelFi, labelEn, ssiGroupId, ssiOrganizerId } = req.body
+    const { name, labelFi, labelEn, ssiGroupId, ssiOrganizerId, ssiCreateUrl } = req.body
     if (!name || name.trim().length < 2) {
       return res.status(400).json({ error: 'Discipline name is required (min 2 characters)' })
     }
@@ -840,7 +840,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
     try {
       const { disciplineId, discipline } = await createDiscipline({
         tenantId: req.params.tenantId,
-        name, labelFi, labelEn, ssiGroupId, ssiOrganizerId,
+        name, labelFi, labelEn, ssiGroupId, ssiOrganizerId, ssiCreateUrl,
       })
       log.info(`[platform] Discipline created: ${name} (${disciplineId}) for tenant ${req.params.tenantId}`)
       res.status(201).json({ success: true, discipline })
@@ -868,7 +868,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       return res.status(404).json({ error: 'Discipline not found' })
     }
 
-    const allowedFields = ['name', 'labelFi', 'labelEn', 'ssiGroupId', 'ssiOrganizerId']
+    const allowedFields = ['name', 'labelFi', 'labelEn', 'ssiGroupId', 'ssiOrganizerId', 'ssiCreateUrl']
     const updates = {}
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) updates[field] = req.body[field]
@@ -1323,8 +1323,8 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       return res.status(400).json({ error: 'Tenant SSI credentials must be configured' })
     }
 
-    // Find discipline to pass group/org fallbacks
-    const discipline = (tenantFull.disciplines || []).find(d => d.id === template.disciplineId)
+    // Fetch discipline from DB for group/org/createUrl config
+    const discipline = template.disciplineId ? await getDiscipline(template.disciplineId) : null
 
     try {
       const ssiReferences = await createSsiEvent({

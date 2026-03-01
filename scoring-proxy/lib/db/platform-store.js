@@ -1120,6 +1120,7 @@ function rowToDiscipline(row) {
     labelEn: row.label_en || '',
     ssiGroupId: row.ssi_group_id || null,
     ssiOrganizerId: row.ssi_organizer_id || null,
+    ssiCreateUrl: row.ssi_create_url || null,
     createdAt: new Date(row.created_at).getTime(),
     updatedAt: new Date(row.updated_at).getTime(),
   }
@@ -1129,14 +1130,14 @@ function rowToDiscipline(row) {
  * Create a new discipline for a tenant.
  * @param {object} params - { tenantId, name, labelFi, labelEn, ssiGroupId?, ssiOrganizerId? }
  */
-export async function createDiscipline({ tenantId, name, labelFi, labelEn, ssiGroupId, ssiOrganizerId }) {
+export async function createDiscipline({ tenantId, name, labelFi, labelEn, ssiGroupId, ssiOrganizerId, ssiCreateUrl }) {
   const disciplineId = generateId('dis')
   const { rows } = await query(
-    `INSERT INTO disciplines (id, tenant_id, name, label_fi, label_en, ssi_group_id, ssi_organizer_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO disciplines (id, tenant_id, name, label_fi, label_en, ssi_group_id, ssi_organizer_id, ssi_create_url)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
     [disciplineId, tenantId, name.trim(), (labelFi || '').trim(), (labelEn || '').trim(),
-     ssiGroupId || null, ssiOrganizerId || null]
+     ssiGroupId || null, ssiOrganizerId || null, ssiCreateUrl || null]
   )
   return { disciplineId, discipline: rowToDiscipline(rows[0]) }
 }
@@ -1171,6 +1172,7 @@ const DISCIPLINE_UPDATE_FIELDS = {
   labelEn: 'label_en',
   ssiGroupId: 'ssi_group_id',
   ssiOrganizerId: 'ssi_organizer_id',
+  ssiCreateUrl: 'ssi_create_url',
 }
 
 /**
