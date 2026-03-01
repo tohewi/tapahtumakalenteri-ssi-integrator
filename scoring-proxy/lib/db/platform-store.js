@@ -1466,6 +1466,26 @@ export async function importSsiEvent({ tenantId, eventName, eventDate, ssiRefere
      RETURNING *`,
     [eventId, tenantId, templateId, disciplineId, eventName, eventDate, JSON.stringify(ssiReferences), createdBy]
   )
+
+  // Auto-populate staffing needs from template's staffing_rules
+  if (templateId) {
+    try {
+      const template = await getMatchTemplate(templateId)
+      const roles = template?.staffingRules?.roles
+      if (Array.isArray(roles) && roles.length > 0) {
+        for (const role of roles) {
+          const needId = generateId('ned')
+          await query(
+            'INSERT INTO event_staffing_needs (id, event_id, role_key, role_label, min_count, max_count) VALUES ($1, $2, $3, $4, $5, $6)',
+            [needId, eventId, role.key, role.label || role.key, role.min || 0, role.max || 1]
+          )
+        }
+      }
+    } catch (err) {
+      console.warn('[platform-store] Failed to auto-populate staffing needs for SSI import:', err.message)
+    }
+  }
+
   return { eventId, event: rowToEvent(rows[0]) }
 }
 
@@ -2041,16 +2061,32 @@ export async function signupForEventStaffing(tenantId, eventId, needId, accountI
  * @returns {{ backfilledCount, skippedCount, errors[] }}
  */
 export async function backfillStaffingNeeds(tenantId) {
-  // Find events with a template but no staffing needs rows
+  // Find upcoming events with no staffing needs rows yet
+  // Includes events WITH template_id and events WITHOUT (e.g. SSI imports)
   const { rows: events } = await query(`
-    SELECT e.id as event_id, e.template_id
+    SELECT e.id as event_id, e.template_id, e.discipline_id
     FROM scheduled_events e
     LEFT JOIN event_staffing_needs n ON e.id = n.event_id
     WHERE e.tenant_id = $1
-      AND e.template_id IS NOT NULL
       AND n.id IS NULL
       AND e.event_date >= CURRENT_DATE
   `, [tenantId])
+
+  // Pre-load all templates for this tenant (keyed by id and by discipline_id)
+  const { rows: tplRows } = await query(
+    `SELECT id, discipline_id, staffing_rules FROM match_templates WHERE tenant_id = $1`, [tenantId]
+  )
+  const templatesById = {}
+  const templatesByDiscipline = {}
+  for (const t of tplRows) {
+    templatesById[t.id] = t
+    if (t.discipline_id) {
+      // Keep first match per discipline (if multiple templates, first wins)
+      if (!templatesByDiscipline[t.discipline_id]) {
+        templatesByDiscipline[t.discipline_id] = t
+      }
+    }
+  }
 
   let backfilledCount = 0
   let skippedCount = 0
@@ -2058,8 +2094,18 @@ export async function backfillStaffingNeeds(tenantId) {
 
   for (const evt of events) {
     try {
-      const template = await getMatchTemplate(evt.template_id)
-      const roles = template?.staffingRules?.roles
+      // Resolve template: direct link first, then match by discipline
+      let tpl = evt.template_id ? templatesById[evt.template_id] : null
+      if (!tpl && evt.discipline_id) {
+        tpl = templatesByDiscipline[evt.discipline_id]
+        // Auto-link the template to this event for future consistency
+        if (tpl) {
+          await query('UPDATE scheduled_events SET template_id = $1 WHERE id = $2', [tpl.id, evt.event_id])
+        }
+      }
+
+      const staffingRules = tpl?.staffing_rules || {}
+      const roles = staffingRules?.roles
       if (!Array.isArray(roles) || roles.length === 0) {
         skippedCount++
         continue

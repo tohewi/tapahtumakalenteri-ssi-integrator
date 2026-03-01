@@ -1430,6 +1430,15 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       return res.status(400).json({ error: 'Cannot import more than 50 events at once' })
     }
 
+    // Auto-resolve template from discipline so imported events get staffing needs
+    let templateId = null
+    if (disciplineId) {
+      const discTemplates = await listDisciplineTemplates(disciplineId)
+      if (discTemplates.length > 0) {
+        templateId = discTemplates[0].id
+      }
+    }
+
     const results = []
     for (const ssiEvent of events) {
       try {
@@ -1458,6 +1467,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
           eventName: ssiEvent.name,
           eventDate,
           ssiReferences,
+          templateId: templateId || null,
           disciplineId: disciplineId || null,
           createdBy: req.account.id,
         })

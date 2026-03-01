@@ -210,22 +210,22 @@ export default function RosterView({ tenantId, account }) {
 
               return (
                 <div key={event.id} className={`bg-white rounded-lg shadow-sm border overflow-hidden ${isUnderstaffed ? 'border-l-4 border-l-orange-400' : 'border-l-4 border-l-green-400'}`}>
-                  {/* Event header — dark banner like the reference UI */}
-                  <div className="bg-gray-800 text-white px-5 py-3">
+                  {/* Event header */}
+                  <div className="px-5 py-4 border-b border-gray-100">
                     <div className="flex items-start justify-between">
                       <div>
-                        <h3 className="font-bold text-base">{event.eventName}</h3>
-                        <div className="flex items-center gap-3 text-sm text-gray-300 mt-1">
+                        <h3 className="font-bold text-base text-gray-900">{event.eventName}</h3>
+                        <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
                           <span>{formatDate(event.eventDate)}</span>
                           {event.disciplineName && (
                             <>
-                              <span className="text-gray-500">·</span>
+                              <span className="text-gray-300">·</span>
                               <span>{event.disciplineName}</span>
                             </>
                           )}
                           {event.matchCount && (
                             <>
-                              <span className="text-gray-500">·</span>
+                              <span className="text-gray-300">·</span>
                               <span>{event.matchCount} {event.matchCount === 1 ? 'match' : 'matches'}</span>
                             </>
                           )}
@@ -236,11 +236,11 @@ export default function RosterView({ tenantId, account }) {
                       </div>
                       <div className="text-right flex-shrink-0 ml-4">
                         {isUnderstaffed ? (
-                          <span className="inline-flex items-center bg-orange-500/20 text-orange-300 text-xs font-medium px-2 py-0.5 rounded">
+                          <span className="inline-flex items-center bg-orange-50 text-orange-600 text-xs font-medium px-2 py-0.5 rounded border border-orange-200">
                             Needs staff
                           </span>
                         ) : (
-                          <span className="inline-flex items-center bg-green-500/20 text-green-300 text-xs font-medium px-2 py-0.5 rounded">
+                          <span className="inline-flex items-center bg-green-50 text-green-700 text-xs font-medium px-2 py-0.5 rounded border border-green-200">
                             Staffed
                           </span>
                         )}
@@ -250,7 +250,7 @@ export default function RosterView({ tenantId, account }) {
                       </div>
                     </div>
                     {event.createdBy && (
-                      <div className="text-[11px] text-gray-500 mt-1">Scheduled by {event.createdBy}</div>
+                      <div className="text-[11px] text-gray-400 mt-1">Scheduled by {event.createdBy}</div>
                     )}
                   </div>
 
