@@ -490,17 +490,19 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
   log.info(`[event-creation] Parsed ${Object.keys(formDefaults).length} fields, ${Object.keys(formDefaultArrays).length} array fields from SSI form`)
 
   // Resolve group and organizer IDs
-  const targetGroupId = discipline?.ssiGroupId || snapshot.settings?.groupId
-  const targetOrgId = discipline?.ssiOrganizerId || snapshot.settings?.organizerId
+  // group: discipline config → snapshot settings → "xxx" (self-administered)
+  // organizer: discipline config → snapshot settings → "" (not arranged by club)
+  const groupId = discipline?.ssiGroupId || snapshot.settings?.groupId || 'xxx'
+  const organizerId = discipline?.ssiOrganizerId || snapshot.settings?.organizerId || ''
 
   // Build the form body — SSI defaults + our overrides for common fields
   const body = {
     ...formDefaults,
     csrfmiddlewaretoken: csrfToken || formDefaults.csrfmiddlewaretoken || '',
     name: eventName,
-    // Group and organizer: use discipline config → snapshot settings → form default
-    ...(targetGroupId && { group: targetGroupId }),
-    ...(targetOrgId && { organizer: targetOrgId }),
+    // Group and organizer
+    group: groupId,
+    organizer: organizerId,
     // Status and agreement
     status: 'on',
     has_accepted_event_data_ass_agreement: 'on',
@@ -535,7 +537,7 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
   // Array fields: use SSI page defaults (discipline-specific weapon_groups, categories, etc.)
   const arrayFields = { ...formDefaultArrays }
 
-  log.info(`[event-creation] CSRF: ${csrfToken ? csrfToken.substring(0, 10) + '...' : 'none'}, group: ${body.group || '(default)'}, organizer: ${body.organizer || '(default)'}`)
+  log.info(`[event-creation] CSRF: ${csrfToken ? csrfToken.substring(0, 10) + '...' : 'none'}, group: ${groupId}, organizer: ${organizerId || '(empty)'}`)
   log.debug(`[event-creation] POST payload keys: ${Object.keys(body).join(', ')}`)
 
   // Step 4: Submit the creation form
