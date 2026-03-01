@@ -1409,6 +1409,27 @@ export async function createScheduledEvent({ tenantId, templateId, disciplineId 
      RETURNING *`,
     [eventId, tenantId, templateId, disciplineId, eventName, eventDate, createdBy]
   )
+
+  // Auto-populate staffing needs from template's staffing_rules
+  if (templateId) {
+    try {
+      const template = await getMatchTemplate(templateId)
+      const roles = template?.staffingRules?.roles
+      if (Array.isArray(roles) && roles.length > 0) {
+        for (const role of roles) {
+          const needId = generateId('ned')
+          await query(
+            'INSERT INTO event_staffing_needs (id, event_id, role_key, role_label, min_count, max_count) VALUES ($1, $2, $3, $4, $5, $6)',
+            [needId, eventId, role.key, role.label || role.key, role.min || 0, role.max || 1]
+          )
+        }
+      }
+    } catch (err) {
+      // Log but don't fail event creation if staffing auto-populate fails
+      console.warn('[platform-store] Failed to auto-populate staffing needs:', err.message)
+    }
+  }
+
   return { eventId, event: rowToEvent(rows[0]) }
 }
 

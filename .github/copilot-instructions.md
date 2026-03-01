@@ -10,7 +10,9 @@
 - **Keep release notes in sync with requirements:** When completing a release or significant feature, update `docs/RELEASE-NOTES.md` with a new section. Release numbers in release notes **must match** the release numbers in `docs/requirements/requirements.md`. Do not invent new version numbers — use the requirement release number (e.g., "Release 7.2" not "Version 5.0"). Include: overview, new features, bug fixes, requirements met, and test status.
 - **Hotfix release numbering must match the base release stream:** Always align hotfix release numbers with the related requirement/base release (for example, R74 hotfixes use `Release 7.4.x`, such as `7.4.1`, `7.4.2`). Do not relabel hotfixes into unrelated release lines.
 - **Keep instructions in sync:** if you modify these agent instructions, update **both** `AGENTS.md` and `.github/copilot-instructions.md` with the same changes.
-- **Tooling limitations:** Note that `grep` is not currently available in the environment. Please use `grep_search` tool, or `Select-String` in powershell, or other file finding tools instead.
+- **Tooling limitations:**
+  - `grep` is not available in this environment. Use `grep_search` tool, or `Select-String` in PowerShell, or other file-finding tools instead.
+  - **Do NOT use `node -e` for multi-line code or code with template literals/backticks/dollar signs.** PowerShell escaping is fundamentally broken for these. Instead: use the `edit`/`multi_edit` tool to modify files directly, or `write_to_file` to create a temp `.js` script and run it with `node temp_script.js`. Only use `node -e` for trivial single-expression commands with no special characters.
 - **Track token usage:** At the end of each session (or when asked), provide a rough token usage summary per requirement. Count words read (file reads, search results, command output) and words written (edits, new files, commands) during the session. Summarize in a table like:
 
   | Requirement | Words Read | Words Written | Total (approx tokens) |
