@@ -2004,6 +2004,52 @@ export async function signupForEventStaffing(tenantId, eventId, needId, accountI
 }
 
 /**
+ * Backfill staffing needs for existing events that have a template with staffing_rules
+ * but no event_staffing_needs rows yet. Purely local DB — no SSI writes.
+ * @param {string} tenantId
+ * @returns {{ backfilledCount, skippedCount, errors[] }}
+ */
+export async function backfillStaffingNeeds(tenantId) {
+  // Find events with a template but no staffing needs rows
+  const { rows: events } = await query(`
+    SELECT e.id as event_id, e.template_id
+    FROM scheduled_events e
+    LEFT JOIN event_staffing_needs n ON e.id = n.event_id
+    WHERE e.tenant_id = $1
+      AND e.template_id IS NOT NULL
+      AND n.id IS NULL
+      AND e.event_date >= CURRENT_DATE
+  `, [tenantId])
+
+  let backfilledCount = 0
+  let skippedCount = 0
+  const errors = []
+
+  for (const evt of events) {
+    try {
+      const template = await getMatchTemplate(evt.template_id)
+      const roles = template?.staffingRules?.roles
+      if (!Array.isArray(roles) || roles.length === 0) {
+        skippedCount++
+        continue
+      }
+      for (const role of roles) {
+        const needId = generateId('ned')
+        await query(
+          'INSERT INTO event_staffing_needs (id, event_id, role_key, role_label, min_count, max_count) VALUES ($1, $2, $3, $4, $5, $6)',
+          [needId, evt.event_id, role.key, role.label || role.key, role.min || 0, role.max || 1]
+        )
+      }
+      backfilledCount++
+    } catch (err) {
+      errors.push({ eventId: evt.event_id, error: err.message })
+    }
+  }
+
+  return { backfilledCount, skippedCount, errors }
+}
+
+/**
  * Get staffing leaderboard for a tenant.
  * Aggregates confirmed staff_signups per account, counting distinct events staffed
  * and total role signups. Neutral framing — "volunteer activity", not competition.

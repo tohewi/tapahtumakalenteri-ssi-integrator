@@ -475,3 +475,31 @@ export async function getStaffingLeaderboardApi(tenantId, period = 'all') {
   return platformFetch(`/tenants/${tenantId}/staffing/leaderboard?period=${period}`)
 }
 
+/**
+ * Backfill staffing needs for existing events from their template's staffing_rules.
+ * Purely local DB — no SSI writes. Admin only.
+ */
+export async function backfillStaffingNeedsApi(tenantId) {
+  return platformFetch(`/tenants/${tenantId}/staffing/backfill`, { method: 'POST' })
+}
+
+/**
+ * Get staffing details for a specific event (needs + signups).
+ */
+export async function getEventStaffingApi(tenantId, eventId) {
+  return platformFetch(`/tenants/${tenantId}/events/${eventId}/staffing`)
+}
+
+/**
+ * Update staffing needs for a specific event (admin override).
+ * @param {string} tenantId
+ * @param {string} eventId
+ * @param {Array} needs - [{ roleKey, roleLabel, minCount, maxCount }]
+ */
+export async function updateEventStaffingNeedsApi(tenantId, eventId, needs) {
+  return platformFetch(`/tenants/${tenantId}/events/${eventId}/staffing-needs`, {
+    method: 'PUT',
+    body: JSON.stringify({ needs })
+  })
+}
+

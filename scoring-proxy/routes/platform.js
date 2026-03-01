@@ -79,6 +79,7 @@ import {
   signupForEventStaffing,
   withdrawFromEventStaffing,
   getStaffingLeaderboard,
+  backfillStaffingNeeds,
 } from '../lib/db/platform-store.js'
 import { requirePlatformAuth, PLATFORM_COOKIE } from '../middleware/platform-auth.js'
 
@@ -1808,6 +1809,24 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
     } catch (err) {
       log.error(`[platform] GET /tenants/${req.params.id}/staffing/leaderboard failed:`, err.message)
       return next(new AppError('Failed to fetch staffing leaderboard', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  /**
+   * POST /tenants/:id/staffing/backfill
+   * Backfill staffing needs for existing events that have templates with staffing_rules
+   * but no event_staffing_needs rows. Purely local DB — no SSI writes.
+   * Access: owner, tenant_admin
+   */
+  router.post('/tenants/:id/staffing/backfill', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
+    try {
+      const tenantId = req.params.id
+      const result = await backfillStaffingNeeds(tenantId)
+      log.info(`[platform] Staffing backfill for tenant ${tenantId}: ${result.backfilledCount} events backfilled, ${result.skippedCount} skipped, ${result.errors.length} errors`)
+      res.json(result)
+    } catch (err) {
+      log.error(`[platform] POST /tenants/${req.params.id}/staffing/backfill failed:`, err.message)
+      return next(new AppError('Failed to backfill staffing needs', 500, 'INTERNAL_ERROR'))
     }
   })
 
