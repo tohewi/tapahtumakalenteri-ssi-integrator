@@ -546,13 +546,16 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
   const { fields: formDefaults, arrayFields: formDefaultArrays } = parseFormFields(formHtml)
 
   log.info(`[event-creation] Parsed ${Object.keys(formDefaults).length} fields, ${Object.keys(formDefaultArrays).length} array fields from SSI form`)
-  // Debug: log fields related to agreement and organizer
-  const debugFields = ['organizer', 'group', 'has_accepted_event_data_ass_agreement', 'rule', 'sub_rule', 'serie_type']
-  for (const f of debugFields) {
-    const inFields = f in formDefaults ? `fields='${formDefaults[f]}'` : 'not in fields'
-    const inArrays = f in formDefaultArrays ? `arrays=[${formDefaultArrays[f].join(',')}]` : 'not in arrays'
-    log.info(`[event-creation] Default '${f}': ${inFields}, ${inArrays}`)
-  }
+  // Debug: find the actual agreement/accept field name in the HTML
+  const agreementFields = Object.keys(formDefaults).filter(k => /agree|accept|dpa|processing/i.test(k))
+  const agreementArrays = Object.keys(formDefaultArrays).filter(k => /agree|accept|dpa|processing/i.test(k))
+  log.info(`[event-creation] Agreement-like fields: scalars=[${agreementFields.join(',')}], arrays=[${agreementArrays.join(',')}]`)
+  // Also search raw HTML for agreement checkbox
+  const agreeInputs = formHtml.match(/<input[^>]*(?:agree|accept|dpa|processing)[^>]*>/gi) || []
+  log.info(`[event-creation] Agreement inputs in HTML (${agreeInputs.length}): ${agreeInputs.map(t => t.substring(0, 120)).join(' | ')}`)
+  // Log ALL field names to find missing required fields
+  const allFieldNames = [...Object.keys(formDefaults), ...Object.keys(formDefaultArrays)].sort()
+  log.info(`[event-creation] All ${allFieldNames.length} field names: ${allFieldNames.join(', ')}`)
 
   // Resolve group and organizer IDs
   // group: discipline config → snapshot settings → "xxx" (self-administered)
