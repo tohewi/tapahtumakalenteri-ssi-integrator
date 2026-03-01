@@ -1831,7 +1831,8 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   router.post('/tenants/:id/staffing/backfill', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
     try {
       const tenantId = req.params.id
-      const result = await backfillStaffingNeeds(tenantId)
+      const { defaultTemplateId } = req.body || {}
+      const result = await backfillStaffingNeeds(tenantId, { defaultTemplateId })
       log.info(`[platform] Staffing backfill for tenant ${tenantId}: ${result.backfilledCount} events backfilled, ${result.skippedCount} skipped, ${result.errors.length} errors`)
       res.json(result)
     } catch (err) {

@@ -2060,7 +2060,7 @@ export async function signupForEventStaffing(tenantId, eventId, needId, accountI
  * @param {string} tenantId
  * @returns {{ backfilledCount, skippedCount, errors[] }}
  */
-export async function backfillStaffingNeeds(tenantId) {
+export async function backfillStaffingNeeds(tenantId, { defaultTemplateId } = {}) {
   // Find upcoming events with no staffing needs rows yet
   // Includes events WITH template_id and events WITHOUT (e.g. SSI imports)
   const { rows: events } = await query(`
@@ -2105,16 +2105,23 @@ export async function backfillStaffingNeeds(tenantId) {
 
   for (const evt of events) {
     try {
-      // Resolve template: direct link first, then match by discipline
+      // Resolve template: direct link first, then match by discipline, then default
       let tpl = evt.template_id ? templatesById[evt.template_id] : null
       let matchMethod = evt.template_id ? 'template_id' : 'none'
       if (!tpl && evt.discipline_id) {
         tpl = templatesByDiscipline[evt.discipline_id]
-        if (tpl) {
-          matchMethod = 'discipline_id'
-          // Auto-link the template to this event for future consistency
-          await query('UPDATE scheduled_events SET template_id = $1 WHERE id = $2', [tpl.id, evt.event_id])
-        }
+        if (tpl) matchMethod = 'discipline_id'
+      }
+      if (!tpl && defaultTemplateId) {
+        tpl = templatesById[defaultTemplateId]
+        if (tpl) matchMethod = 'default_template'
+      }
+      // Auto-link the template to the event for future consistency
+      if (tpl && matchMethod !== 'template_id') {
+        await query(
+          'UPDATE scheduled_events SET template_id = $1, discipline_id = COALESCE(discipline_id, $2) WHERE id = $3',
+          [tpl.id, tpl.discipline_id, evt.event_id]
+        )
       }
       console.log(`[backfill]   processing event=${evt.event_id}: matched=${matchMethod} tpl=${tpl?.id || 'NONE'}`)
 

@@ -479,8 +479,12 @@ export async function getStaffingLeaderboardApi(tenantId, period = 'all') {
  * Backfill staffing needs for existing events from their template's staffing_rules.
  * Purely local DB — no SSI writes. Admin only.
  */
-export async function backfillStaffingNeedsApi(tenantId) {
-  return platformFetch(`/tenants/${tenantId}/staffing/backfill`, { method: 'POST' })
+export async function backfillStaffingNeedsApi(tenantId, { defaultTemplateId } = {}) {
+  const body = defaultTemplateId ? { defaultTemplateId } : undefined
+  return platformFetch(`/tenants/${tenantId}/staffing/backfill`, {
+    method: 'POST',
+    ...(body && { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  })
 }
 
 /**

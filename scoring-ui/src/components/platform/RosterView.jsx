@@ -2,7 +2,7 @@
 // RosterView — Event staffing platform
 // ============================================================
 import { useState, useEffect } from 'react'
-import { getUpcomingStaffingApi, getMyStaffingAssignmentsApi, signupForEventStaffingApi, withdrawFromEventStaffingApi, backfillStaffingNeedsApi, updateEventStaffingNeedsApi } from '../../platform-api'
+import { getUpcomingStaffingApi, getMyStaffingAssignmentsApi, signupForEventStaffingApi, withdrawFromEventStaffingApi, backfillStaffingNeedsApi, updateEventStaffingNeedsApi, listTemplates } from '../../platform-api'
 
 export default function RosterView({ tenantId, account }) {
   const [upcoming, setUpcoming] = useState([])
@@ -12,6 +12,7 @@ export default function RosterView({ tenantId, account }) {
   const [actionLoading, setActionLoading] = useState(null) // ID of need or signup being processed
   const [backfillResult, setBackfillResult] = useState(null)
   const [signupModal, setSignupModal] = useState(null) // { eventId, eventName, roles[] } for role selection dialog
+  const [templatePicker, setTemplatePicker] = useState(null) // { templates[], skippedCount } for unmatched events
 
   useEffect(() => {
     if (!tenantId) return
@@ -69,12 +70,23 @@ export default function RosterView({ tenantId, account }) {
   }
 
   // Backfill staffing needs from templates (admin action)
-  async function handleBackfill() {
-    if (!window.confirm('Populate staffing needs for all upcoming events from their templates? This only affects events that don\'t already have staffing needs.')) return
+  async function handleBackfill(defaultTemplateId) {
+    if (!defaultTemplateId && !window.confirm('Populate staffing needs for all upcoming events from their templates? This only affects events that don\'t already have staffing needs.')) return
     try {
       setActionLoading('backfill')
-      const result = await backfillStaffingNeedsApi(tenantId)
+      setTemplatePicker(null)
+      const result = await backfillStaffingNeedsApi(tenantId, { defaultTemplateId })
       setBackfillResult(result)
+      // If events were skipped and no default template was used, offer template picker
+      if (result.skippedCount > 0 && !defaultTemplateId) {
+        try {
+          const templates = await listTemplates(tenantId)
+          const withRoles = templates.filter(t => t.staffingRules?.roles?.length > 0)
+          if (withRoles.length > 0) {
+            setTemplatePicker({ templates: withRoles, skippedCount: result.skippedCount })
+          }
+        } catch (_) { /* ignore template fetch errors */ }
+      }
       await loadData() // Refresh
     } catch (err) {
       if (err.message?.includes('403') || err.message?.includes('Forbidden')) {
@@ -183,9 +195,31 @@ export default function RosterView({ tenantId, account }) {
 
         {backfillResult && (
           <div className="mb-4 p-3 bg-blue-50 text-blue-800 rounded-md text-sm">
-            Backfill complete: {backfillResult.backfilledCount} events populated, {backfillResult.skippedCount} skipped (no template rules).
+            Backfill complete: {backfillResult.backfilledCount} events populated{backfillResult.skippedCount > 0 ? `, ${backfillResult.skippedCount} skipped` : ''}.
             {backfillResult.errors?.length > 0 && <span className="text-red-600 ml-2">{backfillResult.errors.length} errors</span>}
-            <button onClick={() => setBackfillResult(null)} className="ml-2 text-blue-600 underline text-xs">Dismiss</button>
+            <button onClick={() => { setBackfillResult(null); setTemplatePicker(null) }} className="ml-2 text-blue-600 underline text-xs">Dismiss</button>
+          </div>
+        )}
+
+        {/* Template picker for unmatched events */}
+        {templatePicker && (
+          <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-md">
+            <p className="text-sm font-medium text-amber-800 mb-2">
+              {templatePicker.skippedCount} event(s) couldn't be matched to a template. Select a template to assign:
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {templatePicker.templates.map(tpl => (
+                <button
+                  key={tpl.id}
+                  onClick={() => handleBackfill(tpl.id)}
+                  disabled={actionLoading === 'backfill'}
+                  className="px-3 py-1.5 bg-white border border-amber-300 rounded text-sm font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50 transition-colors"
+                >
+                  {tpl.name} ({tpl.staffingRules.roles.length} roles)
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setTemplatePicker(null)} className="mt-2 text-xs text-amber-600 underline">Dismiss</button>
           </div>
         )}
         
