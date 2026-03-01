@@ -58,6 +58,9 @@ export default function MembersPage({ tenantId, currentAccountId }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  // Assignable roles (from backend — based on actor's permissions)
+  const [assignableRoles, setAssignableRoles] = useState([])
+
   // Invite modal state
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [inviteForm, setInviteForm] = useState({ email: '', roles: ['instructor'] })
@@ -79,6 +82,7 @@ export default function MembersPage({ tenantId, currentAccountId }) {
         listInvitations(tenantId),
       ])
       setMembers(mRes.members || [])
+      setAssignableRoles(mRes.assignableRoles || [])
       setInvitations(iRes.invitations || [])
     } catch (err) {
       setError(err.message)
@@ -270,16 +274,20 @@ export default function MembersPage({ tenantId, currentAccountId }) {
                     {editingMember === member.memberId ? (
                       <div className="flex flex-col gap-2">
                         <div className="flex flex-wrap gap-1">
-                          {AVAILABLE_ROLES.map(role => (
-                            <label key={role.id} className="flex items-center gap-1 text-xs cursor-pointer bg-gray-50 px-2 py-1 rounded border">
+                          {AVAILABLE_ROLES.map(role => {
+                            const canAssign = assignableRoles.includes(role.id)
+                            return (
+                            <label key={role.id} className={`flex items-center gap-1 text-xs px-2 py-1 rounded border ${canAssign ? 'cursor-pointer bg-gray-50' : 'opacity-40 cursor-not-allowed bg-gray-100'}`}>
                               <input
                                 type="checkbox"
                                 checked={editRoles.includes(role.id)}
-                                onChange={() => toggleEditRole(role.id)}
+                                onChange={() => canAssign && toggleEditRole(role.id)}
+                                disabled={!canAssign}
                               />
                               {role.label}
                             </label>
-                          ))}
+                            )
+                          })}
                         </div>
                         <div className="flex gap-2">
                           <button onClick={saveRoles} disabled={savingRoles} className="text-xs bg-sky-600 text-white px-2 py-1 rounded">
@@ -353,7 +361,7 @@ export default function MembersPage({ tenantId, currentAccountId }) {
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Roles</label>
                 <div className="space-y-2 p-1">
-                  {AVAILABLE_ROLES.filter(r => r.id !== 'owner').map(role => (
+                  {AVAILABLE_ROLES.filter(r => assignableRoles.includes(r.id)).map(role => (
                     <label key={role.id} className="flex items-start gap-2 p-2 border rounded-md hover:bg-gray-50 cursor-pointer">
                       <input
                         type="checkbox"
@@ -368,7 +376,9 @@ export default function MembersPage({ tenantId, currentAccountId }) {
                     </label>
                   ))}
                 </div>
-                <p className="text-xs text-gray-400 mt-2">Owner role can only be assigned by editing an existing member.</p>
+                {assignableRoles.length === 0 && (
+                  <p className="text-xs text-amber-600 mt-2">You do not have permission to invite members.</p>
+                )}
               </div>
 
               {inviteError && (

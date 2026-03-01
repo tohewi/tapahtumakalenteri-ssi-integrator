@@ -33,6 +33,47 @@ export const TENANT_ROLES = ['owner', 'tenant_admin', 'discipline_admin', 'instr
 const ADMIN_ROLES = new Set(['owner', 'tenant_admin'])
 
 /**
+ * Role Assignment Matrix — defines which roles each actor role can assign.
+ * Used for both invitations and member role updates.
+ * See docs/requirements/requirements.md Release 8.2 RBAC1.
+ */
+export const ROLE_ASSIGNMENT_MATRIX = {
+  owner:            ['owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor'],
+  tenant_admin:     ['discipline_admin', 'instructor_admin', 'match_admin', 'instructor'],
+  instructor_admin: ['match_admin', 'instructor'],
+  discipline_admin: [],
+  match_admin:      [],
+  instructor:       [],
+}
+
+/**
+ * Get the set of roles an actor can assign, based on all their roles (union).
+ * @param {string[]} actorRoles - the actor's current roles
+ * @returns {string[]} roles the actor is allowed to assign
+ */
+export function getAssignableRoles(actorRoles) {
+  if (!actorRoles || actorRoles.length === 0) return []
+  const assignable = new Set()
+  for (const role of actorRoles) {
+    const allowed = ROLE_ASSIGNMENT_MATRIX[role] || []
+    allowed.forEach(r => assignable.add(r))
+  }
+  return [...assignable]
+}
+
+/**
+ * Check if actor can assign all the requested roles.
+ * @param {string[]} actorRoles
+ * @param {string[]} requestedRoles
+ * @returns {{ allowed: boolean, disallowed: string[] }}
+ */
+export function validateRoleAssignment(actorRoles, requestedRoles) {
+  const assignable = new Set(getAssignableRoles(actorRoles))
+  const disallowed = requestedRoles.filter(r => !assignable.has(r))
+  return { allowed: disallowed.length === 0, disallowed }
+}
+
+/**
  * Check if a membership's roles satisfy the required roles for an action.
  * - `owner` implicitly satisfies every role
  * - `tenant_admin` implicitly satisfies every operational role (not billing/SSI)

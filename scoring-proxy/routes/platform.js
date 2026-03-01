@@ -60,6 +60,8 @@ import {
   listPendingInvitations,
   revokeTenantInvitation,
   hasRequiredRole,
+  validateRoleAssignment,
+  getAssignableRoles,
   TENANT_ROLES,
   countDisciplinesByTenant,
   createScheduledEvent,
@@ -1469,9 +1471,11 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   // ============================================================
 
   // GET /api/v1/platform/tenants/:tenantId/members
-  router.get('/tenants/:tenantId/members', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res) => {
+  router.get('/tenants/:tenantId/members', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'instructor_admin'), async (req, res) => {
     const members = await listTenantMembers(req.params.tenantId)
-    res.json({ members })
+    // Include the actor's assignable roles so frontend can filter role checkboxes
+    const assignableRoles = getAssignableRoles(req.membership.roles)
+    res.json({ members, assignableRoles })
   })
 
   // POST /api/v1/platform/tenants/:tenantId/members — Add a member
@@ -1490,9 +1494,10 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       return res.status(400).json({ error: `Invalid roles: ${invalidRoles.join(', ')}` })
     }
 
-    // tenant_admin cannot assign owner role
-    if (roles.includes('owner') && !hasRequiredRole(req.membership.roles, ['owner'])) {
-      return res.status(403).json({ error: 'Only an owner can assign the owner role' })
+    // Enforce role assignment matrix
+    const { allowed: canAssign, disallowed: badRoles } = validateRoleAssignment(req.membership.roles, roles)
+    if (!canAssign) {
+      return res.status(403).json({ error: `You cannot assign these roles: ${badRoles.join(', ')}. Your permissions do not allow it.` })
     }
 
     try {
@@ -1522,9 +1527,10 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       return res.status(400).json({ error: `Invalid roles: ${invalidRoles.join(', ')}` })
     }
 
-    // tenant_admin cannot assign or remove owner role
-    if (roles.includes('owner') && !hasRequiredRole(req.membership.roles, ['owner'])) {
-      return res.status(403).json({ error: 'Only an owner can assign the owner role' })
+    // Enforce role assignment matrix
+    const { allowed: canAssign, disallowed: badRoles } = validateRoleAssignment(req.membership.roles, roles)
+    if (!canAssign) {
+      return res.status(403).json({ error: `You cannot assign these roles: ${badRoles.join(', ')}. Your permissions do not allow it.` })
     }
 
     try {
@@ -1588,9 +1594,10 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       return res.status(400).json({ error: `Invalid roles: ${invalidRoles.join(', ')}` })
     }
 
-    // tenant_admin cannot invite someone as an owner
-    if (roles.includes('owner') && !hasRequiredRole(req.membership.roles, ['owner'])) {
-      return res.status(403).json({ error: 'Only an owner can invite another owner' })
+    // Enforce role assignment matrix — actor can only assign roles they're allowed to
+    const { allowed, disallowed } = validateRoleAssignment(req.membership.roles, roles)
+    if (!allowed) {
+      return res.status(403).json({ error: `You cannot assign these roles: ${disallowed.join(', ')}. Your permissions do not allow it.` })
     }
 
     try {

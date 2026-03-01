@@ -472,7 +472,7 @@ Strengthen the RBAC model to enforce hierarchical role assignment rules: higher-
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| RBAC1 | **Hierarchical Role Assignment Authorization**: Enforce strict rules on which roles each actor can assign to other members (via invitation or role update). The assignment matrix defines a ceiling — no actor can grant a privilege they do not themselves hold. The matrix must be enforced in **both** the invitation creation endpoint (`POST /tenants/:tenantId/invitations`) and the member role update endpoint (`PATCH /tenants/:tenantId/members/:id`). **Backend**: A single `ROLE_ASSIGNMENT_MATRIX` constant (object or Map) defines allowed assignable roles per actor role. `requireTenantRole` middleware already resolves the actor's roles; the assignment check validates `requestedRoles ⊆ allowedAssignableRoles(actorRoles)`. **Frontend**: The invite form and role editor must only show roles the current user is allowed to assign. Attempting to assign a disallowed role returns `403 Forbidden` with a clear message. | ⬜ Design |
+| RBAC1 | **Hierarchical Role Assignment Authorization**: Enforce strict rules on which roles each actor can assign to other members (via invitation or role update). The assignment matrix defines a ceiling — no actor can grant a privilege they do not themselves hold. The matrix must be enforced in **both** the invitation creation endpoint (`POST /tenants/:tenantId/invitations`) and the member role update endpoint (`PATCH /tenants/:tenantId/members/:id`). **Backend**: `ROLE_ASSIGNMENT_MATRIX` constant + `validateRoleAssignment()` + `getAssignableRoles()` in platform-store.js. Enforced in 3 routes: invitation creation, add member, update member roles. `GET /members` response includes `assignableRoles` for the actor. **Frontend**: Invite modal only shows roles the actor can assign. Inline role editor shows all roles but disables (greyed out) ones the actor cannot assign. | ✅ Implemented |
 
 #### Role Assignment Matrix
 
@@ -626,7 +626,7 @@ Applies if tenants are consumers or non-commercial associations (e.g., shooting 
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
 - **Release 8.0** (Platform Auth & Tenancy): 21 requirements — 21 ✅ (PA1–PA21)
 - **Release 8.1** (Match Management Platform): 8 requirements — 5 ✅ (MP1, MP2, MP4, MP10, MP12), 3 design phase (MP3, MP8, MP9). **MP12 — SSI Event Import**: Search existing SSI events via GraphQL (name, sport, date range, region filters) and import selected events as local scheduled_events with `ssi_created` status. Backend: `ssiSearchEvents` in seed-import.js, `importSsiEvent` in platform-store.js, `/ssi-search` + `/ssi-import` API routes. Frontend: `ImportSsiEventsModal` component in SchedulePage with search form, results table with checkboxes, and batch import action. Schema: `template_id` made nullable, `event_name` column added to `scheduled_events` for imported events without templates
-- **Release 8.2** (Platform Authorization & Workflows): 5 requirements — 1 ✅ (ACCT1), 4 design phase (RBAC1, MP5, MP6, MP7)
+- **Release 8.2** (Platform Authorization & Workflows): 5 requirements — 2 ✅ (ACCT1, RBAC1), 3 design phase (MP5, MP6, MP7)
 - **Release 8.3** (Calendar Integration): 1 requirement — 0 ✅, 1 design phase (MP11)
 - **Regulatory** (SaaS Platform EU/Finland): 23 requirements — 1 ✅ (REG14), 1 N/A (REG12), 21 design phase (REG1–REG23)
 
