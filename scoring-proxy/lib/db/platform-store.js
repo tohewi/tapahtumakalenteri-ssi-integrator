@@ -1475,11 +1475,17 @@ export async function importSsiEvent({ tenantId, eventName, eventDate, ssiRefere
  * Uses individual inserts (not transaction) so partial success is possible.
  */
 export async function createScheduledEventBatch({ tenantId, templateId, dates, createdBy }) {
+  // Look up template once to derive event names and disciplineId
+  let template = null
+  try { template = await getMatchTemplate(templateId) } catch { /* ignore */ }
+
   const results = []
   for (const date of dates) {
     try {
       const { eventId, event } = await createScheduledEvent({
         tenantId, templateId, eventDate: date, createdBy,
+        disciplineId: template?.disciplineId || null,
+        eventName: template?.name || null,
       })
       results.push({ success: true, eventId, event, date })
     } catch (err) {
@@ -1788,13 +1794,21 @@ export async function deletePlatformSession(sessionId) {
 export async function getUpcomingStaffingNeeds(tenantId) {
   const result = await query(`
     SELECT 
-      e.id as event_id, e.event_date, e.event_name,
+      e.id as event_id, e.event_date, e.event_name, e.status as event_status,
+      e.created_by,
+      mt.name as template_name, mt.overrides as template_overrides,
+      mt.ssi_seed_snapshot as seed_snapshot,
+      d.name as discipline_name,
+      creator.name as creator_name,
       n.id as need_id, n.role_key, n.role_label, n.min_count, n.max_count,
       s.id as signup_id, s.account_id, a.name as account_name, s.status, s.notes
     FROM scheduled_events e
     JOIN event_staffing_needs n ON e.id = n.event_id
     LEFT JOIN staff_signups s ON n.id = s.need_id AND s.status = 'confirmed'
     LEFT JOIN accounts a ON s.account_id = a.id
+    LEFT JOIN match_templates mt ON e.template_id = mt.id
+    LEFT JOIN disciplines d ON mt.discipline_id = d.id
+    LEFT JOIN accounts creator ON e.created_by = creator.id
     WHERE e.tenant_id = $1 AND e.event_date >= CURRENT_DATE
     ORDER BY e.event_date ASC, n.role_label ASC
   `, [tenantId])
@@ -1802,8 +1816,25 @@ export async function getUpcomingStaffingNeeds(tenantId) {
   const eventsMap = {}
   for (const row of result.rows) {
     if (!eventsMap[row.event_id]) {
+      // Derive venue from template overrides
+      const overrides = row.template_overrides || {}
+      const snapshot = row.seed_snapshot || {}
+      const venue = overrides.venue || snapshot.venue || null
+      // Derive match count from seed snapshot
+      const matchCount = snapshot.matchCount || (snapshot.matches ? snapshot.matches.length : null)
+
       eventsMap[row.event_id] = {
-        event: { id: row.event_id, eventDate: row.event_date, eventName: row.event_name },
+        event: {
+          id: row.event_id,
+          eventDate: row.event_date,
+          eventName: row.event_name || row.template_name || 'Unnamed Event',
+          status: row.event_status,
+          templateName: row.template_name || null,
+          disciplineName: row.discipline_name || null,
+          venue,
+          matchCount,
+          createdBy: row.creator_name || null,
+        },
         needs: [],
         isUnderstaffed: false
       }

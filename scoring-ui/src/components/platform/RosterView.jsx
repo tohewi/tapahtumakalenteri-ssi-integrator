@@ -11,7 +11,7 @@ export default function RosterView({ tenantId, account }) {
   const [error, setError] = useState(null)
   const [actionLoading, setActionLoading] = useState(null) // ID of need or signup being processed
   const [backfillResult, setBackfillResult] = useState(null)
-  const [editingEvent, setEditingEvent] = useState(null) // { eventId, needs[] } for inline editor
+  const [signupModal, setSignupModal] = useState(null) // { eventId, eventName, roles[] } for role selection dialog
 
   useEffect(() => {
     if (!tenantId) return
@@ -87,25 +87,22 @@ export default function RosterView({ tenantId, account }) {
     }
   }
 
-  // Save edited staffing needs for a specific event
-  async function handleSaveNeeds(eventId, needs) {
-    try {
-      setActionLoading('save-needs')
-      await updateEventStaffingNeedsApi(tenantId, eventId, needs)
-      setEditingEvent(null)
-      await loadData()
-    } catch (err) {
-      alert(`Failed to update staffing needs: ${err.message}`)
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
   // Filter out events that don't have staffing needs configured
   const eventsWithNeeds = upcoming.filter(e => e.needs && e.needs.length > 0)
 
   if (loading) {
     return <div className="text-gray-500 p-8 text-center animate-pulse">Loading staffing data...</div>
+  }
+
+  // Total filled / total needed across all roles
+  function getStaffingSummary(needs) {
+    let filled = 0, min = 0, max = 0
+    for (const n of needs) {
+      filled += (n.signups || []).length
+      min += n.minCount
+      max += n.maxCount
+    }
+    return { filled, min, max }
   }
 
   return (
@@ -137,7 +134,6 @@ export default function RosterView({ tenantId, account }) {
         ) : (
           <div className="divide-y">
             {myAssignments.map(({ signup, event }) => {
-              // Calculate days until event
               const daysUntil = Math.ceil((new Date(event.eventDate) - new Date()) / (1000 * 60 * 60 * 24))
               const isUrgent = daysUntil <= 3
               
@@ -199,77 +195,137 @@ export default function RosterView({ tenantId, account }) {
             <p className="text-xs text-gray-400 mt-2">Click "Populate from Templates" above to add staffing needs to existing events, or create new events from templates with staffing rules.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {eventsWithNeeds.map(({ event, disciplineName, needs, isUnderstaffed }) => {
-              // Collect all signups from all needs into a flat list for this event
+          <div className="space-y-4">
+            {eventsWithNeeds.map(({ event, needs, isUnderstaffed }) => {
+              // Collect all signups from all needs for signup-status check
               const allSignups = needs.flatMap(n => (n.signups || []).map(s => ({ ...s, needId: n.id })))
-              // Does this user have any active signups for this event?
               const mySignupIds = allSignups.filter(s => s.accountId === account?.id).map(s => s.needId)
-              
+              const summary = getStaffingSummary(needs)
+              // Available roles (not full, not already signed up by me)
+              const availableRoles = needs.filter(n => {
+                const filled = (n.signups || []).length
+                return filled < n.maxCount && !mySignupIds.includes(n.id)
+              })
+              const daysUntil = Math.ceil((new Date(event.eventDate) - new Date()) / (1000 * 60 * 60 * 24))
+
               return (
-                <div key={event.id} className={`bg-white rounded-lg shadow-sm border p-6 ${isUnderstaffed ? 'border-orange-200' : ''}`}>
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="font-bold text-gray-900">{event.eventName}</h3>
-                      <p className="text-sm text-gray-500">{formatDate(event.eventDate)}</p>
+                <div key={event.id} className={`bg-white rounded-lg shadow-sm border overflow-hidden ${isUnderstaffed ? 'border-l-4 border-l-orange-400' : 'border-l-4 border-l-green-400'}`}>
+                  {/* Event header — dark banner like the reference UI */}
+                  <div className="bg-gray-800 text-white px-5 py-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="font-bold text-base">{event.eventName}</h3>
+                        <div className="flex items-center gap-3 text-sm text-gray-300 mt-1">
+                          <span>{formatDate(event.eventDate)}</span>
+                          {event.disciplineName && (
+                            <>
+                              <span className="text-gray-500">·</span>
+                              <span>{event.disciplineName}</span>
+                            </>
+                          )}
+                          {event.matchCount && (
+                            <>
+                              <span className="text-gray-500">·</span>
+                              <span>{event.matchCount} {event.matchCount === 1 ? 'match' : 'matches'}</span>
+                            </>
+                          )}
+                        </div>
+                        {event.venue && (
+                          <div className="text-xs text-gray-400 mt-1">{event.venue}</div>
+                        )}
+                      </div>
+                      <div className="text-right flex-shrink-0 ml-4">
+                        {isUnderstaffed ? (
+                          <span className="inline-flex items-center bg-orange-500/20 text-orange-300 text-xs font-medium px-2 py-0.5 rounded">
+                            Needs staff
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center bg-green-500/20 text-green-300 text-xs font-medium px-2 py-0.5 rounded">
+                            Staffed
+                          </span>
+                        )}
+                        <div className="text-xs text-gray-400 mt-1">
+                          Staff: {summary.filled}/{summary.min}
+                        </div>
+                      </div>
                     </div>
-                    {disciplineName && (
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                        {disciplineName}
-                      </span>
+                    {event.createdBy && (
+                      <div className="text-[11px] text-gray-500 mt-1">Scheduled by {event.createdBy}</div>
                     )}
                   </div>
 
-                  {isUnderstaffed && (
-                    <div className="text-xs text-orange-600 font-medium mb-4 flex items-center bg-orange-50 px-2 py-1 rounded w-fit">
-                      <span className="mr-1">⚠️</span> Needs more staff to run
-                    </div>
-                  )}
-
-                  <div className="space-y-4">
+                  {/* Roles list */}
+                  <div className="divide-y divide-gray-100">
                     {needs.map(need => {
                       const assignedCount = (need.signups || []).length
-                      const isFull = assignedCount >= need.maxCount
                       const isAssigned = mySignupIds.includes(need.id)
                       const needsMore = assignedCount < need.minCount
+                      const isFull = assignedCount >= need.maxCount
                       
                       return (
-                        <div key={need.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-gray-50 rounded-md">
-                          <div className="mb-2 sm:mb-0">
-                            <div className="font-medium text-sm text-gray-900">
-                              {need.roleLabel}
-                              {isAssigned && <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">You're assigned</span>}
+                        <div key={need.id} className="px-5 py-3 flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm text-gray-800">{need.roleLabel}</span>
+                              {isAssigned && (
+                                <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">You</span>
+                              )}
                             </div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              {assignedCount} / {need.minCount === need.maxCount ? need.minCount : `${need.minCount}-${need.maxCount}`} filled
-                              {needsMore && <span className="ml-1 text-orange-600">(Needs {need.minCount - assignedCount} more)</span>}
+                            <div className="flex items-center gap-2 mt-1">
+                              {/* Compact progress bar */}
+                              <div className="w-20 bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                                <div 
+                                  className={`h-1.5 rounded-full transition-all ${needsMore ? 'bg-orange-400' : 'bg-green-500'}`} 
+                                  style={{ width: `${Math.min(100, (assignedCount / (need.maxCount || 1)) * 100)}%` }}
+                                ></div>
+                              </div>
+                              <span className="text-xs text-gray-500">
+                                {assignedCount}/{need.maxCount}
+                              </span>
+                              {needsMore && (
+                                <span className="text-xs text-orange-500 font-medium">
+                                  ({need.minCount - assignedCount} needed)
+                                </span>
+                              )}
                             </div>
-                            {/* Progress bar */}
-                            <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2 overflow-hidden">
-                              <div 
-                                className={`h-1.5 rounded-full ${needsMore ? 'bg-orange-400' : 'bg-green-500'}`} 
-                                style={{ width: `${Math.min(100, (assignedCount / need.maxCount) * 100)}%` }}
-                              ></div>
-                            </div>
+                            {/* Show who's signed up */}
+                            {(need.signups || []).length > 0 && (
+                              <div className="text-[11px] text-gray-400 mt-1">
+                                {(need.signups || []).map(s => s.accountName).join(', ')}
+                              </div>
+                            )}
                           </div>
-                          
-                          <div className="flex-shrink-0">
-                            {!isAssigned && !isFull && (
-                              <button
-                                onClick={() => handleSignup(event.id, need.id)}
-                                disabled={actionLoading === need.id}
-                                className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 disabled:opacity-50 shadow-sm"
-                              >
-                                {actionLoading === need.id ? 'Signing up...' : 'Sign Up'}
-                              </button>
+
+                          <div className="flex-shrink-0 ml-3">
+                            {isAssigned && (
+                              <span className="text-xs text-green-600 font-medium">Signed up</span>
                             )}
                             {!isAssigned && isFull && (
-                              <span className="text-xs text-gray-500 italic bg-gray-100 px-2 py-1 rounded">Full</span>
+                              <span className="text-xs text-gray-400 italic">Full</span>
                             )}
                           </div>
                         </div>
                       )
                     })}
+                  </div>
+
+                  {/* Sign Up / action footer */}
+                  <div className="bg-gray-50 px-5 py-3 flex items-center justify-between border-t">
+                    <div className="text-xs text-gray-400">
+                      {daysUntil <= 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `In ${daysUntil} days`}
+                    </div>
+                    {availableRoles.length > 0 ? (
+                      <button
+                        onClick={() => setSignupModal({ eventId: event.id, eventName: event.eventName, roles: availableRoles })}
+                        className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 shadow-sm transition-colors"
+                      >
+                        Sign Up
+                      </button>
+                    ) : mySignupIds.length > 0 ? (
+                      <span className="text-xs text-green-600 font-medium">You're signed up for this event</span>
+                    ) : (
+                      <span className="text-xs text-gray-400 italic">All roles filled</span>
+                    )}
                   </div>
                 </div>
               )
@@ -277,6 +333,45 @@ export default function RosterView({ tenantId, account }) {
           </div>
         )}
       </div>
+
+      {/* Role Selection Modal */}
+      {signupModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSignupModal(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b">
+              <h3 className="text-lg font-bold text-gray-900">Choose a role</h3>
+              <p className="text-sm text-gray-500 mt-0.5">{signupModal.eventName}</p>
+            </div>
+            <div className="divide-y">
+              {signupModal.roles.map(role => {
+                const filled = (role.signups || []).length
+                return (
+                  <button
+                    key={role.id}
+                    onClick={() => { handleSignup(signupModal.eventId, role.id); setSignupModal(null) }}
+                    disabled={actionLoading === role.id}
+                    className="w-full text-left px-5 py-4 hover:bg-blue-50 transition-colors flex items-center justify-between disabled:opacity-50"
+                  >
+                    <div>
+                      <div className="font-medium text-gray-900">{role.roleLabel}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">{filled}/{role.maxCount} positions filled</div>
+                    </div>
+                    <div className="text-blue-600 text-sm font-medium">Select</div>
+                  </button>
+                )
+              })}
+            </div>
+            <div className="p-4 border-t">
+              <button
+                onClick={() => setSignupModal(null)}
+                className="w-full text-center text-sm text-gray-500 hover:text-gray-700 py-2"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
