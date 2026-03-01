@@ -200,9 +200,11 @@ export default function RosterView({ tenantId, account }) {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {eventsWithNeeds.map(({ event, disciplineName, needs, signups, isUnderstaffed }) => {
+            {eventsWithNeeds.map(({ event, disciplineName, needs, isUnderstaffed }) => {
+              // Collect all signups from all needs into a flat list for this event
+              const allSignups = needs.flatMap(n => (n.signups || []).map(s => ({ ...s, needId: n.id })))
               // Does this user have any active signups for this event?
-              const mySignupIds = signups.filter(s => s.accountId === account.id).map(s => s.needId)
+              const mySignupIds = allSignups.filter(s => s.accountId === account?.id).map(s => s.needId)
               
               return (
                 <div key={event.id} className={`bg-white rounded-lg shadow-sm border p-6 ${isUnderstaffed ? 'border-orange-200' : ''}`}>
@@ -226,9 +228,10 @@ export default function RosterView({ tenantId, account }) {
 
                   <div className="space-y-4">
                     {needs.map(need => {
-                      const isFull = need.assignedCount >= need.maxCount
+                      const assignedCount = (need.signups || []).length
+                      const isFull = assignedCount >= need.maxCount
                       const isAssigned = mySignupIds.includes(need.id)
-                      const needsMore = need.assignedCount < need.minCount
+                      const needsMore = assignedCount < need.minCount
                       
                       return (
                         <div key={need.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-gray-50 rounded-md">
@@ -238,14 +241,14 @@ export default function RosterView({ tenantId, account }) {
                               {isAssigned && <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">You're assigned</span>}
                             </div>
                             <div className="text-xs text-gray-500 mt-1">
-                              {need.assignedCount} / {need.minCount === need.maxCount ? need.minCount : `${need.minCount}-${need.maxCount}`} filled
-                              {needsMore && <span className="ml-1 text-orange-600">(Needs {need.minCount - need.assignedCount} more)</span>}
+                              {assignedCount} / {need.minCount === need.maxCount ? need.minCount : `${need.minCount}-${need.maxCount}`} filled
+                              {needsMore && <span className="ml-1 text-orange-600">(Needs {need.minCount - assignedCount} more)</span>}
                             </div>
                             {/* Progress bar */}
                             <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2 overflow-hidden">
                               <div 
                                 className={`h-1.5 rounded-full ${needsMore ? 'bg-orange-400' : 'bg-green-500'}`} 
-                                style={{ width: `${Math.min(100, (need.assignedCount / need.maxCount) * 100)}%` }}
+                                style={{ width: `${Math.min(100, (assignedCount / need.maxCount) * 100)}%` }}
                               ></div>
                             </div>
                           </div>
