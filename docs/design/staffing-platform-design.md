@@ -1,6 +1,6 @@
 # Event Staffing — Platform Design
 
-**Status:** Draft  
+**Status:** Draft — Updated with owner feedback 2026-03-01  
 **Date:** 2026-03-01  
 **Priority:** Next major feature — the core value proposition
 
@@ -43,6 +43,8 @@ Stored in the existing `match_templates.staffing_rules` JSONB column:
 ```json
 {
   "roles": [
+    { "key": "match_director", "label": "Match Director", "labelFi": "Kilpailunjohtaja", "min": 1, "max": 1,
+      "qualification": "Must be a qualified SRA Range Officer" },
     { "key": "ro", "label": "Range Officer", "labelFi": "Ratatuomari", "min": 2, "max": 4 },
     { "key": "safety", "label": "Safety Officer", "labelFi": "Turvallisuusvastaava", "min": 1, "max": 1 },
     { "key": "scorer", "label": "Scorer", "labelFi": "Tuloskirjuri", "min": 1, "max": 2 },
@@ -50,9 +52,12 @@ Stored in the existing `match_templates.staffing_rules` JSONB column:
   ],
   "signupOpensBeforeDays": 14,
   "signupClosesBeforeDays": 2,
-  "reminderBeforeDays": [7, 1]
+  "reminderBeforeDays": [7, 1],
+  "understaffedAlertBeforeDays": 3
 }
 ```
+
+**Note:** The `qualification` field is informative only — displayed to the user when signing up. No enforcement. Self-regulation.
 
 **Design note:** Staffing roles are NOT the same as tenant member roles (owner, instructor, etc.). These are event-specific job assignments.
 
@@ -178,18 +183,25 @@ Using existing Resend infrastructure (`lib/email.js`):
 
 ## 8. Design Decisions
 
-- **Staffing roles ≠ tenant roles** — "Range Officer" is an event job, "instructor" is a platform permission. An account with `instructor` role can sign up as RO, scorer, or equipment handler at different events.
-- **Template-driven defaults** — Staffing needs come from the template, but can be overridden per event. This means you define "Kupittaa Cup needs 2 ROs and 1 safety" once, and every Kupittaa Cup event inherits it.
-- **Self-service first** — Instructors sign themselves up. Admins can also assign, but the primary flow is self-service.
-- **No approval workflow (initially)** — Signup = confirmed. If we need approval later, we add a 'pending' status to staff_signups.
-- **Discipline scoping** — An instructor sees events across all disciplines in their tenant. Future: can filter by disciplines they're qualified for.
-- **Withdrawal policy** — Always allowed, but recorded. Admins can see withdrawal patterns.
+- **Staffing roles ≠ tenant roles** — "Range Officer" is an event job, not a platform role. **Any tenant member** (not just those with `instructor` role) can sign up for event staffing roles. In practice, members with `instructor` role are the primary audience, but owners, admins, and match admins can also staff events.
+- **Template-driven defaults** — Staffing needs (roles + counts) come from the template's `staffing_rules`, inherited by every event created from that template. Can be overridden per event. This applies across all disciplines and their templates.
+- **Self-service first** — Members sign themselves up. Admins can also assign, but the primary flow is self-service. No approval workflow initially — signup = confirmed. Approval could be added as a template setting in the future.
+- **Withdrawal policy** — Always allowed (people get sick, unexpected events happen). Withdrawal **triggers a notification** to all tenant members who are NOT already staffing that event, alerting them that a position needs to be filled.
+- **Certification placeholder** — Templates can define recommended qualifications per role (e.g., "Match director must be a qualified SRA Range Officer") as informative text. No enforcement for now — rely on self-regulation. Formal qualification tracking is deferred.
+- **SSI sync** — Use the SRA staffing engine model: staff assignments sync to SSI (register as officials). Applies to all disciplines.
 
 ---
 
-## 9. Open Questions
+## 9. Resolved Questions
 
-1. **Should instructors see events from other tenants?** — Currently no. Multi-tenant visibility is a future consideration.
-2. **SSI sync for staffing?** — Should staff assignments be synced to SSI (e.g., register ROs as officials in SSI)? The SRA staffing engine does this. Could be Phase 2.
-3. **Qualification/certification tracking** — Should we track RO certifications? Useful but adds complexity. Defer to Phase 2?
-4. **Mobile notifications** — Email only for now. Push notifications (PWA) would be better for time-sensitive alerts.
+1. **Who can staff events?** — ✅ Any tenant member, not just `instructor` role. All members can sign up for event staffing roles.
+2. **SSI sync?** — ✅ Yes, use SRA staffing engine model. Staff registered as officials in SSI. Applies to all disciplines.
+3. **Qualifications?** — ✅ Informative only (text on template role). No enforcement — self-regulation. Formal tracking deferred.
+4. **Approval workflow?** — ✅ No approval initially. Signup = confirmed. Could be a template setting in the future.
+5. **Withdrawal notifications?** — ✅ Withdrawal triggers notification to non-assigned members that a position needs filling.
+6. **Understaffed alert?** — ✅ 3 days before event, alert sent to admins + all members if positions unfilled.
+
+## 10. Remaining Open Questions
+
+1. **Cross-tenant visibility** — Should members see events from other tenants? Currently no.
+2. **Mobile notifications** — Email only for now. Push notifications (PWA) for time-sensitive alerts is a future consideration.
