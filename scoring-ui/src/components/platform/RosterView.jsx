@@ -195,10 +195,34 @@ export default function RosterView({ tenantId, account }) {
         </div>
 
         {backfillResult && (
-          <div className="mb-4 p-3 bg-blue-50 text-blue-800 rounded-md text-sm">
-            Backfill complete: {backfillResult.backfilledCount} events populated{backfillResult.skippedCount > 0 ? `, ${backfillResult.skippedCount} skipped` : ''}.
-            {backfillResult.errors?.length > 0 && <span className="text-red-600 ml-2">{backfillResult.errors.length} errors</span>}
-            <button onClick={() => { setBackfillResult(null); setTemplatePicker(null) }} className="ml-2 text-blue-600 underline text-xs">Dismiss</button>
+          <div className="mb-4 p-3 bg-blue-50 text-blue-800 rounded-md text-sm space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-medium">
+                Backfill complete: {backfillResult.backfilledCount} populated{backfillResult.skippedCount > 0 ? `, ${backfillResult.skippedCount} skipped` : ''}
+                {backfillResult.errors?.length > 0 && <span className="text-red-600 ml-2">({backfillResult.errors.length} errors)</span>}
+              </span>
+              <button onClick={() => { setBackfillResult(null); setTemplatePicker(null) }} className="text-blue-600 underline text-xs">Dismiss</button>
+            </div>
+            {backfillResult.populated?.length > 0 && (
+              <div className="text-xs">
+                <span className="font-medium text-green-700">Populated:</span>
+                {backfillResult.populated.map((e, i) => (
+                  <span key={i} className="ml-1 inline-block bg-green-100 text-green-800 px-1.5 py-0.5 rounded mr-1 mb-0.5">
+                    {e.name} ({e.date}) — {e.roles} roles via {e.template}
+                  </span>
+                ))}
+              </div>
+            )}
+            {backfillResult.skipped?.length > 0 && (
+              <div className="text-xs">
+                <span className="font-medium text-amber-700">Skipped:</span>
+                {backfillResult.skipped.map((e, i) => (
+                  <span key={i} className="ml-1 inline-block bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded mr-1 mb-0.5">
+                    {e.name} ({e.date}) — {e.reason}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

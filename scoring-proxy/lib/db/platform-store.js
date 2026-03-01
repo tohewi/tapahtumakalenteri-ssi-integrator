@@ -2104,8 +2104,17 @@ export async function backfillStaffingNeeds(tenantId, { defaultTemplateId } = {}
   let backfilledCount = 0
   let skippedCount = 0
   const errors = []
+  const populated = []  // events that got staffing needs
+  const skipped = []    // events skipped (no template or no roles)
 
   for (const evt of events) {
+    // Format event date for display (YYYY-MM-DD → dd.mm.yyyy)
+    const dateStr = evt.event_date instanceof Date
+      ? evt.event_date.toISOString().split('T')[0]
+      : String(evt.event_date || '').split('T')[0]
+    const displayDate = dateStr ? dateStr.split('-').reverse().join('.') : '?'
+    const displayName = evt.event_name || displayDate
+
     try {
       // Resolve template: direct link first, then match by discipline, then default
       let tpl = evt.template_id ? templatesById[evt.template_id] : null
@@ -2132,6 +2141,7 @@ export async function backfillStaffingNeeds(tenantId, { defaultTemplateId } = {}
       if (!Array.isArray(roles) || roles.length === 0) {
         console.log(`[backfill]   SKIP event=${evt.event_id}: no roles in staffing_rules (keys: ${Object.keys(staffingRules).join(',')})`)
         skippedCount++
+        skipped.push({ eventId: evt.event_id, name: displayName, date: displayDate, reason: tpl ? 'no roles in template' : 'no template matched' })
         continue
       }
       for (const role of roles) {
@@ -2142,12 +2152,13 @@ export async function backfillStaffingNeeds(tenantId, { defaultTemplateId } = {}
         )
       }
       backfilledCount++
+      populated.push({ eventId: evt.event_id, name: displayName, date: displayDate, template: tpl.name, roles: roles.length, matchMethod })
     } catch (err) {
-      errors.push({ eventId: evt.event_id, error: err.message })
+      errors.push({ eventId: evt.event_id, name: displayName, date: displayDate, error: err.message })
     }
   }
 
-  return { backfilledCount, skippedCount, errors }
+  return { backfilledCount, skippedCount, errors, populated, skipped }
 }
 
 /**
