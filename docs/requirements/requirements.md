@@ -634,6 +634,7 @@ Applies if tenants are consumers or non-commercial associations (e.g., shooting 
   - **Roster UI**: `RosterView.jsx` showing events needing staff with dynamic progress bars, one-click signups, and personal commitment tracking.
   - **UI Integration**: Staffing gap metrics in `DashboardView.jsx` and visual staffing indicators (red/green) in `SchedulePage.jsx`.
   - **Notifications**: Automated emails via Resend for signup confirmations, withdrawal alerts to admins, and urgent understaffed warnings.
+  - **Volunteer Activity Leaderboard**: `GET /staffing/leaderboard?period=all|12m|6m|3m` aggregates confirmed signups per member. Dashboard shows ranked list with activity bars, role tags, and period selector. Neutral "volunteer activity" framing. Active Volunteers stat card replaces placeholder.
   - **Testing**: E2E UAT script `test-staffing-e2e.mjs` verifying the full end-to-end scheduling and staffing flow.
 - **Regulatory** (SaaS Platform EU/Finland): 23 requirements — 1 ✅ (REG14), 1 N/A (REG12), 21 design phase (REG1–REG23)
 

@@ -85,9 +85,9 @@ export default function DashboardView({ tenantId, onNavigate }) {
           <div className="text-xs text-gray-400 mt-1">In use by events</div>
         </div>
         <div className="bg-white rounded-lg border p-4 shadow-sm">
-          <div className="text-sm text-gray-500">Instructors</div>
-          <div className="text-3xl font-bold text-gray-700 mt-1">—</div>
-          <div className="text-xs text-gray-400 mt-1">Active roster</div>
+          <div className="text-sm text-gray-500">Active Volunteers</div>
+          <div className="text-3xl font-bold text-gray-700 mt-1">{loading ? '...' : leaderboard.length}</div>
+          <div className="text-xs text-gray-400 mt-1">Have staffed events</div>
         </div>
       </div>
 
