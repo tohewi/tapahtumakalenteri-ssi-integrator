@@ -522,6 +522,18 @@ Full ACCT1 flow: (1) User clicks "Forgot password?" link on the Sign In page. (2
 | MP6 | **Event Status Dashboard**: Visual status indicators for each scheduled event (planned, creating, active, completed, cancelled). Batch status view for upcoming week/month | ⬜ Design |
 | MP7 | **Event Cancellation**: Cancel a scheduled event — optionally delete from SSI if already created. Status: `ssi_created` → `cancelled`. Requires confirmation dialog with impact summary | ⬜ Design |
 
+## Release 9.1 — API Security Hardening
+
+Addresses misuse risks identified in the platform API security review (March 2026). Focuses on rate limiting, input validation, audit logging, and cross-tenant isolation.
+
+| # | Requirement | Status | Priority | Notes |
+|---|-------------|--------|----------|-------|
+| SEC-H1 | **Mutation rate limits**: Add per-IP rate limits on all state-changing Platform API routes (POST/PATCH/DELETE). Suggested: 30 req/min for general mutations, 5 req/min for SSI-calling routes (`ssi-import`, `import-seed`, `ssi-search`) | ⬚ Pending | High | Currently only login/signup/registration have rate limits. Authenticated routes have none |
+| SEC-H2 | **Cross-tenant template validation**: Validate that `defaultTemplateId` (and any other cross-referenced entity IDs) belongs to the requesting tenant before use. Applies to backfill, event creation, and any route accepting foreign-key IDs | ⬚ Pending | High | Current backfill accepts any template ID without tenant ownership check |
+| SEC-H3 | **Password reset rate limit**: Add rate limiter to `POST /reset-password` (e.g., 5 req/15min per IP). Although tokens are crypto UUIDs, defense-in-depth requires throttling | ⬚ Pending | Medium | `forgot-password` already has `platformLoginLimiter`, but `reset-password` has none |
+| SEC-H4 | **Mutation audit log**: Create an `audit_log` table recording security-sensitive mutations: member role changes, SSI credential updates, event deletions, password changes, MFA setup/disable. Fields: `id`, `tenant_id`, `account_id`, `action`, `target_type`, `target_id`, `metadata JSONB`, `ip`, `created_at` | ⬚ Pending | Medium | Currently mutations log at `info` level only — no queryable audit trail |
+| SEC-H5 | **CSRF token protection**: Evaluate adding CSRF tokens for state-changing requests. Current `sameSite: 'lax'` provides reasonable protection for POST/PATCH/DELETE, but `strict` mode or explicit tokens would strengthen defense. Document decision | ⬚ Design | Low | `sameSite: 'lax'` allows top-level GET navigations to send cookies; state-changing ops use POST so risk is limited |
+
 ## Regulatory Requirements — SaaS Platform (EU/Finland)
 
 This section covers the key regulatory obligations for operating a self-service SaaS platform in the EU (Finland) that processes personal data and handles payments. These apply to the Match Management Platform (R8.1) once it becomes a commercial multi-tenant service.
@@ -636,6 +648,7 @@ Applies if tenants are consumers or non-commercial associations (e.g., shooting 
   - **Notifications**: Automated emails via Resend for signup confirmations, withdrawal alerts to admins, and urgent understaffed warnings.
   - **Volunteer Activity Leaderboard**: `GET /staffing/leaderboard?period=all|12m|6m|3m` aggregates confirmed signups per member. Dashboard shows ranked list with activity bars, role tags, and period selector. Neutral "volunteer activity" framing. Active Volunteers stat card replaces placeholder.
   - **Testing**: E2E UAT script `test-staffing-e2e.mjs` verifying the full end-to-end scheduling and staffing flow.
+- **Release 9.1** (API Security Hardening): 5 requirements — 0 ✅, 4 pending (SEC-H1–SEC-H4), 1 design (SEC-H5)
 - **Regulatory** (SaaS Platform EU/Finland): 23 requirements — 1 ✅ (REG14), 1 N/A (REG12), 21 design phase (REG1–REG23)
 
 
