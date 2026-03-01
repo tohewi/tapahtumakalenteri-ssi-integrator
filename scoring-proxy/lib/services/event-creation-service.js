@@ -486,6 +486,21 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
   // Step 3: Fetch creation page and extract form defaults
   const { csrfToken, cookies: pageCookies, html: formHtml } = await fetchCsrf(createUrl, cookies)
 
+  // Debug: analyze the GET page structure
+  const getPageTitle = extractPageTitle(formHtml)
+  const selectCount = (formHtml.match(/<select\b/gi) || []).length
+  const multiSelectCount = (formHtml.match(/<select[^>]*multiple/gi) || []).length
+  const checkboxCount = (formHtml.match(/<input[^>]*type="checkbox"/gi) || []).length
+  log.info(`[event-creation] GET page: "${getPageTitle}", ${formHtml.length} chars, ${selectCount} selects (${multiSelectCount} multiple), ${checkboxCount} checkboxes`)
+
+  // Debug: log how division fields appear in the HTML
+  const divFields = ['handgun_divs', 'rifle_divs', 'categories', 'firearms']
+  for (const f of divFields) {
+    const selectMatch = formHtml.match(new RegExp(`<select[^>]*name="${f}"[^>]*>`, 'i'))
+    const inputMatch = formHtml.match(new RegExp(`<input[^>]*name="${f}"[^>]*>`, 'i'))
+    log.info(`[event-creation] Field "${f}": select=${selectMatch ? selectMatch[0].substring(0, 100) : 'no'}, input=${inputMatch ? inputMatch[0].substring(0, 100) : 'no'}`)
+  }
+
   // Parse ALL form fields from the SSI page — discipline-specific defaults preserved
   const { fields: formDefaults, arrayFields: formDefaultArrays } = parseFormFields(formHtml)
 
