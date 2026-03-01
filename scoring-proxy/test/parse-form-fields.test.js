@@ -156,6 +156,45 @@ describe('parseFormFields — checkbox arrays', () => {
 })
 
 // ============================================================
+// Radio buttons — only checked value kept
+// ============================================================
+
+describe('parseFormFields — radio buttons', () => {
+  it('keeps only checked radio value (not promoted to array)', () => {
+    const html = `
+      <input type="radio" name="rule" value="sr" checked>
+      <input type="radio" name="rule" value="ip">
+      <input type="radio" name="rule" value="sc">
+    `
+    const { fields, arrayFields } = parseFormFields(html)
+    expect(fields.rule).toBe('sr')
+    expect(arrayFields.rule).toBeUndefined()
+  })
+
+  it('ignores unchecked radio buttons', () => {
+    const html = `
+      <input type="radio" name="sub_rule" value="to">
+      <input type="radio" name="sub_rule" value="ha">
+    `
+    const { fields } = parseFormFields(html)
+    expect(fields.sub_rule).toBeUndefined()
+  })
+
+  it('does not confuse radio with checkbox arrays', () => {
+    const html = `
+      <input type="radio" name="rule" value="sr" checked>
+      <input type="radio" name="rule" value="ip">
+      <input type="checkbox" name="firearms" value="hg" checked>
+      <input type="checkbox" name="firearms" value="rf" checked>
+    `
+    const { fields, arrayFields } = parseFormFields(html)
+    expect(fields.rule).toBe('sr')
+    expect(arrayFields.rule).toBeUndefined()
+    expect(arrayFields.firearms).toEqual(['hg', 'rf'])
+  })
+})
+
+// ============================================================
 // Nordic-style: <select multiple> for weapon_groups
 // ============================================================
 

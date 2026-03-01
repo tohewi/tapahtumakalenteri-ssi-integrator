@@ -325,13 +325,17 @@ function parseFormFields(html) {
     const type = tag.match(/type="([^"]+)"/i)?.[1]?.toLowerCase() || 'text'
     const value = tag.match(/value="([^"]*)"/i)?.[1] || ''
 
-    if (type === 'checkbox') {
-      // Checkbox: only include if checked; collect multiples into arrayFields
+    if (type === 'checkbox' || type === 'radio') {
+      // Checkbox/Radio: only include if checked
+      // Radio: keep only the checked value (don't promote to array)
       if (/\bchecked\b/i.test(tag)) {
-        if (arrayFields[name]) {
+        if (type === 'radio') {
+          // Radio: always overwrite — only one can be checked
+          fields[name] = value
+        } else if (arrayFields[name]) {
           arrayFields[name].push(value || 'on')
         } else if (name in fields) {
-          // Promote scalar to array
+          // Promote scalar to array (multiple checked checkboxes)
           arrayFields[name] = [fields[name], value || 'on']
           delete fields[name]
         } else {
@@ -542,6 +546,13 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
   const { fields: formDefaults, arrayFields: formDefaultArrays } = parseFormFields(formHtml)
 
   log.info(`[event-creation] Parsed ${Object.keys(formDefaults).length} fields, ${Object.keys(formDefaultArrays).length} array fields from SSI form`)
+  // Debug: log fields related to agreement and organizer
+  const debugFields = ['organizer', 'group', 'has_accepted_event_data_ass_agreement', 'rule', 'sub_rule', 'serie_type']
+  for (const f of debugFields) {
+    const inFields = f in formDefaults ? `fields='${formDefaults[f]}'` : 'not in fields'
+    const inArrays = f in formDefaultArrays ? `arrays=[${formDefaultArrays[f].join(',')}]` : 'not in arrays'
+    log.info(`[event-creation] Default '${f}': ${inFields}, ${inArrays}`)
+  }
 
   // Resolve group and organizer IDs
   // group: discipline config → snapshot settings → "xxx" (self-administered)
