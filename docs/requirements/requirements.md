@@ -628,6 +628,13 @@ Applies if tenants are consumers or non-commercial associations (e.g., shooting 
 - **Release 8.1** (Match Management Platform): 8 requirements — 5 ✅ (MP1, MP2, MP4, MP10, MP12), 3 design phase (MP3, MP8, MP9). **MP12 — SSI Event Import**: Search existing SSI events via GraphQL (name, sport, date range, region filters) and import selected events as local scheduled_events with `ssi_created` status. Backend: `ssiSearchEvents` in seed-import.js, `importSsiEvent` in platform-store.js, `/ssi-search` + `/ssi-import` API routes. Frontend: `ImportSsiEventsModal` component in SchedulePage with search form, results table with checkboxes, and batch import action. Schema: `template_id` made nullable, `event_name` column added to `scheduled_events` for imported events without templates
 - **Release 8.2** (Platform Authorization & Workflows): 5 requirements — 2 ✅ (ACCT1, RBAC1), 3 design phase (MP5, MP6, MP7)
 - **Release 8.3** (Calendar Integration): 1 requirement — 0 ✅, 1 design phase (MP11)
+- **Release 9.0** (Event Staffing): Core platform staffing capabilities — **All Implemented ✅**
+  - **Data Model**: `event_staffing_needs` and `staff_signups` tables linked to `scheduled_events` and `accounts`. Auto-populated from template rules.
+  - **API Endpoints**: `/staffing/upcoming`, `/staffing/my-assignments`, `/staffing/signup`, `/staffing/withdraw`.
+  - **Roster UI**: `RosterView.jsx` showing events needing staff with dynamic progress bars, one-click signups, and personal commitment tracking.
+  - **UI Integration**: Staffing gap metrics in `DashboardView.jsx` and visual staffing indicators (red/green) in `SchedulePage.jsx`.
+  - **Notifications**: Automated emails via Resend for signup confirmations, withdrawal alerts to admins, and urgent understaffed warnings.
+  - **Testing**: E2E UAT script `test-staffing-e2e.mjs` verifying the full end-to-end scheduling and staffing flow.
 - **Regulatory** (SaaS Platform EU/Finland): 23 requirements — 1 ✅ (REG14), 1 N/A (REG12), 21 design phase (REG1–REG23)
 
 

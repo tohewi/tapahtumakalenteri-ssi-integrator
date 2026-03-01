@@ -1747,5 +1747,166 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
     }
   })
 
+  /**
+   * ==========================================================================
+   * EVENT STAFFING (ROSTER) ROUTES
+   * ==========================================================================
+   */
+
+  /**
+   * GET /tenants/:id/staffing/upcoming
+   * Get upcoming events that need staff.
+   * Access: Any tenant member
+   */
+  router.get('/tenants/:id/staffing/upcoming', requireTenantRole('owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor'), async (req, res, next) => {
+    try {
+      const tenantId = req.params.id
+      const data = await getUpcomingStaffingNeeds(tenantId)
+      res.json(data)
+    } catch (err) {
+      log.error(`[platform] GET /tenants/${req.params.id}/staffing/upcoming failed:`, err.message)
+      return next(new AppError('Failed to fetch upcoming staffing needs', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  /**
+   * GET /tenants/:id/staffing/my-assignments
+   * Get my own staffing commitments.
+   * Access: Any tenant member
+   */
+  router.get('/tenants/:id/staffing/my-assignments', requireTenantRole('owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor'), async (req, res, next) => {
+    try {
+      const tenantId = req.params.id
+      const accountId = req.account.id
+      const data = await getMyStaffingAssignments(tenantId, accountId)
+      res.json(data)
+    } catch (err) {
+      log.error(`[platform] GET /tenants/${req.params.id}/staffing/my-assignments failed:`, err.message)
+      return next(new AppError('Failed to fetch your staffing assignments', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  /**
+   * GET /tenants/:id/events/:eventId/staffing
+   * Get staffing details for a specific event (needs + signups).
+   * Access: Any tenant member
+   */
+  router.get('/tenants/:id/events/:eventId/staffing', requireTenantRole('owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor'), async (req, res, next) => {
+    try {
+      const { id: tenantId, eventId } = req.params
+      const data = await getEventStaffing(tenantId, eventId)
+      if (!data) return res.status(404).json({ error: 'Event not found' })
+      res.json(data)
+    } catch (err) {
+      log.error(`[platform] GET /tenants/${req.params.id}/events/${req.params.eventId}/staffing failed:`, err.message)
+      return next(new AppError('Failed to fetch event staffing details', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  /**
+   * PUT /tenants/:id/events/:eventId/staffing-needs
+   * Set or update the staffing needs for an event.
+   * Access: match_admin or higher
+   */
+  router.put('/tenants/:id/events/:eventId/staffing-needs', requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
+    try {
+      const { id: tenantId, eventId } = req.params
+      const { needs } = req.body
+
+      if (!Array.isArray(needs)) {
+        return res.status(400).json({ error: 'needs must be an array' })
+      }
+
+      await updateEventStaffingNeeds(tenantId, eventId, needs)
+      
+      const data = await getEventStaffing(tenantId, eventId)
+      res.json(data)
+    } catch (err) {
+      log.error(`[platform] PUT staffing-needs failed:`, err.message)
+      if (err.message.includes('not found')) {
+        return res.status(404).json({ error: err.message })
+      }
+      return next(new AppError('Failed to update event staffing needs', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  /**
+   * POST /tenants/:id/events/:eventId/staffing/signup
+   * Sign up for a staffing role.
+   * Access: Any tenant member
+   */
+  router.post('/tenants/:id/events/:eventId/staffing/signup', requireTenantRole('owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor'), async (req, res, next) => {
+    try {
+      const { id: tenantId, eventId } = req.params
+      const { needId, notes } = req.body
+      const accountId = req.account.id
+
+      if (!needId) return res.status(400).json({ error: 'needId is required' })
+
+      const signup = await signupForEventStaffing(tenantId, eventId, needId, accountId, notes)
+      
+      // Phase 7.5 Trigger signup confirmation email
+      try {
+        const { sendStaffingSignupConfirmation } = await import('../lib/email.js')
+        const event = await getScheduledEvent(eventId)
+        const dateStr = new Date(event.eventDate).toLocaleDateString('fi-FI')
+        await sendStaffingSignupConfirmation(req.account.email, req.account.name, event.eventName, dateStr, signup.roleLabel)
+      } catch (emailErr) {
+        log.warn('[platform] Failed to send staffing confirmation email:', emailErr.message)
+      }
+      
+      res.json({ success: true, signup })
+    } catch (err) {
+      log.error(`[platform] POST staffing signup failed:`, err.message)
+      if (err.message.includes('fully staffed') || err.message.includes('not found')) {
+        return res.status(400).json({ error: err.message })
+      }
+      return next(new AppError('Failed to sign up for event', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  /**
+   * POST /tenants/:id/events/:eventId/staffing/withdraw
+   * Withdraw from a staffing commitment.
+   * Access: Any tenant member
+   */
+  router.post('/tenants/:id/events/:eventId/staffing/withdraw', requireTenantRole('owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor'), async (req, res, next) => {
+    try {
+      const { id: tenantId, eventId } = req.params
+      const { signupId } = req.body
+      const accountId = req.account.id
+
+      if (!signupId) return res.status(400).json({ error: 'signupId is required' })
+
+      const signup = await withdrawFromEventStaffing(tenantId, eventId, signupId, accountId)
+      
+      // Phase 7.5 Trigger withdrawal notification to admins
+      try {
+        const { sendStaffingWithdrawalNotice } = await import('../lib/email.js')
+        const { listTenantMembers } = await import('../lib/db/platform-store.js')
+        
+        // Find tenant admins to notify
+        const members = await listTenantMembers(tenantId)
+        const admins = members.filter(m => m.roles.includes('owner') || m.roles.includes('tenant_admin'))
+        const event = await getScheduledEvent(eventId)
+        const dateStr = new Date(event.eventDate).toLocaleDateString('fi-FI')
+        
+        for (const admin of admins) {
+          await sendStaffingWithdrawalNotice(admin.accountEmail, req.account.name, event.eventName, dateStr, signup.roleLabel)
+        }
+      } catch (emailErr) {
+        log.warn('[platform] Failed to send staffing withdrawal email:', emailErr.message)
+      }
+      
+      res.json({ success: true, signup })
+    } catch (err) {
+      log.error(`[platform] POST staffing withdraw failed:`, err.message)
+      if (err.message.includes('not found')) {
+        return res.status(404).json({ error: err.message })
+      }
+      return next(new AppError('Failed to withdraw from event', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
   return router
 }

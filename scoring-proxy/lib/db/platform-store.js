@@ -1413,19 +1413,6 @@ export async function createScheduledEvent({ tenantId, templateId, disciplineId 
 }
 
 /**
- * Import an existing SSI event as a scheduled event (no template required).
- * The event is created with 'ssi_created' status and populated ssi_references.
- *
- * @param {object} params
- * @param {string} params.tenantId
- * @param {string} params.eventName - SSI event name
- * @param {string} params.eventDate - YYYY-MM-DD
- * @param {object} params.ssiReferences - { ssiEventId, contentType, url, rule, name }
- * @param {string} params.createdBy - account ID
- * @param {string} [params.templateId] - optional template association
- * @returns {{ eventId, event }}
- */
-/**
  * Get the set of SSI event IDs that are already imported for a tenant.
  * Used to mark already-imported events in search results.
  */

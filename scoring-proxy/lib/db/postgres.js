@@ -235,6 +235,40 @@ export async function initPostgres() {
         await client.query('CREATE INDEX IF NOT EXISTS idx_scheduled_events_discipline ON scheduled_events (discipline_id)')
       } catch { /* column already exists */ }
 
+      // M8: Staffing tables
+      try {
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS event_staffing_needs (
+            id          TEXT PRIMARY KEY,
+            event_id    TEXT NOT NULL REFERENCES scheduled_events(id) ON DELETE CASCADE,
+            role_key    TEXT NOT NULL,
+            role_label  TEXT NOT NULL,
+            min_count   INT NOT NULL DEFAULT 1,
+            max_count   INT NOT NULL DEFAULT 1,
+            created_at  TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE(event_id, role_key)
+          )
+        `)
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS staff_signups (
+            id           TEXT PRIMARY KEY,
+            event_id     TEXT NOT NULL REFERENCES scheduled_events(id) ON DELETE CASCADE,
+            need_id      TEXT NOT NULL REFERENCES event_staffing_needs(id) ON DELETE CASCADE,
+            account_id   TEXT NOT NULL REFERENCES accounts(id),
+            status       TEXT NOT NULL DEFAULT 'confirmed', -- confirmed, withdrawn, no_show
+            signed_up_at TIMESTAMPTZ DEFAULT NOW(),
+            withdrawn_at TIMESTAMPTZ,
+            notes        TEXT,
+            UNIQUE(need_id, account_id)
+          )
+        `)
+        await client.query('CREATE INDEX IF NOT EXISTS idx_staff_needs_event ON event_staffing_needs(event_id)')
+        await client.query('CREATE INDEX IF NOT EXISTS idx_staff_signups_event ON staff_signups(event_id)')
+        await client.query('CREATE INDEX IF NOT EXISTS idx_staff_signups_account ON staff_signups(account_id)')
+      } catch (err) {
+        log.warn('[postgres] Could not create staffing tables:', err.message)
+      }
+
       // Optional unique constraints — may fail on existing data with duplicates.
       // App-level checks in createTenant/createAccountWithTenant still prevent new duplicates.
       try {

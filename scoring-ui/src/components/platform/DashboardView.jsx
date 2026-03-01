@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { listEvents } from '../../platform-api.js'
+import { listEvents, getUpcomingStaffingApi } from '../../platform-api.js'
 
 function getStatusBadge(status) {
   switch (status) {
@@ -16,14 +16,25 @@ function getStatusBadge(status) {
 
 export default function DashboardView({ tenantId, onNavigate }) {
   const [events, setEvents] = useState([])
+  const [staffingGaps, setStaffingGaps] = useState(0)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function loadData() {
       setLoading(true)
       try {
-        const eventsData = await listEvents(tenantId)
+        const [eventsData, staffingData] = await Promise.all([
+          listEvents(tenantId),
+          getUpcomingStaffingApi(tenantId).catch(() => []) // fail gracefully if not permitted
+        ])
+        
         setEvents(eventsData.events || [])
+        
+        // Count events that are understaffed
+        if (Array.isArray(staffingData)) {
+          const understaffedCount = staffingData.filter(e => e.isUnderstaffed).length
+          setStaffingGaps(understaffedCount)
+        }
       } catch (err) {
         console.error('Failed to load dashboard data:', err)
       } finally {
@@ -44,9 +55,6 @@ export default function DashboardView({ tenantId, onNavigate }) {
 
   // Group active templates from events
   const activeTemplateIds = new Set(events.map(e => e.templateId))
-  
-  // Fake staffing gaps for mockup until staffing module is ready
-  const staffingGaps = Math.max(0, Math.floor(upcomingEvents.length / 3))
 
   return (
     <div>

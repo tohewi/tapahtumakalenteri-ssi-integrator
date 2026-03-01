@@ -430,3 +430,39 @@ export async function ssiImportEventsApi(tenantId, events, disciplineId = null) 
   })
 }
 
+// ---- Event Staffing (Roster) ----
+
+/**
+ * Get upcoming events that need staff.
+ */
+export async function getUpcomingStaffingApi(tenantId) {
+  return platformFetch(`/tenants/${tenantId}/staffing/upcoming`)
+}
+
+/**
+ * Get the current user's staffing commitments.
+ */
+export async function getMyStaffingAssignmentsApi(tenantId) {
+  return platformFetch(`/tenants/${tenantId}/staffing/my-assignments`)
+}
+
+/**
+ * Sign up for a staffing role at an event.
+ */
+export async function signupForEventStaffingApi(tenantId, eventId, needId, notes = '') {
+  return platformFetch(`/tenants/${tenantId}/events/${eventId}/staffing/signup`, {
+    method: 'POST',
+    body: JSON.stringify({ needId, notes })
+  })
+}
+
+/**
+ * Withdraw from a staffing commitment.
+ */
+export async function withdrawFromEventStaffingApi(tenantId, eventId, signupId) {
+  return platformFetch(`/tenants/${tenantId}/events/${eventId}/staffing/withdraw`, {
+    method: 'POST',
+    body: JSON.stringify({ signupId })
+  })
+}
+

@@ -10,7 +10,7 @@
 // ============================================================
 
 import { useState, useEffect } from 'react'
-import { listTemplates, listEvents, createEventsApi, deleteEventApi, executeEventApi } from '../../platform-api.js'
+import { listTemplates, listEvents, createEventsApi, deleteEventApi, executeEventApi, getUpcomingStaffingApi } from '../../platform-api.js'
 import ImportSsiEventsModal from './ImportSsiEventsModal.jsx'
 
 // ---- Status badge colors ----
@@ -58,6 +58,7 @@ function formatEventDate(dateStr) {
 export default function SchedulePage({ tenantId, onBack }) {
   const [templates, setTemplates] = useState([])
   const [events, setEvents] = useState([])
+  const [staffingStatus, setStaffingStatus] = useState({}) // { eventId: { isUnderstaffed: boolean } }
   const [loading, setLoading] = useState(true)
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [dateInput, setDateInput] = useState('')
@@ -68,16 +69,27 @@ export default function SchedulePage({ tenantId, onBack }) {
   const [executingId, setExecutingId] = useState(null) // event ID being executed in SSI
   const [showImportModal, setShowImportModal] = useState(false)
 
-  // Load templates and events
+  // Load templates, events, and staffing status
   useEffect(() => {
     async function load() {
       try {
-        const [tplData, evtData] = await Promise.all([
+        const [tplData, evtData, staffingData] = await Promise.all([
           listTemplates(tenantId),
           listEvents(tenantId),
+          getUpcomingStaffingApi(tenantId).catch(() => []) // fail gracefully
         ])
+        
         setTemplates(tplData.templates || [])
         setEvents(evtData.events || [])
+        
+        // Map staffing status by event ID
+        if (Array.isArray(staffingData)) {
+          const statusMap = {}
+          for (const item of staffingData) {
+            statusMap[item.event.id] = { isUnderstaffed: item.isUnderstaffed, hasNeeds: item.needs.length > 0 }
+          }
+          setStaffingStatus(statusMap)
+        }
       } catch (err) {
         setStatus({ type: 'error', message: err.message })
       }
@@ -91,6 +103,16 @@ export default function SchedulePage({ tenantId, onBack }) {
     try {
       const data = await listEvents(tenantId)
       setEvents(data.events || [])
+      
+      // Also refresh staffing status if an event was created/deleted
+      const staffingData = await getUpcomingStaffingApi(tenantId).catch(() => [])
+      if (Array.isArray(staffingData)) {
+        const statusMap = {}
+        for (const item of staffingData) {
+          statusMap[item.event.id] = { isUnderstaffed: item.isUnderstaffed, hasNeeds: item.needs.length > 0 }
+        }
+        setStaffingStatus(statusMap)
+      }
     } catch { /* ignore */ }
   }
 
@@ -325,6 +347,8 @@ export default function SchedulePage({ tenantId, onBack }) {
             <div className="space-y-2">
               {filteredEvents.map(evt => {
                 const tpl = tplMap[evt.templateId]
+                const staffing = staffingStatus[evt.id]
+                
                 return (
                   <div key={evt.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">
                     <div>
@@ -333,6 +357,13 @@ export default function SchedulePage({ tenantId, onBack }) {
                           {formatEventDate(evt.eventDate)}
                         </span>
                         <StatusBadge status={evt.status} />
+                        
+                        {/* Staffing indicator */}
+                        {staffing?.hasNeeds && (
+                          <span className="flex items-center ml-2" title={staffing.isUnderstaffed ? 'Needs more staff' : 'Fully staffed'}>
+                            <span className={`w-2.5 h-2.5 rounded-full ${staffing.isUnderstaffed ? 'bg-orange-500' : 'bg-green-500'}`}></span>
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs text-gray-400 mt-0.5">
                         {evt.eventName || tpl?.name || evt.templateId || 'Imported'}
