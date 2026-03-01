@@ -184,7 +184,7 @@ export default function RosterView({ tenantId, account }) {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900">Events Needing Staff</h2>
           <button
-            onClick={handleBackfill}
+            onClick={() => handleBackfill()}
             disabled={actionLoading === 'backfill'}
             className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded font-medium disabled:opacity-50 transition-colors"
             title="Populate staffing needs for events from their templates"
