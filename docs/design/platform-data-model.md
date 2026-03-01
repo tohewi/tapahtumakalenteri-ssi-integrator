@@ -36,6 +36,9 @@ The person who signs up to the platform. Can own one or more tenants.
 | `email` | string | Login identity. Unique, case-insensitive. Not necessarily an SSI email |
 | `name` | string | Display name |
 | `password_hash` | string | bcrypt (12 rounds). Never exposed via API |
+| `mfa_enabled` | boolean | Whether TOTP MFA is active (default: false) |
+| `mfa_secret` | string | TOTP secret, AES-256-GCM encrypted. Null if MFA not set up |
+| `mfa_recovery_codes` | string[] | Bcrypt-hashed single-use recovery codes |
 | `created_at` | timestamp | Registration time |
 | `updated_at` | timestamp | Last profile change |
 
@@ -43,6 +46,7 @@ The person who signs up to the platform. Can own one or more tenants.
 - Email is normalized to lowercase on write
 - No direct relationship to SSI identity — SSI credentials are per-tenant, not per-account
 - An account with zero tenants is valid (all tenants deleted/cancelled)
+- MFA secret is encrypted with the same AES-256-GCM key as SSI credentials (`PLATFORM_CREDENTIALS_KEY`)
 
 ### 2.2 Tenant
 
@@ -320,7 +324,7 @@ Redis is **not** used for any permanent data. If Redis is flushed, the only impa
 | File | Purpose |
 |------|---------|
 | `config/kupittaa-cup-config.yml` | Legacy cup config (migrates to templates in Phase 1) |
-| `config/sra-training-config.yml` | Legacy staffing config (migrates to templates in Phase 1) |
+| `config/training-staffing-configuration.yml` | Staffing config (roles, allowlist) |
 
 These files will eventually be superseded by database-stored templates but remain functional during the migration period.
 
@@ -338,7 +342,8 @@ All entity IDs use a type prefix + 16 random hex characters:
 | Template | `tpl_` | `tpl_abcdef1234567890` |
 | Event | `evt_` | `evt_fedcba0987654321` |
 | Member | `mbr_` | `mbr_9876543210fedcba` |
-| Instructor | `ins_` | `ins_0123456789abcdef` |
+| Password Reset | `prt_` | `prt_0123456789abcdef` |
+| Invitation | `inv_` | `inv_abcdef0123456789` |
 
 Prefixed IDs make debugging easier (you can tell what kind of entity an ID refers to in logs, URLs, and database queries).
 
@@ -347,7 +352,8 @@ Prefixed IDs make debugging easier (you can tell what kind of entity an ID refer
 ## 7. Security Considerations
 
 - **Passwords**: bcrypt with 12 rounds. Never stored in plaintext, never returned via API
-- **SSI credentials**: Encrypted with AES-256-GCM before storage. Each write uses a fresh random IV (96-bit). Decrypted transparently on read. Encryption key set via `PLATFORM_CREDENTIALS_KEY` env var (64 hex chars = 32 bytes)
+- **SSI credentials**: Encrypted with AES-256-GCM before storage. Each write uses a fresh random IV (96-bit). **Write-only** — password and API key are never returned to the frontend. API responses include only email + configured flags (`hasPassword`, `hasApiKey`). Internal SSI operations use `getTenantWithCredentials()`. Encryption key set via `PLATFORM_CREDENTIALS_KEY` env var (64 hex chars = 32 bytes)
+- **MFA secrets**: TOTP secret encrypted with same AES-256-GCM key. Recovery codes bcrypt-hashed individually
 - **Tenant isolation**: Every query includes `tenant_id` in its WHERE clause. No shared tables without tenant scoping
 - **Session cookies**: HttpOnly, SameSite=Lax, Secure in production. Separate cookies for platform auth (`platform_sid`) and SSI auth (`ssi_session`)
 - **Data retention**: Cancelled tenant data retained 90 days for recovery, then permanently purged
@@ -356,13 +362,13 @@ Prefixed IDs make debugging easier (you can tell what kind of entity an ID refer
 
 ## 8. Migration Path
 
-| Phase | Entities added | Storage |
-|-------|---------------|---------|
-| **Phase 0** (current) | Account, Tenant, Subscription | PostgreSQL |
-| **Phase 1** | Discipline, Event Template, Scheduled Event | PostgreSQL |
-| **Phase 2** | Instructor | PostgreSQL |
-| **Phase 2.5** | Tenant Members (RBAC) — roles, permissions, membership | PostgreSQL |
-| **Phase 3** | Full multi-tenancy (invitation flow, role management UI) | PostgreSQL |
-| **Phase 4** | Notification preferences, audit log | PostgreSQL |
+| Phase | Entities added | Status |
+|-------|---------------|--------|
+| **Phase 0** | Account, Tenant, Subscription | Implemented |
+| **Phase 1** | Discipline, Event Template, Scheduled Event | Implemented |
+| **Phase 2** | Tenant Members (RBAC) — 6 roles, membership CRUD, role-based middleware | Implemented |
+| **Phase 3** | Email Invitations, MFA (TOTP), Password Reset, Role Assignment Matrix | Implemented |
+| **Phase 4** | SSI Event Import, Discipline mapping on events, Duplicate prevention | Implemented |
+| **Future** | Instructor roster, Notification preferences, Audit log | Planned |
 
-The database schema grows incrementally. Each phase adds tables via migration scripts. No existing tables are altered destructively.
+The database schema grows incrementally via migrations in `postgres.js` (`initPostgres()`). Each migration is idempotent (`IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`). No destructive alterations.

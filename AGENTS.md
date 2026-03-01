@@ -37,22 +37,25 @@ This is a **shooting competition management system** to help setting up events i
 ```
 ├── scoring-ui/              # React frontend (Vite + TailwindCSS)
 │   ├── src/
-│   │   ├── main.jsx         # Hash-based routing
+│   │   ├── main.jsx         # Hash-based routing (#/scoring, #/platform, etc.)
 │   │   ├── App.jsx          # Scoring app (state machine)
 │   │   ├── TabletApp.jsx    # Tablet scoring app shell
-│   │   ├── api.js           # API client (versioned /api/v1/)
+│   │   ├── api.js           # SSI scoring/manage API client (/api/v1/)
+│   │   ├── platform-api.js  # Platform API client (accounts, tenants, members)
 │   │   ├── register-api.js  # Registration API client
 │   │   ├── staffing-api.js  # Staffing API client
 │   │   ├── i18n.js          # Internationalization (fi/en)
 │   │   ├── hooks/           # Shared hooks (useAuthenticatedPage, useRememberMe)
 │   │   └── components/      # Page components
-│   │       └── manage/      # ManagePage sub-components (barrel export)
+│   │       ├── manage/      # ManagePage sub-components (barrel export)
+│   │       └── platform/    # Match Management Platform UI (20+ components)
 │   └── package.json
 │
 ├── scoring-proxy/           # Express backend
 │   ├── server.js            # Main server, middleware, route mounting
 │   ├── routes/
-│   │   ├── auth-v7.js       # Authentication (dual-session login/logout/status)
+│   │   ├── auth-v7.js       # SSI authentication (dual-session login/logout/status)
+│   │   ├── platform.js      # Platform routes (accounts, tenants, members, MFA, invitations, events)
 │   │   ├── scoring.js       # Score entry endpoints
 │   │   ├── management.js    # Cup management endpoints
 │   │   ├── registration.js  # Public self-registration
@@ -60,38 +63,46 @@ This is a **shooting competition management system** to help setting up events i
 │   │   ├── staffing.js      # Staffing endpoints (signup, resign, sync)
 │   │   └── v1/index.js      # API version info endpoint
 │   ├── middleware/
-│   │   ├── auth-v7.js       # Auth middleware (requireAuthV7, requireScopeV7)
+│   │   ├── auth-v7.js       # SSI auth middleware (requireAuthV7, requireScopeV7)
+│   │   ├── platform-auth.js # Platform auth middleware (requirePlatformAuth)
 │   │   └── errorHandler.js  # Centralized error handling + asyncHandler
 │   ├── lib/
+│   │   ├── db/              # Database layer
+│   │   │   ├── postgres.js  # PostgreSQL pool, schema DDL, migrations
+│   │   │   └── platform-store.js # Platform data store (accounts, tenants, members, RBAC, events)
 │   │   ├── ssi-core/        # SSI API integration (split by domain)
-│   │   │   ├── client.js    # Monolithic SSI client (code move pending)
-│   │   │   ├── graphql.js   # Auth, JWT, login (re-export shim)
-│   │   │   ├── scoring.js   # Scoring pages (re-export shim)
-│   │   │   ├── participants.js # Participant management (re-export shim)
-│   │   │   ├── management.js   # Match management (re-export shim)
-│   │   │   └── http-helpers.js # Cookie/fetch helpers (re-export shim)
+│   │   │   ├── client.js    # Monolithic SSI client (legacy, code move pending)
+│   │   │   ├── graphql.js   # Auth, JWT, login
+│   │   │   ├── scoring.js   # Scoring page scraping
+│   │   │   ├── participants.js # Participant management
+│   │   │   ├── management.js   # Match management scraping
+│   │   │   ├── seed-import.js  # SSI event search + structure import (GraphQL)
+│   │   │   └── http-helpers.js # Cookie/fetch helpers
 │   │   ├── services/        # Business logic (pure functions)
-│   │   │   ├── scoring-service.js  # Scoring operations
-│   │   │   └── cup-manage.js       # Cup management operations
+│   │   │   ├── cup-manage.js          # Cup management operations
+│   │   │   ├── mfa-service.js         # TOTP MFA (setup, verify, recovery codes)
+│   │   │   └── event-creation-service.js # SSI event creation (cups, matches, squads)
 │   │   ├── errors/          # Custom error classes
 │   │   │   └── AppError.js  # AppError hierarchy (9 error types)
-│   │   ├── session/         # Session management
+│   │   ├── session/         # SSI session management (Redis/memory)
 │   │   │   ├── store.js     # Redis/memory dual store
-│   │   │   ├── config.js    # Session configuration
-│   │   │   └── index.js     # Barrel export
+│   │   │   ├── redis.js     # Redis client (shared by SSI sessions + platform sessions)
+│   │   │   └── config.js    # Session configuration
 │   │   ├── staffing/        # Staffing engine
 │   │   │   ├── engine.js    # Core staffing logic
 │   │   │   └── config-loader.js  # Config loading + helpers
-│   │   ├── email.js         # Email via Resend API
+│   │   ├── email.js         # Email via Resend API (confirmations, invitations, password reset)
 │   │   └── logger.js        # Structured logger (LOG_LEVEL controlled)
 │   └── package.json
 │
 ├── config/                  # Cup templates and defaults
-│   └── sra-training-config.yml  # SRA staffing config (roles, allowlist, service accounts)
+│   └── training-staffing-configuration.yml  # Staffing config (roles, allowlist)
 ├── test-harness/            # E2E test scripts
 ├── render.yaml              # Render Blueprint (deploy config)
 └── docs/                    # Documentation
-    └── design/architecture-review.md  # Architecture review & roadmap
+    ├── design/platform-data-model.md  # Platform entity definitions & storage
+    ├── design/architecture-review.md  # Architecture review & roadmap
+    └── requirements/requirements.md   # All requirements & status tracking
 ```
 
 ## Development Workflow
@@ -175,7 +186,7 @@ Preview environments are **automatically created** for all pull requests via Git
 ## Git Workflow
 
 - **Production branch:** `main` (auto-deploys to Render)
-- **Remote name:** `tapahtumakalenteri-ssi-integrator`
+- **Remote name:** `origin` (repo: `tohewi/tapahtumakalenteri-ssi-integrator`)
 - **Feature branches:** Create from `main`, open PR targeting `main`
 - **Preview environments:** Automatically created by GitHub Actions for every PR
 - **CI/CD:** Two workflows run on PRs:
@@ -189,15 +200,18 @@ Preview environments are **automatically created** for all pull requests via Git
 | Add API endpoint | `scoring-proxy/server.js` (mount), `scoring-proxy/routes/*.js` (handler), `scoring-ui/src/api.js` (client) |
 | Add new page | `scoring-ui/src/components/NewPage.jsx`, `scoring-ui/src/main.jsx` |
 | Modify SSI integration | `scoring-proxy/lib/ssi-core/*.js` (domain module, NOT `client.js`) |
-| Update home navigation | `scoring-ui/src/components/HomePage.jsx` |
 | Change deploy config | `render.yaml` |
-| Modify scoring logic | `scoring-proxy/lib/services/scoring-service.js`, `scoring-proxy/routes/scoring.js` |
+| Modify scoring logic | `scoring-proxy/lib/services/cup-manage.js`, `scoring-proxy/routes/scoring.js` |
 | Modify management logic | `scoring-proxy/lib/services/cup-manage.js`, `scoring-proxy/routes/management.js` |
 | Modify staffing logic | `scoring-proxy/lib/staffing/engine.js`, `scoring-proxy/routes/staffing.js` |
-| Modify staffing config | `config/sra-training-config.yml`, `scoring-proxy/lib/staffing/config-loader.js` |
-| Update staffing UI | `scoring-ui/src/components/StaffingPage.jsx` |
+| Modify staffing config | `config/training-staffing-configuration.yml`, `scoring-proxy/lib/staffing/config-loader.js` |
 | Add/update translations | `scoring-ui/src/i18n.js` |
-| Modify authentication | `scoring-proxy/routes/auth-v7.js`, `scoring-proxy/middleware/auth-v7.js` |
+| Modify SSI authentication | `scoring-proxy/routes/auth-v7.js`, `scoring-proxy/middleware/auth-v7.js` |
+| Modify platform auth | `scoring-proxy/routes/platform.js`, `scoring-proxy/middleware/platform-auth.js` |
+| Modify platform data | `scoring-proxy/lib/db/platform-store.js`, `scoring-proxy/lib/db/postgres.js` |
+| Modify platform UI | `scoring-ui/src/components/platform/*.jsx`, `scoring-ui/src/platform-api.js` |
+| Modify MFA | `scoring-proxy/lib/services/mfa-service.js`, `scoring-proxy/routes/platform.js` |
+| Modify SSI event import | `scoring-proxy/lib/ssi-core/seed-import.js`, `scoring-proxy/routes/platform.js` |
 | Modify error handling | `scoring-proxy/middleware/errorHandler.js`, `scoring-proxy/lib/errors/AppError.js` |
 | Modify session management | `scoring-proxy/lib/session/store.js`, `scoring-proxy/lib/session/config.js` |
 
