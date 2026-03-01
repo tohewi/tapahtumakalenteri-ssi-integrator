@@ -222,8 +222,23 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
     setDirty(true)
   }
 
+  // Validate staffing roles — every role must have non-empty key and label
+  function getStaffingValidationErrors() {
+    const errors = []
+    for (const [idx, role] of (staffingRules.roles || []).entries()) {
+      if (!role.key?.trim()) errors.push({ idx, field: 'key' })
+      if (!role.label?.trim()) errors.push({ idx, field: 'label' })
+    }
+    return errors
+  }
+
   // Save all changes
   async function handleSave() {
+    const validationErrors = getStaffingValidationErrors()
+    if (validationErrors.length > 0) {
+      setStatus({ type: 'error', message: 'Staffing roles must have both Key and Label filled in.' })
+      return
+    }
     setSaving(true)
     setStatus(null)
     try {
@@ -440,7 +455,7 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
                         const updated = [...staffingRules.roles]
                         updated[idx] = { ...updated[idx], key: e.target.value }
                         updateStaffing('roles', updated)
-                      }} placeholder="ro" className="w-full border rounded-md px-2 py-1 text-sm" />
+                      }} placeholder="ro" className={`w-full border rounded-md px-2 py-1 text-sm ${!role.key?.trim() ? 'border-red-400 bg-red-50' : ''}`} />
                     </div>
                     <div className="col-span-4">
                       <FieldLabel label="Label" hint="display name" />
@@ -448,7 +463,7 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
                         const updated = [...staffingRules.roles]
                         updated[idx] = { ...updated[idx], label: e.target.value }
                         updateStaffing('roles', updated)
-                      }} placeholder="Range Officer" className="w-full border rounded-md px-2 py-1 text-sm" />
+                      }} placeholder="Range Officer" className={`w-full border rounded-md px-2 py-1 text-sm ${!role.label?.trim() ? 'border-red-400 bg-red-50' : ''}`} />
                     </div>
                     <div className="col-span-2">
                       <FieldLabel label="Min" />
