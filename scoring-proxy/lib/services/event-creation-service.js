@@ -63,10 +63,12 @@ async function fetchCsrf(url, cookies) {
     const html = await resp.text()
 
     // CSRF token from cookie or hidden field
-    const csrfToken = merged.csrftoken
-      || html.match(/name="csrfmiddlewaretoken"\s+value="([^"]+)"/)?.[1]
-      || html.match(/csrfmiddlewaretoken['"]\s*value=['"]([\w]+)['"]/)?.[1]
+    const csrfFromCookie = merged.csrftoken || null
+    const csrfFromHidden = html.match(/name="csrfmiddlewaretoken"\s+value="([^"]+)"/)?.[1]
+      || html.match(/csrfmiddlewaretoken['"]\s*value=['"]([\w]+)['"]/ )?.[1]
       || null
+    const csrfToken = csrfFromCookie || csrfFromHidden
+    log.debug(`[event-creation] CSRF extraction: cookie=${csrfFromCookie ? 'yes' : 'no'}, hidden=${csrfFromHidden ? csrfFromHidden.substring(0, 10) + '...' : 'no'}, html has csrfmiddlewaretoken: ${html.includes('csrfmiddlewaretoken')}`)
 
     return { cookies: merged, csrfToken, html }
   }
@@ -538,6 +540,8 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
   const arrayFields = { ...formDefaultArrays }
 
   log.info(`[event-creation] CSRF: ${csrfToken ? csrfToken.substring(0, 10) + '...' : 'none'}, group: ${groupId}, organizer: ${organizerId || '(empty)'}`)
+  log.info(`[event-creation] Key values: starts_date=${body.starts_date}, visibility=${body.visibility}, status=${body.status}, agreement=${body.has_accepted_event_data_ass_agreement}`)
+  log.info(`[event-creation] Array fields: ${Object.entries(arrayFields).map(([k, v]) => `${k}=[${v.join(',')}]`).join(', ') || '(none)'}`)
   log.debug(`[event-creation] POST payload keys: ${Object.keys(body).join(', ')}`)
 
   // Step 4: Submit the creation form
@@ -546,7 +550,14 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
   if (!eventIds) {
     const ssiErrors = extractFormErrors(createResult.html)
     const pageTitle = extractPageTitle(createResult.html)
-    log.debug(`[event-creation] Failed payload: ${JSON.stringify({ ...body, csrfmiddlewaretoken: '***' }, null, 2)}`)
+    // Log key payload values (not just keys)
+    log.info(`[event-creation] Failed payload values: name=${body.name}, group=${body.group}, organizer=${body.organizer}, starts_date=${body.starts_date}, csrfmiddlewaretoken=${body.csrfmiddlewaretoken ? body.csrfmiddlewaretoken.substring(0, 10) + '...' : 'EMPTY'}`)
+    // Log a snippet of the response HTML around errorlist / error / alert
+    const errorSnippet = createResult.html?.match(/class="[^"]*error[^"]*"[\s\S]{0,500}/gi)?.slice(0, 3) || []
+    log.info(`[event-creation] HTML error snippets (${errorSnippet.length}): ${errorSnippet.map(s => s.substring(0, 200)).join(' ||| ')}`)
+    // Log first 1000 chars of <form> tag to see structure
+    const formSnippet = createResult.html?.match(/<form[\s\S]{0,1000}/i)?.[0] || ''
+    log.info(`[event-creation] Form snippet: ${formSnippet.substring(0, 500)}`)
     log.error(`[event-creation] Event creation failed. HTTP ${createResult.status}, page: "${pageTitle}", finalUrl: ${createResult.finalUrl}, errors: ${ssiErrors.length > 0 ? ssiErrors.join('; ') : 'none'}, HTML: ${createResult.html?.length || 0} chars`)
     if (ssiErrors.length > 0) {
       throw new Error(`SSI rejected event creation: ${ssiErrors.join('; ')}`)
