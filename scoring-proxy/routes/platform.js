@@ -1764,7 +1764,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
    * Get upcoming events that need staff.
    * Access: Any tenant member
    */
-  router.get('/tenants/:id/staffing/upcoming', requireTenantRole('owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor'), async (req, res, next) => {
+  router.get('/tenants/:id/staffing/upcoming', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor'), async (req, res, next) => {
     try {
       const tenantId = req.params.id
       const data = await getUpcomingStaffingNeeds(tenantId)
@@ -1780,7 +1780,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
    * Get my own staffing commitments.
    * Access: Any tenant member
    */
-  router.get('/tenants/:id/staffing/my-assignments', requireTenantRole('owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor'), async (req, res, next) => {
+  router.get('/tenants/:id/staffing/my-assignments', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor'), async (req, res, next) => {
     try {
       const tenantId = req.params.id
       const accountId = req.account.id
@@ -1797,7 +1797,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
    * Get staffing details for a specific event (needs + signups).
    * Access: Any tenant member
    */
-  router.get('/tenants/:id/events/:eventId/staffing', requireTenantRole('owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor'), async (req, res, next) => {
+  router.get('/tenants/:id/events/:eventId/staffing', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor'), async (req, res, next) => {
     try {
       const { id: tenantId, eventId } = req.params
       const data = await getEventStaffing(tenantId, eventId)
@@ -1814,7 +1814,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
    * Set or update the staffing needs for an event.
    * Access: match_admin or higher
    */
-  router.put('/tenants/:id/events/:eventId/staffing-needs', requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
+  router.put('/tenants/:id/events/:eventId/staffing-needs', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
     try {
       const { id: tenantId, eventId } = req.params
       const { needs } = req.body
@@ -1841,7 +1841,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
    * Sign up for a staffing role.
    * Access: Any tenant member
    */
-  router.post('/tenants/:id/events/:eventId/staffing/signup', requireTenantRole('owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor'), async (req, res, next) => {
+  router.post('/tenants/:id/events/:eventId/staffing/signup', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor'), async (req, res, next) => {
     try {
       const { id: tenantId, eventId } = req.params
       const { needId, notes } = req.body
@@ -1876,7 +1876,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
    * Withdraw from a staffing commitment.
    * Access: Any tenant member
    */
-  router.post('/tenants/:id/events/:eventId/staffing/withdraw', requireTenantRole('owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor'), async (req, res, next) => {
+  router.post('/tenants/:id/events/:eventId/staffing/withdraw', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor'), async (req, res, next) => {
     try {
       const { id: tenantId, eventId } = req.params
       const { signupId } = req.body
