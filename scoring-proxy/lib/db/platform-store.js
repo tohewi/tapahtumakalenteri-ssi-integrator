@@ -1755,3 +1755,247 @@ export async function deletePlatformSession(sessionId) {
   const result = await redis.del(platformSessionKey(sessionId))
   return result > 0
 }
+
+// ============================================================================
+// STAFFING (ROSTER) OPERATIONS
+// ============================================================================
+
+/**
+ * Get upcoming events that need staff for a tenant.
+ * Returns array of { event, needs[], isUnderstaffed }.
+ */
+export async function getUpcomingStaffingNeeds(tenantId) {
+  const result = await query(`
+    SELECT 
+      e.id as event_id, e.event_date, e.event_name,
+      n.id as need_id, n.role_key, n.role_label, n.min_count, n.max_count,
+      s.id as signup_id, s.account_id, a.name as account_name, s.status, s.notes
+    FROM scheduled_events e
+    JOIN event_staffing_needs n ON e.id = n.event_id
+    LEFT JOIN staff_signups s ON n.id = s.need_id AND s.status = 'confirmed'
+    LEFT JOIN accounts a ON s.account_id = a.id
+    WHERE e.tenant_id = $1 AND e.event_date >= CURRENT_DATE
+    ORDER BY e.event_date ASC, n.role_label ASC
+  `, [tenantId])
+
+  const eventsMap = {}
+  for (const row of result.rows) {
+    if (!eventsMap[row.event_id]) {
+      eventsMap[row.event_id] = {
+        event: { id: row.event_id, eventDate: row.event_date, eventName: row.event_name },
+        needs: [],
+        isUnderstaffed: false
+      }
+    }
+    const evt = eventsMap[row.event_id]
+
+    let need = evt.needs.find(n => n.id === row.need_id)
+    if (!need) {
+      need = {
+        id: row.need_id,
+        roleKey: row.role_key,
+        roleLabel: row.role_label,
+        minCount: row.min_count,
+        maxCount: row.max_count,
+        signups: []
+      }
+      evt.needs.push(need)
+    }
+
+    if (row.signup_id) {
+      need.signups.push({
+        id: row.signup_id,
+        accountId: row.account_id,
+        accountName: row.account_name,
+        status: row.status,
+        notes: row.notes
+      })
+    }
+  }
+
+  const events = Object.values(eventsMap)
+  for (const evt of events) {
+    evt.isUnderstaffed = evt.needs.some(n => n.signups.length < n.minCount)
+  }
+
+  return events
+}
+
+/**
+ * Get my own staffing commitments for a tenant.
+ * Returns array of { event, need, signup }.
+ */
+export async function getMyStaffingAssignments(tenantId, accountId) {
+  const result = await query(`
+    SELECT 
+      e.id as event_id, e.event_date, e.event_name,
+      n.id as need_id, n.role_key, n.role_label,
+      s.id as signup_id, s.status, s.notes, s.signed_up_at
+    FROM staff_signups s
+    JOIN event_staffing_needs n ON s.need_id = n.id
+    JOIN scheduled_events e ON n.event_id = e.id
+    WHERE e.tenant_id = $1 AND s.account_id = $2 AND s.status = 'confirmed' AND e.event_date >= CURRENT_DATE
+    ORDER BY e.event_date ASC
+  `, [tenantId, accountId])
+
+  return result.rows.map(row => ({
+    event: { id: row.event_id, eventDate: row.event_date, eventName: row.event_name },
+    need: { id: row.need_id, roleKey: row.role_key, roleLabel: row.role_label },
+    signup: { id: row.signup_id, status: row.status, notes: row.notes, signedUpAt: row.signed_up_at }
+  }))
+}
+
+/**
+ * Get staffing details for a specific event (needs + signups).
+ * Returns { event, needs[] } or null if event not found.
+ */
+export async function getEventStaffing(tenantId, eventId) {
+  const evtRes = await query(
+    'SELECT id, event_date, event_name FROM scheduled_events WHERE id = $1 AND tenant_id = $2',
+    [eventId, tenantId]
+  )
+  if (evtRes.rows.length === 0) return null
+
+  const result = await query(`
+    SELECT 
+      n.id as need_id, n.role_key, n.role_label, n.min_count, n.max_count,
+      s.id as signup_id, s.account_id, a.name as account_name, s.status, s.notes
+    FROM event_staffing_needs n
+    LEFT JOIN staff_signups s ON n.id = s.need_id AND s.status = 'confirmed'
+    LEFT JOIN accounts a ON s.account_id = a.id
+    WHERE n.event_id = $1
+    ORDER BY n.role_label ASC
+  `, [eventId])
+
+  const event = { id: evtRes.rows[0].id, eventDate: evtRes.rows[0].event_date, eventName: evtRes.rows[0].event_name }
+  const needsMap = {}
+
+  for (const row of result.rows) {
+    if (!row.need_id) continue
+    if (!needsMap[row.need_id]) {
+      needsMap[row.need_id] = {
+        id: row.need_id,
+        roleKey: row.role_key,
+        roleLabel: row.role_label,
+        minCount: row.min_count,
+        maxCount: row.max_count,
+        signups: []
+      }
+    }
+
+    if (row.signup_id) {
+      needsMap[row.need_id].signups.push({
+        id: row.signup_id,
+        accountId: row.account_id,
+        accountName: row.account_name,
+        status: row.status,
+        notes: row.notes
+      })
+    }
+  }
+
+  return { event, needs: Object.values(needsMap) }
+}
+
+/**
+ * Update staffing needs for an event (upsert/delete pattern).
+ */
+export async function updateEventStaffingNeeds(tenantId, eventId, needsArray) {
+  const evtRes = await query('SELECT id FROM scheduled_events WHERE id = $1 AND tenant_id = $2', [eventId, tenantId])
+  if (evtRes.rows.length === 0) throw new Error('Event not found')
+
+  const { pool } = await import('./postgres.js')
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    const currentRes = await client.query('SELECT id, role_key FROM event_staffing_needs WHERE event_id = $1', [eventId])
+    const currentNeeds = currentRes.rows
+
+    const keptNeedIds = new Set()
+    for (const need of needsArray) {
+      if (need.id) {
+        await client.query(
+          'UPDATE event_staffing_needs SET role_label = $1, min_count = $2, max_count = $3 WHERE id = $4 AND event_id = $5',
+          [need.roleLabel, need.minCount, need.maxCount, need.id, eventId]
+        )
+        keptNeedIds.add(need.id)
+      } else {
+        const newId = generateId('ned')
+        await client.query(
+          'INSERT INTO event_staffing_needs (id, event_id, role_key, role_label, min_count, max_count) VALUES ($1, $2, $3, $4, $5, $6)',
+          [newId, eventId, need.roleKey, need.roleLabel, need.minCount, need.maxCount]
+        )
+        keptNeedIds.add(newId)
+      }
+    }
+
+    for (const cn of currentNeeds) {
+      if (!keptNeedIds.has(cn.id)) {
+        await client.query('DELETE FROM event_staffing_needs WHERE id = $1', [cn.id])
+      }
+    }
+
+    await client.query('COMMIT')
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
+}
+
+/**
+ * Sign up for an event staffing role.
+ * Validates need exists, role isn't full, and account hasn't already signed up.
+ */
+export async function signupForEventStaffing(tenantId, eventId, needId, accountId, notes) {
+  const res = await query(
+    'SELECT n.id, n.max_count FROM event_staffing_needs n JOIN scheduled_events e ON n.event_id = e.id WHERE n.id = $1 AND e.id = $2 AND e.tenant_id = $3',
+    [needId, eventId, tenantId]
+  )
+  if (res.rows.length === 0) throw new Error('Need or event not found')
+
+  const maxCount = res.rows[0].max_count
+
+  const countRes = await query(
+    "SELECT COUNT(*) as count FROM staff_signups WHERE need_id = $1 AND status = 'confirmed'",
+    [needId]
+  )
+  if (parseInt(countRes.rows[0].count) >= maxCount) {
+    throw new Error('This role is already fully staffed')
+  }
+
+  const existingRes = await query(
+    "SELECT id FROM staff_signups WHERE need_id = $1 AND account_id = $2 AND status = 'confirmed'",
+    [needId, accountId]
+  )
+  if (existingRes.rows.length > 0) {
+    throw new Error('You are already signed up for this role')
+  }
+
+  const id = generateId('sup')
+  const insertRes = await query(
+    'INSERT INTO staff_signups (id, event_id, need_id, account_id, status, notes) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+    [id, eventId, needId, accountId, 'confirmed', notes || null]
+  )
+  return insertRes.rows[0]
+}
+
+/**
+ * Withdraw from a staffing role.
+ * Validates signup belongs to the user and is currently confirmed.
+ */
+export async function withdrawFromEventStaffing(tenantId, eventId, signupId, accountId) {
+  const res = await query(
+    "SELECT s.id FROM staff_signups s JOIN scheduled_events e ON s.event_id = e.id WHERE s.id = $1 AND e.id = $2 AND e.tenant_id = $3 AND s.account_id = $4 AND s.status = 'confirmed'",
+    [signupId, eventId, tenantId, accountId]
+  )
+  if (res.rows.length === 0) throw new Error('Signup not found or already withdrawn')
+
+  const updateRes = await query(
+    "UPDATE staff_signups SET status = 'withdrawn', withdrawn_at = NOW() WHERE id = $1 RETURNING *",
+    [signupId]
+  )
+  return updateRes.rows[0]
+}

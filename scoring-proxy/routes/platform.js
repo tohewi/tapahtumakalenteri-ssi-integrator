@@ -72,6 +72,12 @@ import {
   deleteScheduledEvent,
   importSsiEvent,
   getImportedSsiEventIds,
+  getUpcomingStaffingNeeds,
+  getMyStaffingAssignments,
+  getEventStaffing,
+  updateEventStaffingNeeds,
+  signupForEventStaffing,
+  withdrawFromEventStaffing,
 } from '../lib/db/platform-store.js'
 import { requirePlatformAuth, PLATFORM_COOKIE } from '../middleware/platform-auth.js'
 

@@ -32,7 +32,22 @@ if (!config.email || !config.password || !config.tenantId || !config.templateId)
 let cookieHeader = ''
 
 async function apiFetch(endpoint, options = {}) {
-  const url = `${config.baseUrl}/api/v1/platform${endpoint}`
+  // Platform routes are mounted at /api/v1/platform (e.g. /api/v1/platform/login)
+  // Staffing routes are mounted at /api/v1/staffing
+  let basePath = '/api/v1/platform'
+  if (endpoint.startsWith('/login') || endpoint.startsWith('/register')) {
+    basePath = '/api/v1/platform'
+  } else if (endpoint.includes('/staffing')) {
+    // Actually the platform routes handle some staffing logic under /tenants/:id/events/:eventId/staffing/signup
+    // and /api/v1/staffing handles upcoming needs and my assignments
+    if (endpoint.startsWith('/staffing/upcoming') || endpoint.startsWith('/staffing/my-assignments')) {
+      basePath = '/api/v1' // will be appended with /staffing/... 
+    }
+  }
+  
+  // Clean up double slashes
+  const url = `${config.baseUrl}${basePath}${endpoint}`.replace(/([^:]\/)\/+/g, '$1')
+  
   const fetchOptions = {
     ...options,
     headers: {
@@ -48,7 +63,7 @@ async function apiFetch(endpoint, options = {}) {
   const setCookie = res.headers.get('set-cookie')
   if (setCookie) {
     const cookies = Array.isArray(setCookie) ? setCookie : [setCookie]
-    const platformCookie = cookies.find(c => c.startsWith('platform_session='))
+    const platformCookie = cookies.find(c => c.startsWith('platform_sid='))
     if (platformCookie) {
       cookieHeader = platformCookie.split(';')[0]
     }
@@ -83,7 +98,7 @@ async function run() {
   try {
     // 1. Login
     console.log('1. Logging in...')
-    const loginRes = await apiFetch('/auth/login', {
+    const loginRes = await apiFetch('/login', {
       method: 'POST',
       body: JSON.stringify({ email: config.email, password: config.password })
     })
@@ -95,7 +110,7 @@ async function run() {
     targetDate.setDate(targetDate.getDate() + 14)
     const dateStr = targetDate.toISOString().split('T')[0]
     
-    const scheduleRes = await apiFetch(`/tenants/${config.tenantId}/events/schedule`, {
+    const scheduleRes = await apiFetch(`/tenants/${config.tenantId}/events`, {
       method: 'POST',
       body: JSON.stringify({
         templateId: config.templateId,
@@ -103,18 +118,22 @@ async function run() {
       })
     })
     
-    if (scheduleRes.results && scheduleRes.results[0] && scheduleRes.results[0].success) {
-      testEventId = scheduleRes.results[0].eventId
+    if (scheduleRes.success && scheduleRes.event) {
+      testEventId = scheduleRes.event.id
       console.log(`✅ Created test event: ${testEventId} on ${dateStr}`)
+    } else if (scheduleRes.results && scheduleRes.results[0] && scheduleRes.results[0].success) {
+      testEventId = scheduleRes.results[0].eventId
+      console.log(`✅ Created test event (batch): ${testEventId} on ${dateStr}`)
     } else {
       throw new Error(`Failed to schedule event: ${JSON.stringify(scheduleRes)}`)
     }
 
     // 3. Verify staffing needs were auto-populated
     console.log('\n3. Verifying staffing needs...')
+    // Note: the route is GET /api/v1/platform/tenants/:id/events/:eventId/staffing
     const staffingRes = await apiFetch(`/tenants/${config.tenantId}/events/${testEventId}/staffing`)
     
-    if (!staffingRes.needs || staffingRes.needs.length === 0) {
+    if (!staffingRes || !staffingRes.needs || staffingRes.needs.length === 0) {
       throw new Error('No staffing needs auto-populated. Does the template have staffing_rules?')
     }
     console.log(`✅ Event has ${staffingRes.needs.length} staffing needs auto-populated from template`)
@@ -135,6 +154,7 @@ async function run() {
 
     // 5. Sign up for a role
     console.log(`\n5. Signing up for role: ${targetRoleLabel}...`)
+    // API is POST /api/v1/platform/tenants/:id/events/:eventId/staffing/signup
     const signupRes = await apiFetch(`/tenants/${config.tenantId}/events/${testEventId}/staffing/signup`, {
       method: 'POST',
       body: JSON.stringify({ needId, notes: 'UAT Test Signup' })
