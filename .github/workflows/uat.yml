@@ -1,0 +1,165 @@
+name: UAT Tests (Playwright)
+
+# Runs Playwright end-to-end tests against the Render preview environment
+# after it has been created or updated by pr-preview.yml.
+#
+# Email bypass strategy:
+#   Invitation tokens are captured directly from the API response
+#   (POST /api/v1/platform/tenants/:id/invitations → { invitation: { token } })
+#   so no real email delivery is needed for UAT.  RESEND_API_KEY is intentionally
+#   left unconfigured so the server silently skips email sending.
+#
+# Required secrets (same set as pr-preview.yml):
+#   PLATFORM_EMAIL    - Owner account email on the preview environment
+#   PLATFORM_PASSWORD - Owner account password on the preview environment
+#
+# These must be pre-seeded in the preview environment.
+# See docs/uat-test-setup.md for initial seed instructions.
+
+on:
+  # Run after the preview workflow has updated the deployment
+  workflow_run:
+    workflows: ['PR Preview Environment']
+    types: [completed]
+    # Only trigger when the preview was successfully deployed/updated
+  # Also allow manual dispatch for debugging
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Target URL (e.g. https://turres-ssi-tools-pr-42.onrender.com)'
+        required: true
+        type: string
+      pr_number:
+        description: 'PR number (for comments)'
+        required: false
+        type: string
+
+jobs:
+  uat:
+    name: Playwright UAT
+    runs-on: ubuntu-latest
+    # Only run UAT when the upstream workflow completed successfully
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'pull_request')
+
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install Playwright dependencies
+        run: npm ci
+        working-directory: e2e
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: e2e
+
+      # ── Determine target URL ────────────────────────────────────────────
+      - name: Derive preview URL from workflow_run
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "url=${{ inputs.base_url }}" >> $GITHUB_OUTPUT
+            echo "pr=${{ inputs.pr_number }}" >> $GITHUB_OUTPUT
+          else
+            # Extract PR number from the upstream workflow run
+            PR="${{ github.event.workflow_run.pull_requests[0].number }}"
+            echo "url=https://turres-ssi-tools-pr-${PR}.onrender.com" >> $GITHUB_OUTPUT
+            echo "pr=${PR}" >> $GITHUB_OUTPUT
+          fi
+
+      # ── Wait for deployment readiness ───────────────────────────────────
+      - name: Wait for preview environment to wake up
+        run: |
+          URL="${{ steps.target.outputs.url }}"
+          echo "Waiting for ${URL} to respond…"
+          for i in $(seq 1 12); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${URL}/api/v1" || echo "000")
+            if [ "$STATUS" != "000" ] && [ "$STATUS" != "502" ] && [ "$STATUS" != "503" ]; then
+              echo "✅ Preview environment is up (HTTP ${STATUS})"
+              exit 0
+            fi
+            echo "  Attempt ${i}/12 — status ${STATUS}, waiting 10 s…"
+            sleep 10
+          done
+          echo "❌ Preview environment did not respond in time"
+          exit 1
+
+      # ── Seed test account ────────────────────────────────────────────────
+      # Creates the owner account on first run; exits cleanly if it already exists.
+      # The account is used by all Playwright tests (sign-in, invitation, etc.)
+      - name: Seed UAT owner account
+        env:
+          PLATFORM_BASE_URL: ${{ steps.target.outputs.url }}
+          PLATFORM_EMAIL: ${{ secrets.UAT_PLATFORM_EMAIL }}
+          PLATFORM_PASSWORD: ${{ secrets.UAT_PLATFORM_PASSWORD }}
+        run: node test-harness/seed-uat-account.mjs
+
+      # ── Run Playwright tests ─────────────────────────────────────────────
+      - name: Run UAT tests
+        env:
+          BASE_URL: ${{ steps.target.outputs.url }}
+          PLATFORM_EMAIL: ${{ secrets.UAT_PLATFORM_EMAIL }}
+          PLATFORM_PASSWORD: ${{ secrets.UAT_PLATFORM_PASSWORD }}
+        run: npx playwright test
+        working-directory: e2e
+
+      # ── Upload test report ───────────────────────────────────────────────
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-pr-${{ steps.target.outputs.pr || 'manual' }}
+          path: e2e/playwright-report/
+          retention-days: 7
+
+      # ── Post result as PR comment ────────────────────────────────────────
+      - name: Comment UAT result on PR
+        if: always() && steps.target.outputs.pr != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = parseInt('${{ steps.target.outputs.pr }}')
+            if (!pr) return
+
+            const passed = '${{ job.status }}' === 'success'
+            const emoji = passed ? '✅' : '❌'
+            const status = passed ? 'passed' : 'failed'
+
+            const body = `${emoji} **UAT Tests ${status}** against \`${{ steps.target.outputs.url }}\`
+
+            ${passed
+              ? 'All Playwright UAT tests passed. Sign-in, account creation, instructor invitation, and invitation acceptance all verified.'
+              : '⚠️ One or more UAT tests failed. Check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details and download the Playwright report artifact.'}
+
+            <details>
+            <summary>Tests covered</summary>
+
+            - Sign in with existing owner account
+            - Sign-in form shows error for wrong password
+            - Create new account and auto-join existing tenant via pending invitation
+            - Owner can invite an instructor from the Members page
+            - Invitee can accept invitation and create account without email delivery
+            - Invitation page shows error for expired or invalid token
+
+            </details>`
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr,
+              body,
+            })
