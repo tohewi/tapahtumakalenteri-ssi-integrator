@@ -297,6 +297,8 @@ function parseFormFields(html) {
   const arrayFields = {}
 
   // Extract hidden and text inputs: <input type="..." name="..." value="...">
+  // SRA forms use multiple hidden inputs with the same name for array fields
+  // (e.g., handgun_divs_0, handgun_divs_1 all with name="handgun_divs")
   const inputRe = /<input[^>]*\sname="([^"]+)"[^>]*>/gi
   let m
   while ((m = inputRe.exec(html)) !== null) {
@@ -306,12 +308,29 @@ function parseFormFields(html) {
     const value = tag.match(/value="([^"]*)"/i)?.[1] || ''
 
     if (type === 'checkbox') {
-      // Checkbox: only include if checked
+      // Checkbox: only include if checked; collect multiples into arrayFields
       if (/\bchecked\b/i.test(tag)) {
-        fields[name] = value || 'on'
+        if (arrayFields[name]) {
+          arrayFields[name].push(value || 'on')
+        } else if (name in fields) {
+          // Promote scalar to array
+          arrayFields[name] = [fields[name], value || 'on']
+          delete fields[name]
+        } else {
+          fields[name] = value || 'on'
+        }
       }
     } else if (type !== 'submit' && type !== 'button' && type !== 'file') {
-      fields[name] = value
+      // Detect duplicate names → promote to array (SRA hidden input arrays)
+      if (arrayFields[name]) {
+        arrayFields[name].push(value)
+      } else if (name in fields) {
+        // Same name seen twice → promote to array
+        arrayFields[name] = [fields[name], value]
+        delete fields[name]
+      } else {
+        fields[name] = value
+      }
     }
   }
 
