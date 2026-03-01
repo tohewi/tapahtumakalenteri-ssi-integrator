@@ -580,7 +580,7 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
         results: 'org',
         description: (seedMatch.description || '').trim(),
         information: (seedMatch.information || '').trim(),
-        venue: body.venue,
+        venue: overrides.venue || snapshot.venue || '',
         starts_date: schedule.isoDate,
         starts_time: schedule.startTime,
         ends_date: schedule.isoDate,
