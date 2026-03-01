@@ -474,7 +474,7 @@ function DisciplinesSection({ tenantId }) {
                           <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">SSI Create URL</label>
                           <input
                             type="text" value={form.ssiCreateUrl} onChange={e => setForm(f => ({ ...f, ssiCreateUrl: e.target.value }))}
-                            placeholder="e.g. /series/nordic/create-sra-match/"
+                            placeholder="e.g. https://shootnscoreit.com/sra/create-match/"
                             className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
                           />
                           <p className="text-xs text-gray-400 mt-0.5">SSI form URL for creating events in this discipline</p>
@@ -547,7 +547,7 @@ function DisciplinesSection({ tenantId }) {
                 <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">SSI Create URL</label>
                 <input
                   type="text" value={form.ssiCreateUrl} onChange={e => setForm(f => ({ ...f, ssiCreateUrl: e.target.value }))}
-                  placeholder="e.g. /series/nordic/create-sra-match/"
+                  placeholder="e.g. https://shootnscoreit.com/sra/create-match/"
                   className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
                 />
                 <p className="text-xs text-gray-400 mt-0.5">SSI form URL for creating events in this discipline</p>
