@@ -5,6 +5,41 @@
 
 ---
 
+## Release 8.2 — Template-Driven Event Creation (2026-03-02)
+
+**Requirements:** MP5 (Event Execution Workflow) — bug fixes and refactoring
+
+### Overview
+
+Fixed Kupittaa Cup template creation to correctly produce cups with the right name, divisions, and categories. SSI's GraphQL API silently ignores multi-value form fields (weapon_groups, categories, competence_classes), so both cup and match creation were migrated to web form POST. Template overrides are now the source of truth for multi-value fields.
+
+### Bug Fixes
+
+- **Cup name now includes "CUP"**: Template `nameTemplate` updated to `"TEST TurRes Kupittaa CUP {date}"`.
+- **Divisions and categories match template**: Previously all options were selected ("select all" fallback); now `overrides.formFields` specifies exact values (e.g., STD + Open).
+- **Match names strip "CUP"**: Component match names no longer include "CUP" from the cup name. SSI's 40-character name limit is enforced with truncation.
+- **Match creation via web POST**: Matches switched from GraphQL to web form POST (same as cup) so multi-value fields are applied correctly.
+
+### New Features
+
+- **Template `formFields` / `matchFormFields` overrides**: Multi-value fields (weapon_groups, categories, competence_classes) can be configured per template via `overrides.formFields` (simple arrays).
+- **Seed import form field capture**: `ssiFetchEventStructure` attempts to capture form-level fields from SSI event edit pages via web scraping (probes multiple URL patterns).
+- **`applyTemplateFormFields` merging**: Builder merges fields from: (1) `overrides.formFields` (priority), (2) `snapshot.formFields` (seed capture), (3) SSI form page defaults.
+
+### Technical Changes
+
+- `nordic-cup-graphql-builder.js`: Replaced `fetchFormDefaults` (select-all) with `fetchFormPage` + `applyTemplateFormFields`. Both cup and matches use web form POST.
+- `seed-import.js`: Added `captureEventFormFields()` — probes SSI edit page URL patterns to capture checked/selected values for multi-value form fields.
+- `event-creation-service.js`: Exported `postForm`, `extractEventIds`, `extractFormErrors`, `extractPageTitle` for builder reuse.
+
+### Test Harness
+
+- `test-cup-no-cleanup.mjs`: End-to-end cup creation test (schedule → execute → verify).
+- `cleanup-event.mjs`: Delete platform events after testing.
+- `check-squads.mjs`, `check-cup-snapshot.mjs`: Diagnostic utilities.
+
+---
+
 ## Release 7.5 — Architecture V2 Foundation (2026-02-23)
 
 **Requirements:** ARCH1 ✅, ARCH2 ✅, ARCH5 ✅, ARCH3–ARCH4 📋

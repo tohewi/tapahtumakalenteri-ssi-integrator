@@ -518,7 +518,7 @@ Full ACCT1 flow: (1) User clicks "Forgot password?" link on the Sign In page. (2
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| MP5 | **Event Execution Workflow**: Execute a planned scheduled event — create cup/matches/squads in SSI from template + overrides. Status transitions: `planned` → `creating` → `ssi_created` (success) or `failed` (error with retry). Progress tracking per sub-operation | ⬜ Design |
+| MP5 | **Event Execution Workflow**: Execute a planned scheduled event — create cup/matches/squads in SSI from template + overrides. Status transitions: `planned` → `creating` → `ssi_created` (success) or `failed` (error with retry). Progress tracking per sub-operation. **Bug fixes (R8.2):** Template-driven divisions/categories via `overrides.formFields`, web form POST for both cup + matches (GraphQL ignores multi-value fields), 40-char name limit enforcement | ✅ Implemented |
 | MP6 | **Event Status Dashboard**: Visual status indicators for each scheduled event (planned, creating, active, completed, cancelled). Batch status view for upcoming week/month | ⬜ Design |
 | MP7 | **Event Cancellation**: Cancel a scheduled event — optionally delete from SSI if already created. Status: `ssi_created` → `cancelled`. Requires confirmation dialog with impact summary | ⬜ Design |
 
