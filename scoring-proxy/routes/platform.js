@@ -2284,12 +2284,13 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
         if (!action || !email) return res.status(400).json({ error: 'action and email are required' })
 
         const evtStaffing = await getEventStaffing(tenantId, eventId)
-        if (!evtStaffing?.ssiReferences?.ssiEventId) {
+        const ssiRefs = evtStaffing?.event?.ssiReferences || {}
+        const ssiEventId = ssiRefs.ssiEventId || ssiRefs.cupId
+        const contentType = ssiRefs.contentTypeKey || ssiRefs.cupTypeId || 91
+        if (!ssiEventId) {
           return res.status(400).json({ error: 'Event has no SSI reference' })
         }
 
-        const ssiEventId = evtStaffing.ssiReferences.ssiEventId
-        const contentType = evtStaffing.ssiReferences.contentType || 91
         const adminSess = getAdminSession ? await getAdminSession() : null
         const cookies = adminSess?.cookies
         if (!cookies) return res.status(503).json({ error: 'No admin session available' })
@@ -2319,12 +2320,13 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       try {
         const { id: tenantId, eventId } = req.params
         const evtStaffing = await getEventStaffing(tenantId, eventId)
-        if (!evtStaffing?.ssiReferences?.ssiEventId) {
+        const ssiRefs = evtStaffing?.event?.ssiReferences || {}
+        const ssiEventId = ssiRefs.ssiEventId || ssiRefs.cupId
+        const contentType = ssiRefs.contentTypeKey || ssiRefs.cupTypeId || 91
+        if (!ssiEventId) {
           return res.status(400).json({ error: 'Event has no SSI reference' })
         }
 
-        const ssiEventId = evtStaffing.ssiReferences.ssiEventId
-        const contentType = evtStaffing.ssiReferences.contentType || 91
         const adminSess = getAdminSession ? await getAdminSession() : null
         const cookies = adminSess?.cookies
         if (!cookies) return res.status(503).json({ error: 'No admin session available' })
