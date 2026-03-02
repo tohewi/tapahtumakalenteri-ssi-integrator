@@ -2256,5 +2256,77 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
     }
   })
 
+  // ============================================================
+  // TEST-ONLY: Direct SSI management manipulation for E2E tests
+  // Only available in non-production environments.
+  // ============================================================
+  if (process.env.NODE_ENV !== 'production') {
+    /**
+     * POST /tenants/:id/events/:eventId/test/ssi-management
+     * Directly add or remove a user from SSI management group.
+     * Body: { action: 'add'|'remove', email, role?, officialCodes? }
+     */
+    router.post('/tenants/:id/events/:eventId/test/ssi-management', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
+      try {
+        const { id: tenantId, eventId } = req.params
+        const { action, email, role, officialCodes } = req.body
+
+        if (!action || !email) return res.status(400).json({ error: 'action and email are required' })
+
+        const evtStaffing = await getEventStaffing(tenantId, eventId)
+        if (!evtStaffing?.ssiReferences?.ssiEventId) {
+          return res.status(400).json({ error: 'Event has no SSI reference' })
+        }
+
+        const ssiEventId = evtStaffing.ssiReferences.ssiEventId
+        const contentType = evtStaffing.ssiReferences.contentType || 91
+        const adminSess = getAdminSession ? await getAdminSession() : null
+        const cookies = adminSess?.cookies
+        if (!cookies) return res.status(503).json({ error: 'No admin session available' })
+
+        const groupId = await ssiGetMatchGroupId(contentType, ssiEventId, cookies)
+
+        if (action === 'add') {
+          const result = await ssiAddToMatchManagement(groupId, contentType, ssiEventId, email, role || '1', officialCodes || [], cookies)
+          return res.json({ success: true, result })
+        } else if (action === 'remove') {
+          const result = await ssiRemoveFromMatchManagement(groupId, contentType, ssiEventId, email, cookies)
+          return res.json({ success: true, result })
+        } else {
+          return res.status(400).json({ error: 'action must be "add" or "remove"' })
+        }
+      } catch (err) {
+        log.error(`[platform] TEST ssi-management failed:`, err.message)
+        return res.status(500).json({ error: err.message })
+      }
+    })
+
+    /**
+     * GET /tenants/:id/events/:eventId/test/ssi-officials
+     * Read the current SSI management group members for an event.
+     */
+    router.get('/tenants/:id/events/:eventId/test/ssi-officials', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
+      try {
+        const { id: tenantId, eventId } = req.params
+        const evtStaffing = await getEventStaffing(tenantId, eventId)
+        if (!evtStaffing?.ssiReferences?.ssiEventId) {
+          return res.status(400).json({ error: 'Event has no SSI reference' })
+        }
+
+        const ssiEventId = evtStaffing.ssiReferences.ssiEventId
+        const contentType = evtStaffing.ssiReferences.contentType || 91
+        const adminSess = getAdminSession ? await getAdminSession() : null
+        const cookies = adminSess?.cookies
+        if (!cookies) return res.status(503).json({ error: 'No admin session available' })
+
+        const officials = await ssiGetMatchOfficials(contentType, ssiEventId, cookies)
+        return res.json({ officials })
+      } catch (err) {
+        log.error(`[platform] TEST ssi-officials failed:`, err.message)
+        return res.status(500).json({ error: err.message })
+      }
+    })
+  }
+
   return router
 }
