@@ -300,7 +300,7 @@ function calculateSchedule(eventDate, overrides) {
 }
 
 // Exported for unit testing
-export { extractEventIds, formatDisplayDate, toSsiTime, calculateSchedule, normalizeDate, subtractDays }
+export { formatDisplayDate, toSsiTime, calculateSchedule, normalizeDate, subtractDays }
 
 // ---- Generic HTML Form Parser ----
 
@@ -388,8 +388,8 @@ function parseFormFields(html) {
   return { fields, arrayFields }
 }
 
-// Exported for testing
-export { parseFormFields }
+// Exported for testing and reuse by builders
+export { parseFormFields, fetchCsrf, postForm, extractEventIds, extractFormErrors, extractPageTitle }
 
 // ---- Main Service ----
 
@@ -543,19 +543,32 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
     extractPageTitle
   }
 
-  const { eventIds, eventUrl, cookies: createResultCookies } = await createEventWithBuilder(builderParams)
+  const builderResult = await createEventWithBuilder(builderParams)
+  const { eventIds, eventUrl, cookies: createResultCookies } = builderResult
   
   progress('event_created', `${isCup ? 'Cup' : 'Match'} created: ${eventUrl}`)
 
   // Step 5: Create component matches (cups only)
-  const createdMatches = []
-  if (isCup && snapshot.matches && snapshot.matches.length > 0) {
+  // If the builder already created matches (e.g. GraphQL builders), use those.
+  // Otherwise, fall back to web scraping match creation.
+  let createdMatches = builderResult.createdMatches || []
+
+  if (isCup && createdMatches.length === 0 && snapshot.matches && snapshot.matches.length > 0) {
+    // Legacy web scraping path for component match creation
     for (const seedMatch of snapshot.matches) {
-      const matchName = eventName.replace(snapshot.name, seedMatch.name)
-        .replace(/\{date\}/gi, schedule.displayDate)
+      // Build match name: try replacing cup name with match name.
+      // If snapshot.name isn't in eventName, extract suffix from seed match name.
+      let matchName = eventName.replace(snapshot.name, seedMatch.name)
+      if (matchName === eventName) {
+        const withoutDate = seedMatch.name.replace(/\d{2}\.\d{2}\.\d{4}/, '').trim()
+        const words = withoutDate.split(/\s+/)
+        const suffix = words[words.length - 1]
+        matchName = `${eventName} ${suffix}`
+      }
+      matchName = matchName.replace(/\{date\}/gi, schedule.displayDate)
 
       progress('create_match', `Creating match: ${matchName}`)
-      log.info(`[event-creation] Creating match: ${matchName}`)
+      log.info(`[event-creation] Creating match via web scraping: ${matchName}`)
 
       // Determine the match creation URL from the seed's content type
       // Default: Nordic 25m Kuvio Pistol
@@ -609,26 +622,41 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
 
       await new Promise(r => setTimeout(r, 500))
     }
+  } else if (isCup && createdMatches.length > 0) {
+    log.info(`[event-creation] Builder provided ${createdMatches.length} pre-created matches — skipping web scraping match creation`)
+  }
 
-    // Step 6: Link matches to cup
-    if (createdMatches.length > 0) {
-      progress('link_matches', `Linking ${createdMatches.length} matches to cup...`)
-      const linkUrl = `${SSI_BASE_URL}/event/${eventIds.typeId}/${eventIds.eventId}/add-existing-match/`
-      let matchNumber = 1
+  // Step 6: Link matches to cup (always needed, regardless of how matches were created)
+  if (isCup && createdMatches.length > 0) {
+    progress('link_matches', `Linking ${createdMatches.length} matches to cup...`)
+    const linkUrl = `${SSI_BASE_URL}/event/${eventIds.typeId}/${eventIds.eventId}/add-existing-match/`
+    let matchNumber = 1
 
-      for (const match of createdMatches) {
-        const { csrfToken: linkCsrf, cookies: linkCookies } = await fetchCsrf(linkUrl, createResultCookies)
+    for (const match of createdMatches) {
+      const { csrfToken: linkCsrf, cookies: linkCookies, html: linkPageHtml } = await fetchCsrf(linkUrl, createResultCookies)
 
-        await postForm(linkUrl, {
-          number: String(matchNumber),
-          match: match.eventId,
-          included: 'on',
-        }, {}, linkCsrf, linkCookies)
+      // DEBUG: Log what page we landed on after fetchCsrf
+      const pageTitle = linkPageHtml.match(/<title>([^<]*)<\/title>/)?.[1]?.trim() || '(no title)'
+      const hasLinkForm = linkPageHtml.includes('match') && linkPageHtml.includes('<form')
+      log.info(`[event-creation] Link page: title="${pageTitle}" hasForm=${hasLinkForm} htmlLen=${linkPageHtml.length}`)
 
-        log.info(`[event-creation] Linked ${match.name} as component #${matchNumber}`)
-        matchNumber++
-        await new Promise(r => setTimeout(r, 500))
+      const linkResult = await postForm(linkUrl, {
+        number: String(matchNumber),
+        match: match.eventId,
+        match_content_type: match.typeId,
+        included: 'on',
+      }, {}, linkCsrf, linkCookies)
+
+      // DEBUG: Check if the redirect target shows linked matches
+      log.info(`[event-creation] Link POST result: status=${linkResult.status} → ${linkResult.finalUrl}`)
+      if (linkResult.html) {
+        const errors = linkResult.html.match(/(?:is-invalid|alert-danger|errorlist|text-danger)[^<]*/gi) || []
+        if (errors.length) log.warn(`[event-creation] Link form errors: ${errors.slice(0, 3).join(' | ')}`)
       }
+
+      log.info(`[event-creation] Linked ${match.name} (id=${match.eventId}, type=${match.typeId}) as component #${matchNumber}`)
+      matchNumber++
+      await new Promise(r => setTimeout(r, 500))
     }
   }
 
@@ -659,7 +687,7 @@ export async function createSsiEvent({ template, eventDate, credentials, discipl
       const squadBody = {
         quantity: '1',
         max_competitors: String(squad.maxCompetitors || 9),
-        registration: 'aa',
+        registration: squad.registration || 'aa',
         comment: squad.name || '',
         starts_date: schedule.regStartDate,
         starts_time: schedule.regStartTime,

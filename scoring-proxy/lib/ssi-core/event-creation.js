@@ -3,6 +3,7 @@
 // ============================================================
 
 import { ssiGraphQL, ssiGraphQLAuth } from './graphql.js'
+import { log } from '../logger.js'
 
 const CREATE_EVENT_MUTATION = `
 mutation CreateEvent($form_input: JSON!, $rule: String!, $sub_rule: String!, $serie_type: String, $firearms: String) {
@@ -32,7 +33,12 @@ mutation CreateEvent($form_input: JSON!, $rule: String!, $sub_rule: String!, $se
 export async function ssiCreateEvent({ credentials, formInput, rule, subRule = '', serieType = '', firearms = '' }) {
   const jwt = await ssiGraphQLAuth(credentials)
   
-  // The GraphQL schema expects form_input to be a JSON string, not a generic object
+  // Log multi-value fields being sent to SSI for debugging
+  const arrayFields = Object.entries(formInput).filter(([, v]) => Array.isArray(v))
+  if (arrayFields.length > 0) {
+    log.info(`[event-creation] Array fields: ${arrayFields.map(([k, v]) => `${k}=[${v.join(',')}]`).join(', ')}`)
+  }
+
   const variables = {
     form_input: JSON.stringify(formInput),
     rule,
@@ -41,11 +47,15 @@ export async function ssiCreateEvent({ credentials, formInput, rule, subRule = '
     firearms
   }
   
-  const result = await ssiGraphQL(jwt, CREATE_EVENT_MUTATION, variables)
+  log.info(`[event-creation] GraphQL create_event: rule=${rule}, sub_rule=${subRule}, serie_type=${serieType}, fields=${Object.keys(formInput).length}`)
+  
+  const result = await ssiGraphQL(jwt, CREATE_EVENT_MUTATION, variables, credentials.apiKey)
   
   if (!result.create_event) {
     throw new Error('Event creation failed - no event returned from GraphQL')
   }
   
-  return result.create_event
+  const created = result.create_event
+  log.info(`[event-creation] SSI returned: name="${created.name}" id=${created.id} url=${created.get_full_absolute_url}`)
+  return created
 }

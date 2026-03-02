@@ -7,6 +7,7 @@
 // ============================================================
 
 import { buildSraStandaloneMatch } from './sra-graphql-builder.js'
+import { buildNordicCupWithMatches } from './nordic-cup-graphql-builder.js'
 import { buildLegacyWebScrapingEvent } from './legacy-web-builder.js'
 import { log } from '../../logger.js'
 
@@ -27,6 +28,14 @@ const BUILDERS = [
       return !isCup && isSRA
     },
     build: buildSraStandaloneMatch
+  },
+  {
+    name: 'Nordic Cup GraphQL (RESUL)',
+    match: (snapshot, isCup, discipline) => {
+      const isNordic = snapshot.rule === 'rl' || discipline?.sportCode === 'rl'
+      return isCup && isNordic
+    },
+    build: buildNordicCupWithMatches
   }
 ]
 

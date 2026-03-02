@@ -1333,6 +1333,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
         credentials: {
           email: tenantFull.ssiCredentials.email,
           password: tenantFull.ssiCredentials.password,
+          apiKey: tenantFull.ssiCredentials.apiKey || null,
         },
         discipline,
       })

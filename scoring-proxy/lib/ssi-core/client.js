@@ -32,6 +32,11 @@ export async function ssiGraphQL(jwtToken, query, variables = {}, apiKey = null)
 
   if (json.errors && json.errors.length > 0) {
     const messages = json.errors.map(e => e.message).join('; ')
+    // Log full error details for debugging (field-level validation, extensions, etc.)
+    log.error(`[ssi-graphql] Full error response: ${JSON.stringify(json.errors)}`)
+    if (json.data) {
+      log.error(`[ssi-graphql] Partial data alongside errors: ${JSON.stringify(json.data)}`)
+    }
     throw new Error(`GraphQL Error: ${messages}`)
   }
 
