@@ -16,7 +16,7 @@ function getStatusBadge(status) {
 
 export default function DashboardView({ tenantId, onNavigate }) {
   const [events, setEvents] = useState([])
-  const [staffingGaps, setStaffingGaps] = useState(0)
+  const [staffingData, setStaffingData] = useState([]) // full understaffed event list
   const [leaderboard, setLeaderboard] = useState([])
   const [leaderboardPeriod, setLeaderboardPeriod] = useState('all')
   const [loading, setLoading] = useState(true)
@@ -25,7 +25,7 @@ export default function DashboardView({ tenantId, onNavigate }) {
     async function loadData() {
       setLoading(true)
       try {
-        const [eventsData, staffingData, lbData] = await Promise.all([
+        const [eventsData, rawStaffing, lbData] = await Promise.all([
           listEvents(tenantId),
           getUpcomingStaffingApi(tenantId).catch(() => []),
           getStaffingLeaderboardApi(tenantId, leaderboardPeriod).catch(() => [])
@@ -33,10 +33,9 @@ export default function DashboardView({ tenantId, onNavigate }) {
         
         setEvents(eventsData.events || [])
         
-        // Count events that are understaffed
-        if (Array.isArray(staffingData)) {
-          const understaffedCount = staffingData.filter(e => e.isUnderstaffed).length
-          setStaffingGaps(understaffedCount)
+        // Store understaffed events with details
+        if (Array.isArray(rawStaffing)) {
+          setStaffingData(rawStaffing.filter(e => e.isUnderstaffed))
         }
 
         if (Array.isArray(lbData)) {
@@ -60,35 +59,74 @@ export default function DashboardView({ tenantId, onNavigate }) {
     return d >= now && d <= thirtyDaysFromNow
   }).sort((a, b) => new Date(a.eventDate) - new Date(b.eventDate))
 
-  // Group active templates from events
-  const activeTemplateIds = new Set(events.map(e => e.templateId))
-
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
       
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white rounded-lg border p-4 shadow-sm">
-          <div className="text-sm text-gray-500">Upcoming Events</div>
-          <div className="text-3xl font-bold text-sky-700 mt-1">{loading ? '...' : upcomingEvents.length}</div>
-          <div className="text-xs text-gray-400 mt-1">Next 30 days</div>
+      {/* Staffing Gaps Summary */}
+      <div className="bg-white rounded-lg border shadow-sm mb-8 overflow-hidden">
+        <div className="px-4 py-3 border-b flex items-center justify-between bg-gray-50/50">
+          <div className="flex items-center gap-2">
+            <h2 className="font-semibold text-gray-800">Staffing Gaps</h2>
+            {!loading && staffingData.length > 0 && (
+              <span className="bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                {staffingData.length} event{staffingData.length !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+          <button onClick={() => onNavigate('roster')} className="text-sm text-sky-600 hover:text-sky-800">Go to Roster</button>
         </div>
-        <div className="bg-white rounded-lg border p-4 shadow-sm">
-          <div className="text-sm text-gray-500">Staffing Gaps</div>
-          <div className="text-3xl font-bold text-amber-600 mt-1">{loading ? '...' : staffingGaps}</div>
-          <div className="text-xs text-gray-400 mt-1">Events need instructors</div>
-        </div>
-        <div className="bg-white rounded-lg border p-4 shadow-sm">
-          <div className="text-sm text-gray-500">Active Templates</div>
-          <div className="text-3xl font-bold text-gray-700 mt-1">{loading ? '...' : activeTemplateIds.size}</div>
-          <div className="text-xs text-gray-400 mt-1">In use by events</div>
-        </div>
-        <div className="bg-white rounded-lg border p-4 shadow-sm">
-          <div className="text-sm text-gray-500">Active Volunteers</div>
-          <div className="text-3xl font-bold text-gray-700 mt-1">{loading ? '...' : leaderboard.length}</div>
-          <div className="text-xs text-gray-400 mt-1">Have staffed events</div>
-        </div>
+
+        {loading ? (
+          <div className="p-6 text-center text-sm text-gray-400">Loading staffing data...</div>
+        ) : staffingData.length === 0 ? (
+          <div className="p-6 text-center">
+            <p className="text-sm text-green-600 font-medium">All events are fully staffed</p>
+            <p className="text-xs text-gray-400 mt-1">No open roles for upcoming events.</p>
+          </div>
+        ) : (
+          <div className="divide-y">
+            {staffingData.map(({ event, needs }) => {
+              // Summarize unfilled roles
+              const gaps = needs
+                .map(n => {
+                  const filled = (n.signups || []).length
+                  const remaining = n.minCount - filled
+                  return remaining > 0 ? { role: n.roleLabel, remaining } : null
+                })
+                .filter(Boolean)
+              const totalGaps = gaps.reduce((sum, g) => sum + g.remaining, 0)
+
+              const d = new Date(event.eventDate)
+              const dateStr = d.toLocaleDateString('fi-FI', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })
+
+              return (
+                <div
+                  key={event.id}
+                  onClick={() => onNavigate('roster')}
+                  className="px-4 py-3 flex items-center justify-between hover:bg-amber-50/50 cursor-pointer transition-colors"
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium text-sm text-gray-900 truncate">
+                      {event.eventName || 'Unnamed Event'}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-0.5">{dateStr}</div>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                    <div className="flex flex-wrap gap-1 justify-end">
+                      {gaps.map(g => (
+                        <span key={g.role} className="inline-flex items-center bg-amber-50 text-amber-700 text-[11px] font-medium px-2 py-0.5 rounded-full">
+                          {g.role} <span className="ml-1 font-bold">×{g.remaining}</span>
+                        </span>
+                      ))}
+                    </div>
+                    <span className="text-amber-600 font-bold text-sm w-8 text-right">{totalGaps}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Upcoming Events List */}
