@@ -26,6 +26,7 @@ import {
   apiGetEventStaffing,
   apiStaffingSignup,
   apiStaffingWithdraw,
+  apiGetMyAssignments,
   apiTestSsiGetOfficials,
   apiTestSsiAdd,
   apiTestSsiRemove,
@@ -69,6 +70,20 @@ test.beforeAll(async ({ request }) => {
 
   if (!sraEvent) throw new Error(`No upcoming SRA event found matching "${SRA_NAME}"`)
   if (!cupEvent) throw new Error(`No upcoming Cup event found matching "${CUP_NAME}"`)
+
+  // Clean up any stale signups from previous test runs
+  // my-assignments returns [{ event: { id }, signup: { id } }, ...]
+  try {
+    const myAssignments = await apiGetMyAssignments(request, sid, tenantId)
+    for (const a of myAssignments) {
+      const evtId = a.event?.id
+      if (evtId === sraEvent.id || evtId === cupEvent.id) {
+        try {
+          await apiStaffingWithdraw(request, sid, tenantId, evtId, a.signup?.id)
+        } catch (e) { /* ignore cleanup errors */ }
+      }
+    }
+  } catch (e) { /* ignore if my-assignments not available */ }
 })
 
 // ============================================================
@@ -143,8 +158,8 @@ test.describe('Kupittaa Cup — Platform ↔ SSI sync', () => {
 
   test('TC-2: Sign up for Match Director via API → appears in SSI', async ({ request }) => {
     const staffing = await apiGetEventStaffing(request, sid, tenantId, cupEvent.id)
-    const mdNeed = findNeedByRole(staffing.needs, 'match_director')
-    expect(mdNeed, 'Match Director role must exist in Cup event').toBeTruthy()
+    const mdNeed = findNeedByRole(staffing.needs, 'md')
+    expect(mdNeed, 'Match Director (md) role must exist in Cup event').toBeTruthy()
 
     const result = await apiStaffingSignup(request, sid, tenantId, cupEvent.id, mdNeed.id)
     expect(result.success).toBe(true)
@@ -260,8 +275,15 @@ test.describe('SSI-direct → Platform visibility', () => {
 test.describe('Dashboard UI reflects SSI state', () => {
 
   test('TC-10: Roster tab shows correct staffing after SSI changes', async ({ page }) => {
-    // Sign in via UI
+    // Sign in via UI — the landing page shows the signup form first,
+    // so we need to click the 'Sign in' link to get to the sign-in form
     await page.goto('/#/platform')
+
+    // Click the 'Sign in' button/link on the landing page to switch to sign-in form
+    const signInLink = page.getByRole('button', { name: /sign in/i }).first()
+    await signInLink.click()
+
+    // Now fill in the sign-in form
     await page.getByRole('textbox', { name: /email/i }).fill(EMAIL)
     await page.getByRole('textbox', { name: /password/i }).fill(PASSWORD)
     await page.getByRole('button', { name: /sign in/i }).click()

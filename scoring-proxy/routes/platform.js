@@ -2267,10 +2267,10 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   })
 
   // ============================================================
-  // TEST-ONLY: Direct SSI management manipulation for E2E tests
-  // Only available in non-production environments.
+  // SSI Management inspection endpoints for E2E tests and admin debugging.
+  // Secured by requirePlatformAuth + requireTenantRole (owner, tenant_admin).
   // ============================================================
-  if (process.env.NODE_ENV !== 'production') {
+  {
     /**
      * POST /tenants/:id/events/:eventId/test/ssi-management
      * Directly add or remove a user from SSI management group.
