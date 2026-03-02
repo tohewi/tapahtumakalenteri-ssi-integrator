@@ -2053,7 +2053,7 @@ export async function signupForEventStaffing(tenantId, eventId, needId, accountI
   }
 
   const existingRes = await query(
-    "SELECT id FROM staff_signups WHERE need_id = $1 AND account_id = $2 AND status = 'confirmed'",
+    "SELECT id FROM staff_signups WHERE need_id = $1 AND account_id = $2",
     [needId, accountId]
   )
   if (existingRes.rows.length > 0) {
@@ -2062,7 +2062,10 @@ export async function signupForEventStaffing(tenantId, eventId, needId, accountI
 
   const id = generateId('sup')
   const insertRes = await query(
-    'INSERT INTO staff_signups (id, event_id, need_id, account_id, status, notes) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+    `INSERT INTO staff_signups (id, event_id, need_id, account_id, status, notes)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (need_id, account_id) DO UPDATE SET status = 'confirmed', notes = EXCLUDED.notes
+     RETURNING *`,
     [id, eventId, needId, accountId, 'confirmed', notes || null]
   )
   return insertRes.rows[0]
