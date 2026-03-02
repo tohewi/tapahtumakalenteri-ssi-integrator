@@ -2053,10 +2053,10 @@ export async function signupForEventStaffing(tenantId, eventId, needId, accountI
   }
 
   const existingRes = await query(
-    "SELECT id FROM staff_signups WHERE need_id = $1 AND account_id = $2",
+    "SELECT id, status FROM staff_signups WHERE need_id = $1 AND account_id = $2",
     [needId, accountId]
   )
-  if (existingRes.rows.length > 0) {
+  if (existingRes.rows.length > 0 && existingRes.rows[0].status === 'confirmed') {
     throw new Error('You are already signed up for this role')
   }
 
