@@ -10,7 +10,7 @@
 //   executingId  - Currently executing event ID (for loading state)
 // ============================================================
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 
 // ---- Status badge colors (shared with SchedulePage) ----
 const STATUS_COLORS = {
@@ -102,6 +102,9 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
   const [selectedDay, setSelectedDay] = useState(null) // 'YYYY-MM-DD' or null
+  const [popoverPos, setPopoverPos] = useState(null) // { top, left } for positioning
+  const popoverRef = useRef(null)
+  const gridRef = useRef(null)
 
   // Group events by date key
   const eventsByDate = useMemo(() => {
@@ -151,6 +154,39 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
   // Events for the selected day
   const selectedEvents = selectedDay ? (eventsByDate[selectedDay] || []) : []
 
+  // Handle day cell click — compute popover position relative to the grid
+  const handleDayClick = useCallback((dateKey, cellEl) => {
+    if (dateKey === selectedDay) {
+      setSelectedDay(null)
+      setPopoverPos(null)
+      return
+    }
+    setSelectedDay(dateKey)
+    if (cellEl && gridRef.current) {
+      const gridRect = gridRef.current.getBoundingClientRect()
+      const cellRect = cellEl.getBoundingClientRect()
+      // Position popover below the cell, centered horizontally
+      let top = cellRect.bottom - gridRect.top + 8
+      let left = cellRect.left - gridRect.left + cellRect.width / 2
+      setPopoverPos({ top, left })
+    }
+  }, [selectedDay])
+
+  // Close popover on outside click
+  useEffect(() => {
+    if (!selectedDay) return
+    function handleClickOutside(e) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target)) {
+        // Check if click is on another day cell (let handleDayClick handle it)
+        if (e.target.closest('[data-calendar-day]')) return
+        setSelectedDay(null)
+        setPopoverPos(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [selectedDay])
+
   return (
     <div className="space-y-4">
       {/* Month navigation */}
@@ -183,9 +219,9 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
       </div>
 
       {/* Calendar grid */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg border border-gray-200">
         {/* Day headers */}
-        <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50">
+        <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50 rounded-t-lg overflow-hidden">
           {DAY_NAMES.map(day => (
             <div key={day} className="px-2 py-2 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
               {day}
@@ -194,7 +230,7 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
         </div>
 
         {/* Day cells */}
-        <div className="grid grid-cols-7">
+        <div ref={gridRef} className="grid grid-cols-7 relative">
           {calendarDays.map((day, i) => {
             const dayEvents = eventsByDate[day.dateKey] || []
             const isToday = day.dateKey === todayKey
@@ -204,7 +240,8 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
             return (
               <div
                 key={i}
-                onClick={() => setSelectedDay(day.dateKey === selectedDay ? null : day.dateKey)}
+                data-calendar-day={day.dateKey}
+                onClick={(e) => handleDayClick(day.dateKey, e.currentTarget)}
                 className={`
                   relative min-h-[72px] p-1.5 border-b border-r border-gray-100 cursor-pointer transition-colors
                   ${!day.isCurrentMonth ? 'bg-gray-50' : 'bg-white'}
@@ -261,93 +298,104 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
               </div>
             )
           })}
-        </div>
-      </div>
 
-      {/* Selected day detail panel */}
-      {selectedDay && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="font-semibold text-sm text-gray-900">
-              {new Date(selectedDay + 'T12:00:00Z').toLocaleDateString('fi-FI', {
-                weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-              })}
-            </h4>
-            <button
-              onClick={() => setSelectedDay(null)}
-              className="text-gray-400 hover:text-gray-600 text-sm"
+          {/* Floating popover for selected day — inside the relative grid */}
+          {selectedDay && popoverPos && (
+            <div
+              ref={popoverRef}
+              className="absolute z-30 w-[340px] bg-white rounded-lg border border-gray-200 shadow-xl"
+              style={{
+                top: popoverPos.top,
+                left: Math.max(8, Math.min(popoverPos.left - 170, (gridRef.current?.offsetWidth || 600) - 348)),
+              }}
             >
-              ×
-            </button>
-          </div>
+              {/* Arrow */}
+              <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white border-l border-t border-gray-200 rotate-45" />
 
-          {selectedEvents.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-2">No events on this day.</p>
-          ) : (
-            <div className="space-y-2">
-              {selectedEvents.map(evt => {
-                const tpl = tplMap?.[evt.templateId]
-                const staffing = staffingStatus?.[evt.id]
+              <div className="relative p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold text-sm text-gray-900">
+                    {new Date(selectedDay + 'T12:00:00Z').toLocaleDateString('fi-FI', {
+                      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+                    })}
+                  </h4>
+                  <button
+                    onClick={() => { setSelectedDay(null); setPopoverPos(null) }}
+                    className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+                  >
+                    ×
+                  </button>
+                </div>
 
-                return (
-                  <div key={evt.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm text-gray-900 truncate">
-                          {evt.eventName || tpl?.name || 'Event'}
-                        </span>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${STATUS_COLORS[evt.status] || 'bg-gray-100 text-gray-500'}`}>
-                          {STATUS_LABELS[evt.status] || evt.status}
-                        </span>
-                        {staffing?.hasNeeds && (
-                          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${staffing.isUnderstaffed ? 'bg-orange-500' : 'bg-green-500'}`}
-                            title={staffing.isUnderstaffed ? 'Needs more staff' : 'Fully staffed'} />
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        {tpl?.name || evt.templateId || 'Imported'}
-                        {(evt.ssiReferences?.cupUrl || evt.ssiReferences?.url) && (
-                          <span> • <a href={evt.ssiReferences.cupUrl || evt.ssiReferences.url} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">SSI</a></span>
-                        )}
-                      </div>
-                      {evt.status === 'failed' && evt.errorDetails && (
-                        <div className="text-xs text-red-500 mt-1">{evt.errorDetails}</div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 ml-3">
-                      {evt.status === 'planned' && (
-                        <button
-                          onClick={() => onExecute(evt.id)}
-                          disabled={executingId === evt.id}
-                          className="text-xs text-sky-600 hover:text-sky-800 font-medium disabled:opacity-50"
-                        >
-                          {executingId === evt.id ? 'Creating...' : 'Create in SSI'}
-                        </button>
-                      )}
-                      {evt.status === 'failed' && (
-                        <button
-                          onClick={() => onExecute(evt.id)}
-                          disabled={executingId === evt.id}
-                          className="text-xs text-sky-600 hover:text-sky-800 font-medium disabled:opacity-50"
-                        >
-                          {executingId === evt.id ? 'Retrying...' : 'Retry'}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => onDelete(evt)}
-                        disabled={executingId === evt.id}
-                        className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
-                      >
-                        {executingId === evt.id ? 'Deleting...' : 'Delete'}
-                      </button>
-                    </div>
+                {selectedEvents.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-2">No events on this day.</p>
+                ) : (
+                  <div className="space-y-2 max-h-[280px] overflow-y-auto">
+                    {selectedEvents.map(evt => {
+                      const tpl = tplMap?.[evt.templateId]
+                      const staffing = staffingStatus?.[evt.id]
+
+                      return (
+                        <div key={evt.id} className="bg-gray-50 rounded-lg px-3 py-2.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-sm text-gray-900">
+                              {evt.eventName || tpl?.name || 'Event'}
+                            </span>
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${STATUS_COLORS[evt.status] || 'bg-gray-100 text-gray-500'}`}>
+                              {STATUS_LABELS[evt.status] || evt.status}
+                            </span>
+                            {staffing?.hasNeeds && (
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${staffing.isUnderstaffed ? 'bg-orange-500' : 'bg-green-500'}`}
+                                title={staffing.isUnderstaffed ? 'Needs more staff' : 'Fully staffed'} />
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-400 mt-0.5">
+                            {tpl?.name || evt.templateId || 'Imported'}
+                            {(evt.ssiReferences?.cupUrl || evt.ssiReferences?.url) && (
+                              <span> • <a href={evt.ssiReferences.cupUrl || evt.ssiReferences.url} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline" onClick={e => e.stopPropagation()}>SSI</a></span>
+                            )}
+                          </div>
+                          {evt.status === 'failed' && evt.errorDetails && (
+                            <div className="text-xs text-red-500 mt-1">{evt.errorDetails}</div>
+                          )}
+                          {/* Actions */}
+                          <div className="flex items-center gap-3 mt-2">
+                            {evt.status === 'planned' && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onExecute(evt.id) }}
+                                disabled={executingId === evt.id}
+                                className="text-xs text-sky-600 hover:text-sky-800 font-medium disabled:opacity-50"
+                              >
+                                {executingId === evt.id ? 'Creating...' : 'Create in SSI'}
+                              </button>
+                            )}
+                            {evt.status === 'failed' && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onExecute(evt.id) }}
+                                disabled={executingId === evt.id}
+                                className="text-xs text-sky-600 hover:text-sky-800 font-medium disabled:opacity-50"
+                              >
+                                {executingId === evt.id ? 'Retrying...' : 'Retry'}
+                              </button>
+                            )}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onDelete(evt) }}
+                              disabled={executingId === evt.id}
+                              className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
+                            >
+                              {executingId === evt.id ? 'Deleting...' : 'Delete'}
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
-                )
-              })}
+                )}
+              </div>
             </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   )
 }
