@@ -1,7 +1,7 @@
 // ============================================================
 // RosterView — Event staffing platform
 // ============================================================
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { getUpcomingStaffingApi, getMyStaffingAssignmentsApi, signupForEventStaffingApi, withdrawFromEventStaffingApi, backfillStaffingNeedsApi, updateEventStaffingNeedsApi, listTemplates } from '../../platform-api'
 
 // Filter tab definitions
@@ -12,7 +12,7 @@ const FILTERS = [
   { key: 'myEvents',  label: 'My Events' },
 ]
 
-export default function RosterView({ tenantId, account }) {
+export default function RosterView({ tenantId, account, focusEventId, onFocusHandled }) {
   const [upcoming, setUpcoming] = useState([])
   const [myAssignments, setMyAssignments] = useState([])
   const [loading, setLoading] = useState(true)
@@ -21,12 +21,35 @@ export default function RosterView({ tenantId, account }) {
   const [backfillResult, setBackfillResult] = useState(null)
   const [signupModal, setSignupModal] = useState(null) // { eventId, eventName, roles[] } for role selection dialog
   const [templatePicker, setTemplatePicker] = useState(null) // { templates[], skippedCount } for unmatched events
-  const [filter, setFilter] = useState('all') // 'all' | 'needStaff' | 'staffed' | 'myEvents'
+  const [filter, setFilter] = useState(focusEventId ? 'needStaff' : 'all') // 'all' | 'needStaff' | 'staffed' | 'myEvents'
+  const focusRef = useRef(null) // ref for the focused event card
+  const pendingFocus = useRef(focusEventId || null)
 
   useEffect(() => {
     if (!tenantId) return
     loadData()
   }, [tenantId])
+
+  // When focusEventId changes from parent (e.g. dashboard click), update filter + pending focus
+  useEffect(() => {
+    if (focusEventId) {
+      setFilter('needStaff')
+      pendingFocus.current = focusEventId
+    }
+  }, [focusEventId])
+
+  // Scroll to focused event after data loads and DOM renders
+  useEffect(() => {
+    if (!loading && pendingFocus.current && focusRef.current) {
+      focusRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      // Clear after a brief highlight period
+      const timer = setTimeout(() => {
+        pendingFocus.current = null
+        if (onFocusHandled) onFocusHandled()
+      }, 2000)
+      return () => clearTimeout(timer)
+    }
+  }, [loading, filter])
 
   async function loadData() {
     try {
@@ -282,8 +305,14 @@ export default function RosterView({ tenantId, account }) {
               })
               const daysUntil = Math.ceil((new Date(event.eventDate) - new Date()) / (1000 * 60 * 60 * 24))
 
+              const isFocused = pendingFocus.current === event.id
+
               return (
-                <div key={event.id} className={`bg-white rounded-lg shadow-sm border overflow-hidden ${isUnderstaffed ? 'border-l-4 border-l-orange-400' : 'border-l-4 border-l-green-400'}`}>
+                <div
+                  key={event.id}
+                  ref={isFocused ? focusRef : undefined}
+                  className={`bg-white rounded-lg shadow-sm border overflow-hidden transition-all duration-700 ${isUnderstaffed ? 'border-l-4 border-l-orange-400' : 'border-l-4 border-l-green-400'} ${isFocused ? 'ring-2 ring-amber-400 ring-offset-2' : ''}`}
+                >
                   {/* Event header */}
                   <div className="px-5 py-4 border-b border-gray-100">
                     <div className="flex items-start justify-between">

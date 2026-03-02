@@ -307,9 +307,11 @@ export default function PlatformApp({ route }) {
   }, [])
 
   // ---- Navigate within sidebar ----
+  const [focusEventId, setFocusEventId] = useState(null)
   function navigate(viewId, extra) {
     setActiveView(viewId)
     if (extra?.templateId) setSelectedTemplateId(extra.templateId)
+    setFocusEventId(extra?.focusEventId || null)
   }
 
   // ---- Render: Auth flow (full page, no sidebar) ----
@@ -437,7 +439,7 @@ export default function PlatformApp({ route }) {
         return <SchedulePage tenantId={selectedTenantId} onBack={() => setActiveView('dashboard')} />
 
       case 'roster':
-        return <RosterView tenantId={selectedTenantId} account={account} />
+        return <RosterView tenantId={selectedTenantId} account={account} focusEventId={focusEventId} onFocusHandled={() => setFocusEventId(null)} />
 
       case 'join':
         return <PlaceholderView title="Join as Instructor" description="Register to join the instructor roster for this organization." />

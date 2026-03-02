@@ -103,7 +103,7 @@ export default function DashboardView({ tenantId, onNavigate }) {
               return (
                 <div
                   key={event.id}
-                  onClick={() => onNavigate('roster')}
+                  onClick={() => onNavigate('roster', { focusEventId: event.id })}
                   className="px-4 py-3 flex items-center justify-between hover:bg-amber-50/50 cursor-pointer transition-colors"
                 >
                   <div className="min-w-0">
