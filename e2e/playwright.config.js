@@ -12,6 +12,7 @@
 //   BASE_URL=https://example.com npm test
 // ============================================================
 
+import 'dotenv/config'
 import { defineConfig, devices } from '@playwright/test'
 
 const baseURL = process.env.BASE_URL || 'http://localhost:3001'

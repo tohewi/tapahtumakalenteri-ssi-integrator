@@ -2064,18 +2064,21 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       const ssiResults = { trainerSquad: null, management: null }
       try {
         const evtStaffing = await getEventStaffing(tenantId, eventId)
-        if (evtStaffing && evtStaffing.ssiReferences?.ssiEventId) {
-          const ssiEventId = evtStaffing.ssiReferences.ssiEventId
-          const contentType = evtStaffing.ssiReferences.contentType || 91 // fallback to NordicMatch
-          
-          const rules = evtStaffing.templateStaffingRules || {}
+        const ssiRefs = evtStaffing?.event?.ssiReferences || {}
+        // For non-cup events: ssiEventId + contentTypeKey; for cups: cupId + cupTypeId
+        const ssiEventId = ssiRefs.ssiEventId || ssiRefs.cupId
+        const contentType = ssiRefs.contentTypeKey || ssiRefs.cupTypeId || 91
+        if (evtStaffing && ssiEventId) {
+          const rules = evtStaffing.event?.templateStaffingRules || {}
           const staffSquadName = rules.staffSquadName
           const needDef = (evtStaffing.needs || []).find(n => n.id === needId) || {}
           
-          // Role config might be directly in rules.roles for the new JSON model
+          // Role config from template rules, with default SSI mapping based on role key
           const roleCfg = (rules.roles || []).find(r => r.key === needDef.roleKey) || {}
-          const ssiOfficialCode = roleCfg.ssiOfficialCode
-          const ssiMgmtRole = roleCfg.ssiMgmtRole // '1' or '2'
+          const defaultSsiMapping = { ro: 'RO', md: 'MD', qm: 'QM', safety: 'RM', match_director: 'MD' }
+          const ssiOfficialCode = roleCfg.ssiOfficialCode || defaultSsiMapping[needDef.roleKey]
+          // Default all roles to mgmt role '1' (admin) for SSI management group
+          const ssiMgmtRole = roleCfg.ssiMgmtRole || '1'
 
           // Use the admin session to perform the SSI operations since the regular user might not have rights
           const adminSess = getAdminSession ? await getAdminSession() : null
@@ -2199,9 +2202,11 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       const ssiResults = { trainerSquad: null, management: null }
       try {
         const evtStaffing = await getEventStaffing(tenantId, eventId)
-        if (evtStaffing && evtStaffing.ssiReferences?.ssiEventId) {
-          const ssiEventId = evtStaffing.ssiReferences.ssiEventId
-          const contentType = evtStaffing.ssiReferences.contentType || 91
+        const ssiRefs = evtStaffing?.event?.ssiReferences || {}
+        // For non-cup events: ssiEventId + contentTypeKey; for cups: cupId + cupTypeId
+        const ssiEventId = ssiRefs.ssiEventId || ssiRefs.cupId
+        const contentType = ssiRefs.contentTypeKey || ssiRefs.cupTypeId || 91
+        if (evtStaffing && ssiEventId) {
 
           const adminSess = getAdminSession ? await getAdminSession() : null
           const cookies = adminSess?.cookies
