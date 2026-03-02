@@ -122,6 +122,36 @@ const COOKIE_OPTIONS = {
   maxAge: 24 * 60 * 60 * 1000, // 24 hours
 }
 
+// ---- Helpers ----
+
+/**
+ * Extract the SSI event ID and content type from ssiReferences.
+ * For non-cup events: uses ssiEventId + contentTypeKey.
+ * For cups: uses the first match's id + typeId (cups don't have management groups at the container level).
+ * @returns {{ ssiEventId: string|null, contentType: number }}
+ */
+function extractSsiTarget(ssiRefs) {
+  if (!ssiRefs) return { ssiEventId: null, contentType: 91 }
+
+  // Non-cup: direct event
+  if (ssiRefs.ssiEventId) {
+    return { ssiEventId: ssiRefs.ssiEventId, contentType: ssiRefs.contentTypeKey || 91 }
+  }
+
+  // Cup: use first match (management groups live on matches, not on the cup container)
+  if (ssiRefs.isCup && ssiRefs.matches?.length > 0) {
+    const firstMatch = ssiRefs.matches[0]
+    return { ssiEventId: firstMatch.id, contentType: parseInt(firstMatch.typeId) || 91 }
+  }
+
+  // Fallback: try cupId (non-cup import that only has cupId)
+  if (ssiRefs.cupId) {
+    return { ssiEventId: ssiRefs.cupId, contentType: ssiRefs.cupTypeId || 91 }
+  }
+
+  return { ssiEventId: null, contentType: 91 }
+}
+
 // ---- Router factory ----
 
 export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimiter, getAdminSession }) {
@@ -1858,10 +1888,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
 
       // SSI Sync: Verify actual staff assignments from SSI and mark DB signups as invalid if missing
       try {
-        const ssiRefs = data.event?.ssiReferences || {}
-        // For non-cup events: ssiEventId + contentTypeKey; for cups: cupId + cupTypeId
-        const ssiEventId = ssiRefs.ssiEventId || ssiRefs.cupId
-        const contentType = ssiRefs.contentTypeKey || ssiRefs.cupTypeId || 91
+        const { ssiEventId, contentType } = extractSsiTarget(data.event?.ssiReferences)
         if (ssiEventId) {
           const rules = data.event?.templateStaffingRules || {}
           const staffSquadName = rules.staffSquadName
@@ -2069,10 +2096,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       const ssiResults = { trainerSquad: null, management: null }
       try {
         const evtStaffing = await getEventStaffing(tenantId, eventId)
-        const ssiRefs = evtStaffing?.event?.ssiReferences || {}
-        // For non-cup events: ssiEventId + contentTypeKey; for cups: cupId + cupTypeId
-        const ssiEventId = ssiRefs.ssiEventId || ssiRefs.cupId
-        const contentType = ssiRefs.contentTypeKey || ssiRefs.cupTypeId || 91
+        const { ssiEventId, contentType } = extractSsiTarget(evtStaffing?.event?.ssiReferences)
         if (evtStaffing && ssiEventId) {
           const rules = evtStaffing.event?.templateStaffingRules || {}
           const staffSquadName = rules.staffSquadName
@@ -2207,10 +2231,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       const ssiResults = { trainerSquad: null, management: null }
       try {
         const evtStaffing = await getEventStaffing(tenantId, eventId)
-        const ssiRefs = evtStaffing?.event?.ssiReferences || {}
-        // For non-cup events: ssiEventId + contentTypeKey; for cups: cupId + cupTypeId
-        const ssiEventId = ssiRefs.ssiEventId || ssiRefs.cupId
-        const contentType = ssiRefs.contentTypeKey || ssiRefs.cupTypeId || 91
+        const { ssiEventId, contentType } = extractSsiTarget(evtStaffing?.event?.ssiReferences)
         if (evtStaffing && ssiEventId) {
 
           const adminSess = getAdminSession ? await getAdminSession() : null
@@ -2284,9 +2305,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
         if (!action || !email) return res.status(400).json({ error: 'action and email are required' })
 
         const evtStaffing = await getEventStaffing(tenantId, eventId)
-        const ssiRefs = evtStaffing?.event?.ssiReferences || {}
-        const ssiEventId = ssiRefs.ssiEventId || ssiRefs.cupId
-        const contentType = ssiRefs.contentTypeKey || ssiRefs.cupTypeId || 91
+        const { ssiEventId, contentType } = extractSsiTarget(evtStaffing?.event?.ssiReferences)
         if (!ssiEventId) {
           return res.status(400).json({ error: 'Event has no SSI reference' })
         }
@@ -2320,9 +2339,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       try {
         const { id: tenantId, eventId } = req.params
         const evtStaffing = await getEventStaffing(tenantId, eventId)
-        const ssiRefs = evtStaffing?.event?.ssiReferences || {}
-        const ssiEventId = ssiRefs.ssiEventId || ssiRefs.cupId
-        const contentType = ssiRefs.contentTypeKey || ssiRefs.cupTypeId || 91
+        const { ssiEventId, contentType } = extractSsiTarget(evtStaffing?.event?.ssiReferences)
         if (!ssiEventId) {
           return res.status(400).json({ error: 'Event has no SSI reference' })
         }
