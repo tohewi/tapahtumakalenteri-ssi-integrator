@@ -16,6 +16,8 @@ import { AppError } from '../lib/errors/AppError.js'
 import { sendEmail } from '../lib/email.js'
 import { ssiFetchEventStructure, ssiSearchEvents } from '../lib/ssi-core/seed-import.js'
 import { createSsiEvent, deleteSsiEvent } from '../lib/services/event-creation-service.js'
+import { ssiRegisterToTrainerSquad, ssiDeleteMatchParticipant, ssiSetParticipantSquad, ssiFindParticipantInEvent } from '../lib/ssi-core/participants.js'
+import { ssiGetMatchGroupId, ssiAddToMatchManagement, ssiRemoveFromMatchManagement } from '../lib/ssi-core/management.js'
 import { generateMfaSetup, verifyTotpCode, hashRecoveryCodes, verifyRecoveryCode } from '../lib/services/mfa-service.js'
 import {
   createAccountWithTenant,
@@ -1910,8 +1912,100 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       } catch (emailErr) {
         log.warn('[platform] Failed to send staffing confirmation email:', emailErr.message)
       }
+
+      // Phase 8 SSI Sync (Trainer Squad + Mgmt Group + Official Codes)
+      const ssiResults = { trainerSquad: null, management: null }
+      try {
+        const evtStaffing = await getEventStaffing(tenantId, eventId)
+        if (evtStaffing && evtStaffing.ssiReferences?.ssiEventId) {
+          const ssiEventId = evtStaffing.ssiReferences.ssiEventId
+          const contentType = evtStaffing.ssiReferences.contentType || 91 // fallback to NordicMatch
+          
+          const rules = evtStaffing.templateStaffingRules || {}
+          const staffSquadName = rules.staffSquadName
+          const needDef = (evtStaffing.needs || []).find(n => n.id === needId) || {}
+          
+          // Role config might be directly in rules.roles for the new JSON model
+          const roleCfg = (rules.roles || []).find(r => r.key === needDef.roleKey) || {}
+          const ssiOfficialCode = roleCfg.ssiOfficialCode
+          const ssiMgmtRole = roleCfg.ssiMgmtRole // '1' or '2'
+
+          // Use the admin session to perform the SSI operations since the regular user might not have rights
+          const adminSess = getAdminSession ? await getAdminSession() : null
+          const cookies = adminSess?.cookies
+          
+          if (cookies) {
+            // 1. Add to SSI Trainer Squad
+            if (staffSquadName) {
+              try {
+                const squadResult = await ssiRegisterToTrainerSquad(contentType, ssiEventId, req.account.email, staffSquadName, cookies)
+                log.debug(`[platform] SSI trainer squad: ${req.account.email} → ${squadResult.message}`)
+                ssiResults.trainerSquad = { success: true, message: squadResult.message }
+
+                // Fallback: if already registered but not in trainer squad, move them
+                if (squadResult.message?.includes('Already registered')) {
+                  try {
+                    const { ssiGraphQL } = await import('../lib/ssi-core/graphql.js')
+                    const sqData = await ssiGraphQL(adminSess, `
+                      query GetSquads($ct: Int!, $id: String!) {
+                        event(content_type: $ct, id: $id) {
+                          squads {
+                            number
+                            ... on NordicSquadNode    { competitors { id shooter { email } } }
+                            ... on IpscSquadNode      { competitors { id shooter { email } } }
+                            ... on PpcSquadNode       { competitors { id shooter { email } } }
+                            ... on CmpSquadNode       { competitors { id shooter { email } } }
+                            ... on PrecisionSquadNode { competitors { id shooter { email } } }
+                            ... on GenericSquadNode   { competitors { id shooter { email } } }
+                          }
+                        }
+                      }
+                    `, { ct: contentType, id: ssiEventId })
+                    
+                    let competitorId = null
+                    for (const sq of sqData.event?.squads || []) {
+                      const comp = (sq.competitors || []).find(c => c.shooter?.email === req.account.email)
+                      if (comp) {
+                        competitorId = comp.id
+                        break
+                      }
+                    }
+                    if (competitorId) {
+                      // We need the numeric squad ID of the staff squad. For now we assume we can fetch it or just log.
+                      // Doing full squad fallback requires scraping participants page to find the squad ID by name.
+                      log.debug(`[platform] Need to move competitor ${competitorId} to ${staffSquadName} (requires separate fetch for squad id)`)
+                      // Future: add proper squad move logic here if needed
+                    }
+                  } catch (err) {
+                    log.error(`[platform] Squad fallback failed: ${err.message}`)
+                  }
+                }
+              } catch (e) {
+                log.error(`[platform] SSI trainer squad failed for ${req.account.email}: ${e.message}`)
+                ssiResults.trainerSquad = { success: false, message: e.message }
+              }
+            }
+
+            // 2. Add to SSI Management Group
+            if (ssiMgmtRole) {
+              try {
+                const groupId = await ssiGetMatchGroupId(contentType, ssiEventId, cookies)
+                const officialCodes = ssiOfficialCode ? [ssiOfficialCode] : []
+                const mgmtResult = await ssiAddToMatchManagement(groupId, contentType, ssiEventId, req.account.email, ssiMgmtRole, officialCodes, cookies)
+                log.debug(`[platform] SSI management: ${req.account.email} (${ssiMgmtRole}) → ${mgmtResult.message}`)
+                ssiResults.management = { success: true, message: mgmtResult.message }
+              } catch (e) {
+                log.error(`[platform] SSI management add failed for ${req.account.email}: ${e.message}`)
+                ssiResults.management = { success: false, message: e.message }
+              }
+            }
+          }
+        }
+      } catch (syncErr) {
+        log.error(`[platform] SSI sync error during signup:`, syncErr.message)
+      }
       
-      res.json({ success: true, signup })
+      res.json({ success: true, signup, ssi: ssiResults })
     } catch (err) {
       log.error(`[platform] POST staffing signup failed:`, err.message)
       if (err.message.includes('fully staffed') || err.message.includes('not found')) {
@@ -1953,8 +2047,59 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       } catch (emailErr) {
         log.warn('[platform] Failed to send staffing withdrawal email:', emailErr.message)
       }
+
+      // Phase 8 SSI Sync (Remove from Trainer Squad + Mgmt Group)
+      const ssiResults = { trainerSquad: null, management: null }
+      try {
+        const evtStaffing = await getEventStaffing(tenantId, eventId)
+        if (evtStaffing && evtStaffing.ssiReferences?.ssiEventId) {
+          const ssiEventId = evtStaffing.ssiReferences.ssiEventId
+          const contentType = evtStaffing.ssiReferences.contentType || 91
+
+          const adminSess = getAdminSession ? await getAdminSession() : null
+          const cookies = adminSess?.cookies
+
+          if (cookies) {
+            // 1. Remove from SSI Management Group
+            try {
+              const groupId = await ssiGetMatchGroupId(contentType, ssiEventId, cookies)
+              const removeResult = await ssiRemoveFromMatchManagement(groupId, contentType, ssiEventId, req.account.email, cookies)
+              log.debug(`[platform] SSI management remove: ${req.account.email} → ${removeResult.message}`)
+              ssiResults.management = { success: true, message: removeResult.message, usedFallback: removeResult.usedFallback }
+            } catch (e) {
+              log.error(`[platform] SSI management remove failed for ${req.account.email}: ${e.message}`)
+              if (!e.message.includes('not found') && !e.message.includes('may already be removed')) {
+                ssiResults.management = { success: false, message: e.message }
+              } else {
+                ssiResults.management = { success: true, message: 'Already removed or not found' }
+              }
+            }
+
+            // 2. Remove from Trainer Squad (scrape participants)
+            // It only removes from the event entirely. If they are also a regular competitor, 
+            // the user will need to re-register. This matches the SRA staffing engine behavior.
+            try {
+              const displayName = req.account.name || req.account.email
+              const found = await ssiFindParticipantInEvent(contentType, ssiEventId, displayName, cookies)
+              
+              if (found) {
+                const deleteResult = await ssiDeleteMatchParticipant(ssiEventId, found.participantId, displayName, cookies, found.participantCT)
+                log.debug(`[platform] SSI trainer squad remove: ${req.account.email} → ${deleteResult.message}`)
+                ssiResults.trainerSquad = { success: true, message: deleteResult.message }
+              } else {
+                ssiResults.trainerSquad = { success: true, message: 'Not found on participants page' }
+              }
+            } catch (e) {
+              log.error(`[platform] SSI trainer squad remove failed: ${e.message}`)
+              ssiResults.trainerSquad = { success: false, message: e.message }
+            }
+          }
+        }
+      } catch (syncErr) {
+        log.error(`[platform] SSI sync error during withdrawal:`, syncErr.message)
+      }
       
-      res.json({ success: true, signup })
+      res.json({ success: true, signup, ssi: ssiResults })
     } catch (err) {
       log.error(`[platform] POST staffing withdraw failed:`, err.message)
       if (err.message.includes('not found')) {

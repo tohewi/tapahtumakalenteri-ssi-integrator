@@ -440,6 +440,21 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
 
         {/* Section 4: Staffing Rules — roles array */}
         <SectionCard title="Staffing Rules" description="Roles and counts auto-populated to every event created from this template.">
+          <div className="mb-4 bg-white border border-gray-200 rounded-md p-4 space-y-3">
+            <h4 className="text-sm font-semibold text-gray-800">SSI Sync Settings</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <TextInput
+                label="Trainer Squad Name" hint="e.g. Squad 5"
+                value={staffingRules.staffSquadName}
+                onChange={v => updateStaffing('staffSquadName', v)}
+                placeholder="Squad 5"
+              />
+            </div>
+            <p className="text-xs text-gray-500">
+              When a user signs up for any role below, they will be automatically moved to this squad in SSI (if left empty, squad sync is skipped).
+            </p>
+          </div>
+
           {(staffingRules.roles || []).length === 0 ? (
             <div className="text-sm text-gray-500 text-center py-4">
               No staffing roles defined. Add roles so events know how many volunteers they need.
@@ -488,12 +503,34 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
                       }} className="text-red-400 hover:text-red-600 text-lg leading-none pb-1" title="Remove role">×</button>
                     </div>
                   </div>
+                  <div className="grid grid-cols-12 gap-2 mt-2 pt-2 border-t border-gray-100">
+                    <div className="col-span-4">
+                      <FieldLabel label="SSI Official Code" hint="e.g. MD, QM, RM, RO" />
+                      <input type="text" value={role.ssiOfficialCode || ''} onChange={e => {
+                        const updated = [...staffingRules.roles]
+                        updated[idx] = { ...updated[idx], ssiOfficialCode: e.target.value }
+                        updateStaffing('roles', updated)
+                      }} placeholder="Leave empty for none" className="w-full border rounded-md px-2 py-1 text-sm" />
+                    </div>
+                    <div className="col-span-4">
+                      <FieldLabel label="SSI Mgmt Role" hint="1=Admin, 2=Staff" />
+                      <select value={role.ssiMgmtRole || ''} onChange={e => {
+                        const updated = [...staffingRules.roles]
+                        updated[idx] = { ...updated[idx], ssiMgmtRole: e.target.value }
+                        updateStaffing('roles', updated)
+                      }} className="w-full border rounded-md px-2 py-1 text-sm">
+                        <option value="">No Management Access</option>
+                        <option value="1">Match Admin (1)</option>
+                        <option value="2">Staff (2)</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
           )}
           <button onClick={() => {
-            const roles = [...(staffingRules.roles || []), { key: '', label: '', min: 1, max: 1 }]
+            const roles = [...(staffingRules.roles || []), { key: '', label: '', min: 1, max: 1, ssiOfficialCode: '', ssiMgmtRole: '' }]
             updateStaffing('roles', roles)
           }} className="mt-2 text-sm text-sky-600 hover:text-sky-800 font-medium">
             + Add Role
@@ -503,10 +540,10 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
           {(staffingRules.roles || []).length === 0 && (
             <button onClick={() => {
               updateStaffing('roles', [
-                { key: 'match_director', label: 'Match Director', min: 1, max: 1 },
-                { key: 'ro', label: 'Range Officer', min: 2, max: 4 },
-                { key: 'safety', label: 'Safety Officer', min: 1, max: 1 },
-                { key: 'scorer', label: 'Scorer', min: 1, max: 2 },
+                { key: 'match_director', label: 'Match Director', min: 1, max: 1, ssiOfficialCode: 'MD', ssiMgmtRole: '1' },
+                { key: 'ro', label: 'Range Officer', min: 2, max: 4, ssiOfficialCode: 'RO', ssiMgmtRole: '1' },
+                { key: 'safety', label: 'Safety Officer', min: 1, max: 1, ssiOfficialCode: 'RM', ssiMgmtRole: '1' },
+                { key: 'scorer', label: 'Scorer', min: 1, max: 2, ssiOfficialCode: '', ssiMgmtRole: '1' },
               ])
             }} className="ml-4 text-sm text-gray-400 hover:text-gray-600">
               or load SRA defaults

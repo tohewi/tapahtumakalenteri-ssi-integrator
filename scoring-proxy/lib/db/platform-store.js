@@ -1816,10 +1816,11 @@ export async function deletePlatformSession(sessionId) {
 export async function getUpcomingStaffingNeeds(tenantId) {
   const result = await query(`
     SELECT 
-      e.id as event_id, e.event_date, e.event_name, e.status as event_status,
+      e.id as event_id, e.event_date, e.event_name, e.status as event_status, e.ssi_references,
       e.created_by,
       mt.name as template_name, mt.overrides as template_overrides,
       mt.ssi_seed_snapshot as seed_snapshot,
+      mt.staffing_rules as template_staffing_rules,
       d.name as discipline_name,
       creator.name as creator_name,
       n.id as need_id, n.role_key, n.role_label, n.min_count, n.max_count,
@@ -1851,11 +1852,13 @@ export async function getUpcomingStaffingNeeds(tenantId) {
           eventDate: row.event_date,
           eventName: row.event_name || row.template_name || 'Unnamed Event',
           status: row.event_status,
+          ssiReferences: row.ssi_references || {},
           templateName: row.template_name || null,
           disciplineName: row.discipline_name || null,
           venue,
           matchCount,
           createdBy: row.creator_name || null,
+          templateStaffingRules: row.template_staffing_rules || {},
         },
         needs: [],
         isUnderstaffed: false
@@ -1924,11 +1927,21 @@ export async function getMyStaffingAssignments(tenantId, accountId) {
  * Returns { event, needs[] } or null if event not found.
  */
 export async function getEventStaffing(tenantId, eventId) {
-  const evtRes = await query(
-    'SELECT id, event_date, event_name FROM scheduled_events WHERE id = $1 AND tenant_id = $2',
-    [eventId, tenantId]
-  )
+  const evtRes = await query(`
+    SELECT e.id, e.event_date, e.event_name, e.ssi_references, mt.staffing_rules as template_staffing_rules
+    FROM scheduled_events e
+    LEFT JOIN match_templates mt ON e.template_id = mt.id
+    WHERE e.id = $1 AND e.tenant_id = $2
+  `, [eventId, tenantId])
   if (evtRes.rows.length === 0) return null
+
+  const event = {
+    id: evtRes.rows[0].id,
+    eventDate: evtRes.rows[0].event_date,
+    eventName: evtRes.rows[0].event_name,
+    ssiReferences: evtRes.rows[0].ssi_references || {},
+    templateStaffingRules: evtRes.rows[0].template_staffing_rules || {},
+  }
 
   const result = await query(`
     SELECT 
@@ -1941,7 +1954,6 @@ export async function getEventStaffing(tenantId, eventId) {
     ORDER BY n.role_label ASC
   `, [eventId])
 
-  const event = { id: evtRes.rows[0].id, eventDate: evtRes.rows[0].event_date, eventName: evtRes.rows[0].event_name }
   const needsMap = {}
 
   for (const row of result.rows) {
