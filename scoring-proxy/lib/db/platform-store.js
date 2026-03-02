@@ -2053,12 +2053,25 @@ export async function signupForEventStaffing(tenantId, eventId, needId, accountI
     throw new Error('This role is already fully staffed')
   }
 
+  // Check if already signed up for THIS specific role
   const existingRes = await query(
     "SELECT id, status FROM staff_signups WHERE need_id = $1 AND account_id = $2",
     [needId, accountId]
   )
   if (existingRes.rows.length > 0 && existingRes.rows[0].status === 'confirmed') {
     throw new Error('You are already signed up for this role')
+  }
+
+  // Check if already signed up for ANY other role in the same event
+  const otherRoleRes = await query(
+    `SELECT s.id, n.role_label FROM staff_signups s
+     JOIN event_staffing_needs n ON s.need_id = n.id
+     WHERE n.event_id = $1 AND s.account_id = $2 AND s.status = 'confirmed' AND s.need_id != $3`,
+    [eventId, accountId, needId]
+  )
+  if (otherRoleRes.rows.length > 0) {
+    const existingRole = otherRoleRes.rows[0].role_label
+    throw new Error(`You are already signed up as ${existingRole} for this event. Withdraw first to change roles.`)
   }
 
   const id = generateId('sup')

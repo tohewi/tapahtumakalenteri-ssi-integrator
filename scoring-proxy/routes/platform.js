@@ -1858,10 +1858,12 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
 
       // SSI Sync: Verify actual staff assignments from SSI and mark DB signups as invalid if missing
       try {
-        if (data.ssiReferences?.ssiEventId) {
-          const ssiEventId = data.ssiReferences.ssiEventId
-          const contentType = data.ssiReferences.contentType || 91
-          const rules = data.templateStaffingRules || {}
+        const ssiRefs = data.event?.ssiReferences || {}
+        // For non-cup events: ssiEventId + contentTypeKey; for cups: cupId + cupTypeId
+        const ssiEventId = ssiRefs.ssiEventId || ssiRefs.cupId
+        const contentType = ssiRefs.contentTypeKey || ssiRefs.cupTypeId || 91
+        if (ssiEventId) {
+          const rules = data.event?.templateStaffingRules || {}
           const staffSquadName = rules.staffSquadName
 
           const adminSess = getAdminSession ? await getAdminSession() : null
@@ -1914,11 +1916,14 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
             let hasChanges = false
             const { withdrawFromEventStaffing } = await import('../lib/db/platform-store.js')
 
+            // Default SSI role mapping based on role key
+            const defaultSsiMapping = { ro: 'RO', md: 'MD', qm: 'QM', safety: 'RM', match_director: 'MD' }
+
             // 1. Check existing DB signups against SSI. If they aren't in SSI, withdraw them.
             for (const need of data.needs || []) {
               const roleCfg = (rules.roles || []).find(r => r.key === need.roleKey) || {}
-              const ssiOfficialCode = roleCfg.ssiOfficialCode
-              const ssiMgmtRole = roleCfg.ssiMgmtRole // '1' or '2'
+              const ssiOfficialCode = roleCfg.ssiOfficialCode || defaultSsiMapping[need.roleKey]
+              const ssiMgmtRole = roleCfg.ssiMgmtRole || '1' // default all roles to admin
 
               for (const signup of need.signups || []) {
                 if (signup.status !== 'confirmed') continue
@@ -1961,8 +1966,8 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
             // We look through all people in SSI who hold a specific role (official code / management group)
             for (const need of data.needs || []) {
               const roleCfg = (rules.roles || []).find(r => r.key === need.roleKey) || {}
-              const ssiOfficialCode = roleCfg.ssiOfficialCode
-              const ssiMgmtRole = roleCfg.ssiMgmtRole
+              const ssiOfficialCode = roleCfg.ssiOfficialCode || defaultSsiMapping[need.roleKey]
+              const ssiMgmtRole = roleCfg.ssiMgmtRole || '1'
 
               if (!ssiMgmtRole) continue // Cannot map SSI people to roles without management role config
 
