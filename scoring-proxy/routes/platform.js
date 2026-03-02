@@ -18,6 +18,7 @@ import { ssiFetchEventStructure, ssiSearchEvents } from '../lib/ssi-core/seed-im
 import { createSsiEvent, deleteSsiEvent } from '../lib/services/event-creation-service.js'
 import { ssiRegisterToTrainerSquad, ssiDeleteMatchParticipant, ssiSetParticipantSquad, ssiFindParticipantInEvent } from '../lib/ssi-core/participants.js'
 import { ssiGetMatchGroupId, ssiAddToMatchManagement, ssiRemoveFromMatchManagement } from '../lib/ssi-core/management.js'
+import { ssiGetMatchOfficials } from '../lib/ssi-core/client.js'
 import { generateMfaSetup, verifyTotpCode, hashRecoveryCodes, verifyRecoveryCode } from '../lib/services/mfa-service.js'
 import {
   createAccountWithTenant,
@@ -123,7 +124,7 @@ const COOKIE_OPTIONS = {
 
 // ---- Router factory ----
 
-export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimiter }) {
+export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimiter, getAdminSession }) {
   const router = express.Router()
 
   // ============================================================
@@ -1852,8 +1853,117 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   router.get('/tenants/:id/events/:eventId/staffing', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'discipline_admin', 'instructor_admin', 'match_admin', 'instructor'), async (req, res, next) => {
     try {
       const { id: tenantId, eventId } = req.params
-      const data = await getEventStaffing(tenantId, eventId)
+      let data = await getEventStaffing(tenantId, eventId)
       if (!data) return res.status(404).json({ error: 'Event not found' })
+
+      // SSI Sync: Verify actual staff assignments from SSI and mark DB signups as invalid if missing
+      try {
+        if (data.ssiReferences?.ssiEventId) {
+          const ssiEventId = data.ssiReferences.ssiEventId
+          const contentType = data.ssiReferences.contentType || 91
+          const rules = data.templateStaffingRules || {}
+          const staffSquadName = rules.staffSquadName
+
+          const adminSess = getAdminSession ? await getAdminSession() : null
+          const cookies = adminSess?.cookies
+
+          if (cookies) {
+            // Fetch officials (Management Group)
+            const officials = await ssiGetMatchOfficials(contentType, ssiEventId, cookies)
+            
+            // Map emails using GraphQL for trainer squad members
+            let squadEmails = new Set()
+            if (staffSquadName) {
+              const { ssiGraphQL } = await import('../lib/ssi-core/graphql.js')
+              const sqData = await ssiGraphQL(adminSess, `
+                query GetSquads($ct: Int!, $id: String!) {
+                  event(content_type: $ct, id: $id) {
+                    squads {
+                      number
+                      comment
+                      ... on NordicSquadNode    { competitors { id status shooter { email } } }
+                      ... on IpscSquadNode      { competitors { id status shooter { email } } }
+                      ... on PpcSquadNode       { competitors { id status shooter { email } } }
+                      ... on CmpSquadNode       { competitors { id status shooter { email } } }
+                      ... on PrecisionSquadNode { competitors { id status shooter { email } } }
+                      ... on GenericSquadNode   { competitors { id status shooter { email } } }
+                    }
+                  }
+                }
+              `, { ct: contentType, id: ssiEventId })
+              
+              const staffSquad = (sqData.event?.squads || []).find(s => 
+                s.comment === staffSquadName || `Squad ${s.number}` === staffSquadName
+              )
+              if (staffSquad) {
+                (staffSquad.competitors || []).forEach(c => {
+                  if (c.status === 'a' && c.shooter?.email) {
+                    squadEmails.add(c.shooter.email.toLowerCase())
+                  }
+                })
+              }
+            }
+
+            // Sync verification logic
+            let hasChanges = false
+            for (const need of data.needs || []) {
+              const roleCfg = (rules.roles || []).find(r => r.key === need.roleKey) || {}
+              const ssiOfficialCode = roleCfg.ssiOfficialCode
+              const ssiMgmtRole = roleCfg.ssiMgmtRole // '1' or '2'
+
+              for (const signup of need.signups || []) {
+                if (signup.status !== 'confirmed') continue
+
+                // We need the account email to verify. We'll fetch it if not present.
+                // In getEventStaffing, account_name is returned but not email. Let's look it up.
+                const { getAccountById } = await import('../lib/db/platform-store.js')
+                const account = await getAccountById(signup.accountId)
+                if (!account) continue
+
+                const email = account.email.toLowerCase()
+                const accountName = account.name.toLowerCase()
+
+                let isMissing = false
+
+                // 1. Check Trainer Squad
+                if (staffSquadName && !squadEmails.has(email)) {
+                  log.debug(`[platform] SSI sync: User ${email} is missing from squad ${staffSquadName} for event ${eventId}`)
+                  isMissing = true
+                }
+
+                // 2. Check Management Group
+                if (ssiMgmtRole) {
+                  // The officials endpoint returns names, not emails
+                  const ssiOfficial = officials.find(o => o.name.toLowerCase() === accountName)
+                  if (!ssiOfficial) {
+                    log.debug(`[platform] SSI sync: User ${accountName} is missing from management group for event ${eventId}`)
+                    isMissing = true
+                  } else if (ssiOfficialCode && !ssiOfficial.officials.includes(ssiOfficialCode)) {
+                    log.debug(`[platform] SSI sync: User ${accountName} is missing official code ${ssiOfficialCode} for event ${eventId}`)
+                    isMissing = true
+                  }
+                }
+
+                if (isMissing) {
+                  // Mark as withdrawn in DB
+                  const { withdrawFromEventStaffing } = await import('../lib/db/platform-store.js')
+                  log.info(`[platform] SSI sync: Auto-withdrawing ${email} from role ${need.roleKey} in event ${eventId} (not found in SSI)`)
+                  await withdrawFromEventStaffing(tenantId, eventId, signup.id, account.id, 'Auto-withdrawn by SSI sync')
+                  hasChanges = true
+                }
+              }
+            }
+            
+            // Reload data if we made changes
+            if (hasChanges) {
+              data = await getEventStaffing(tenantId, eventId)
+            }
+          }
+        }
+      } catch (syncErr) {
+        log.error(`[platform] SSI sync verify error on load:`, syncErr.message)
+      }
+
       res.json(data)
     } catch (err) {
       log.error(`[platform] GET /tenants/${req.params.id}/events/${req.params.eventId}/staffing failed:`, err.message)
