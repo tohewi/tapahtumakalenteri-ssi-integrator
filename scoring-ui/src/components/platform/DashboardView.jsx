@@ -203,21 +203,6 @@ export default function DashboardView({ tenantId, onNavigate }) {
         )}
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg border p-4 text-left cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all" onClick={() => onNavigate('templates')}>
-          <div className="text-sky-600 font-semibold">+ New Template</div>
-          <div className="text-sm text-gray-500 mt-1">Import from SSI seed event</div>
-        </div>
-        <div className="bg-white rounded-lg border p-4 text-left cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all" onClick={() => onNavigate('schedule')}>
-          <div className="text-sky-600 font-semibold">+ Schedule Events</div>
-          <div className="text-sm text-gray-500 mt-1">Batch create from template</div>
-        </div>
-        <div className="bg-white rounded-lg border p-4 text-left cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all" onClick={() => onNavigate('roster')}>
-          <div className="text-sky-600 font-semibold">Instructor Roster</div>
-          <div className="text-sm text-gray-500 mt-1">Manage instructors</div>
-        </div>
-      </div>
     </div>
   )
 }
