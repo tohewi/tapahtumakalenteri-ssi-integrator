@@ -316,10 +316,10 @@ test.describe('Dashboard UI reflects SSI state', () => {
     // Navigate to Roster tab — use the sidebar nav item (contains emoji + text)
     await page.getByText('👥 Roster').click()
 
-    // Verify SRA event appears with staffing information
-    await expect(page.getByText(new RegExp(SRA_NAME, 'i'))).toBeVisible({ timeout: 15_000 })
+    // Verify SRA event appears with staffing information (may match multiple events)
+    await expect(page.getByText(new RegExp(SRA_NAME, 'i')).first()).toBeVisible({ timeout: 15_000 })
 
     // Verify Cup event appears
-    await expect(page.getByText(new RegExp(CUP_NAME, 'i'))).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(new RegExp(CUP_NAME, 'i')).first()).toBeVisible({ timeout: 15_000 })
   })
 })
