@@ -437,7 +437,7 @@ app.use(`${API_LEGACY_BASE}/report`, legacyApiAlias, reportsRouter)
 const platformRouter = createPlatformRouter({
   platformSignUpLimiter,
   platformLoginLimiter,
-  getAdminSession: getDualSession,
+  getAdminSession,
 })
 app.use(`${API_V1_BASE}/platform`, platformRouter)
 
