@@ -1946,7 +1946,7 @@ export async function getEventStaffing(tenantId, eventId) {
   const result = await query(`
     SELECT 
       n.id as need_id, n.role_key, n.role_label, n.min_count, n.max_count,
-      s.id as signup_id, s.account_id, a.name as account_name, s.status, s.notes
+      s.id as signup_id, s.account_id, a.name as account_name, a.email as account_email, s.status, s.notes
     FROM event_staffing_needs n
     LEFT JOIN staff_signups s ON n.id = s.need_id AND s.status = 'confirmed'
     LEFT JOIN accounts a ON s.account_id = a.id
@@ -1974,6 +1974,7 @@ export async function getEventStaffing(tenantId, eventId) {
         id: row.signup_id,
         accountId: row.account_id,
         accountName: row.account_name,
+        accountEmail: row.account_email,
         status: row.status,
         notes: row.notes
       })

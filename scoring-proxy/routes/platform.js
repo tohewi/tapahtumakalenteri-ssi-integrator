@@ -1873,6 +1873,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
             
             // Map emails using GraphQL for trainer squad members
             let squadEmails = new Set()
+            let squadMembers = []
             if (staffSquadName) {
               const { ssiGraphQL } = await import('../lib/ssi-core/graphql.js')
               const sqData = await ssiGraphQL(adminSess, `
@@ -1881,12 +1882,12 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
                     squads {
                       number
                       comment
-                      ... on NordicSquadNode    { competitors { id status shooter { email } } }
-                      ... on IpscSquadNode      { competitors { id status shooter { email } } }
-                      ... on PpcSquadNode       { competitors { id status shooter { email } } }
-                      ... on CmpSquadNode       { competitors { id status shooter { email } } }
-                      ... on PrecisionSquadNode { competitors { id status shooter { email } } }
-                      ... on GenericSquadNode   { competitors { id status shooter { email } } }
+                      ... on NordicSquadNode    { competitors { id status shooter { email first_name last_name } } }
+                      ... on IpscSquadNode      { competitors { id status shooter { email first_name last_name } } }
+                      ... on PpcSquadNode       { competitors { id status shooter { email first_name last_name } } }
+                      ... on CmpSquadNode       { competitors { id status shooter { email first_name last_name } } }
+                      ... on PrecisionSquadNode { competitors { id status shooter { email first_name last_name } } }
+                      ... on GenericSquadNode   { competitors { id status shooter { email first_name last_name } } }
                     }
                   }
                 }
@@ -1898,7 +1899,12 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
               if (staffSquad) {
                 (staffSquad.competitors || []).forEach(c => {
                   if (c.status === 'a' && c.shooter?.email) {
-                    squadEmails.add(c.shooter.email.toLowerCase())
+                    const email = c.shooter.email.toLowerCase()
+                    squadEmails.add(email)
+                    squadMembers.push({
+                      email,
+                      name: `${c.shooter.first_name || ''} ${c.shooter.last_name || ''}`.trim()
+                    })
                   }
                 })
               }
@@ -1906,6 +1912,9 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
 
             // Sync verification logic
             let hasChanges = false
+            const { withdrawFromEventStaffing } = await import('../lib/db/platform-store.js')
+
+            // 1. Check existing DB signups against SSI. If they aren't in SSI, withdraw them.
             for (const need of data.needs || []) {
               const roleCfg = (rules.roles || []).find(r => r.key === need.roleKey) || {}
               const ssiOfficialCode = roleCfg.ssiOfficialCode
@@ -1914,24 +1923,19 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
               for (const signup of need.signups || []) {
                 if (signup.status !== 'confirmed') continue
 
-                // We need the account email to verify. We'll fetch it if not present.
-                // In getEventStaffing, account_name is returned but not email. Let's look it up.
-                const { getAccountById } = await import('../lib/db/platform-store.js')
-                const account = await getAccountById(signup.accountId)
-                if (!account) continue
-
-                const email = account.email.toLowerCase()
-                const accountName = account.name.toLowerCase()
+                const email = signup.accountEmail?.toLowerCase()
+                const accountName = signup.accountName?.toLowerCase()
+                if (!email) continue
 
                 let isMissing = false
 
-                // 1. Check Trainer Squad
+                // 1a. Check Trainer Squad
                 if (staffSquadName && !squadEmails.has(email)) {
                   log.debug(`[platform] SSI sync: User ${email} is missing from squad ${staffSquadName} for event ${eventId}`)
                   isMissing = true
                 }
 
-                // 2. Check Management Group
+                // 1b. Check Management Group
                 if (ssiMgmtRole) {
                   // The officials endpoint returns names, not emails
                   const ssiOfficial = officials.find(o => o.name.toLowerCase() === accountName)
@@ -1946,18 +1950,51 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
 
                 if (isMissing) {
                   // Mark as withdrawn in DB
-                  const { withdrawFromEventStaffing } = await import('../lib/db/platform-store.js')
                   log.info(`[platform] SSI sync: Auto-withdrawing ${email} from role ${need.roleKey} in event ${eventId} (not found in SSI)`)
-                  await withdrawFromEventStaffing(tenantId, eventId, signup.id, account.id, 'Auto-withdrawn by SSI sync')
+                  await withdrawFromEventStaffing(tenantId, eventId, signup.id, signup.accountId, 'Auto-withdrawn by SSI sync')
                   hasChanges = true
                 }
               }
             }
             
-            // Reload data if we made changes
-            if (hasChanges) {
-              data = await getEventStaffing(tenantId, eventId)
+            // 2. Map people from SSI to virtual signups if they are missing in DB
+            // We look through all people in SSI who hold a specific role (official code / management group)
+            for (const need of data.needs || []) {
+              const roleCfg = (rules.roles || []).find(r => r.key === need.roleKey) || {}
+              const ssiOfficialCode = roleCfg.ssiOfficialCode
+              const ssiMgmtRole = roleCfg.ssiMgmtRole
+
+              if (!ssiMgmtRole) continue // Cannot map SSI people to roles without management role config
+
+              // Find all officials in SSI that match this role
+              const matchedOfficials = officials.filter(o => 
+                (ssiOfficialCode ? o.officials.includes(ssiOfficialCode) : true)
+              )
+
+              for (const ssiOfficial of matchedOfficials) {
+                // Check if they are already signed up in DB
+                const isSignedUp = need.signups.some(s => s.status === 'confirmed' && s.accountName?.toLowerCase() === ssiOfficial.name.toLowerCase())
+                
+                if (!isSignedUp) {
+                  log.debug(`[platform] SSI sync: User ${ssiOfficial.name} found in SSI but not in DB for role ${need.roleKey}. Injecting virtual signup.`)
+                  
+                  // Inject virtual signup for display
+                  need.signups.push({
+                    id: `virtual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    accountId: null, // Virtual signups don't map to a platform account
+                    accountName: ssiOfficial.name,
+                    accountEmail: null,
+                    status: 'confirmed',
+                    notes: 'Added from SSI'
+                  })
+                  hasChanges = true
+                }
+              }
             }
+            
+            // Reload data if we made DB changes (not virtual signups)
+            // But since virtual signups are just injected into memory, we shouldn't reload, or we'd lose them.
+            // So we don't reload from DB here anymore. The data object is modified in place.
           }
         }
       } catch (syncErr) {
