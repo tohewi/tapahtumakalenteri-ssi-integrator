@@ -12,6 +12,7 @@
 import { useState, useEffect } from 'react'
 import { listTemplates, listEvents, createEventsApi, deleteEventApi, executeEventApi, getUpcomingStaffingApi } from '../../platform-api.js'
 import ImportSsiEventsModal from './ImportSsiEventsModal.jsx'
+import EventCalendar from './EventCalendar.jsx'
 
 // ---- Status badge colors ----
 const STATUS_COLORS = {
@@ -68,6 +69,7 @@ export default function SchedulePage({ tenantId, onBack }) {
   const [status, setStatus] = useState(null)
   const [executingId, setExecutingId] = useState(null) // event ID being executed in SSI
   const [showImportModal, setShowImportModal] = useState(false)
+  const [viewMode, setViewMode] = useState('calendar') // 'list' | 'calendar'
 
   // Load templates, events, and staffing status
   useEffect(() => {
@@ -330,92 +332,123 @@ export default function SchedulePage({ tenantId, onBack }) {
           )}
         </div>
 
-        {/* Event List */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-gray-900">
-              Scheduled Events
-              <span className="text-sm font-normal text-gray-400 ml-2">({filteredEvents.length})</span>
-            </h2>
+        {/* View toggle + Event heading */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold text-gray-900">
+            Scheduled Events
+            <span className="text-sm font-normal text-gray-400 ml-2">({filteredEvents.length})</span>
+          </h2>
+          <div className="flex items-center bg-gray-100 rounded-md p-0.5">
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                viewMode === 'calendar' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Calendar
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+                viewMode === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              List
+            </button>
           </div>
-
-          {filteredEvents.length === 0 ? (
-            <div className="text-sm text-gray-400 text-center py-8">
-              No events scheduled yet. Select a template and add dates above.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {filteredEvents.map(evt => {
-                const tpl = tplMap[evt.templateId]
-                const staffing = staffingStatus[evt.id]
-                
-                return (
-                  <div key={evt.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm text-gray-900">
-                          {formatEventDate(evt.eventDate)}
-                        </span>
-                        <StatusBadge status={evt.status} />
-                        
-                        {/* Staffing indicator */}
-                        {staffing?.hasNeeds && (
-                          <span className="flex items-center ml-2" title={staffing.isUnderstaffed ? 'Needs more staff' : 'Fully staffed'}>
-                            <span className={`w-2.5 h-2.5 rounded-full ${staffing.isUnderstaffed ? 'bg-orange-500' : 'bg-green-500'}`}></span>
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        {evt.eventName || tpl?.name || evt.templateId || 'Imported'}
-                        {(evt.ssiReferences?.cupUrl || evt.ssiReferences?.url) && (
-                          <span> • <a href={evt.ssiReferences.cupUrl || evt.ssiReferences.url} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">SSI</a></span>
-                        )}
-                        {evt.calendarReference?.calendarUrl && (
-                          <span> • <a href={evt.calendarReference.calendarUrl} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">Calendar</a></span>
-                        )}
-                      </div>
-                      {evt.status === 'failed' && evt.errorDetails && (
-                        <div className="text-xs text-red-500 mt-1">{evt.errorDetails}</div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {evt.status === 'planned' && (
-                        <>
-                          <button
-                            onClick={() => handleExecute(evt.id)}
-                            disabled={executingId === evt.id}
-                            className="text-xs text-sky-600 hover:text-sky-800 font-medium"
-                          >
-                            {executingId === evt.id ? 'Creating in SSI...' : 'Create in SSI'}
-                          </button>
-                        </>
-                      )}
-                      {evt.status === 'failed' && (
-                        <>
-                          <button
-                            onClick={() => handleExecute(evt.id)}
-                            disabled={executingId === evt.id}
-                            className="text-xs text-sky-600 hover:text-sky-800 font-medium"
-                          >
-                            {executingId === evt.id ? 'Retrying...' : 'Retry'}
-                          </button>
-                        </>
-                      )}
-                      {/* Delete is allowed for all statuses */}
-                      <button 
-                        onClick={() => handleDelete(evt)} 
-                        disabled={executingId === evt.id}
-                        className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
-                      >
-                        {executingId === evt.id ? 'Deleting...' : 'Delete'}
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
         </div>
+
+        {/* Calendar View */}
+        {viewMode === 'calendar' ? (
+          <EventCalendar
+            events={filteredEvents}
+            staffingStatus={staffingStatus}
+            tplMap={tplMap}
+            onExecute={handleExecute}
+            onDelete={handleDelete}
+            executingId={executingId}
+          />
+        ) : (
+          /* List View */
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            {filteredEvents.length === 0 ? (
+              <div className="text-sm text-gray-400 text-center py-8">
+                No events scheduled yet. Select a template and add dates above.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filteredEvents.map(evt => {
+                  const tpl = tplMap[evt.templateId]
+                  const staffing = staffingStatus[evt.id]
+                  
+                  return (
+                    <div key={evt.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm text-gray-900">
+                            {formatEventDate(evt.eventDate)}
+                          </span>
+                          <StatusBadge status={evt.status} />
+                          
+                          {/* Staffing indicator */}
+                          {staffing?.hasNeeds && (
+                            <span className="flex items-center ml-2" title={staffing.isUnderstaffed ? 'Needs more staff' : 'Fully staffed'}>
+                              <span className={`w-2.5 h-2.5 rounded-full ${staffing.isUnderstaffed ? 'bg-orange-500' : 'bg-green-500'}`}></span>
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          {evt.eventName || tpl?.name || evt.templateId || 'Imported'}
+                          {(evt.ssiReferences?.cupUrl || evt.ssiReferences?.url) && (
+                            <span> • <a href={evt.ssiReferences.cupUrl || evt.ssiReferences.url} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">SSI</a></span>
+                          )}
+                          {evt.calendarReference?.calendarUrl && (
+                            <span> • <a href={evt.calendarReference.calendarUrl} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">Calendar</a></span>
+                          )}
+                        </div>
+                        {evt.status === 'failed' && evt.errorDetails && (
+                          <div className="text-xs text-red-500 mt-1">{evt.errorDetails}</div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {evt.status === 'planned' && (
+                          <>
+                            <button
+                              onClick={() => handleExecute(evt.id)}
+                              disabled={executingId === evt.id}
+                              className="text-xs text-sky-600 hover:text-sky-800 font-medium"
+                            >
+                              {executingId === evt.id ? 'Creating in SSI...' : 'Create in SSI'}
+                            </button>
+                          </>
+                        )}
+                        {evt.status === 'failed' && (
+                          <>
+                            <button
+                              onClick={() => handleExecute(evt.id)}
+                              disabled={executingId === evt.id}
+                              className="text-xs text-sky-600 hover:text-sky-800 font-medium"
+                            >
+                              {executingId === evt.id ? 'Retrying...' : 'Retry'}
+                            </button>
+                          </>
+                        )}
+                        {/* Delete is allowed for all statuses */}
+                        <button 
+                          onClick={() => handleDelete(evt)} 
+                          disabled={executingId === evt.id}
+                          className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
+                        >
+                          {executingId === evt.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
         {/* Import from SSI Modal */}
         {showImportModal && (
           <ImportSsiEventsModal
