@@ -313,11 +313,8 @@ test.describe('Dashboard UI reflects SSI state', () => {
     // Wait for dashboard
     await expect(page.getByRole('heading', { name: /dashboard/i })).toBeVisible({ timeout: 20_000 })
 
-    // Navigate to Roster tab
-    const rosterTab = page.getByRole('button', { name: /roster/i }).or(page.getByText(/roster/i))
-    if (await rosterTab.isVisible()) {
-      await rosterTab.click()
-    }
+    // Navigate to Roster tab — use the sidebar nav item (contains emoji + text)
+    await page.getByText('👥 Roster').click()
 
     // Verify SRA event appears with staffing information
     await expect(page.getByText(new RegExp(SRA_NAME, 'i'))).toBeVisible({ timeout: 15_000 })
