@@ -65,6 +65,7 @@ import {
   hasRequiredRole,
   validateRoleAssignment,
   getAssignableRoles,
+  createAuditLog,
   TENANT_ROLES,
   countDisciplinesByTenant,
   createScheduledEvent,
@@ -804,6 +805,19 @@ export function createPlatformRouter({
 
     try {
       const updated = await updateTenant(req.params.id, updates)
+
+      // SEC-H4: Audit log for SSI credentials update
+      if (updates.ssiCredentials) {
+        await createAuditLog({
+          tenantId: req.params.id,
+          accountId: req.account.id,
+          action: 'update_ssi_credentials',
+          targetType: 'tenant',
+          targetId: req.params.id,
+          ipAddress: req.ip
+        })
+      }
+
       res.json({ success: true, tenant: updated })
     } catch (err) {
       log.error('[platform] Tenant update failed:', err.message)
@@ -943,6 +957,17 @@ export function createPlatformRouter({
       return res.status(404).json({ error: 'Discipline not found' })
     }
 
+    // SEC-H4: Audit log
+    await createAuditLog({
+      tenantId: req.params.tenantId,
+      accountId: req.account.id,
+      action: 'delete_discipline',
+      targetType: 'discipline',
+      targetId: req.params.id,
+      metadata: { name: discipline.name },
+      ipAddress: req.ip
+    })
+
     log.info(`[platform] Discipline deleted: ${req.params.id} from tenant ${req.params.tenantId}`)
     res.json({ success: true })
   })
@@ -1041,6 +1066,17 @@ export function createPlatformRouter({
     if (!deleted) {
       return res.status(404).json({ error: 'Template not found' })
     }
+
+    // SEC-H4: Audit log
+    await createAuditLog({
+      tenantId: req.params.tenantId,
+      accountId: req.account.id,
+      action: 'delete_template',
+      targetType: 'template',
+      targetId: req.params.id,
+      metadata: { name: template.name },
+      ipAddress: req.ip
+    })
 
     log.info(`[platform] Template deleted: ${req.params.id} from tenant ${req.params.tenantId}`)
     res.json({ success: true })
@@ -1333,6 +1369,17 @@ export function createPlatformRouter({
       return res.status(400).json({ error: 'Failed to delete event from database' })
     }
 
+    // SEC-H4: Audit log
+    await createAuditLog({
+      tenantId: req.params.tenantId,
+      accountId: req.account.id,
+      action: 'delete_event',
+      targetType: 'event',
+      targetId: req.params.id,
+      metadata: { ssiCreated: event.status === 'ssi_created', status: event.status },
+      ipAddress: req.ip
+    })
+
     log.info(`[platform] Event deleted: ${req.params.id}`)
     res.json({ success: true })
   })
@@ -1600,6 +1647,17 @@ export function createPlatformRouter({
       if (!updated) {
         return res.status(404).json({ error: 'Membership not found' })
       }
+
+      // SEC-H4: Audit log
+      await createAuditLog({
+        tenantId: req.params.tenantId,
+        accountId: req.account.id,
+        action: 'update_member_roles',
+        targetType: 'member',
+        targetId: req.params.memberId,
+        metadata: { newRoles: roles },
+        ipAddress: req.ip
+      })
       log.info(`[platform] Member roles updated: ${req.params.memberId} → [${roles}]`)
       res.json({ success: true, member: updated })
     } catch (err) {
@@ -1618,6 +1676,16 @@ export function createPlatformRouter({
       if (!removed) {
         return res.status(404).json({ error: 'Membership not found' })
       }
+
+      // SEC-H4: Audit log
+      await createAuditLog({
+        tenantId: req.params.tenantId,
+        accountId: req.account.id,
+        action: 'remove_member',
+        targetType: 'member',
+        targetId: req.params.memberId,
+        ipAddress: req.ip
+      })
       log.info(`[platform] Member removed: ${req.params.memberId} from tenant ${req.params.tenantId}`)
       res.json({ success: true })
     } catch (err) {

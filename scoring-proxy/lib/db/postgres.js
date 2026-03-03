@@ -280,6 +280,28 @@ export async function initPostgres() {
         log.warn('[postgres] M10 migration (ssi identity columns):', err.message)
       }
 
+      // M11: Create audit_log table for security-sensitive mutations (SEC-H4)
+      try {
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS audit_log (
+            id          TEXT PRIMARY KEY,
+            tenant_id   TEXT REFERENCES tenants(id) ON DELETE CASCADE,
+            account_id  TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+            action      TEXT NOT NULL,
+            target_type TEXT,
+            target_id   TEXT,
+            metadata    JSONB,
+            ip_address  TEXT,
+            created_at  TIMESTAMPTZ DEFAULT NOW()
+          )
+        `)
+        await client.query('CREATE INDEX IF NOT EXISTS idx_audit_tenant ON audit_log(tenant_id)')
+        await client.query('CREATE INDEX IF NOT EXISTS idx_audit_account ON audit_log(account_id)')
+        await client.query('CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action)')
+      } catch (err) {
+        log.warn('[postgres] M11 migration (audit_log):', err.message)
+      }
+
       // M9: Add ssi_create_url to disciplines (SSI event creation URL per discipline)
       try {
         await client.query('ALTER TABLE disciplines ADD COLUMN IF NOT EXISTS ssi_create_url TEXT')
