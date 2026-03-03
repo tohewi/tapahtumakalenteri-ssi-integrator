@@ -471,15 +471,50 @@ function DisciplinesSection({ tenantId }) {
                           />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">SSI Create URL</label>
-                          <input
-                            type="text" value={form.ssiCreateUrl} onChange={e => setForm(f => ({ ...f, ssiCreateUrl: e.target.value }))}
-                            placeholder="e.g. https://shootnscoreit.com/sra/create-match/"
-                            className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
-                          />
-                          <p className="text-xs text-gray-400 mt-0.5">SSI form URL for creating events in this discipline</p>
+                          <label className="flex items-center gap-2 text-sm text-gray-700 font-medium mt-2">
+                            <input
+                              type="checkbox"
+                              checked={form.ssiLinked}
+                              onChange={e => {
+                                const checked = e.target.checked
+                                setForm(f => ({
+                                  ...f,
+                                  ssiLinked: checked,
+                                  ssiCreateUrl: checked ? '' : f.ssiCreateUrl
+                                }))
+                              }}
+                              className="rounded text-sky-600 focus:ring-sky-500"
+                            />
+                            SSI-linked discipline
+                          </label>
                         </div>
-                        <div className="flex items-center justify-end gap-2 pt-1">
+
+                        {form.ssiLinked ? (
+                          <div>
+                            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1 mt-2">SSI Discipline Type</label>
+                            <select
+                              value={registry.some(r => r.ssiCreateUrl === form.ssiCreateUrl) ? form.ssiCreateUrl : ''}
+                              onChange={e => setForm(f => ({ ...f, ssiCreateUrl: e.target.value }))}
+                              className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none bg-white"
+                            >
+                              <option value="">Select type...</option>
+                              {registry.map(r => (
+                                <option key={r.id} value={r.ssiCreateUrl}>{r.displayName} {r.isCup ? '(Cup)' : '(Match)'}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ) : (
+                          <div>
+                            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1 mt-2">SSI Create URL (Manual)</label>
+                            <input
+                              type="text" value={form.ssiCreateUrl} onChange={e => setForm(f => ({ ...f, ssiCreateUrl: e.target.value }))}
+                              placeholder="e.g. /sra/create-match/"
+                              className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
+                            />
+                            <p className="text-xs text-gray-400 mt-0.5">SSI form URL for creating events in this discipline</p>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-end gap-2 pt-2">
                           <button type="button" onClick={resetForm} className="text-sm text-gray-500 hover:text-gray-700">Cancel</button>
                           <button
                             type="submit" disabled={saving || form.name.trim().length < 2}
@@ -544,15 +579,50 @@ function DisciplinesSection({ tenantId }) {
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">SSI Create URL</label>
-                <input
-                  type="text" value={form.ssiCreateUrl} onChange={e => setForm(f => ({ ...f, ssiCreateUrl: e.target.value }))}
-                  placeholder="e.g. https://shootnscoreit.com/sra/create-match/"
-                  className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
-                />
-                <p className="text-xs text-gray-400 mt-0.5">SSI form URL for creating events in this discipline</p>
+                <label className="flex items-center gap-2 text-sm text-gray-700 font-medium mt-2">
+                  <input
+                    type="checkbox"
+                    checked={form.ssiLinked}
+                    onChange={e => {
+                      const checked = e.target.checked
+                      setForm(f => ({
+                        ...f,
+                        ssiLinked: checked,
+                        ssiCreateUrl: checked ? '' : f.ssiCreateUrl
+                      }))
+                    }}
+                    className="rounded text-sky-600 focus:ring-sky-500"
+                  />
+                  SSI-linked discipline
+                </label>
               </div>
-              <div className="flex items-center justify-end gap-2 pt-1">
+
+              {form.ssiLinked ? (
+                <div>
+                  <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1 mt-2">SSI Discipline Type</label>
+                  <select
+                    value={registry.some(r => r.ssiCreateUrl === form.ssiCreateUrl) ? form.ssiCreateUrl : ''}
+                    onChange={e => setForm(f => ({ ...f, ssiCreateUrl: e.target.value }))}
+                    className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none bg-white"
+                  >
+                    <option value="">Select type...</option>
+                    {registry.map(r => (
+                      <option key={r.id} value={r.ssiCreateUrl}>{r.displayName} {r.isCup ? '(Cup)' : '(Match)'}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1 mt-2">SSI Create URL (Manual)</label>
+                  <input
+                    type="text" value={form.ssiCreateUrl} onChange={e => setForm(f => ({ ...f, ssiCreateUrl: e.target.value }))}
+                    placeholder="e.g. /sra/create-match/"
+                    className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
+                  />
+                  <p className="text-xs text-gray-400 mt-0.5">SSI form URL for creating events in this discipline</p>
+                </div>
+              )}
+              <div className="flex items-center justify-end gap-2 pt-2">
                 <button type="button" onClick={resetForm} className="text-sm text-gray-500 hover:text-gray-700">
                   Cancel
                 </button>

@@ -879,6 +879,13 @@ export function createPlatformRouter({
   // Discipline CRUD — nested under /tenants/:tenantId/disciplines
   // ============================================================
 
+  // GET /api/v1/platform/ssi-discipline-registry
+  // Any authenticated user can read the static registry
+  router.get('/ssi-discipline-registry', requirePlatformAuth(), async (req, res) => {
+    const { SSI_DISCIPLINE_REGISTRY } = await import('../lib/ssi-core/discipline-registry.js')
+    res.json({ registry: SSI_DISCIPLINE_REGISTRY })
+  })
+
   // GET /api/v1/platform/tenants/:tenantId/disciplines
   // Any member can read disciplines
   router.get('/tenants/:tenantId/disciplines', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res) => {

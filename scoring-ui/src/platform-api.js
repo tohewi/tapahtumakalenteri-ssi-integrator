@@ -207,6 +207,13 @@ export async function resetPassword({ token, newPassword }) {
 // ---- Disciplines ----
 
 /**
+ * Get the static registry of supported SSI discipline types.
+ */
+export async function getSsiDisciplineRegistry() {
+  return platformFetch('/ssi-discipline-registry')
+}
+
+/**
  * List disciplines for a tenant.
  */
 export async function listDisciplines(tenantId) {
