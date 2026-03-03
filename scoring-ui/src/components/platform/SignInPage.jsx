@@ -59,10 +59,11 @@ export default function SignInPage({ error, onLogin, onSwitchToSignUp, onForgotP
 
         <form onSubmit={handleSubmit} className="bg-white rounded-lg border p-6 space-y-4">
           <div>
-            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
+            <label htmlFor="signin-email" className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
               Email
             </label>
             <input
+              id="signin-email"
               type="email"
               name="email"
               value={form.email}
@@ -74,10 +75,11 @@ export default function SignInPage({ error, onLogin, onSwitchToSignUp, onForgotP
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
+            <label htmlFor="signin-password" className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
               Password
             </label>
             <input
+              id="signin-password"
               type="password"
               name="password"
               value={form.password}

@@ -38,6 +38,8 @@ test('owner can invite an instructor from the Members page', async ({ page, requ
   try {
     // ── Step 1: Sign in via UI ────────────────────────────────────────────
     await page.goto('/#/platform')
+    // WelcomePage is the landing page — click header "Sign in" to switch to SignInPage
+    await page.getByRole('banner').getByRole('button', { name: 'Sign in' }).click()
     await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible()
 
     await page.getByRole('textbox', { name: /email/i }).fill(OWNER_EMAIL)

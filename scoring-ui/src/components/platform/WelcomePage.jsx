@@ -95,7 +95,9 @@ export default function WelcomePage({ error, onRegister, onSwitchToSignIn }) {
 
           <form onSubmit={handleSubmit} className="max-w-sm mx-auto space-y-3">
             <div>
+              <label htmlFor="reg-org" className="sr-only">Organization name</label>
               <input
+                id="reg-org"
                 type="text"
                 name="organizationName"
                 placeholder="Organization name (e.g. TurRes)"
@@ -108,7 +110,9 @@ export default function WelcomePage({ error, onRegister, onSwitchToSignIn }) {
               />
             </div>
             <div>
+              <label htmlFor="reg-name" className="sr-only">Your name</label>
               <input
+                id="reg-name"
                 type="text"
                 name="name"
                 placeholder="Your name"
@@ -121,7 +125,9 @@ export default function WelcomePage({ error, onRegister, onSwitchToSignIn }) {
               />
             </div>
             <div>
+              <label htmlFor="reg-email" className="sr-only">Email address</label>
               <input
+                id="reg-email"
                 type="email"
                 name="email"
                 placeholder="Email address"
@@ -133,7 +139,9 @@ export default function WelcomePage({ error, onRegister, onSwitchToSignIn }) {
               />
             </div>
             <div>
+              <label htmlFor="reg-password" className="sr-only">Password</label>
               <input
+                id="reg-password"
                 type="password"
                 name="password"
                 placeholder="Password (min 8 characters)"

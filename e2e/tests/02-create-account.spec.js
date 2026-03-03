@@ -39,14 +39,11 @@ test('create new account and auto-join existing tenant via pending invitation', 
   const inviteeEmail = testEmail('newuser')
   const { token } = await apiCreateInvitation(request, sid, tenantId, inviteeEmail)
 
-  // ── Step 2: New user navigates to sign-up page ──────────────────────────
+  // ── Step 2: New user navigates to sign-up page (WelcomePage is the landing page) ──
   await page.goto('/#/platform')
-  // Click "Create account" link to switch to the sign-up form
-  await page.getByRole('button', { name: /create account/i }).click()
+  await expect(page.getByRole('heading', { name: /match management platform/i })).toBeVisible()
 
-  await expect(page.getByRole('heading', { name: /create your account/i })).toBeVisible()
-
-  // ── Step 3: Fill in the registration form ───────────────────────────────
+  // ── Step 3: Fill in the registration form on the WelcomePage ────────────
   const orgName = `UAT Org ${Date.now()}`
   const userName = 'UAT Test User'
   const userPassword = 'UATpassword123!'

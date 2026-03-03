@@ -23,10 +23,13 @@ test.beforeAll(() => {
 })
 
 test('sign in with existing owner account', async ({ page }) => {
-  // Navigate to the platform section
+  // Navigate to the platform section (lands on WelcomePage)
   await page.goto('/#/platform')
 
-  // The welcome/sign-in page should appear
+  // Click the header "Sign in" link to switch to SignInPage
+  await page.getByRole('banner').getByRole('button', { name: 'Sign in' }).click()
+
+  // The sign-in page should appear
   await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible()
 
   // Fill in credentials
@@ -42,6 +45,9 @@ test('sign in with existing owner account', async ({ page }) => {
 
 test('sign-in form shows error for wrong password', async ({ page }) => {
   await page.goto('/#/platform')
+
+  // Click the header "Sign in" link to switch to SignInPage
+  await page.getByRole('banner').getByRole('button', { name: 'Sign in' }).click()
 
   await expect(page.getByRole('heading', { name: /sign in/i })).toBeVisible()
 

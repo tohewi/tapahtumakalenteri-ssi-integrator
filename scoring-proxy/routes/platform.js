@@ -1679,7 +1679,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
       })
 
       log.info(`[platform] Invitation created for ${email} by ${req.account.email} for tenant ${req.params.tenantId}`)
-      res.status(201).json({ success: true, invitation })
+      res.status(201).json({ success: true, invitation: { ...invitation, token } })
     } catch (err) {
       log.error('[platform] Create invitation failed:', err.message)
       return next(new AppError('Failed to create invitation', 500, 'INTERNAL_ERROR'))
