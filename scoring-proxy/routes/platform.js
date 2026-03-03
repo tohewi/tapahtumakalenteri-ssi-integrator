@@ -2378,12 +2378,34 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
             // It only removes from the event entirely. If they are also a regular competitor, 
             // the user will need to re-register. This matches the SRA staffing engine behavior.
             try {
+              // Try cached participant ID first (safe, no name matching)
+              const { getAccountSsiShooterId } = await import('../lib/db/platform-store.js')
+              // Note: getAccountSsiShooterId returns the shooter ID, but we need the participant ID.
+              // To get the participant ID, we would normally query the DB. Since withdrawFromEventStaffing
+              // doesn't return the ssi_participant_id, let's query the DB here.
+              const { query } = await import('../lib/db/postgres.js')
+              const signupRes = await query(`SELECT ssi_participant_id FROM staff_signups WHERE id = $1`, [req.params.signupId])
+              const cachedParticipantId = signupRes.rows[0]?.ssi_participant_id
+
+              let participantIdToDelete = cachedParticipantId
+              let participantCT = contentType === 22 ? 23 : contentType === 91 ? 93 : 23
               const displayName = req.account.name || req.account.email
-              const found = await ssiFindParticipantInEvent(contentType, ssiEventId, displayName, cookies)
+
+              if (participantIdToDelete) {
+                log.info(`[platform] Withdrawal: using cached participant ID ${participantIdToDelete}`)
+              } else {
+                // Fallback to name matching if no cached ID (legacy signups)
+                log.warn(`[platform] Withdrawal: no cached participant ID for ${req.account.email}, falling back to name search`)
+                const found = await ssiFindParticipantInEvent(contentType, ssiEventId, displayName, cookies)
+                if (found) {
+                  participantIdToDelete = found.participantId
+                  participantCT = found.participantCT
+                }
+              }
               
-              if (found) {
-                const deleteResult = await ssiDeleteMatchParticipant(ssiEventId, found.participantId, displayName, cookies, found.participantCT)
-                log.debug(`[platform] SSI trainer squad remove: ${req.account.email} → ${deleteResult.message}`)
+              if (participantIdToDelete) {
+                const deleteResult = await ssiDeleteMatchParticipant(ssiEventId, participantIdToDelete, displayName, cookies, participantCT)
+                log.info(`[platform] SSI trainer squad remove: ${req.account.email} (ID ${participantIdToDelete}) → ${deleteResult.message}`)
                 ssiResults.trainerSquad = { success: true, message: deleteResult.message }
               } else {
                 ssiResults.trainerSquad = { success: true, message: 'Not found on participants page' }
