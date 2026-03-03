@@ -2360,6 +2360,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
           query GetSquads($ct: Int!, $id: String!) {
             event(content_type: $ct, id: $id) {
               squads {
+                __typename
                 number
                 comment
                 ... on NordicSquadNode    { competitors { id status shooter { email first_name last_name } } }
@@ -2372,6 +2373,10 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
             }
           }
         `, { ct: contentType, id: ssiEventId })
+
+        // Log raw squad types and competitor counts for debugging
+        const rawSquads = sqData.event?.squads || []
+        log.info(`[platform] TEST ssi-squads: CT=${contentType} eventId=${ssiEventId} squads=${rawSquads.map(s => `${s.__typename}#${s.number}(${(s.competitors||[]).length})`).join(', ')}`)
 
         const squads = (sqData.event?.squads || []).map(sq => ({
           number: sq.number,
