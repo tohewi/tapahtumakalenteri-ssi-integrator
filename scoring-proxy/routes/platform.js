@@ -127,26 +127,21 @@ const COOKIE_OPTIONS = {
 /**
  * Extract the SSI event ID and content type from ssiReferences.
  * For non-cup events: uses ssiEventId + contentTypeKey.
- * For cups: uses the first match's id + typeId (cups don't have management groups at the container level).
+ * For cups: uses cupId + cupTypeId (cups have their own staff page; squads live on individual matches).
  * @returns {{ ssiEventId: string|null, contentType: number }}
  */
 function extractSsiTarget(ssiRefs) {
   if (!ssiRefs) return { ssiEventId: null, contentType: 91 }
 
-  // Non-cup: direct event
+  // Non-cup: direct event (e.g. SRA match with ssiEventId + contentTypeKey)
   if (ssiRefs.ssiEventId) {
     return { ssiEventId: ssiRefs.ssiEventId, contentType: ssiRefs.contentTypeKey || 91 }
   }
 
-  // Cup: use first match (management groups live on matches, not on the cup container)
-  if (ssiRefs.isCup && ssiRefs.matches?.length > 0) {
-    const firstMatch = ssiRefs.matches[0]
-    return { ssiEventId: firstMatch.id, contentType: parseInt(firstMatch.typeId) || 91 }
-  }
-
-  // Fallback: try cupId (non-cup import that only has cupId)
+  // Cup: use cupId + cupTypeId (cups have their own staff page at content type 136)
+  // Note: cups don't have squads — squadding lives on individual matches
   if (ssiRefs.cupId) {
-    return { ssiEventId: ssiRefs.cupId, contentType: ssiRefs.cupTypeId || 91 }
+    return { ssiEventId: ssiRefs.cupId, contentType: parseInt(ssiRefs.cupTypeId) || 136 }
   }
 
   return { ssiEventId: null, contentType: 91 }
