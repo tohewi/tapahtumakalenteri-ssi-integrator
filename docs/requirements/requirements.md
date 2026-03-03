@@ -628,6 +628,15 @@ Applies if tenants are consumers or non-commercial associations (e.g., shooting 
 7. **WCAG 2.1 AA audit** of all new platform views
 8. **Set up Stripe** (or Paytrail for Finnish market) — never touch raw card data
 
+## Backlog / Future Enhancements
+
+These requirements are planned for a future release, likely before billing integration.
+
+| # | Requirement | Status | Priority | Notes |
+|---|-------------|--------|----------|-------|
+| BL-1 | **Platform Admin Dashboard**: Match Management needs an admin site from which super-admins can see all tenants created and who their owners are. This admin site must be secure and access must be IP-whitelisted. | ⬚ Pending | Medium | Needed for operational oversight before commercial rollout |
+| BL-2 | **Production Hosting Strategy**: Compare production hosting solutions for this service. Evaluate where to cost-efficiently and securely run the web service, database, and Redis. Needs to support future agentic workflows. | ⬚ Pending | Medium | Evaluate Render vs AWS vs Azure vs Hetzner based on Finnish/EU requirements and cost |
+
 ## Summary
 
 - **Release 1.0** (SSI Cup Automation): 37 requirements — 35 ✅, 2 on hold (35, 36)
