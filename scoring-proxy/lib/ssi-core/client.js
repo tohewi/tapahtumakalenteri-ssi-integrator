@@ -850,20 +850,22 @@ export async function ssiSetParticipantSquad(participantId, squadNumber, cookies
     redirect: 'manual',
   })
 
-  if (debug) console.log(`[squad-edit] Response: ${editResp.status}`)
+  log.info(`[squad-edit] POST CT=${participantContentType} id=${participantId} squad=${squadValue} status=${statusOverride} → HTTP ${editResp.status}`)
 
   if (editResp.status === 302 || editResp.status === 301) {
-    return { success: true }
+    return { success: true, httpStatus: editResp.status }
   }
   if (editResp.status === 200) {
     const respHtml = await editResp.text()
     if (respHtml.includes('errorlist') || respHtml.includes('is-invalid')) {
       const errorMatch = respHtml.match(/<(?:ul|div)[^>]*(?:errorlist|invalid-feedback)[^>]*>([\s\S]*?)<\/(?:ul|div)>/)
       const errorText = errorMatch ? errorMatch[1].replace(/<[^>]+>/g, '').trim() : 'Edit error'
-      if (debug) console.log(`[squad-edit] Error: ${errorText}`)
-      return { success: false, message: errorText }
+      log.warn(`[squad-edit] Form error: ${errorText}`)
+      return { success: false, message: errorText, httpStatus: 200 }
     }
-    return { success: true }
+    // HTTP 200 without error class — SSI may have re-rendered the form without applying changes
+    log.warn(`[squad-edit] HTTP 200 without redirect — squad change may not have been applied (CT=${participantContentType})`)
+    return { success: true, httpStatus: 200, warning: 'no-redirect' }
   }
   throw new Error(`Participant edit failed HTTP ${editResp.status}`)
 }

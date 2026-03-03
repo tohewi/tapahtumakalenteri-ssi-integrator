@@ -2127,9 +2127,10 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
                       // Extract squad number from staffSquadName (e.g. "Squad 5" → 5)
                       const squadNum = parseInt(staffSquadName.match(/\d+/)?.[0])
                       if (squadNum) {
-                        log.debug(`[platform] Moving participant ${found.participantId} to ${staffSquadName} (squad ${squadNum}) with status=a`)
-                        await ssiSetParticipantSquad(found.participantId, squadNum, cookies, 'a', found.participantCT)
-                        ssiResults.trainerSquad = { success: true, message: `Moved to ${staffSquadName}` }
+                        log.info(`[platform] Squad move fallback: participant=${found.participantId} CT=${found.participantCT} → ${staffSquadName} (squad ${squadNum}) status=a`)
+                        const moveResult = await ssiSetParticipantSquad(found.participantId, squadNum, cookies, 'a', found.participantCT)
+                        log.info(`[platform] Squad move result: ${JSON.stringify(moveResult)}`)
+                        ssiResults.trainerSquad = { success: moveResult?.success ?? true, message: `Moved to ${staffSquadName}` }
                       }
                     } else {
                       log.warn(`[platform] Could not find participant ${displayName} in event ${ssiEventId} for squad move`)
