@@ -2137,17 +2137,39 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
                   return sqData.event?.squads || []
                 }
 
-                // Helper: find our user across all squads by email or cached shooter.id
-                function findUserInSquads(squads, email, cachedShooterId) {
+                // Helper: find our user across all squads by email, cached shooter.id,
+                // or exact full-name match (bootstrap fallback only — see MG-ID1/MG-ID2).
+                function findUserInSquads(squads, email, cachedShooterId, accountName) {
+                  // Pass 1: email match (most reliable, works for Nordic)
                   for (const sq of squads) {
                     for (const c of (sq.competitors || [])) {
-                      // Match by email (reliable for Nordic, null for IPSC/SRA)
                       if (c.shooter?.email && c.shooter.email.toLowerCase() === email.toLowerCase()) {
-                        return { competitorId: c.id, shooterId: c.shooter.id, squadNumber: sq.number, status: c.status }
+                        return { competitorId: c.id, shooterId: c.shooter.id, squadNumber: sq.number, status: c.status, matchedBy: 'email' }
                       }
-                      // Match by cached shooter.id from previous signup
-                      if (cachedShooterId && c.shooter?.id === cachedShooterId) {
-                        return { competitorId: c.id, shooterId: c.shooter.id, squadNumber: sq.number, status: c.status }
+                    }
+                  }
+                  // Pass 2: cached shooter.id from previous signup
+                  if (cachedShooterId) {
+                    for (const sq of squads) {
+                      for (const c of (sq.competitors || [])) {
+                        if (c.shooter?.id === cachedShooterId) {
+                          return { competitorId: c.id, shooterId: c.shooter.id, squadNumber: sq.number, status: c.status, matchedBy: 'shooterId' }
+                        }
+                      }
+                    }
+                  }
+                  // Pass 3: exact full-name match (bootstrap fallback for first signup when
+                  // email is null and no cached shooter.id). Uses exact equality, not partial.
+                  // Once shooter.id is cached from this match, future operations use Pass 2.
+                  if (accountName) {
+                    const nameLower = accountName.toLowerCase()
+                    for (const sq of squads) {
+                      for (const c of (sq.competitors || [])) {
+                        const competitorName = `${c.shooter?.first_name || ''} ${c.shooter?.last_name || ''}`.trim().toLowerCase()
+                        if (competitorName && competitorName === nameLower) {
+                          log.warn(`[platform] Bootstrap: matched by exact name "${accountName}" (no email/shooterId available) — caching shooter.id for future ops`)
+                          return { competitorId: c.id, shooterId: c.shooter.id, squadNumber: sq.number, status: c.status, matchedBy: 'name-bootstrap' }
+                        }
                       }
                     }
                   }
@@ -2171,7 +2193,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
                   const cachedShooterId = await getAccountSsiShooterId(eventId, req.account.id)
 
                   const squadsNow = await querySquadCompetitors()
-                  const found = findUserInSquads(squadsNow, req.account.email, cachedShooterId)
+                  const found = findUserInSquads(squadsNow, req.account.email, cachedShooterId, req.account.name)
 
                   if (found) {
                     log.info(`[platform] GraphQL identified participant: competitor=${found.competitorId} shooter=${found.shooterId} squad=${found.squadNumber}`)
