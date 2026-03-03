@@ -2125,30 +2125,46 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
                         event(content_type: $ct, id: $id) {
                           squads {
                             number
-                            ... on NordicSquadNode    { competitors { id shooter { email } } }
-                            ... on IpscSquadNode      { competitors { id shooter { email } } }
-                            ... on PpcSquadNode       { competitors { id shooter { email } } }
-                            ... on CmpSquadNode       { competitors { id shooter { email } } }
-                            ... on PrecisionSquadNode { competitors { id shooter { email } } }
-                            ... on GenericSquadNode   { competitors { id shooter { email } } }
+                            comment
+                            ... on NordicSquadNode    { competitors { id status shooter { email } } }
+                            ... on IpscSquadNode      { competitors { id status shooter { email } } }
+                            ... on PpcSquadNode       { competitors { id status shooter { email } } }
+                            ... on CmpSquadNode       { competitors { id status shooter { email } } }
+                            ... on PrecisionSquadNode { competitors { id status shooter { email } } }
+                            ... on GenericSquadNode   { competitors { id status shooter { email } } }
                           }
                         }
                       }
                     `, { ct: contentType, id: ssiEventId })
                     
+                    // Find competitor and their current squad
                     let competitorId = null
+                    let currentSquadNum = null
                     for (const sq of sqData.event?.squads || []) {
                       const comp = (sq.competitors || []).find(c => c.shooter?.email === req.account.email)
                       if (comp) {
                         competitorId = comp.id
+                        currentSquadNum = sq.number
                         break
                       }
                     }
-                    if (competitorId) {
-                      // We need the numeric squad ID of the staff squad. For now we assume we can fetch it or just log.
-                      // Doing full squad fallback requires scraping participants page to find the squad ID by name.
-                      log.debug(`[platform] Need to move competitor ${competitorId} to ${staffSquadName} (requires separate fetch for squad id)`)
-                      // Future: add proper squad move logic here if needed
+
+                    // Find the target squad number from staffSquadName (e.g. "Squad 5" → 5)
+                    const targetSquad = sqData.event?.squads?.find(s =>
+                      s.comment === staffSquadName || `Squad ${s.number}` === staffSquadName
+                    )
+                    const targetSquadNum = targetSquad?.number
+                    
+                    if (competitorId && targetSquadNum && currentSquadNum !== targetSquadNum) {
+                      // Move to trainer squad using ssiSetParticipantSquad
+                      // Participant content type: 23 for SRA/IPSC (event CT 22), 93 for Nordic (event CT 91)
+                      const participantCT = contentType === 22 ? 23 : 93
+                      log.debug(`[platform] Moving competitor ${competitorId} from squad ${currentSquadNum} to squad ${targetSquadNum} (${staffSquadName})`)
+                      await ssiSetParticipantSquad(competitorId, targetSquadNum, cookies, 'a', participantCT)
+                      ssiResults.trainerSquad = { success: true, message: `Moved to ${staffSquadName}` }
+                    } else if (competitorId && currentSquadNum === targetSquadNum) {
+                      log.debug(`[platform] Competitor already in trainer squad ${staffSquadName}`)
+                      ssiResults.trainerSquad = { success: true, message: 'Already in trainer squad' }
                     }
                   } catch (err) {
                     log.error(`[platform] Squad fallback failed: ${err.message}`)
