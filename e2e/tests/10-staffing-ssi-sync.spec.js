@@ -167,15 +167,10 @@ test.describe('Kupittaa Cup — Platform ↔ SSI sync', () => {
     expect(result.success).toBe(true)
     signupId = result.signup.id
 
-    // Verify in SSI — cups may not support staff page, so verify softly
-    try {
-      const { officials } = await apiTestSsiGetOfficials(request, sid, tenantId, cupEvent.id)
-      const found = officials.some(o => o.officials?.includes('MD'))
-      expect(found, 'User with MD official code should appear in SSI').toBe(true)
-    } catch (e) {
-      // Cup staff page may not exist — SSI sync for cups is best-effort
-      console.log(`[TC-2] SSI verification skipped (cup limitation): ${e.message}`)
-    }
+    // Verify in SSI
+    const { officials } = await apiTestSsiGetOfficials(request, sid, tenantId, cupEvent.id)
+    const found = officials.some(o => o.officials?.includes('MD'))
+    expect(found, 'User with MD official code should appear in SSI').toBe(true)
   })
 
   test('TC-4: Withdraw from Match Director via API → removed from SSI', async ({ request }) => {
@@ -184,18 +179,14 @@ test.describe('Kupittaa Cup — Platform ↔ SSI sync', () => {
     const result = await apiStaffingWithdraw(request, sid, tenantId, cupEvent.id, signupId)
     expect(result.success).toBe(true)
 
-    // Verify SSI removal — cups may not support staff page
-    try {
-      const { officials } = await apiTestSsiGetOfficials(request, sid, tenantId, cupEvent.id)
-      const accountName = result.signup?.account_name || result.signup?.accountName
-      if (accountName) {
-        const stillThere = officials.some(o =>
-          o.name.toLowerCase().includes(accountName.toLowerCase()) && o.officials?.includes('MD')
-        )
-        expect(stillThere, `User should NOT have MD in SSI after withdrawal`).toBe(false)
-      }
-    } catch (e) {
-      console.log(`[TC-4] SSI verification skipped (cup limitation): ${e.message}`)
+    // Verify in SSI: user should no longer have MD
+    const { officials } = await apiTestSsiGetOfficials(request, sid, tenantId, cupEvent.id)
+    const accountName = result.signup?.account_name || result.signup?.accountName
+    if (accountName) {
+      const stillThere = officials.some(o =>
+        o.name.toLowerCase().includes(accountName.toLowerCase()) && o.officials?.includes('MD')
+      )
+      expect(stillThere, `User should NOT have MD in SSI after withdrawal`).toBe(false)
     }
   })
 })
@@ -258,30 +249,22 @@ test.describe('SSI-direct → Platform visibility', () => {
   })
 
   test('TC-6: Add user directly in SSI for Cup → visible in Platform', async ({ request }) => {
-    // Cup events may not support staff page management — skip gracefully
-    try {
-      await apiTestSsiAdd(request, sid, tenantId, cupEvent.id, SSI_TEST_EMAIL, '1', ['MD'])
-      const { officials } = await apiTestSsiGetOfficials(request, sid, tenantId, cupEvent.id)
-      const inSsi = officials.some(o => o.officials?.includes('MD'))
-      expect(inSsi, 'User with MD should be in Cup SSI management group').toBe(true)
-      // Clean up
-      await apiTestSsiRemove(request, sid, tenantId, cupEvent.id, SSI_TEST_EMAIL)
-    } catch (e) {
-      console.log(`[TC-6] Skipped (cup SSI limitation): ${e.message}`)
-      test.skip()
-    }
+    await apiTestSsiAdd(request, sid, tenantId, cupEvent.id, SSI_TEST_EMAIL, '1', ['MD'])
+
+    const { officials } = await apiTestSsiGetOfficials(request, sid, tenantId, cupEvent.id)
+    const inSsi = officials.some(o => o.officials?.includes('MD'))
+    expect(inSsi, 'User with MD should be in Cup SSI management group').toBe(true)
+
+    // Clean up
+    await apiTestSsiRemove(request, sid, tenantId, cupEvent.id, SSI_TEST_EMAIL)
   })
 
   test('TC-8: Remove user from SSI for Cup → gone from Platform', async ({ request }) => {
-    try {
-      await apiTestSsiAdd(request, sid, tenantId, cupEvent.id, SSI_TEST_EMAIL, '1', ['MD'])
-      await apiTestSsiRemove(request, sid, tenantId, cupEvent.id, SSI_TEST_EMAIL)
-      const staffing = await apiGetEventStaffing(request, sid, tenantId, cupEvent.id)
-      expect(staffing.needs).toBeDefined()
-    } catch (e) {
-      console.log(`[TC-8] Skipped (cup SSI limitation): ${e.message}`)
-      test.skip()
-    }
+    await apiTestSsiAdd(request, sid, tenantId, cupEvent.id, SSI_TEST_EMAIL, '1', ['MD'])
+    await apiTestSsiRemove(request, sid, tenantId, cupEvent.id, SSI_TEST_EMAIL)
+
+    const staffing = await apiGetEventStaffing(request, sid, tenantId, cupEvent.id)
+    expect(staffing.needs).toBeDefined()
   })
 })
 
