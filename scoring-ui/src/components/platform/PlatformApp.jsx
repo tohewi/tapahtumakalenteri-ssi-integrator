@@ -41,9 +41,14 @@ import SchedulePage from './SchedulePage.jsx'
 // ---- Navigation sections matching the mockup ----
 const NAV_SECTIONS = [
   {
-    label: 'Management',
+    // Dashboard is standalone at the top — always visible, no section header
     items: [
       { id: 'dashboard', icon: '🏠', label: 'Dashboard' },
+    ],
+  },
+  {
+    label: 'Event Management',
+    items: [
       { id: 'templates', icon: '📋', label: 'Templates' },
       { id: 'schedule', icon: '📅', label: 'Schedule' },
     ],
@@ -96,11 +101,13 @@ function PlaceholderView({ title, description }) {
 function Sidebar({ activeView, onNavigate }) {
   return (
     <nav className="w-56 bg-white border-r p-3 flex-shrink-0 hidden md:block">
-      {NAV_SECTIONS.map((section) => (
-        <div key={section.label}>
-          <div className="text-xs uppercase tracking-wider text-gray-400 font-semibold mb-2 px-3 mt-4 first:mt-0">
-            {section.label}
-          </div>
+      {NAV_SECTIONS.map((section, idx) => (
+        <div key={section.label || `section-${idx}`}>
+          {section.label && (
+            <div className="text-xs uppercase tracking-wider text-gray-400 font-semibold mb-2 px-3 mt-4 first:mt-0">
+              {section.label}
+            </div>
+          )}
           <div className="space-y-0.5">
             {section.items.map((item) => (
               <div
