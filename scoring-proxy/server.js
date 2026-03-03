@@ -341,6 +341,36 @@ const platformLoginLimiter = rateLimit({
   handler: rateLimitHandler('platform-login', 15 * 60 * 1000, { error: 'Too many login attempts. Try again in 15 minutes.' }),
 })
 
+// Rate limit for password reset: 5 per 15 min per IP (SEC-H3)
+const platformPasswordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many password reset attempts. Try again later.' },
+  handler: rateLimitHandler('platform-reset', 15 * 60 * 1000, { error: 'Too many password reset attempts. Try again later.' }),
+})
+
+// Rate limit for general platform mutations: 30 per minute per IP (SEC-H1)
+const platformMutationLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please slow down.' },
+  handler: rateLimitHandler('platform-mutation', 60 * 1000, { error: 'Too many requests. Please slow down.' }),
+})
+
+// Rate limit for SSI operations: 5 per minute per IP (SEC-H1)
+const platformSsiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many SSI operations. Please slow down.' },
+  handler: rateLimitHandler('platform-ssi', 60 * 1000, { error: 'Too many SSI operations. Please slow down.' }),
+})
+
 // Rate limit for registration: 5 submit attempts per 10 min per IP
 const registerLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
@@ -436,7 +466,10 @@ app.use(`${API_LEGACY_BASE}/report`, legacyApiAlias, reportsRouter)
 const platformRouter = createPlatformRouter({
   platformSignUpLimiter,
   platformLoginLimiter,
-  getAdminSession,
+  platformPasswordResetLimiter,
+  platformMutationLimiter,
+  platformSsiLimiter,
+  getAdminSession
 })
 app.use(`${API_V1_BASE}/platform`, platformRouter)
 

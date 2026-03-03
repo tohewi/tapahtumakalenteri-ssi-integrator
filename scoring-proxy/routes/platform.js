@@ -149,7 +149,14 @@ function extractSsiTarget(ssiRefs) {
 
 // ---- Router factory ----
 
-export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimiter, getAdminSession }) {
+export function createPlatformRouter({
+  platformSignUpLimiter,
+  platformLoginLimiter,
+  platformPasswordResetLimiter,
+  platformMutationLimiter,
+  platformSsiLimiter,
+  getAdminSession
+}) {
   const router = express.Router()
 
   // ============================================================
@@ -338,7 +345,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   // POST /api/v1/platform/reset-password — Reset password with token
   // No auth required.
   // ============================================================
-  router.post('/reset-password', async (req, res, next) => {
+  router.post('/reset-password', platformPasswordResetLimiter, async (req, res, next) => {
     const { token, newPassword } = req.body
     if (!token) {
       return res.status(400).json({ error: 'Reset token is required' })
@@ -438,7 +445,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   // ============================================================
   // PATCH /api/v1/platform/account — Update account profile
   // ============================================================
-  router.patch('/account', requirePlatformAuth(), async (req, res, next) => {
+  router.patch('/account', platformMutationLimiter, requirePlatformAuth(), async (req, res, next) => {
     const { name, email } = req.body
     const updates = {}
 
@@ -490,7 +497,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   // ============================================================
   // POST /api/v1/platform/account/change-password
   // ============================================================
-  router.post('/account/change-password', requirePlatformAuth(), async (req, res, next) => {
+  router.post('/account/change-password', platformMutationLimiter, requirePlatformAuth(), async (req, res, next) => {
     const { currentPassword, newPassword } = req.body
 
     if (!currentPassword || !newPassword) {
@@ -604,7 +611,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   // POST /api/v1/platform/account/mfa/setup — Initiate MFA setup
   // Returns QR code and recovery codes (not yet enabled)
   // ============================================================
-  router.post('/account/mfa/setup', requirePlatformAuth(), async (req, res, next) => {
+  router.post('/account/mfa/setup', platformMutationLimiter, requirePlatformAuth(), async (req, res, next) => {
     try {
       const account = await getAccount(req.account.id)
       if (account.mfaEnabled) {
@@ -635,7 +642,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   // POST /api/v1/platform/account/mfa/confirm — Confirm MFA setup
   // Verifies the TOTP code and enables MFA on the account
   // ============================================================
-  router.post('/account/mfa/confirm', requirePlatformAuth(), async (req, res, next) => {
+  router.post('/account/mfa/confirm', platformMutationLimiter, requirePlatformAuth(), async (req, res, next) => {
     const { code } = req.body
     if (!code || typeof code !== 'string' || code.length !== 6) {
       return res.status(400).json({ error: 'A 6-digit verification code is required' })
@@ -674,7 +681,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   // POST /api/v1/platform/account/mfa/disable — Disable MFA
   // Requires current password for security
   // ============================================================
-  router.post('/account/mfa/disable', requirePlatformAuth(), async (req, res, next) => {
+  router.post('/account/mfa/disable', platformMutationLimiter, requirePlatformAuth(), async (req, res, next) => {
     const { password } = req.body
     if (!password) {
       return res.status(400).json({ error: 'Current password is required to disable MFA' })
@@ -705,7 +712,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   // ============================================================
   // POST /api/v1/platform/tenants — Create a new tenant
   // ============================================================
-  router.post('/tenants', requirePlatformAuth(), async (req, res, next) => {
+  router.post('/tenants', platformMutationLimiter, requirePlatformAuth(), async (req, res, next) => {
     const errors = validateTenantCreate(req.body)
     if (errors.length > 0) {
       return res.status(400).json({ error: 'Validation failed', details: errors })
@@ -773,7 +780,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   // Name: owner or tenant_admin
   // SSI credentials, calendar config: owner only
   // ============================================================
-  router.patch('/tenants/:id', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
+  router.patch('/tenants/:id', platformMutationLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
     // Field-level permission check:
     // SSI credentials and calendar config require owner role
     const ownerOnlyFields = ['ssiCredentials', 'calendarConfig']
@@ -867,7 +874,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
 
   // POST /api/v1/platform/tenants/:tenantId/disciplines
   // Requires: owner, tenant_admin, or discipline_admin
-  router.post('/tenants/:tenantId/disciplines', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'discipline_admin'), async (req, res, next) => {
+  router.post('/tenants/:tenantId/disciplines', platformMutationLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'discipline_admin'), async (req, res, next) => {
     const { name, labelFi, labelEn, ssiGroupId, ssiOrganizerId, ssiCreateUrl } = req.body
     if (!name || name.trim().length < 2) {
       return res.status(400).json({ error: 'Discipline name is required (min 2 characters)' })
@@ -898,7 +905,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
 
   // PATCH /api/v1/platform/tenants/:tenantId/disciplines/:id
   // Requires: owner, tenant_admin, or discipline_admin
-  router.patch('/tenants/:tenantId/disciplines/:id', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'discipline_admin'), async (req, res, next) => {
+  router.patch('/tenants/:tenantId/disciplines/:id', platformMutationLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'discipline_admin'), async (req, res, next) => {
     const discipline = await getDiscipline(req.params.id)
     if (!discipline || discipline.tenantId !== req.params.tenantId) {
       return res.status(404).json({ error: 'Discipline not found' })
@@ -925,7 +932,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
 
   // DELETE /api/v1/platform/tenants/:tenantId/disciplines/:id
   // Requires: owner, tenant_admin, or discipline_admin
-  router.delete('/tenants/:tenantId/disciplines/:id', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'discipline_admin'), async (req, res) => {
+  router.delete('/tenants/:tenantId/disciplines/:id', platformMutationLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'discipline_admin'), async (req, res) => {
     const discipline = await getDiscipline(req.params.id)
     if (!discipline || discipline.tenantId !== req.params.tenantId) {
       return res.status(404).json({ error: 'Discipline not found' })
@@ -956,7 +963,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
 
   // POST /api/v1/platform/tenants/:tenantId/templates
   // Requires: owner, tenant_admin, or match_admin
-  router.post('/tenants/:tenantId/templates', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
+  router.post('/tenants/:tenantId/templates', platformMutationLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
     const { name, disciplineId, ssiSeedEventId, ssiSeedSnapshot, overrides, calendarTemplate, staffingRules } = req.body
     if (!name || name.trim().length < 2) {
       return res.status(400).json({ error: 'Template name is required (min 2 characters)' })
@@ -997,7 +1004,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
 
   // PATCH /api/v1/platform/tenants/:tenantId/templates/:id
   // Requires: owner, tenant_admin, or match_admin
-  router.patch('/tenants/:tenantId/templates/:id', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
+  router.patch('/tenants/:tenantId/templates/:id', platformMutationLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
     const template = await getMatchTemplate(req.params.id)
     if (!template || template.tenantId !== req.params.tenantId) {
       return res.status(404).json({ error: 'Template not found' })
@@ -1024,7 +1031,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
 
   // DELETE /api/v1/platform/tenants/:tenantId/templates/:id
   // Requires: owner, tenant_admin, or match_admin
-  router.delete('/tenants/:tenantId/templates/:id', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res) => {
+  router.delete('/tenants/:tenantId/templates/:id', platformMutationLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res) => {
     const template = await getMatchTemplate(req.params.id)
     if (!template || template.tenantId !== req.params.tenantId) {
       return res.status(404).json({ error: 'Template not found' })
@@ -1196,7 +1203,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   // POST /api/v1/platform/tenants/:tenantId/events — Create event(s) for date(s)
   // Requires: owner, tenant_admin, or match_admin
   // Body: { templateId, dates: ['2026-03-14', '2026-03-21'] }
-  router.post('/tenants/:tenantId/events', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
+  router.post('/tenants/:tenantId/events', platformMutationLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
     const { templateId, dates } = req.body
     if (!templateId) {
       return res.status(400).json({ error: 'templateId is required' })
@@ -1263,7 +1270,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
 
   // PATCH /api/v1/platform/tenants/:tenantId/events/:id — Update event status/references
   // Requires: owner, tenant_admin, or match_admin
-  router.patch('/tenants/:tenantId/events/:id', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
+  router.patch('/tenants/:tenantId/events/:id', platformMutationLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
     const event = await getScheduledEvent(req.params.id)
     if (!event || event.tenantId !== req.params.tenantId) {
       return res.status(404).json({ error: 'Event not found' })
@@ -1286,7 +1293,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
 
   // DELETE /api/v1/platform/tenants/:tenantId/events/:id — Delete event (and cascade to SSI if created)
   // Requires: owner, tenant_admin, or match_admin
-  router.delete('/tenants/:tenantId/events/:id', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
+  router.delete('/tenants/:tenantId/events/:id', platformMutationLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
     const event = await getScheduledEvent(req.params.id)
     if (!event || event.tenantId !== req.params.tenantId) {
       return res.status(404).json({ error: 'Event not found' })
@@ -1334,7 +1341,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   // Triggers SSI event creation for a planned scheduled event.
   // Creates cup + matches + squads in SSI, updates event status and ssiReferences.
   // Requires: owner, tenant_admin, or match_admin
-  router.post('/tenants/:tenantId/events/:id/execute', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
+  router.post('/tenants/:tenantId/events/:id/execute', platformSsiLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
     const event = await getScheduledEvent(req.params.id)
     if (!event || event.tenantId !== req.params.tenantId) {
       return res.status(404).json({ error: 'Event not found' })
@@ -1634,7 +1641,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   })
 
   // POST /api/v1/platform/tenants/:tenantId/invitations
-  router.post('/tenants/:tenantId/invitations', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
+  router.post('/tenants/:tenantId/invitations', platformMutationLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
     const { email, roles } = req.body
     if (!email || !EMAIL_RE.test(email)) {
       return res.status(400).json({ error: 'A valid email is required' })
@@ -1695,7 +1702,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
   })
 
   // DELETE /api/v1/platform/tenants/:tenantId/invitations/:id
-  router.delete('/tenants/:tenantId/invitations/:id', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
+  router.delete('/tenants/:tenantId/invitations/:id', platformMutationLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
     try {
       const revoked = await revokeTenantInvitation(req.params.tenantId, req.params.id)
       if (!revoked) {
@@ -1723,7 +1730,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
 
   // POST /api/v1/platform/invitations/:token/accept
   // Requires user to be logged in to platform OR creates account inline if password/name provided
-  router.post('/invitations/:token/accept', async (req, res, next) => {
+  router.post('/invitations/:token/accept', platformMutationLimiter, async (req, res, next) => {
     try {
       const invite = await getInvitationByToken(req.params.token)
       if (!invite) {
