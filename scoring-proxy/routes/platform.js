@@ -2363,12 +2363,12 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
                 __typename
                 number
                 comment
-                ... on NordicSquadNode    { competitors { id status shooter { email first_name last_name } } }
-                ... on IpscSquadNode      { competitors { id status shooter { email first_name last_name } } }
-                ... on PpcSquadNode       { competitors { id status shooter { email first_name last_name } } }
-                ... on CmpSquadNode       { competitors { id status shooter { email first_name last_name } } }
-                ... on PrecisionSquadNode { competitors { id status shooter { email first_name last_name } } }
-                ... on GenericSquadNode   { competitors { id status shooter { email first_name last_name } } }
+                ... on NordicSquadNode    { competitors { id status shooter { id email first_name last_name } } }
+                ... on IpscSquadNode      { competitors { id status shooter { id email first_name last_name } } }
+                ... on PpcSquadNode       { competitors { id status shooter { id email first_name last_name } } }
+                ... on CmpSquadNode       { competitors { id status shooter { id email first_name last_name } } }
+                ... on PrecisionSquadNode { competitors { id status shooter { id email first_name last_name } } }
+                ... on GenericSquadNode   { competitors { id status shooter { id email first_name last_name } } }
               }
             }
           }
@@ -2382,7 +2382,7 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
         if (staffSquadNameForLog) {
           const trainerSq = rawSquads.find(s => s.comment === staffSquadNameForLog || `Squad ${s.number}` === staffSquadNameForLog)
           if (trainerSq) {
-            log.info(`[platform] TEST trainer squad competitors: ${JSON.stringify((trainerSq.competitors || []).map(c => ({ id: c.id, status: c.status, email: c.shooter?.email, name: c.shooter?.first_name })))}`)
+            log.info(`[platform] TEST trainer squad competitors: ${JSON.stringify((trainerSq.competitors || []).map(c => ({ id: c.id, status: c.status, shooterId: c.shooter?.id, email: c.shooter?.email, name: c.shooter?.first_name })))}`)
           }
         }
 
@@ -2393,12 +2393,23 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
           competitors: (sq.competitors || []).map(c => ({
             id: c.id,
             status: c.status,
+            shooterId: c.shooter?.id || null,
             email: c.shooter?.email || null,
             name: `${c.shooter?.first_name || ''} ${c.shooter?.last_name || ''}`.trim(),
           }))
         }))
 
-        return res.json({ squads, staffSquadName: evtStaffing.event?.templateStaffingRules?.staffSquadName || null })
+        // Also query { me } to get the admin SSI user ID for correlation
+        let meData = null
+        try {
+          meData = await ssiGraphQL(adminSess, `{ me { id email first_name last_name } }`)
+        } catch (e) { /* me query optional */ }
+
+        return res.json({
+          squads,
+          staffSquadName: evtStaffing.event?.templateStaffingRules?.staffSquadName || null,
+          ssiMe: meData?.me || null,
+        })
       } catch (err) {
         log.error(`[platform] TEST ssi-squads failed:`, err.message)
         return res.status(500).json({ error: err.message })
