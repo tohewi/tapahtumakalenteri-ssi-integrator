@@ -347,8 +347,9 @@ export default function MembersPage({ tenantId, currentAccountId }) {
             <p className="text-sm text-gray-500 mb-4">Send an invitation link by email. The recipient can create an account and join this tenant.</p>
             <form onSubmit={handleInviteSubmit}>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                <label htmlFor="invite-email" className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
                 <input
+                  id="invite-email"
                   type="email"
                   required
                   value={inviteForm.email}
