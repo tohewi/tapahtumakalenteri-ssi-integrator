@@ -43,6 +43,17 @@ const MONTH_NAMES = [
 ]
 
 /**
+ * Format a local Date object as 'YYYY-MM-DD' using local (not UTC) components.
+ * Used by the calendar grid to avoid timezone-shift off-by-one errors.
+ */
+function localDateKey(d) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/**
  * Parse an event date string into a YYYY-MM-DD key for grouping.
  * Handles both 'YYYY-MM-DD' and ISO timestamp formats.
  */
@@ -75,13 +86,13 @@ function getCalendarDays(year, month) {
   // Leading days from previous month
   for (let i = startDow - 1; i >= 0; i--) {
     const d = new Date(year, month, -i)
-    days.push({ date: d, dateKey: toDateKey(d.toISOString()), isCurrentMonth: false })
+    days.push({ date: d, dateKey: localDateKey(d), isCurrentMonth: false })
   }
 
   // Days of current month
   for (let d = 1; d <= lastDay.getDate(); d++) {
     const dt = new Date(year, month, d)
-    days.push({ date: dt, dateKey: toDateKey(dt.toISOString()), isCurrentMonth: true })
+    days.push({ date: dt, dateKey: localDateKey(dt), isCurrentMonth: true })
   }
 
   // Trailing days to fill the last week row
@@ -90,7 +101,7 @@ function getCalendarDays(year, month) {
     const fill = 7 - remainder
     for (let i = 1; i <= fill; i++) {
       const d = new Date(year, month + 1, i)
-      days.push({ date: d, dateKey: toDateKey(d.toISOString()), isCurrentMonth: false })
+      days.push({ date: d, dateKey: localDateKey(d), isCurrentMonth: false })
     }
   }
 
@@ -121,8 +132,8 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
   // Calendar grid for current view
   const calendarDays = useMemo(() => getCalendarDays(viewYear, viewMonth), [viewYear, viewMonth])
 
-  // Today's date key for highlighting
-  const todayKey = toDateKey(today.toISOString())
+  // Today's date key for highlighting (use local date to avoid timezone shift)
+  const todayKey = localDateKey(today)
 
   // Navigation handlers
   function goToPrevMonth() {
