@@ -43,11 +43,34 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: e2e
 
+      - name: Wait for preview environment to respond
+        run: |
+          URL="${{ github.event.inputs.base_url || format('https://turres-ssi-tools-pr-{0}.onrender.com', github.event.pull_request.number) }}"
+          echo "Waiting for ${URL} to respond…"
+          for i in $(seq 1 18); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${URL}/api/v1" || echo "000")
+            if [ "$STATUS" != "000" ] && [ "$STATUS" != "502" ] && [ "$STATUS" != "503" ]; then
+              echo "✅ Preview environment is up (HTTP ${STATUS})"
+              exit 0
+            fi
+            echo "  Attempt ${i}/18 — status ${STATUS}, waiting 10 s…"
+            sleep 10
+          done
+          echo "❌ Preview environment did not respond after 3 minutes"
+          exit 1
+
+      - name: Seed UAT owner account
+        env:
+          PLATFORM_BASE_URL: ${{ github.event.inputs.base_url || format('https://turres-ssi-tools-pr-{0}.onrender.com', github.event.pull_request.number) }}
+          PLATFORM_EMAIL: ${{ secrets.PLATFORM_TEST_EMAIL }}
+          PLATFORM_PASSWORD: ${{ secrets.PLATFORM_TEST_PASSWORD }}
+        run: node test-harness/seed-uat-account.mjs
+
       - name: Run staffing SSI sync tests
         run: npx playwright test tests/10-staffing-ssi-sync.spec.js
         working-directory: e2e
         env:
-          BASE_URL: ${{ github.event.inputs.base_url || 'https://turres-ssi-tools-pr-138.onrender.com' }}
+          BASE_URL: ${{ github.event.inputs.base_url || format('https://turres-ssi-tools-pr-{0}.onrender.com', github.event.pull_request.number) }}
           PLATFORM_EMAIL: ${{ secrets.PLATFORM_TEST_EMAIL }}
           PLATFORM_PASSWORD: ${{ secrets.PLATFORM_TEST_PASSWORD }}
           SSI_TEST_EMAIL: ${{ secrets.SSI_TEST_EMAIL }}
