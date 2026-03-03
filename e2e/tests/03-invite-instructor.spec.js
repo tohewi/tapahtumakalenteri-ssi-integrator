@@ -58,12 +58,11 @@ test('owner can invite an instructor from the Members page', async ({ page, requ
     await expect(page.getByRole('heading', { name: /invite member/i })).toBeVisible()
 
     // ── Step 4: Fill in the invite form ──────────────────────────────────
-    await page.getByRole('textbox', { name: /email address/i }).fill(inviteeEmail)
+    await page.getByLabel(/email address/i).fill(inviteeEmail)
 
     // Verify the Instructor checkbox is checked by default.
-    // There is exactly one checkbox labelled "Instructor" in this modal;
-    // the strict (no .first()) locator intentionally fails if duplicates appear.
-    const instructorCheckbox = page.getByRole('checkbox', { name: /^instructor$/i })
+    // The label text includes the description, so we match the prefix.
+    const instructorCheckbox = page.getByLabel(/^Instructor.*match staff/i)
     await expect(instructorCheckbox).toBeChecked()
 
     // ── Step 5: Submit ────────────────────────────────────────────────────

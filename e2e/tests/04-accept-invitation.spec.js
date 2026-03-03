@@ -65,14 +65,14 @@ test('invitee can accept invitation and create account without email delivery', 
     // ── Step 3: JoinInvitePage renders ────────────────────────────────────
     // The page should show the invited email and a form to set up an account
     await expect(page.getByText(inviteeEmail)).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByText(/create.*account|set up|join/i)).toBeVisible()
+    await expect(page.getByText(/Please enter your name and create a password/i)).toBeVisible()
 
     // ── Step 4: Invitee fills in name + password ──────────────────────────
     const inviteeName = 'UAT Invited User'
     const inviteePassword = 'InviteUAT999!'
 
     await page.getByLabel(/full name/i).fill(inviteeName)
-    await page.getByLabel(/password/i).fill(inviteePassword)
+    await page.getByLabel(/create password/i).fill(inviteePassword)
 
     await page.getByRole('button', { name: /create account.*join|join/i }).click()
 
@@ -100,6 +100,6 @@ test('invitation page shows error for expired or invalid token', async ({ page }
   await page.goto('/#/platform/invite/invalid-token-uat-test')
 
   await expect(
-    page.getByText(/not found|expired|invalid|error/i),
+    page.getByRole('heading', { name: /invalid invitation/i })
   ).toBeVisible({ timeout: 15_000 })
 })
