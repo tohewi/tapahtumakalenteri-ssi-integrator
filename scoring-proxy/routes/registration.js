@@ -9,8 +9,11 @@ import {
 } from '../lib/ssi-core/participants.js'
 import { sendRegistrationConfirmation } from '../lib/email.js'
 import { log } from '../lib/logger.js'
+import { AppError } from '../lib/errors/AppError.js'
 
-const router = express.Router()
+function internalError(message) {
+  return new AppError(message, 500, 'INTERNAL_ERROR')
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -43,7 +46,22 @@ function validateRegistrationInput({ cupId, squadNumber, email, captchaId, captc
   return errors
 }
 
-export function createRegistrationRouter({ captchaChallenges, CAPTCHA_TTL, captchaLimiter, registerBodyLimit, registerReadLimiter, registerLimiter, getAdminSession, adminGraphQL, IS_PROD }) {
+export function createRegistrationRouter({
+  captchaChallenges,
+  CAPTCHA_TTL,
+  captchaLimiter,
+  registerBodyLimit,
+  registerReadLimiter,
+  registerLimiter,
+  createOrGetAdminSession,
+  getAdminSession,
+  setAdminSession,
+  clearAdminSession,
+  adminGraphQL,
+  IS_PROD,
+}) {
+  const router = express.Router()
+
   // ============================================================
   // GET /api/register/captcha — Generate math challenge
   // ============================================================
@@ -92,7 +110,7 @@ export function createRegistrationRouter({ captchaChallenges, CAPTCHA_TTL, captc
   // Searches for "Kupittaa CUP", returns future cups with
   // registration open and capacity info
   // ============================================================
-  router.get('/cups', registerReadLimiter, async (req, res) => {
+  router.get('/cups', registerReadLimiter, async (req, res, next) => {
     try {
       const result = await adminGraphQL(`
         query {
@@ -159,8 +177,8 @@ export function createRegistrationRouter({ captchaChallenges, CAPTCHA_TTL, captc
 
       res.json({ cups })
     } catch (err) {
-      console.error('[register] Failed to list cups:', err.message)
-      res.status(500).json({ error: 'Ilmoittautumispalvelu ei ole käytettävissä.' })
+      log.error('[register] Failed to list cups:', err.message)
+      return next(internalError('Ilmoittautumispalvelu ei ole käytettävissä.'))
     }
   })
 
@@ -168,7 +186,7 @@ export function createRegistrationRouter({ captchaChallenges, CAPTCHA_TTL, captc
   // GET /api/register/cup/:id — Cup squads with capacity (public)
   // Returns squad info aggregated across all matches in the cup
   // ============================================================
-  router.get('/cup/:id', registerReadLimiter, async (req, res) => {
+  router.get('/cup/:id', registerReadLimiter, async (req, res, next) => {
     // Validate cup ID format (RSEC3)
     if (!/^\d{1,10}$/.test(req.params.id)) {
       return res.status(400).json({ error: 'Virheellinen Cup-tunniste.' })
@@ -255,8 +273,8 @@ export function createRegistrationRouter({ captchaChallenges, CAPTCHA_TTL, captc
         squads,
       })
     } catch (err) {
-      console.error('[register] Failed to get cup:', err.message)
-      res.status(500).json({ error: 'Ilmoittautumispalvelu ei ole käytettävissä.' })
+      log.error('[register] Failed to get cup:', err.message)
+      return next(internalError('Ilmoittautumispalvelu ei ole käytettävissä.'))
     }
   })
 
@@ -264,7 +282,7 @@ export function createRegistrationRouter({ captchaChallenges, CAPTCHA_TTL, captc
   // POST /api/register/submit — Register shooter to cup + squad
   // Body: { cupId, squadNumber, email, captchaId, captchaAnswer }
   // ============================================================
-  router.post('/submit', registerBodyLimit, registerLimiter, async (req, res) => {
+  router.post('/submit', registerBodyLimit, registerLimiter, async (req, res, next) => {
     const { cupId, squadNumber, email, captchaId, captchaAnswer } = req.body || {}
 
     // Strict schema validation (RSEC3)
@@ -424,15 +442,15 @@ export function createRegistrationRouter({ captchaChallenges, CAPTCHA_TTL, captc
 
         sendRegistrationConfirmation(email, shooterName, cupData.event.name, matchSquads)
           .then(result => {
-            if (!result.success) console.warn(`[register] Confirmation email failed: ${result.error}`)
+            if (!result.success) log.warn(`[register] Confirmation email failed: ${result.error}`)
           })
-          .catch(err => console.error(`[register] Email error: ${err.message}`))
+          .catch(err => log.error(`[register] Email error: ${err.message}`))
       }
 
       res.end()
     } catch (err) {
-      console.error('[register] Registration failed:', err.message)
-      res.status(500).json({ error: 'Ilmoittautuminen epäonnistui. Yritä myöhemmin uudelleen.' })
+      log.error('[register] Registration failed:', err.message)
+      return next(internalError('Ilmoittautuminen epäonnistui. Yritä myöhemmin uudelleen.'))
     }
   })
 

@@ -31,6 +31,7 @@ import { initRedis, closeRedis } from '../lib/session/redis.js'
 import { createSession } from '../lib/session/store.js'
 import { createMockSessionInput } from './fixtures/sessions.js'
 import { requireAuthV7 } from '../middleware/auth-v7.js'
+import { errorHandler } from '../middleware/errorHandler.js'
 import { createManagementRouter } from '../routes/management.js'
 
 let server, baseUrl, app
@@ -101,6 +102,7 @@ beforeAll(async () => {
   })
   
   app.use('/api/manage', managementRouter)
+  app.use(errorHandler)
   
   await new Promise((resolve) => {
     server = app.listen(0, () => {
