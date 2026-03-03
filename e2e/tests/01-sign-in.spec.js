@@ -57,7 +57,7 @@ test('sign-in form shows error for wrong password', async ({ page }) => {
   await page.getByRole('button', { name: /sign in/i }).click()
 
   // An error message should appear (no redirect to dashboard)
-  await expect(page.getByText(/invalid credentials|incorrect password|wrong|error/i)).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText(/invalid|incorrect|wrong password|error/i)).toBeVisible({ timeout: 10_000 })
   // Dashboard heading must NOT appear
   await expect(page.getByRole('heading', { name: /dashboard/i })).not.toBeVisible()
 })

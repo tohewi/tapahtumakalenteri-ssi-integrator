@@ -49,8 +49,8 @@ test('owner can invite an instructor from the Members page', async ({ page, requ
     await expect(page.getByRole('heading', { name: /dashboard/i })).toBeVisible({ timeout: 20_000 })
 
     // ── Step 2: Navigate to Members page ─────────────────────────────────
-    // Use the sidebar/navigation link
-    await page.getByRole('link', { name: /members/i }).click()
+    // Sidebar items are <div> elements, not links — click by text
+    await page.locator('nav').getByText('Members').click()
     await expect(page.getByRole('heading', { name: /members/i })).toBeVisible({ timeout: 10_000 })
 
     // ── Step 3: Open invite modal ─────────────────────────────────────────

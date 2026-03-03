@@ -144,8 +144,9 @@ export default function JoinInvitePage({ token, onComplete, onCancel }) {
             </p>
             
             <div className="space-y-1">
-              <label className="block text-sm font-medium text-gray-700">Full Name</label>
+              <label htmlFor="invite-name" className="block text-sm font-medium text-gray-700">Full Name</label>
               <input
+                id="invite-name"
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
@@ -156,8 +157,9 @@ export default function JoinInvitePage({ token, onComplete, onCancel }) {
             </div>
             
             <div className="space-y-1">
-              <label className="block text-sm font-medium text-gray-700">Create Password</label>
+              <label htmlFor="invite-password" className="block text-sm font-medium text-gray-700">Create Password</label>
               <input
+                id="invite-password"
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
