@@ -2,6 +2,8 @@ name: E2E Staffing SSI Sync
 
 # Runs Playwright E2E tests for staffing ↔ SSI bidirectional sync.
 # Triggered manually or on PRs that touch staffing-related code.
+#
+# To DISABLE: set repository variable E2E_ENABLED = "false"
 on:
   workflow_dispatch:
     inputs:
@@ -22,6 +24,7 @@ jobs:
   e2e-staffing:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    if: vars.E2E_ENABLED != 'false'
 
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +51,7 @@ jobs:
           PLATFORM_EMAIL: ${{ secrets.PLATFORM_TEST_EMAIL }}
           PLATFORM_PASSWORD: ${{ secrets.PLATFORM_TEST_PASSWORD }}
           SSI_TEST_EMAIL: ${{ secrets.SSI_TEST_EMAIL }}
-          CI: true
+          CI: 'true'
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
