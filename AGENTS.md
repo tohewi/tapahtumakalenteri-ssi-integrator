@@ -404,6 +404,7 @@ export function createXxxRouter({ requireAuth, graphqlWithRefresh, ... }) {
 - **Bug fixes:** Must include a regression test that fails without the fix
 - **Refactors:** Must not reduce test count. Run `npm test` in both `scoring-proxy/` and `scoring-ui/` before committing
 - **Time-dependent tests:** Must use `vi.useFakeTimers()` to pin the clock. Never hardcode dates that will expire
+- **Playwright Locators & Accessibility:** When writing Playwright tests or React UI components, always ensure `<label>` elements have an `htmlFor` attribute that exactly matches the `<input id="...">` attribute. This is required to give the input an accessible name so that `page.getByRole('textbox', { name: /label text/i })` can successfully locate it. Never use `page.locator('input[name="..."]')` as a crutch for missing accessibility attributes.
 
 ### Merge Conflict Prevention
 
