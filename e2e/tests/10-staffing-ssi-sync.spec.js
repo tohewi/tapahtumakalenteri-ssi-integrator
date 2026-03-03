@@ -60,11 +60,22 @@ test.beforeAll(async ({ request }) => {
 
   for (const item of upcoming) {
     const name = item.event.eventName || ''
+    const refs = item.event.ssiReferences || {}
     if (name.includes(SRA_NAME) && !sraEvent) {
       sraEvent = { id: item.event.id, eventName: name, needs: item.needs }
     }
-    if (name.includes(CUP_NAME) && !cupEvent) {
+    // Prefer cups with isCup: true — those have properly configured SSI staff pages
+    if (name.includes(CUP_NAME) && refs.isCup && !cupEvent) {
       cupEvent = { id: item.event.id, eventName: name, needs: item.needs }
+    }
+  }
+  // Fallback: pick any cup if none had isCup flag
+  if (!cupEvent) {
+    for (const item of upcoming) {
+      if ((item.event.eventName || '').includes(CUP_NAME)) {
+        cupEvent = { id: item.event.id, eventName: item.event.eventName, needs: item.needs }
+        break
+      }
     }
   }
 
