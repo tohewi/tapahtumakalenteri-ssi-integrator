@@ -766,7 +766,11 @@ function TemplatesSection({ tenantId, onEditTemplate }) {
     try {
       const data = await importTemplateSeed(tenantId, tplId)
       setTemplates(prev => prev.map(t => t.id === tplId ? data.template : t))
-      setStatus({ type: 'success', message: `Imported: "${data.snapshot.name}" — ${data.snapshot.isCup ? data.snapshot.matchCount + ' matches' : 'single match'}` })
+      if (data.warning) {
+        setStatus({ type: 'warning', message: `Imported with warning: ${data.warning}` })
+      } else {
+        setStatus({ type: 'success', message: `Imported: "${data.snapshot.name}" — ${data.snapshot.isCup ? data.snapshot.matchCount + ' matches' : 'single match'}` })
+      }
       setExpandedId(tplId)
     } catch (err) {
       setStatus({ type: 'error', message: err.message })

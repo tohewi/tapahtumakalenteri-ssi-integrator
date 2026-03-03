@@ -264,7 +264,11 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
     try {
       const data = await importTemplateSeed(tenantId, templateId)
       setTemplate(data.template)
-      setStatus({ type: 'success', message: `Re-imported: "${data.snapshot.name}"` })
+      if (data.warning) {
+        setStatus({ type: 'warning', message: `Imported with warning: ${data.warning}` })
+      } else {
+        setStatus({ type: 'success', message: `Re-imported: "${data.snapshot.name}"` })
+      }
     } catch (err) {
       setStatus({ type: 'error', message: err.message })
     } finally {

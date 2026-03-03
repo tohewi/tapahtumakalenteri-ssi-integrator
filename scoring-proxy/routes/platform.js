@@ -1124,8 +1124,22 @@ export function createPlatformRouter({
         ssiSeedSnapshot: snapshot,
       })
 
+      // SSI-R4: Validate template SSI type against discipline SSI type
+      let validationWarning = null
+      const discipline = await getDiscipline(template.disciplineId)
+      if (discipline && discipline.ssiCreateUrl) {
+        const { getSsiDisciplineByProperties, getSsiDisciplineByUrl } = await import('../lib/ssi-core/discipline-registry.js')
+        const detectedType = getSsiDisciplineByProperties(snapshot.rule, snapshot.isCup, snapshot.eventTypeName)
+        const expectedType = getSsiDisciplineByUrl(discipline.ssiCreateUrl)
+        
+        if (detectedType && expectedType && detectedType.id !== expectedType.id) {
+          validationWarning = `Type mismatch: The imported event appears to be a ${detectedType.displayName}, but this template belongs to a discipline configured for ${expectedType.displayName}.`
+          log.warn(`[platform] SSI-R4 Validation Warning for template ${template.id}: ${validationWarning}`)
+        }
+      }
+
       log.info(`[platform] Seed imported for template ${req.params.id}: "${snapshot.name}" (${snapshot.isCup ? snapshot.matchCount + ' matches' : 'single match'})`)
-      res.json({ success: true, template: updated, snapshot })
+      res.json({ success: true, template: updated, snapshot, warning: validationWarning })
     } catch (err) {
       log.error(`[platform] Seed import failed for template ${req.params.id}:`, err.message)
       if (err.message.includes('authentication failed') || err.message.includes('credentials')) {
