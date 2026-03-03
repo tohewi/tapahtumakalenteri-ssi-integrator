@@ -304,14 +304,22 @@ test.describe('SRA Squadding — instructor roles placed in trainer squad', () =
     )
   }
 
-  // Helper: find our competitor in a squad.
+  // Helper: find our competitor in a squad (READ-ONLY test verification only).
   // SSI GraphQL returns email=null for IPSC/SRA competitors (confirmed SSI limitation).
-  // Match by email first, then fall back to name matching using platform account name.
+  // Match by email first, then fall back to EXACT full-name matching.
+  //
+  // ⚠️  WARNING: SSI uses wildcard/partial name search internally, which can return
+  // ambiguous results (e.g. searching "Ari" matches both "Ari Virtanen" and "Jari Virtanen").
+  // Per MG-ID1/MG-ID2: name-based matching must NEVER be used for state-changing operations.
+  // This helper is acceptable here because:
+  //   1. It's read-only verification in a test (no SSI state change)
+  //   2. It uses exact full-name equality (not partial/wildcard)
+  //   3. Email match is always preferred when available
   function findMyCompetitor(competitors) {
     const testEmail = (process.env.SSI_TEST_EMAIL || EMAIL || '').toLowerCase()
     const byEmail = competitors.find(c => c.email?.toLowerCase() === testEmail)
     if (byEmail) return byEmail
-    // Name-based fallback: match against the platform account display name
+    // Exact full-name fallback (not partial match — see warning above)
     if (accountName) {
       const nameLower = accountName.toLowerCase()
       return competitors.find(c => c.name?.toLowerCase() === nameLower)
