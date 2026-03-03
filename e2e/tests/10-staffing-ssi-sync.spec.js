@@ -44,6 +44,7 @@ const CUP_NAME = process.env.TEST_EVENT_NAME_CUP || 'Kupittaa'
 // Shared state across tests in this file (serial execution)
 let sid
 let tenantId
+let accountName // platform account display name (for squad competitor matching)
 let sraEvent   // { id, eventName }
 let cupEvent   // { id, eventName }
 
@@ -52,9 +53,17 @@ test.beforeAll(async ({ request }) => {
     throw new Error('Set PLATFORM_EMAIL and PLATFORM_PASSWORD env vars before running.')
   }
 
-  // Sign in and get tenant
+  // Sign in and get tenant + account name
   sid = await apiSignIn(request, EMAIL, PASSWORD)
   tenantId = await apiGetFirstTenantId(request, sid)
+
+  // Fetch account name for squad competitor matching
+  // (SSI GraphQL returns email=null for IPSC/SRA competitors, so we match by name)
+  const statusRes = await request.get('/api/v1/platform/status', {
+    headers: { Cookie: `platform_sid=${sid}` },
+  })
+  const statusBody = await statusRes.json()
+  accountName = statusBody.account?.name || ''
 
   // Find the SRA and Cup events from upcoming staffing
   const upcoming = await apiGetUpcomingStaffing(request, sid, tenantId)
@@ -287,7 +296,6 @@ test.describe('SSI-direct → Platform visibility', () => {
 
 test.describe('SRA Squadding — instructor roles placed in trainer squad', () => {
   let signupId
-  const TEST_EMAIL = process.env.SSI_TEST_EMAIL || process.env.PLATFORM_EMAIL
 
   // Helper: find the trainer squad from the squads array
   function findTrainerSquad(squads, staffSquadName) {
@@ -296,18 +304,26 @@ test.describe('SRA Squadding — instructor roles placed in trainer squad', () =
     )
   }
 
-  // Helper: count approved competitors in a squad
-  function countApproved(squad) {
-    return (squad?.competitors || []).filter(c => c.status === 'a').length
+  // Helper: find our competitor in a squad.
+  // SSI GraphQL returns email=null for IPSC/SRA competitors (confirmed SSI limitation).
+  // Match by email first, then fall back to name matching using platform account name.
+  function findMyCompetitor(competitors) {
+    const testEmail = (process.env.SSI_TEST_EMAIL || EMAIL || '').toLowerCase()
+    const byEmail = competitors.find(c => c.email?.toLowerCase() === testEmail)
+    if (byEmail) return byEmail
+    // Name-based fallback: match against the platform account display name
+    if (accountName) {
+      const nameLower = accountName.toLowerCase()
+      return competitors.find(c => c.name?.toLowerCase() === nameLower)
+    }
+    return undefined
   }
 
   test('TC-11a: Sign up for RO → user appears in trainer squad with status "a"', async ({ request }) => {
-    // Capture trainer squad state BEFORE signup
     const { squads: squadsBefore, staffSquadName } = await apiTestSsiGetSquads(request, sid, tenantId, sraEvent.id)
     expect(staffSquadName, 'SRA template must have staffSquadName configured').toBeTruthy()
     const trainerBefore = findTrainerSquad(squadsBefore, staffSquadName)
     expect(trainerBefore, `Trainer squad "${staffSquadName}" must exist in SSI`).toBeTruthy()
-    const approvedBefore = countApproved(trainerBefore)
 
     // Sign up for Range Officer
     const staffing = await apiGetEventStaffing(request, sid, tenantId, sraEvent.id)
@@ -318,41 +334,32 @@ test.describe('SRA Squadding — instructor roles placed in trainer squad', () =
     expect(result.success).toBe(true)
     signupId = result.signup.id
 
-    // Verify trainer squad gained an approved competitor
-    // NOTE: SSI GraphQL may return email=null for IPSC/SRA competitors,
-    // so we use count-based verification instead of email matching.
+    // Verify user appears in the trainer squad with status 'a'
     const { squads } = await apiTestSsiGetSquads(request, sid, tenantId, sraEvent.id)
     const trainerAfter = findTrainerSquad(squads, staffSquadName)
-    const approvedAfter = countApproved(trainerAfter)
-    expect(approvedAfter, `Trainer squad approved count should increase (was ${approvedBefore})`).toBeGreaterThan(approvedBefore)
+    const myEntry = findMyCompetitor(trainerAfter.competitors)
+    expect(myEntry, `User must appear in trainer squad (accountName="${accountName}")`).toBeTruthy()
+    expect(myEntry.status, 'Competitor status must be "a" (approved)').toBe('a')
   })
 
-  test('TC-11b: Withdraw from RO → user removed or status changes in squad', async ({ request }) => {
+  test('TC-11b: Withdraw from RO → user status changes in squad', async ({ request }) => {
     expect(signupId, 'signupId must be set from TC-11a').toBeTruthy()
-
-    // Capture state before withdrawal
-    const { squads: squadsBefore, staffSquadName } = await apiTestSsiGetSquads(request, sid, tenantId, sraEvent.id)
-    const trainerBefore = findTrainerSquad(squadsBefore, staffSquadName)
-    const approvedBefore = countApproved(trainerBefore)
 
     // Withdraw
     const result = await apiStaffingWithdraw(request, sid, tenantId, sraEvent.id, signupId)
     expect(result.success).toBe(true)
 
-    // After withdrawal, the approved count should decrease or stay the same
-    // (SSI may set status to 'd' or physically remove the competitor)
-    const { squads } = await apiTestSsiGetSquads(request, sid, tenantId, sraEvent.id)
+    // After withdrawal, the competitor may be removed entirely or have status != 'a'
+    const { squads, staffSquadName } = await apiTestSsiGetSquads(request, sid, tenantId, sraEvent.id)
     const trainerAfter = findTrainerSquad(squads, staffSquadName)
-    const approvedAfter = countApproved(trainerAfter)
-    expect(approvedAfter, 'Approved count should not increase after withdrawal').toBeLessThanOrEqual(approvedBefore)
+    const myEntry = findMyCompetitor(trainerAfter.competitors)
+    if (myEntry) {
+      expect(myEntry.status, 'Status should no longer be "a" after withdrawal').not.toBe('a')
+    }
+    // If competitor is completely gone, that's also acceptable
   })
 
   test('TC-11c: Sign up for MD → user also appears in trainer squad', async ({ request }) => {
-    // Capture state before signup
-    const { squads: squadsBefore, staffSquadName } = await apiTestSsiGetSquads(request, sid, tenantId, sraEvent.id)
-    const trainerBefore = findTrainerSquad(squadsBefore, staffSquadName)
-    const approvedBefore = countApproved(trainerBefore)
-
     // All instructor roles (ro, md, qm) should be squadded to the trainer squad
     const staffing = await apiGetEventStaffing(request, sid, tenantId, sraEvent.id)
     const mdNeed = findNeedByRole(staffing.needs, 'md')
@@ -361,11 +368,11 @@ test.describe('SRA Squadding — instructor roles placed in trainer squad', () =
     const result = await apiStaffingSignup(request, sid, tenantId, sraEvent.id, mdNeed.id)
     expect(result.success).toBe(true)
 
-    // Verify trainer squad gained an approved competitor
-    const { squads } = await apiTestSsiGetSquads(request, sid, tenantId, sraEvent.id)
+    // Verify user appears in the trainer squad with status 'a'
+    const { squads, staffSquadName } = await apiTestSsiGetSquads(request, sid, tenantId, sraEvent.id)
     const trainerAfter = findTrainerSquad(squads, staffSquadName)
-    const approvedAfter = countApproved(trainerAfter)
-    expect(approvedAfter, `Trainer squad approved count should increase (was ${approvedBefore})`).toBeGreaterThan(approvedBefore)
+    const myEntry = findMyCompetitor(trainerAfter.competitors.filter(c => c.status === 'a'))
+    expect(myEntry, `User must appear in trainer squad with status "a" after MD signup`).toBeTruthy()
 
     // Clean up
     try {
