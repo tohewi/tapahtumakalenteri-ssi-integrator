@@ -2377,6 +2377,14 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
         // Log raw squad types and competitor counts for debugging
         const rawSquads = sqData.event?.squads || []
         log.info(`[platform] TEST ssi-squads: CT=${contentType} eventId=${ssiEventId} squads=${rawSquads.map(s => `${s.__typename}#${s.number}(${(s.competitors||[]).length})`).join(', ')}`)
+        // Log trainer squad competitor details to diagnose email matching
+        const staffSquadNameForLog = evtStaffing.event?.templateStaffingRules?.staffSquadName
+        if (staffSquadNameForLog) {
+          const trainerSq = rawSquads.find(s => s.comment === staffSquadNameForLog || `Squad ${s.number}` === staffSquadNameForLog)
+          if (trainerSq) {
+            log.info(`[platform] TEST trainer squad competitors: ${JSON.stringify((trainerSq.competitors || []).map(c => ({ id: c.id, status: c.status, email: c.shooter?.email, name: c.shooter?.first_name })))}`)
+          }
+        }
 
         const squads = (sqData.event?.squads || []).map(sq => ({
           number: sq.number,
