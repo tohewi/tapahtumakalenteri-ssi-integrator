@@ -2350,6 +2350,62 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
         return res.status(500).json({ error: err.message })
       }
     })
+
+    /**
+     * GET /tenants/:id/events/:eventId/test/ssi-squads
+     * Read squad data for an event via GraphQL.
+     * Returns squads with competitors (id, status, email, name).
+     * Only works for non-cup events (cups don't have squads; matches do).
+     */
+    router.get('/tenants/:id/events/:eventId/test/ssi-squads', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
+      try {
+        const { id: tenantId, eventId } = req.params
+        const evtStaffing = await getEventStaffing(tenantId, eventId)
+        const { ssiEventId, contentType } = extractSsiTarget(evtStaffing?.event?.ssiReferences)
+        if (!ssiEventId) {
+          return res.status(400).json({ error: 'Event has no SSI reference' })
+        }
+
+        const adminSess = getAdminSession ? await getAdminSession() : null
+        const cookies = adminSess?.cookies
+        if (!cookies) return res.status(503).json({ error: 'No admin session available' })
+
+        const { ssiGraphQL } = await import('../lib/ssi-core/graphql.js')
+        const sqData = await ssiGraphQL(adminSess, `
+          query GetSquads($ct: Int!, $id: String!) {
+            event(content_type: $ct, id: $id) {
+              squads {
+                number
+                comment
+                ... on NordicSquadNode    { competitors { id status shooter { email first_name last_name } } }
+                ... on IpscSquadNode      { competitors { id status shooter { email first_name last_name } } }
+                ... on PpcSquadNode       { competitors { id status shooter { email first_name last_name } } }
+                ... on CmpSquadNode       { competitors { id status shooter { email first_name last_name } } }
+                ... on PrecisionSquadNode { competitors { id status shooter { email first_name last_name } } }
+                ... on GenericSquadNode   { competitors { id status shooter { email first_name last_name } } }
+              }
+            }
+          }
+        `, { ct: contentType, id: ssiEventId })
+
+        const squads = (sqData.event?.squads || []).map(sq => ({
+          number: sq.number,
+          comment: sq.comment,
+          label: sq.comment || `Squad ${sq.number}`,
+          competitors: (sq.competitors || []).map(c => ({
+            id: c.id,
+            status: c.status,
+            email: c.shooter?.email || null,
+            name: `${c.shooter?.first_name || ''} ${c.shooter?.last_name || ''}`.trim(),
+          }))
+        }))
+
+        return res.json({ squads, staffSquadName: evtStaffing.event?.templateStaffingRules?.staffSquadName || null })
+      } catch (err) {
+        log.error(`[platform] TEST ssi-squads failed:`, err.message)
+        return res.status(500).json({ error: err.message })
+      }
+    })
   }
 
   return router

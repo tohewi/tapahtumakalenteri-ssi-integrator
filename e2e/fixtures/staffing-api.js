@@ -164,6 +164,26 @@ export async function apiTestSsiGetOfficials(request, sid, tenantId, eventId) {
 }
 
 /**
+ * Read SSI squad data for an event (competitors, statuses, squad assignments).
+ * Only works for non-cup events (cups don't have squads).
+ * @param {import('@playwright/test').APIRequestContext} request
+ * @param {string} sid
+ * @param {string} tenantId
+ * @param {string} eventId
+ * @returns {Promise<{squads: Array<{number, comment, label, competitors: Array}>, staffSquadName: string|null}>}
+ */
+export async function apiTestSsiGetSquads(request, sid, tenantId, eventId) {
+  const res = await request.get(`/api/v1/platform/tenants/${tenantId}/events/${eventId}/test/ssi-squads`, {
+    headers: { Cookie: `platform_sid=${sid}` },
+  })
+  if (!res.ok()) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(`TEST SSI get-squads failed (${res.status()}): ${body.error || 'unknown'}`)
+  }
+  return res.json()
+}
+
+/**
  * Find a need by roleKey from event staffing data.
  * @param {Array} needs  array of { id, roleKey, roleLabel, signups[] }
  * @param {string} roleKey  e.g. 'ro', 'match_director'

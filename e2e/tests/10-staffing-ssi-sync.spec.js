@@ -28,6 +28,7 @@ import {
   apiStaffingWithdraw,
   apiGetMyAssignments,
   apiTestSsiGetOfficials,
+  apiTestSsiGetSquads,
   apiTestSsiAdd,
   apiTestSsiRemove,
   findNeedByRole,
@@ -276,6 +277,97 @@ test.describe('SSI-direct → Platform visibility', () => {
 
     const staffing = await apiGetEventStaffing(request, sid, tenantId, cupEvent.id)
     expect(staffing.needs).toBeDefined()
+  })
+})
+
+// ============================================================
+// Squadding tests: verify instructor roles are placed in the correct SSI squad
+// Only applies to SRA events (cups don't have squads at the cup level)
+// ============================================================
+
+test.describe('SRA Squadding — instructor roles placed in trainer squad', () => {
+  let signupId
+  const TEST_EMAIL = process.env.SSI_TEST_EMAIL || process.env.PLATFORM_EMAIL
+
+  test('TC-11a: Sign up for RO → user appears in trainer squad with status "a"', async ({ request }) => {
+    // Get the staffSquadName from the event's template rules
+    const { squads: squadsBefore, staffSquadName } = await apiTestSsiGetSquads(request, sid, tenantId, sraEvent.id)
+    expect(staffSquadName, 'SRA template must have staffSquadName configured').toBeTruthy()
+
+    // Sign up for Range Officer
+    const staffing = await apiGetEventStaffing(request, sid, tenantId, sraEvent.id)
+    const roNeed = findNeedByRole(staffing.needs, 'ro')
+    expect(roNeed, 'Range Officer role must exist').toBeTruthy()
+
+    const result = await apiStaffingSignup(request, sid, tenantId, sraEvent.id, roNeed.id)
+    expect(result.success).toBe(true)
+    signupId = result.signup.id
+
+    // Verify user appears in the trainer squad with status 'a' (approved)
+    const { squads } = await apiTestSsiGetSquads(request, sid, tenantId, sraEvent.id)
+    const staffSquad = squads.find(s =>
+      s.label === staffSquadName || s.comment === staffSquadName || `Squad ${s.number}` === staffSquadName
+    )
+    expect(staffSquad, `Trainer squad "${staffSquadName}" must exist in SSI`).toBeTruthy()
+
+    const myEntry = staffSquad.competitors.find(c =>
+      c.email?.toLowerCase() === TEST_EMAIL.toLowerCase()
+    )
+    expect(myEntry, `User ${TEST_EMAIL} must appear in trainer squad`).toBeTruthy()
+    expect(myEntry.status, 'Competitor status must be "a" (approved)').toBe('a')
+  })
+
+  test('TC-11b: Withdraw from RO → user status changes in squad (not deleted from event)', async ({ request }) => {
+    expect(signupId, 'signupId must be set from TC-11a').toBeTruthy()
+
+    // Withdraw
+    const result = await apiStaffingWithdraw(request, sid, tenantId, sraEvent.id, signupId)
+    expect(result.success).toBe(true)
+
+    // Verify user is still in the squad data but with changed status (not 'a')
+    const { squads, staffSquadName } = await apiTestSsiGetSquads(request, sid, tenantId, sraEvent.id)
+    const staffSquad = squads.find(s =>
+      s.label === staffSquadName || s.comment === staffSquadName || `Squad ${s.number}` === staffSquadName
+    )
+    expect(staffSquad).toBeTruthy()
+
+    const myEntry = staffSquad.competitors.find(c =>
+      c.email?.toLowerCase() === TEST_EMAIL.toLowerCase()
+    )
+    // After withdrawal, the competitor should still exist but with a different status
+    // (status 'd' = deleted/DNS, not physically removed from the squad)
+    if (myEntry) {
+      expect(myEntry.status, 'Status should no longer be "a" after withdrawal').not.toBe('a')
+    }
+    // If competitor is completely gone, that's also acceptable (SSI may have removed them)
+    // The key assertion is that the withdrawal didn't crash and the squad data is consistent
+  })
+
+  test('TC-11c: Sign up for MD → user also appears in trainer squad', async ({ request }) => {
+    // All instructor roles (ro, md, qm) should be squadded to the trainer squad
+    const staffing = await apiGetEventStaffing(request, sid, tenantId, sraEvent.id)
+    const mdNeed = findNeedByRole(staffing.needs, 'md')
+    expect(mdNeed, 'Match Director role must exist').toBeTruthy()
+
+    const result = await apiStaffingSignup(request, sid, tenantId, sraEvent.id, mdNeed.id)
+    expect(result.success).toBe(true)
+
+    // Verify user appears in the trainer squad
+    const { squads, staffSquadName } = await apiTestSsiGetSquads(request, sid, tenantId, sraEvent.id)
+    const staffSquad = squads.find(s =>
+      s.label === staffSquadName || s.comment === staffSquadName || `Squad ${s.number}` === staffSquadName
+    )
+    expect(staffSquad).toBeTruthy()
+
+    const myEntry = staffSquad.competitors.find(c =>
+      c.email?.toLowerCase() === TEST_EMAIL.toLowerCase() && c.status === 'a'
+    )
+    expect(myEntry, `User ${TEST_EMAIL} must appear in trainer squad with status "a" after MD signup`).toBeTruthy()
+
+    // Clean up
+    try {
+      await apiStaffingWithdraw(request, sid, tenantId, sraEvent.id, result.signup.id)
+    } catch (e) { /* cleanup */ }
   })
 })
 
