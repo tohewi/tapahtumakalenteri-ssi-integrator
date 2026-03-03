@@ -2219,7 +2219,39 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
                       log.warn(`[platform] Failed to cache SSI IDs: ${cacheErr.message}`)
                     }
                   } else {
-                    log.warn(`[platform] Could not identify participant via GraphQL for ${req.account.email} in event ${ssiEventId} — email may be null and no cached shooter.id`)
+                    // Last resort: user is "Already registered" but not found in ANY squad via GraphQL.
+                    // This happens when a previous withdrawal deleted the participant (status 'd') —
+                    // they're linked to the event but have no active squad membership.
+                    // Use ssiFindParticipantInEvent (web scraping) which finds ALL participants including declined.
+                    log.warn(`[platform] GraphQL found no squad match for ${req.account.email} — falling back to participants page scraping`)
+                    try {
+                      const displayName = req.account.name || req.account.email
+                      const found = await ssiFindParticipantInEvent(contentType, ssiEventId, displayName, cookies)
+                      if (found && squadNum) {
+                        const participantCT = found.participantCT || (contentType === 22 ? 23 : contentType === 91 ? 93 : 23)
+                        log.info(`[platform] Scraping fallback: participant=${found.participantId} CT=${participantCT} → moving to ${staffSquadName} with status=a`)
+                        const moveResult = await ssiSetParticipantSquad(found.participantId, squadNum, cookies, 'a', participantCT)
+                        log.info(`[platform] Scraping fallback move result: HTTP ${moveResult.httpStatus}`)
+                        ssiResults.trainerSquad = { success: moveResult?.success ?? true, message: `Moved to ${staffSquadName} (scraping fallback)` }
+
+                        // Query squad again to cache the shooter.id now that we moved them
+                        try {
+                          const squadsAfterMove = await querySquadCompetitors()
+                          const movedUser = findUserInSquads(squadsAfterMove, req.account.email, null, req.account.name)
+                          if (movedUser?.shooterId) {
+                            const { updateStaffSignupSsiIds } = await import('../lib/db/platform-store.js')
+                            await updateStaffSignupSsiIds(signup.id, { ssiShooterId: movedUser.shooterId, ssiParticipantId: movedUser.competitorId })
+                            log.info(`[platform] Cached shooter.id from scraping fallback: ${movedUser.shooterId}`)
+                          }
+                        } catch (cacheErr) {
+                          log.warn(`[platform] Failed to cache SSI IDs after scraping fallback: ${cacheErr.message}`)
+                        }
+                      } else {
+                        log.warn(`[platform] Scraping fallback: participant not found for ${displayName} in event ${ssiEventId}`)
+                      }
+                    } catch (scrapingErr) {
+                      log.error(`[platform] Scraping fallback failed: ${scrapingErr.message}`)
+                    }
                   }
                 } else if (squadResult.success) {
                   // New registration succeeded — use before/after diff to identify the new competitor
