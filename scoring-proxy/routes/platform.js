@@ -2109,34 +2109,113 @@ export function createPlatformRouter({ platformSignUpLimiter, platformLoginLimit
           const cookies = adminSess?.cookies
           
           if (cookies) {
-            // 1. Add to SSI Trainer Squad
+            // 1. Add to SSI Trainer Squad (GraphQL-based identification)
+            // See docs/design/shooter-identification-design.md
             if (staffSquadName) {
               try {
+                const { ssiGraphQL } = await import('../lib/ssi-core/graphql.js')
+                const squadNum = parseInt(staffSquadName.match(/\d+/)?.[0])
+
+                // Helper: query all squad competitors with shooter.id via GraphQL
+                async function querySquadCompetitors() {
+                  const sqData = await ssiGraphQL(adminSess, `
+                    query GetSquads($ct: Int!, $id: String!) {
+                      event(content_type: $ct, id: $id) {
+                        squads {
+                          number
+                          comment
+                          ... on NordicSquadNode    { competitors { id status shooter { id email } } }
+                          ... on IpscSquadNode      { competitors { id status shooter { id email } } }
+                          ... on PpcSquadNode       { competitors { id status shooter { id email } } }
+                          ... on CmpSquadNode       { competitors { id status shooter { id email } } }
+                          ... on PrecisionSquadNode { competitors { id status shooter { id email } } }
+                          ... on GenericSquadNode   { competitors { id status shooter { id email } } }
+                        }
+                      }
+                    }
+                  `, { ct: contentType, id: ssiEventId })
+                  return sqData.event?.squads || []
+                }
+
+                // Helper: find our user across all squads by email or cached shooter.id
+                function findUserInSquads(squads, email, cachedShooterId) {
+                  for (const sq of squads) {
+                    for (const c of (sq.competitors || [])) {
+                      // Match by email (reliable for Nordic, null for IPSC/SRA)
+                      if (c.shooter?.email && c.shooter.email.toLowerCase() === email.toLowerCase()) {
+                        return { competitorId: c.id, shooterId: c.shooter.id, squadNumber: sq.number, status: c.status }
+                      }
+                      // Match by cached shooter.id from previous signup
+                      if (cachedShooterId && c.shooter?.id === cachedShooterId) {
+                        return { competitorId: c.id, shooterId: c.shooter.id, squadNumber: sq.number, status: c.status }
+                      }
+                    }
+                  }
+                  return null
+                }
+
+                // Snapshot BEFORE registration (for before/after diff on new registrations)
+                const squadsBefore = await querySquadCompetitors()
+                const trainerBefore = squadsBefore.find(s => s.comment === staffSquadName || `Squad ${s.number}` === staffSquadName)
+                const competitorIdsBefore = new Set((trainerBefore?.competitors || []).map(c => c.id))
+
+                // Attempt registration
                 const squadResult = await ssiRegisterToTrainerSquad(contentType, ssiEventId, req.account.email, staffSquadName, cookies)
-                log.debug(`[platform] SSI trainer squad: ${req.account.email} → ${squadResult.message}`)
+                log.info(`[platform] SSI trainer squad: ${req.account.email} → ${squadResult.message}`)
                 ssiResults.trainerSquad = { success: true, message: squadResult.message }
 
-                // Fallback: if already registered but not in trainer squad, move them
-                // Use web scraping (ssiFindParticipantInEvent) to get the correct participant ID,
-                // then ssiSetParticipantSquad to move + set status='a'
+                // Post-registration: identify and cache SSI IDs
                 if (squadResult.message?.includes('Already registered')) {
-                  try {
-                    const displayName = req.account.name || req.account.email
-                    const found = await ssiFindParticipantInEvent(contentType, ssiEventId, displayName, cookies)
-                    if (found) {
-                      // Extract squad number from staffSquadName (e.g. "Squad 5" → 5)
-                      const squadNum = parseInt(staffSquadName.match(/\d+/)?.[0])
-                      if (squadNum) {
-                        log.info(`[platform] Squad move fallback: participant=${found.participantId} CT=${found.participantCT} → ${staffSquadName} (squad ${squadNum}) status=a`)
-                        const moveResult = await ssiSetParticipantSquad(found.participantId, squadNum, cookies, 'a', found.participantCT)
-                        log.info(`[platform] Squad move result: ${JSON.stringify(moveResult)}`)
-                        ssiResults.trainerSquad = { success: moveResult?.success ?? true, message: `Moved to ${staffSquadName}` }
-                      }
+                  // User is already in the event — find them via GraphQL (no name matching!)
+                  const { getAccountSsiShooterId } = await import('../lib/db/platform-store.js')
+                  const cachedShooterId = await getAccountSsiShooterId(eventId, req.account.id)
+
+                  const squadsNow = await querySquadCompetitors()
+                  const found = findUserInSquads(squadsNow, req.account.email, cachedShooterId)
+
+                  if (found) {
+                    log.info(`[platform] GraphQL identified participant: competitor=${found.competitorId} shooter=${found.shooterId} squad=${found.squadNumber}`)
+
+                    // Move to trainer squad if not already there
+                    if (found.squadNumber !== squadNum && squadNum) {
+                      // Need the participant CT for the edit form — derive from event content type
+                      // CT 22 (SRA match) → participant CT 23; CT 91 (Nordic match) → participant CT 93
+                      const participantCT = contentType === 22 ? 23 : contentType === 91 ? 93 : 23
+                      log.info(`[platform] Moving participant ${found.competitorId} from squad ${found.squadNumber} → ${staffSquadName} (CT=${participantCT})`)
+                      const moveResult = await ssiSetParticipantSquad(found.competitorId, squadNum, cookies, 'a', participantCT)
+                      log.info(`[platform] Squad move result: HTTP ${moveResult.httpStatus}`)
+                      ssiResults.trainerSquad = { success: moveResult?.success ?? true, message: `Moved to ${staffSquadName}` }
                     } else {
-                      log.warn(`[platform] Could not find participant ${displayName} in event ${ssiEventId} for squad move`)
+                      log.info(`[platform] User already in trainer squad ${staffSquadName} — no move needed`)
                     }
-                  } catch (err) {
-                    log.error(`[platform] Squad move fallback failed: ${err.message}`)
+
+                    // Cache SSI IDs for future operations
+                    try {
+                      const { updateStaffSignupSsiIds } = await import('../lib/db/platform-store.js')
+                      await updateStaffSignupSsiIds(signup.id, { ssiShooterId: found.shooterId, ssiParticipantId: found.competitorId })
+                    } catch (cacheErr) {
+                      log.warn(`[platform] Failed to cache SSI IDs: ${cacheErr.message}`)
+                    }
+                  } else {
+                    log.warn(`[platform] Could not identify participant via GraphQL for ${req.account.email} in event ${ssiEventId} — email may be null and no cached shooter.id`)
+                  }
+                } else if (squadResult.success) {
+                  // New registration succeeded — use before/after diff to identify the new competitor
+                  try {
+                    const squadsAfter = await querySquadCompetitors()
+                    const trainerAfter = squadsAfter.find(s => s.comment === staffSquadName || `Squad ${s.number}` === staffSquadName)
+                    const newCompetitors = (trainerAfter?.competitors || []).filter(c => !competitorIdsBefore.has(c.id))
+
+                    if (newCompetitors.length === 1) {
+                      const nc = newCompetitors[0]
+                      log.info(`[platform] New competitor identified via diff: id=${nc.id} shooter=${nc.shooter?.id}`)
+                      const { updateStaffSignupSsiIds } = await import('../lib/db/platform-store.js')
+                      await updateStaffSignupSsiIds(signup.id, { ssiShooterId: nc.shooter?.id, ssiParticipantId: nc.id })
+                    } else {
+                      log.info(`[platform] Before/after diff: ${newCompetitors.length} new competitors (expected 1)`)
+                    }
+                  } catch (diffErr) {
+                    log.warn(`[platform] Before/after diff failed: ${diffErr.message}`)
                   }
                 }
               } catch (e) {

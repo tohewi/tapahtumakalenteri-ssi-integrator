@@ -2239,6 +2239,41 @@ export async function getStaffingLeaderboard(tenantId, options = {}) {
   }))
 }
 
+/**
+ * Update the cached SSI identity on a staff signup record.
+ * Used after successful squad placement to store the SSI shooter.id (Relay global ID)
+ * and competitor.id (participant ID) for future operations without name matching.
+ * See docs/design/shooter-identification-design.md
+ */
+export async function updateStaffSignupSsiIds(signupId, { ssiShooterId, ssiParticipantId }) {
+  const sets = []
+  const params = [signupId]
+  if (ssiShooterId !== undefined) {
+    params.push(ssiShooterId)
+    sets.push(`ssi_shooter_id = $${params.length}`)
+  }
+  if (ssiParticipantId !== undefined) {
+    params.push(ssiParticipantId)
+    sets.push(`ssi_participant_id = $${params.length}`)
+  }
+  if (sets.length === 0) return
+  await query(`UPDATE staff_signups SET ${sets.join(', ')} WHERE id = $1`, params)
+}
+
+/**
+ * Get the cached SSI shooter.id for an account in a specific event.
+ * Returns the most recent confirmed signup's ssi_shooter_id, or null.
+ */
+export async function getAccountSsiShooterId(eventId, accountId) {
+  const res = await query(
+    `SELECT ssi_shooter_id FROM staff_signups
+     WHERE event_id = $1 AND account_id = $2 AND ssi_shooter_id IS NOT NULL
+     ORDER BY signed_up_at DESC LIMIT 1`,
+    [eventId, accountId]
+  )
+  return res.rows[0]?.ssi_shooter_id || null
+}
+
 export async function withdrawFromEventStaffing(tenantId, eventId, signupId, accountId) {
   const res = await query(
     "SELECT s.id FROM staff_signups s JOIN scheduled_events e ON s.event_id = e.id WHERE s.id = $1 AND e.id = $2 AND e.tenant_id = $3 AND s.account_id = $4 AND s.status = 'confirmed'",

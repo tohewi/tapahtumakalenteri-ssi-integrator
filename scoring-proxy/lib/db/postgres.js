@@ -269,6 +269,17 @@ export async function initPostgres() {
         log.warn('[postgres] Could not create staffing tables:', err.message)
       }
 
+      // M10: Add SSI identity columns to staff_signups for safe participant identification
+      // SSI GraphQL returns email=null for IPSC/SRA competitors. These columns cache the
+      // SSI shooter.id (Relay global ID) and participant.id so we can identify the user
+      // reliably without name-based matching. See docs/design/shooter-identification-design.md
+      try {
+        await client.query(`ALTER TABLE staff_signups ADD COLUMN IF NOT EXISTS ssi_shooter_id TEXT`)
+        await client.query(`ALTER TABLE staff_signups ADD COLUMN IF NOT EXISTS ssi_participant_id TEXT`)
+      } catch (err) {
+        log.warn('[postgres] M10 migration (ssi identity columns):', err.message)
+      }
+
       // M9: Add ssi_create_url to disciplines (SSI event creation URL per discipline)
       try {
         await client.query('ALTER TABLE disciplines ADD COLUMN IF NOT EXISTS ssi_create_url TEXT')
