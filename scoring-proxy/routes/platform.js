@@ -1872,10 +1872,19 @@ export function createPlatformRouter({
    * but no event_staffing_needs rows. Purely local DB — no SSI writes.
    * Access: owner, tenant_admin
    */
-  router.post('/tenants/:id/staffing/backfill', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
+  router.post('/tenants/:id/staffing/backfill', platformMutationLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
     try {
       const tenantId = req.params.id
       const { defaultTemplateId } = req.body || {}
+
+      if (defaultTemplateId) {
+        // SEC-H2: Validate defaultTemplateId belongs to this tenant
+        const template = await getMatchTemplate(defaultTemplateId)
+        if (!template || template.tenantId !== tenantId) {
+          return res.status(403).json({ error: 'Template not found or does not belong to your organization' })
+        }
+      }
+
       const result = await backfillStaffingNeeds(tenantId, { defaultTemplateId })
       log.info(`[platform] Staffing backfill for tenant ${tenantId}: ${result.backfilledCount} events backfilled, ${result.skippedCount} skipped, ${result.errors.length} errors`)
       res.json(result)
