@@ -1,6 +1,6 @@
 import { upsertSsiDiscoveredDisciplines } from '../db/platform-store.js'
 import { ssiGraphQL } from '../ssi-core/graphql.js'
-import log from '../logger.js'
+import { log } from '../logger.js'
 
 let syncInterval = null
 const SYNC_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000 // 1 week
