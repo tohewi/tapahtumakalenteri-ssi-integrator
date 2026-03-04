@@ -16,6 +16,11 @@ jobs:
 
     environment: production
 
+    # Required for OIDC token exchange with Azure (id-github-turres-prod UAMI)
+    permissions:
+      id-token: write
+      contents: read
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,10 +60,15 @@ jobs:
           echo "Package size: $(du -sh ../deploy.zip | cut -f1)"
 
       # ── Deploy ────────────────────────────────────────────────
-      - name: Azure login
+      # Keyless login via OIDC — no service principal secret needed.
+      # The GitHub Actions UAMI (id-github-turres-prod) has a federated
+      # credential matching: repo:<owner>/<repo>:environment:production
+      - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy to Azure App Service
         uses: azure/webapps-deploy@v3

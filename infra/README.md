@@ -122,26 +122,41 @@ Bicep is idempotent — re-running only applies changes (no downtime for unchang
 
 ## GitHub Actions secrets required
 
-Add these to the repository's **Settings → Secrets and variables → Actions**:
+The workflow uses **keyless OIDC login** via the `id-github-turres-prod` user-assigned
+managed identity — no service principal JSON secret needed.
 
-| Secret | Value |
-|---|---|
-| `AZURE_CREDENTIALS` | JSON output of `az ad sp create-for-rbac` (see below) |
-| `AZURE_SUBSCRIPTION_ID` | Your Azure subscription ID |
-| `AZURE_RESOURCE_GROUP` | `rg-turres-prod` |
-| `AZURE_APP_SERVICE_NAME` | `app-turres-prod` |
+Add these to the repository's **Settings → Secrets and variables → Actions**
+(under the `production` environment):
 
-### Create the service principal
+| Secret | Value | How to get |
+|---|---|---|
+| `AZURE_CLIENT_ID` | GH Actions UAMI client ID | Output `ghActionsClientId` from Bicep deploy |
+| `AZURE_TENANT_ID` | Azure AD tenant ID | Output `tenantId` from Bicep deploy |
+| `AZURE_SUBSCRIPTION_ID` | Azure subscription ID | `az account show --query id -o tsv` |
+| `AZURE_RESOURCE_GROUP` | `rg-turres-prod` | Fixed value |
+| `AZURE_APP_SERVICE_NAME` | `app-turres-prod` | Fixed value |
+
+### Read output values after Bicep deployment
 
 ```bash
-az ad sp create-for-rbac \
-  --name "github-turres-deploy" \
-  --role "Website Contributor" \
-  --scopes /subscriptions/<sub-id>/resourceGroups/rg-turres-prod \
-  --sdk-auth
+# After running az deployment group create (step 4 above), read the outputs:
+az deployment group show \
+  --resource-group rg-turres-prod \
+  --name turres-prod-<timestamp> \
+  --query properties.outputs
+
+# Or query directly:
+az identity show \
+  --resource-group rg-turres-prod \
+  --name id-github-turres-prod \
+  --query clientId -o tsv
 ```
 
-Copy the JSON output into the `AZURE_CREDENTIALS` secret.
+### GitHub Actions environment
+
+The workflow uses `environment: production`. Make sure this environment exists in
+**Settings → Environments → production** and the secrets above are scoped to it.
+The OIDC subject claim is: `repo:tohewi/tapahtumakalenteri-ssi-integrator:environment:production`
 
 ---
 

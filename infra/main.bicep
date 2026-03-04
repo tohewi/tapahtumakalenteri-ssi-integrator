@@ -6,15 +6,17 @@
 // Check https://aka.ms/avm for latest module versions before deploying.
 //
 // Deployment order (managed by Bicep dependency graph):
-//   1. Log Analytics Workspace
-//   2. Application Insights
-//   3. Key Vault (empty)
-//   4. PostgreSQL Flexible Server
-//   5. Azure Cache for Redis
-//   6. Key Vault secrets (connection strings)
-//   7. App Service Plan
-//   8. App Service (system-assigned MI, KV references)
-//   9. Role assignment: KV Secrets User → App Service MI
+//   0.  App UAMI (id-turres-prod)
+//   0.1 GitHub Actions UAMI (id-github-turres-prod) + OIDC federation + role assignments
+//   1.  Log Analytics Workspace
+//   2.  Application Insights
+//   3.  Key Vault (empty)
+//   4.  PostgreSQL Flexible Server
+//   5.  Azure Cache for Redis
+//   6.  Key Vault secrets (connection strings)
+//   7.  App Service Plan
+//   8.  App Service (user-assigned MI, KV references)
+//   9.  Role assignment: KV Secrets User → App UAMI
 // ============================================================
 
 targetScope = 'resourceGroup'
@@ -49,6 +51,12 @@ param postgresStorageSizeGB int = 32
 @description('Log Analytics data retention in days.')
 param logRetentionDays int = 30
 
+@description('GitHub repository in owner/repo format for OIDC federation.')
+param githubRepository string = 'tohewi/tapahtumakalenteri-ssi-integrator'
+
+@description('GitHub Actions environment name used in the OIDC subject claim.')
+param githubEnvironment string = 'production'
+
 // ── Computed names ───────────────────────────────────────────
 
 var kvName     = 'kv-${appName}-${environmentName}'
@@ -58,11 +66,18 @@ var psqlName   = 'psql-${appName}-${environmentName}'
 var redisName  = 'redis-${appName}-${environmentName}'
 var aspName    = 'asp-${appName}-${environmentName}'
 var appSvcName = 'app-${appName}-${environmentName}'
-var uamiName   = 'id-${appName}-${environmentName}'
-var dbName     = 'turres_platform'
+var uamiName     = 'id-${appName}-${environmentName}'
+var ghUamiName   = 'id-github-${appName}-${environmentName}'
+var dbName       = 'turres_platform'
 
-// Key Vault Secrets User built-in role ID
-var kvSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
+// Built-in role definition IDs
+var kvSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'  // Key Vault Secrets User
+var contributorRoleId   = 'b24988ac-6180-42a0-ab88-20f7382dd24c'  // Contributor
+var rbacAdminRoleId     = 'f58310d9-a9f6-439a-9e8d-f62e7b41a168'  // Role Based Access Control Administrator
+
+// ABAC condition: limits RBAC Admin to assigning ONLY Key Vault Secrets User.
+// Prevents privilege escalation while still allowing the KV role assignment in Bicep.
+var rbacAdminCondition = '(!(ActionMatches{''Microsoft.Authorization/roleAssignments/write''}) OR @Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {4633458b-17de-408a-b874-0445c86b69e6}) AND (!(ActionMatches{''Microsoft.Authorization/roleAssignments/delete''}) OR @Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {4633458b-17de-408a-b874-0445c86b69e6})'
 
 // ── 0. User-Assigned Managed Identity ──────────────────────────
 // Created before all other resources so its principalId is available
@@ -79,6 +94,59 @@ module uami 'br/public:avm/res/managed-identity/user-assigned-identity:0.4.0' = 
       environment: environmentName
       managedBy: 'bicep-avm'
     }
+  }
+}
+
+// ── 0.1 GitHub Actions UAMI + OIDC federation ───────────────
+// Separate identity for CI/CD — no overlap with app runtime identity.
+// Federates with GitHub Actions environment-scoped OIDC, enabling keyless
+// Azure login from the workflow (no AZURE_CREDENTIALS service principal needed).
+// AVM: https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/managed-identity/user-assigned-identity
+
+module ghUami 'br/public:avm/res/managed-identity/user-assigned-identity:0.4.0' = {
+  name: 'ghUamiDeployment'
+  params: {
+    name: ghUamiName
+    location: location
+    federatedIdentityCredentials: [
+      {
+        // Subject must match the GitHub Actions token exactly:
+        // environment-scoped claim → repo:<owner>/<repo>:environment:<env>
+        name: 'github-actions-${githubEnvironment}'
+        audiences: ['api://AzureADTokenExchange']
+        issuer: 'https://token.actions.githubusercontent.com'
+        subject: 'repo:${githubRepository}:environment:${githubEnvironment}'
+      }
+    ]
+    tags: {
+      environment: environmentName
+      managedBy: 'bicep-avm'
+    }
+  }
+}
+
+// Contributor on RG: create / update / delete any resource during infra + app deploy.
+resource ghActionsContributorRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: resourceGroup()
+  name: guid(resourceGroup().id, ghUami.outputs.principalId, contributorRoleId)
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', contributorRoleId)
+    principalId: ghUami.outputs.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Role Based Access Control Administrator on RG, constrained by ABAC condition to
+// only assign/revoke Key Vault Secrets User — prevents any privilege escalation.
+resource ghActionsRbacAdminRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: resourceGroup()
+  name: guid(resourceGroup().id, ghUami.outputs.principalId, rbacAdminRoleId)
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', rbacAdminRoleId)
+    principalId: ghUami.outputs.principalId
+    principalType: 'ServicePrincipal'
+    condition: rbacAdminCondition
+    conditionVersion: '2.0'
   }
 }
 
@@ -400,3 +468,9 @@ output redisHostName string = redis.outputs.hostName
 
 @description('Application Insights connection string')
 output appInsightsConnectionString string = appInsights.outputs.connectionString
+
+@description('GitHub Actions UAMI client ID — set as AZURE_CLIENT_ID GitHub Actions secret')
+output ghActionsClientId string = ghUami.outputs.clientId
+
+@description('Azure tenant ID — set as AZURE_TENANT_ID GitHub Actions secret')
+output tenantId string = subscription().tenantId
