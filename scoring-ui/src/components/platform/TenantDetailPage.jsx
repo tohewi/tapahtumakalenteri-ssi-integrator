@@ -11,7 +11,7 @@
 // ============================================================
 
 import { useState, useEffect, useCallback } from 'react'
-import { getTenantDetails, updateTenant, listDisciplines, createDisciplineApi, updateDisciplineApi, deleteDisciplineApi, listTemplates, createTemplateApi, updateTemplateApi, deleteTemplateApi, importTemplateSeed } from '../../platform-api.js'
+import { getTenantDetails, updateTenant, listDisciplines, createDisciplineApi, updateDisciplineApi, deleteDisciplineApi, listTemplates, createTemplateApi, updateTemplateApi, deleteTemplateApi, importTemplateSeed, getSsiDisciplineRegistry } from '../../platform-api.js'
 
 // ---- Helpers ----
 
@@ -296,6 +296,7 @@ function SSICredentialsSection({ tenant, onSave }) {
 
 function DisciplinesSection({ tenantId }) {
   const [disciplines, setDisciplines] = useState([])
+  const [registry, setRegistry] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -303,12 +304,16 @@ function DisciplinesSection({ tenantId }) {
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState(null)
 
-  // Load disciplines on mount
+  // Load disciplines and SSI type registry on mount
   useEffect(() => {
     async function load() {
       try {
-        const data = await listDisciplines(tenantId)
-        setDisciplines(data.disciplines || [])
+        const [disData, regData] = await Promise.all([
+          listDisciplines(tenantId),
+          getSsiDisciplineRegistry().catch(() => ({ registry: [] })),
+        ])
+        setDisciplines(disData.disciplines || [])
+        setRegistry(regData.registry || [])
       } catch { /* ignore load errors */ }
       setLoading(false)
     }
@@ -498,9 +503,20 @@ function DisciplinesSection({ tenantId }) {
                               className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none bg-white"
                             >
                               <option value="">Select type...</option>
-                              {registry.map(r => (
-                                <option key={r.id} value={r.ssiCreateUrl}>{r.displayName} {r.isCup ? '(Cup)' : '(Match)'}</option>
-                              ))}
+                              {registry.filter(r => !r.lastSeenAt).length > 0 && (
+                                <optgroup label="Built-in">
+                                  {registry.filter(r => !r.lastSeenAt).map(r => (
+                                    <option key={r.id} value={r.ssiCreateUrl}>{r.displayName} {r.isCup ? '(Cup)' : '(Match)'}</option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              {registry.filter(r => r.lastSeenAt).length > 0 && (
+                                <optgroup label="Auto-discovered from SSI">
+                                  {registry.filter(r => r.lastSeenAt).map(r => (
+                                    <option key={r.id} value={r.ssiCreateUrl}>{r.displayName} {r.isCup ? '(Cup)' : '(Match)'}</option>
+                                  ))}
+                                </optgroup>
+                              )}
                             </select>
                           </div>
                         ) : (
@@ -606,9 +622,20 @@ function DisciplinesSection({ tenantId }) {
                     className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none bg-white"
                   >
                     <option value="">Select type...</option>
-                    {registry.map(r => (
-                      <option key={r.id} value={r.ssiCreateUrl}>{r.displayName} {r.isCup ? '(Cup)' : '(Match)'}</option>
-                    ))}
+                    {registry.filter(r => !r.lastSeenAt).length > 0 && (
+                      <optgroup label="Built-in">
+                        {registry.filter(r => !r.lastSeenAt).map(r => (
+                          <option key={r.id} value={r.ssiCreateUrl}>{r.displayName} {r.isCup ? '(Cup)' : '(Match)'}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {registry.filter(r => r.lastSeenAt).length > 0 && (
+                      <optgroup label="Auto-discovered from SSI">
+                        {registry.filter(r => r.lastSeenAt).map(r => (
+                          <option key={r.id} value={r.ssiCreateUrl}>{r.displayName} {r.isCup ? '(Cup)' : '(Match)'}</option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                 </div>
               ) : (

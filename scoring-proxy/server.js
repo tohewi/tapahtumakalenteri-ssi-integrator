@@ -20,6 +20,7 @@ import { createAuthV7Router } from './routes/auth-v7.js'
 import apiV1Router from './routes/v1/index.js'
 import { createPlatformRouter } from './routes/platform.js'
 import { initPostgres } from './lib/db/postgres.js'
+import { startSsiDisciplineSync } from './lib/services/ssi-discipline-sync.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -507,6 +508,11 @@ if (isDirectRun) {
   // Initialize data stores before accepting requests
   await initRedis()
   const pgReady = await initPostgres()
+
+  // Start background jobs if DB is ready
+  if (pgReady && process.env.SSI_ADMIN_EMAIL && process.env.SSI_ADMIN_PASSWORD) {
+    startSsiDisciplineSync(process.env.SSI_ADMIN_EMAIL, process.env.SSI_ADMIN_PASSWORD)
+  }
 
   app.listen(PORT, () => {
     console.log(`Scoring proxy running on http://localhost:${PORT}`)

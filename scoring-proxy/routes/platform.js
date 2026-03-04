@@ -880,10 +880,33 @@ export function createPlatformRouter({
   // ============================================================
 
   // GET /api/v1/platform/ssi-discipline-registry
-  // Any authenticated user can read the static registry
+  // Any authenticated user can read the registry (static + discovered)
   router.get('/ssi-discipline-registry', requirePlatformAuth(), async (req, res) => {
-    const { SSI_DISCIPLINE_REGISTRY } = await import('../lib/ssi-core/discipline-registry.js')
-    res.json({ registry: SSI_DISCIPLINE_REGISTRY })
+    try {
+      const { SSI_DISCIPLINE_REGISTRY } = await import('../lib/ssi-core/discipline-registry.js')
+      const { listSsiDiscoveredDisciplines } = await import('../lib/db/platform-store.js')
+      
+      const staticRegistry = [...SSI_DISCIPLINE_REGISTRY]
+      
+      let discovered = []
+      try {
+        discovered = await listSsiDiscoveredDisciplines()
+      } catch (dbErr) {
+        log.warn('[platform] Failed to fetch discovered SSI disciplines:', dbErr.message)
+      }
+
+      // Merge: prefer static ones if ID matches (though they shouldn't conflict)
+      const staticIds = new Set(staticRegistry.map(d => d.id))
+      const combinedRegistry = [
+        ...staticRegistry,
+        ...discovered.filter(d => !staticIds.has(d.id))
+      ]
+
+      res.json({ registry: combinedRegistry })
+    } catch (err) {
+      log.error('[platform] Error fetching SSI discipline registry:', err.message)
+      res.status(500).json({ error: 'Internal server error' })
+    }
   })
 
   // GET /api/v1/platform/tenants/:tenantId/disciplines
