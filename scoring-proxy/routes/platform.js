@@ -1936,6 +1936,64 @@ export function createPlatformRouter({
     try {
       const tenantId = req.params.id
       const data = await getUpcomingStaffingNeeds(tenantId)
+
+      // SSI Sync: inject virtual signups from SSI officials for events that have SSI references.
+      // This ensures the Roster reflects assignments made directly in SSI (SSI is master).
+      try {
+        const adminSess = getAdminSession ? await getAdminSession() : null
+        const cookies = adminSess?.cookies
+        if (cookies) {
+          const defaultSsiMapping = { ro: 'RO', md: 'MD', qm: 'QM', safety: 'RM', match_director: 'MD' }
+
+          for (const entry of data) {
+            const { ssiEventId, contentType } = extractSsiTarget(entry.event?.ssiReferences)
+            if (!ssiEventId) continue
+
+            const rules = entry.event?.templateStaffingRules || {}
+
+            let officials
+            try {
+              officials = await ssiGetMatchOfficials(contentType, ssiEventId, cookies)
+            } catch (ssiErr) {
+              log.warn(`[platform] SSI officials fetch failed for event ${entry.event.id}: ${ssiErr.message}`)
+              continue
+            }
+
+            for (const need of entry.needs || []) {
+              const roleCfg = (rules.roles || []).find(r => r.key === need.roleKey) || {}
+              const ssiOfficialCode = roleCfg.ssiOfficialCode || defaultSsiMapping[need.roleKey]
+
+              // Find all SSI officials matching this role
+              const matchedOfficials = officials.filter(o =>
+                ssiOfficialCode ? o.officials.includes(ssiOfficialCode) : false
+              )
+
+              for (const ssiOfficial of matchedOfficials) {
+                const alreadyInDb = need.signups.some(
+                  s => s.accountName?.toLowerCase() === ssiOfficial.name.toLowerCase()
+                )
+                if (!alreadyInDb) {
+                  need.signups.push({
+                    id: `virtual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    accountId: null,
+                    accountName: ssiOfficial.name,
+                    accountEmail: null,
+                    status: 'confirmed',
+                    notes: 'Added from SSI'
+                  })
+                }
+              }
+            }
+
+            // Recompute isUnderstaffed after virtual signup injection
+            entry.isUnderstaffed = entry.needs.some(n => n.signups.length < n.minCount)
+          }
+        }
+      } catch (syncErr) {
+        log.warn(`[platform] SSI sync inject failed for upcoming staffing: ${syncErr.message}`)
+        // Non-fatal: return DB data as-is
+      }
+
       res.json(data)
     } catch (err) {
       log.error(`[platform] GET /tenants/${req.params.id}/staffing/upcoming failed:`, err.message)
