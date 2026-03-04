@@ -20,6 +20,7 @@ const STATUS_COLORS = {
   staffed: 'bg-purple-100 text-purple-700',
   ready: 'bg-emerald-100 text-emerald-800',
   completed: 'bg-gray-200 text-gray-500',
+  cancelled: 'bg-orange-100 text-orange-600',
   failed: 'bg-red-100 text-red-700',
 }
 
@@ -30,8 +31,12 @@ const STATUS_LABELS = {
   staffed: 'Staffed',
   ready: 'Ready',
   completed: 'Completed',
+  cancelled: 'Cancelled',
   failed: 'Failed',
 }
+
+// Which statuses allow cancellation
+const CANCELLABLE_STATUSES = new Set(['planned', 'ssi_created', 'calendar_published', 'staffed', 'ready'])
 
 // Day names for header (Monday-first, Finnish convention)
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -108,7 +113,7 @@ function getCalendarDays(year, month) {
   return days
 }
 
-export default function EventCalendar({ events, staffingStatus, tplMap, onExecute, onDelete, executingId }) {
+export default function EventCalendar({ events, staffingStatus, tplMap, onExecute, onDelete, onCancel, executingId }) {
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
@@ -280,6 +285,7 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                       // Determine dot color: staffing takes priority for visual cue
                       let dotColor = 'bg-gray-400'
                       if (evt.status === 'failed') dotColor = 'bg-red-500'
+                      else if (evt.status === 'cancelled') dotColor = 'bg-orange-300'
                       else if (evt.status === 'ssi_created' && staffing?.isUnderstaffed) dotColor = 'bg-orange-500'
                       else if (evt.status === 'ssi_created') dotColor = 'bg-blue-500'
                       else if (evt.status === 'calendar_published') dotColor = 'bg-green-500'
@@ -389,12 +395,21 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                                 {executingId === evt.id ? 'Retrying...' : 'Retry'}
                               </button>
                             )}
+                            {CANCELLABLE_STATUSES.has(evt.status) && onCancel && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onCancel(evt) }}
+                                disabled={executingId === evt.id}
+                                className="text-xs text-orange-500 hover:text-orange-700 font-medium disabled:opacity-50"
+                              >
+                                Cancel
+                              </button>
+                            )}
                             <button
                               onClick={(e) => { e.stopPropagation(); onDelete(evt) }}
                               disabled={executingId === evt.id}
                               className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
                             >
-                              {executingId === evt.id ? 'Deleting...' : 'Delete'}
+                              {executingId === evt.id ? '...' : 'Delete'}
                             </button>
                           </div>
                         </div>

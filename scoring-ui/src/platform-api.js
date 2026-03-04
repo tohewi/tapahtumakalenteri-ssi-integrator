@@ -403,11 +403,25 @@ export async function executeEventApi(tenantId, eventId) {
 }
 
 /**
- * Delete a planned scheduled event.
+ * Delete a planned scheduled event (hard delete — removes from DB and SSI).
  */
 export async function deleteEventApi(tenantId, eventId) {
   return platformFetch(`/tenants/${tenantId}/events/${eventId}`, {
     method: 'DELETE',
+  })
+}
+
+/**
+ * Soft-cancel a scheduled event (keeps DB record as 'cancelled').
+ * @param {string} tenantId
+ * @param {string} eventId
+ * @param {{ removeFromSsi?: boolean }} options
+ * @returns {{ event, impact: { staffingSignups, removedFromSsi } }}
+ */
+export async function cancelEventApi(tenantId, eventId, { removeFromSsi = false } = {}) {
+  return platformFetch(`/tenants/${tenantId}/events/${eventId}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ removeFromSsi }),
   })
 }
 

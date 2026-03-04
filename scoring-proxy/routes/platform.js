@@ -74,6 +74,7 @@ import {
   listScheduledEvents,
   updateScheduledEvent,
   deleteScheduledEvent,
+  cancelScheduledEvent,
   importSsiEvent,
   getImportedSsiEventIds,
   getUpcomingStaffingNeeds,
@@ -1432,6 +1433,86 @@ export function createPlatformRouter({
 
     log.info(`[platform] Event deleted: ${req.params.id}`)
     res.json({ success: true })
+  })
+
+  // POST /api/v1/platform/tenants/:tenantId/events/:id/cancel
+  // Soft-cancel a scheduled event. Keeps the DB record as 'cancelled'.
+  // If the event is ssi_created and body.removeFromSsi is true, the SSI event is deleted first.
+  // Returns { event, impact: { staffingSignups, removedFromSsi } }
+  // Requires: owner, tenant_admin, or match_admin
+  router.post('/tenants/:tenantId/events/:id/cancel', platformMutationLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
+    try {
+      const event = await getScheduledEvent(req.params.id)
+      if (!event || event.tenantId !== req.params.tenantId) {
+        return res.status(404).json({ error: 'Event not found' })
+      }
+
+      if (event.status === 'cancelled') {
+        return res.status(400).json({ error: 'Event is already cancelled' })
+      }
+      if (event.status === 'completed') {
+        return res.status(400).json({ error: 'Completed events cannot be cancelled' })
+      }
+
+      // Count confirmed staffing signups for impact summary
+      const { pool } = await import('../lib/db/postgres.js')
+      const db = await pool()
+      const signupRes = await db.query(
+        `SELECT COUNT(*) as count FROM staff_signups s
+         JOIN event_staffing_needs n ON s.need_id = n.id
+         WHERE n.event_id = $1 AND s.status = 'confirmed'`,
+        [event.id]
+      )
+      const staffingSignups = parseInt(signupRes.rows[0].count, 10)
+
+      // Optionally remove from SSI before cancelling
+      let removedFromSsi = false
+      const { removeFromSsi } = req.body
+      if (removeFromSsi && event.status === 'ssi_created' && event.ssiReferences) {
+        const tenantFull = await getTenantWithCredentials(req.params.tenantId)
+        if (!tenantFull?.ssiCredentials?.email || !tenantFull?.ssiCredentials?.password) {
+          return res.status(400).json({ error: 'Cannot remove from SSI: Tenant SSI credentials missing' })
+        }
+        try {
+          log.info(`[platform] Cancellation: removing SSI event ${event.id}`)
+          await deleteSsiEvent({
+            ssiReferences: event.ssiReferences,
+            credentials: { email: tenantFull.ssiCredentials.email, password: tenantFull.ssiCredentials.password },
+          })
+          removedFromSsi = true
+        } catch (err) {
+          const isStaleOrMissing = /no ssi reference|missing ssi|not found|404|already deleted/i.test(err.message)
+          if (isStaleOrMissing) {
+            log.warn(`[platform] SSI event already gone for ${event.id} — proceeding with cancellation: ${err.message}`)
+            removedFromSsi = true
+          } else {
+            log.error(`[platform] Failed to remove SSI event for ${event.id}:`, err.message)
+            return res.status(500).json({ error: `Failed to remove event from SSI: ${err.message}` })
+          }
+        }
+      }
+
+      const cancelled = await cancelScheduledEvent(event.id)
+      if (!cancelled) {
+        return res.status(409).json({ error: 'Event could not be cancelled (status may have changed)' })
+      }
+
+      await createAuditLog({
+        tenantId: req.params.tenantId,
+        accountId: req.account.id,
+        action: 'cancel_event',
+        targetType: 'event',
+        targetId: event.id,
+        metadata: { previousStatus: event.status, removedFromSsi, staffingSignups },
+        ipAddress: req.ip
+      })
+
+      log.info(`[platform] Event cancelled: ${event.id} (removedFromSsi=${removedFromSsi})`)
+      res.json({ event: cancelled, impact: { staffingSignups, removedFromSsi } })
+    } catch (err) {
+      log.error(`[platform] POST /cancel failed for event ${req.params.id}:`, err.message)
+      return next(new AppError('Failed to cancel event', 500, 'INTERNAL_ERROR'))
+    }
   })
 
   // POST /api/v1/platform/tenants/:tenantId/events/:id/execute

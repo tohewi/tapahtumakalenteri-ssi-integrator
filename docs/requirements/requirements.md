@@ -519,8 +519,8 @@ Full ACCT1 flow: (1) User clicks "Forgot password?" link on the Sign In page. (2
 | # | Requirement | Status |
 |---|-------------|--------|
 | MP5 | **Event Execution Workflow**: Execute a planned scheduled event — create cup/matches/squads in SSI from template + overrides. Status transitions: `planned` → `creating` → `ssi_created` (success) or `failed` (error with retry). Progress tracking per sub-operation. **Bug fixes (R8.2):** Template-driven divisions/categories via `overrides.formFields`, web form POST for both cup + matches (GraphQL ignores multi-value fields), 40-char name limit enforcement | ✅ Implemented |
-| MP6 | **Event Status Dashboard**: Visual status indicators for each scheduled event (planned, creating, active, completed, cancelled). Batch status view for upcoming week/month | ⬜ Design |
-| MP7 | **Event Cancellation**: Cancel a scheduled event — optionally delete from SSI if already created. Status: `ssi_created` → `cancelled`. Requires confirmation dialog with impact summary | ⬜ Design |
+| MP6 | **Event Status Dashboard**: Visual status indicators for each scheduled event (planned, creating, active, completed, cancelled). Batch status view for upcoming week/month. **Implemented:** status summary strip (counts per status), time filter (Upcoming/Next 7d/Next 30d/Past/All), `cancelled` status with orange badge. | ✅ Implemented |
+| MP7 | **Event Cancellation**: Cancel a scheduled event — optionally delete from SSI if already created. Status: `ssi_created` → `cancelled`. Requires confirmation dialog with impact summary. **Implemented:** `POST /events/:id/cancel` route, soft-cancel keeps DB record, `CancelEventModal` with SSI removal checkbox + staffing impact warning, Cancel button in list + calendar popover. | ✅ Implemented |
 
 ## Release 9.2 — SSI Discipline Registry
 
@@ -658,7 +658,7 @@ These requirements are planned for a future release, likely before billing integ
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
 - **Release 8.0** (Platform Auth & Tenancy): 21 requirements — 21 ✅ (PA1–PA21)
 - **Release 8.1** (Match Management Platform): 8 requirements — 5 ✅ (MP1, MP2, MP4, MP10, MP12), 3 design phase (MP3, MP8, MP9). **MP12 — SSI Event Import**: Search existing SSI events via GraphQL (name, sport, date range, region filters) and import selected events as local scheduled_events with `ssi_created` status. Backend: `ssiSearchEvents` in seed-import.js, `importSsiEvent` in platform-store.js, `/ssi-search` + `/ssi-import` API routes. Frontend: `ImportSsiEventsModal` component in SchedulePage with search form, results table with checkboxes, and batch import action. Schema: `template_id` made nullable, `event_name` column added to `scheduled_events` for imported events without templates
-- **Release 8.2** (Platform Authorization & Workflows): 5 requirements — 2 ✅ (ACCT1, RBAC1), 3 design phase (MP5, MP6, MP7)
+- **Release 8.2** (Platform Authorization & Workflows): 5 requirements — 5 ✅ (ACCT1, RBAC1, MP5, MP6, MP7)
 - **Release 8.3** (Calendar Integration): 1 requirement — 0 ✅, 1 design phase (MP11)
 - **Release 9.0** (Event Staffing): Core platform staffing capabilities — **All Implemented ✅**
   - **Data Model**: `event_staffing_needs` and `staff_signups` tables linked to `scheduled_events` and `accounts`. Auto-populated from template rules.

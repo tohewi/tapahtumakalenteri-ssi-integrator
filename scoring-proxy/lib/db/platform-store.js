@@ -1416,7 +1416,7 @@ export async function deleteMatchTemplate(templateId) {
  * Lifecycle: planned → ssi_created → calendar_published → staffed → ready → completed
  * Any state can transition to → failed (with error_details)
  */
-export const EVENT_STATUSES = ['planned', 'ssi_created', 'calendar_published', 'staffed', 'ready', 'completed', 'failed']
+export const EVENT_STATUSES = ['planned', 'ssi_created', 'calendar_published', 'staffed', 'ready', 'completed', 'cancelled', 'failed']
 
 /**
  * Convert a PostgreSQL scheduled_events row to API format.
@@ -1657,6 +1657,22 @@ export async function deleteScheduledEvent(eventId) {
     [eventId]
   )
   return rows.length > 0
+}
+
+/**
+ * Soft-cancel a scheduled event: set status to 'cancelled'.
+ * Cannot cancel events that are already 'cancelled' or 'completed'.
+ * @returns {object|null} updated event, or null if not found / not cancellable
+ */
+export async function cancelScheduledEvent(eventId) {
+  const { rows } = await query(
+    `UPDATE scheduled_events
+     SET status = 'cancelled', updated_at = NOW()
+     WHERE id = $1 AND status NOT IN ('cancelled', 'completed')
+     RETURNING *`,
+    [eventId]
+  )
+  return rows.length > 0 ? rowToEvent(rows[0]) : null
 }
 
 // ---- Password Reset Tokens ----
