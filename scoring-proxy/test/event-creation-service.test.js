@@ -14,6 +14,7 @@ import {
   calculateSchedule,
   normalizeDate,
   subtractDays,
+  deleteSsiEvent,
 } from '../lib/services/event-creation-service.js'
 
 // ============================================================
@@ -194,6 +195,74 @@ describe('calculateSchedule', () => {
     expect(result.regCloseDate).toBe('2026-03-14')
     expect(result.regCloseTime).toBe('21:00')
   })
+
+})
+
+// ============================================================
+// deleteSsiEvent — guard / reference-shape resolution
+//
+// The guard throws before ssiLogin() is called, so no HTTP mocking needed.
+// Verifies that all three ssiReferences shapes are accepted and that
+// missing/empty refs are rejected correctly.
+// ============================================================
+
+describe('deleteSsiEvent — reference guard', () => {
+  it('throws when ssiReferences is null', async () => {
+    await expect(deleteSsiEvent({ ssiReferences: null, credentials: {} }))
+      .rejects.toThrow('No SSI reference ID provided for deletion')
+  })
+
+  it('throws when ssiReferences has no usable ID fields', async () => {
+    await expect(deleteSsiEvent({ ssiReferences: {}, credentials: {} }))
+      .rejects.toThrow('No SSI reference ID provided for deletion')
+  })
+
+  it('throws when ssiReferences has ssiEventId but no typeId field', async () => {
+    // ssiEventId present but contentTypeKey missing — guard passes, second check fires
+    await expect(deleteSsiEvent({ ssiReferences: { ssiEventId: '123' }, credentials: {} }))
+      .rejects.toThrow('Missing SSI eventId or typeId in references')
+  })
+
+  it('throws when cupId present but cupTypeId missing', async () => {
+    await expect(deleteSsiEvent({ ssiReferences: { cupId: '456' }, credentials: {} }))
+      .rejects.toThrow('Missing SSI eventId or typeId in references')
+  })
+
+  it('accepts platform-created cup shape (cupId + cupTypeId) and proceeds to login', async () => {
+    // Guard passes — function will fail at ssiLogin() because credentials are empty,
+    // not at the guard check. That confirms the reference shape is accepted.
+    await expect(deleteSsiEvent({
+      ssiReferences: { cupId: '100', cupTypeId: '136', isCup: false },
+      credentials: { email: '', password: '' },
+    })).rejects.not.toThrow('No SSI reference ID provided for deletion')
+  })
+
+  it('accepts platform-created match shape (id + typeId) and proceeds to login', async () => {
+    await expect(deleteSsiEvent({
+      ssiReferences: { id: '200', typeId: '22' },
+      credentials: { email: '', password: '' },
+    })).rejects.not.toThrow('No SSI reference ID provided for deletion')
+  })
+
+  it('accepts imported event shape (ssiEventId + contentTypeKey) and proceeds to login', async () => {
+    // This is the shape stored by importSsiEvent() — previously rejected before the fix.
+    await expect(deleteSsiEvent({
+      ssiReferences: { ssiEventId: '300', contentTypeKey: 22 },
+      credentials: { email: '', password: '' },
+    })).rejects.not.toThrow('No SSI reference ID provided for deletion')
+  })
+})
+
+// ============================================================
+// calculateSchedule — edge cases (continued)
+// ============================================================
+
+describe('calculateSchedule — edge cases', () => {
+  const defaultOverrides = {
+    startTime: '09.00',
+    endTime: '12.00',
+    registrationDaysBeforeEvent: 7,
+  }
 
   it('uses default values when overrides are empty', () => {
     const result = calculateSchedule('2026-06-01', {})

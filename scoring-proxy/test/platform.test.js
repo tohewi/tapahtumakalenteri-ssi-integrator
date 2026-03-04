@@ -816,3 +816,48 @@ describe('PATCH /api/v1/platform/tenants/:id', () => {
     expect(res.data.tenant.disciplines).toEqual(['sra', 'resul'])
   })
 })
+
+// ============================================================
+// DELETE /events — stale SSI error classification
+//
+// The DELETE route distinguishes errors that indicate the SSI event is
+// already gone (allow local deletion) from live SSI errors (block deletion).
+// This tests the regex pattern used for that classification.
+// ============================================================
+
+describe('DELETE /events — stale SSI error classification', () => {
+  // Mirrors the regex in the DELETE route catch block
+  const isStaleOrMissing = (msg) => /no ssi reference|missing ssi|not found|404|already deleted/i.test(msg)
+
+  it('classifies "No SSI reference ID provided for deletion" as stale', () => {
+    expect(isStaleOrMissing('No SSI reference ID provided for deletion')).toBe(true)
+  })
+
+  it('classifies "Missing SSI eventId or typeId in references" as stale', () => {
+    expect(isStaleOrMissing('Missing SSI eventId or typeId in references: {}')).toBe(true)
+  })
+
+  it('classifies "Event not found on SSI (already deleted)" as stale', () => {
+    expect(isStaleOrMissing('Event not found on SSI (already deleted)')).toBe(true)
+  })
+
+  it('classifies "Staff page HTTP 404" as stale', () => {
+    expect(isStaleOrMissing('Staff page HTTP 404')).toBe(true)
+  })
+
+  it('classifies "SSI event not found at https://..." as stale', () => {
+    expect(isStaleOrMissing('SSI event not found at https://shootnscoreit.com/event/22/123/')).toBe(true)
+  })
+
+  it('does NOT classify auth failure as stale', () => {
+    expect(isStaleOrMissing('SSI authentication failed — invalid credentials')).toBe(false)
+  })
+
+  it('does NOT classify unexpected HTTP error as stale', () => {
+    expect(isStaleOrMissing('Failed to access delete page for event 123: HTTP 500')).toBe(false)
+  })
+
+  it('does NOT classify network error as stale', () => {
+    expect(isStaleOrMissing('fetch failed: ECONNREFUSED')).toBe(false)
+  })
+})
