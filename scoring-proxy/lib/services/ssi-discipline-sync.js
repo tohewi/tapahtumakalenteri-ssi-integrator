@@ -1,4 +1,4 @@
-import { getPool, upsertSsiDiscoveredDisciplines } from '../db/platform-store.js'
+import { upsertSsiDiscoveredDisciplines } from '../db/platform-store.js'
 import { ssiGraphQL } from '../ssi-core/graphql.js'
 import log from '../logger.js'
 
