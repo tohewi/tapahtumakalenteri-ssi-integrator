@@ -1397,10 +1397,16 @@ export function createPlatformRouter({
           }
         })
       } catch (err) {
-        log.error(`[platform] Failed to delete event from SSI for ${req.params.id}:`, err.message)
-        // Note: we might want to still allow deleting the local event if SSI deletion fails,
-        // but for safety we block it so the user knows they have a dangling event in SSI.
-        return res.status(500).json({ error: `Failed to delete event from SSI: ${err.message}. Local event was not deleted.` })
+        // If the SSI event is already gone or the reference is stale/invalid, allow local deletion.
+        // Only block if the error indicates the event likely still exists in SSI (e.g. auth failure,
+        // network error, or unexpected server response that isn't a missing-event condition).
+        const isStaleOrMissing = /no ssi reference|missing ssi|not found|404|already deleted/i.test(err.message)
+        if (isStaleOrMissing) {
+          log.warn(`[platform] SSI event already gone or reference invalid for ${req.params.id} — proceeding with local deletion: ${err.message}`)
+        } else {
+          log.error(`[platform] Failed to delete event from SSI for ${req.params.id}:`, err.message)
+          return res.status(500).json({ error: `Failed to delete event from SSI: ${err.message}. Local event was not deleted.` })
+        }
       }
     }
 

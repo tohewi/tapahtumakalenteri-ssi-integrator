@@ -463,13 +463,17 @@ async function deleteSingleSsiEvent(typeId, eventId, cookies) {
  * @returns {Promise<void>}
  */
 export async function deleteSsiEvent({ ssiReferences, credentials }) {
-  if (!ssiReferences || (!ssiReferences.cupId && !ssiReferences.id)) {
+  if (!ssiReferences || (!ssiReferences.cupId && !ssiReferences.id && !ssiReferences.ssiEventId)) {
     throw new Error('No SSI reference ID provided for deletion')
   }
 
-  // Handle both single matches and cups. Prefer cup if both exist.
-  const eventId = ssiReferences.cupId || ssiReferences.id
-  const typeId = ssiReferences.cupTypeId || ssiReferences.typeId
+  // Handle three ssiReferences shapes:
+  //   1. Platform-created cup:      { cupId, cupTypeId, matches[], isCup }
+  //   2. Platform-created match:    { id, typeId }  (legacy)
+  //   3. Imported SSI event:        { ssiEventId, contentTypeKey }
+  // Prefer cup if both cupId and ssiEventId exist.
+  const eventId = ssiReferences.cupId || ssiReferences.id || ssiReferences.ssiEventId
+  const typeId = ssiReferences.cupTypeId || ssiReferences.typeId || ssiReferences.contentTypeKey
 
   if (!eventId || !typeId) {
     throw new Error(`Missing SSI eventId or typeId in references: ${JSON.stringify(ssiReferences)}`)
