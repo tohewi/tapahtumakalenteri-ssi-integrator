@@ -5,18 +5,17 @@
 // All modules use Azure Verified Modules (AVM) from the public registry.
 // Check https://aka.ms/avm for latest module versions before deploying.
 //
-// Deployment order (managed by Bicep dependency graph):
-//   0.  App UAMI (id-turres-prod)
-//   0.1 GitHub Actions UAMI (id-github-turres-prod) + OIDC federation + role assignments
+// Deployment order:
+//   PRE: Run infra/bootstrap.bicep first (KV + UAMIs + role assignments).
+//        Populate ALL secrets in Key Vault before running this template.
 //   1.  Log Analytics Workspace
 //   2.  Application Insights
-//   3.  Key Vault (empty)
-//   4.  PostgreSQL Flexible Server
-//   5.  Azure Cache for Redis
-//   6.  Key Vault secrets (connection strings)
-//   7.  App Service Plan
-//   8.  App Service (user-assigned MI, KV references)
-//   9.  Role assignment: KV Secrets User → App UAMI
+//   3.  PostgreSQL Flexible Server
+//   4.  Azure Cache for Redis
+//   5.  Key Vault secrets (computed DatabaseUrl + RedisUrl)
+//   6.  App Service Plan
+//   7.  App Service (existing App UAMI, KV references)
+//   8.  Budget (cost guardrail — 100 €/month, notify tohewi@gmail.com)
 // ============================================================
 
 targetScope = 'resourceGroup'
@@ -51,11 +50,14 @@ param postgresStorageSizeGB int = 32
 @description('Log Analytics data retention in days.')
 param logRetentionDays int = 30
 
-@description('GitHub repository in owner/repo format for OIDC federation.')
-param githubRepository string = 'tohewi/tapahtumakalenteri-ssi-integrator'
+@description('Budget start date — first of the current or a future month (YYYY-MM-01T00:00:00Z).')
+param budgetStartDate string = '2026-03-01T00:00:00Z'
 
-@description('GitHub Actions environment name used in the OIDC subject claim.')
-param githubEnvironment string = 'production'
+@description('Monthly budget cap in subscription billing currency (EUR for Finnish Pay-As-You-Go).')
+param budgetAmountEur int = 100
+
+@description('Email address for budget breach notifications.')
+param budgetAlertEmail string = 'tohewi@gmail.com'
 
 // ── Computed names ───────────────────────────────────────────
 
@@ -67,87 +69,17 @@ var redisName  = 'redis-${appName}-${environmentName}'
 var aspName    = 'asp-${appName}-${environmentName}'
 var appSvcName = 'app-${appName}-${environmentName}'
 var uamiName     = 'id-${appName}-${environmentName}'
-var ghUamiName   = 'id-github-${appName}-${environmentName}'
 var dbName       = 'turres_platform'
 
-// Built-in role definition IDs
-var kvSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'  // Key Vault Secrets User
-var contributorRoleId   = 'b24988ac-6180-42a0-ab88-20f7382dd24c'  // Contributor
-var rbacAdminRoleId     = 'f58310d9-a9f6-439a-9e8d-f62e7b41a168'  // Role Based Access Control Administrator
+// ── 0. Existing resources (provisioned by bootstrap.bicep) ─────────────
+// Run infra/bootstrap.bicep once, populate KV secrets, then run this template.
 
-// ABAC condition: limits RBAC Admin to assigning ONLY Key Vault Secrets User.
-// Prevents privilege escalation while still allowing the KV role assignment in Bicep.
-var rbacAdminCondition = '(!(ActionMatches{''Microsoft.Authorization/roleAssignments/write''}) OR @Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {4633458b-17de-408a-b874-0445c86b69e6}) AND (!(ActionMatches{''Microsoft.Authorization/roleAssignments/delete''}) OR @Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {4633458b-17de-408a-b874-0445c86b69e6})'
-
-// ── 0. User-Assigned Managed Identity ──────────────────────────
-// Created before all other resources so its principalId is available
-// for Key Vault role assignment and the identity survives App Service
-// recreation (unlike system-assigned).
-// AVM: https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/managed-identity/user-assigned-identity
-
-module uami 'br/public:avm/res/managed-identity/user-assigned-identity:0.4.0' = {
-  name: 'uamiDeployment'
-  params: {
-    name: uamiName
-    location: location
-    tags: {
-      environment: environmentName
-      managedBy: 'bicep-avm'
-    }
-  }
+resource uamiExisting 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
+  name: uamiName
 }
 
-// ── 0.1 GitHub Actions UAMI + OIDC federation ───────────────
-// Separate identity for CI/CD — no overlap with app runtime identity.
-// Federates with GitHub Actions environment-scoped OIDC, enabling keyless
-// Azure login from the workflow (no AZURE_CREDENTIALS service principal needed).
-// AVM: https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/managed-identity/user-assigned-identity
-
-module ghUami 'br/public:avm/res/managed-identity/user-assigned-identity:0.4.0' = {
-  name: 'ghUamiDeployment'
-  params: {
-    name: ghUamiName
-    location: location
-    federatedIdentityCredentials: [
-      {
-        // Subject must match the GitHub Actions token exactly:
-        // environment-scoped claim → repo:<owner>/<repo>:environment:<env>
-        name: 'github-actions-${githubEnvironment}'
-        audiences: ['api://AzureADTokenExchange']
-        issuer: 'https://token.actions.githubusercontent.com'
-        subject: 'repo:${githubRepository}:environment:${githubEnvironment}'
-      }
-    ]
-    tags: {
-      environment: environmentName
-      managedBy: 'bicep-avm'
-    }
-  }
-}
-
-// Contributor on RG: create / update / delete any resource during infra + app deploy.
-resource ghActionsContributorRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: resourceGroup()
-  name: guid(resourceGroup().id, ghUami.outputs.principalId, contributorRoleId)
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', contributorRoleId)
-    principalId: ghUami.outputs.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-// Role Based Access Control Administrator on RG, constrained by ABAC condition to
-// only assign/revoke Key Vault Secrets User — prevents any privilege escalation.
-resource ghActionsRbacAdminRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: resourceGroup()
-  name: guid(resourceGroup().id, ghUami.outputs.principalId, rbacAdminRoleId)
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', rbacAdminRoleId)
-    principalId: ghUami.outputs.principalId
-    principalType: 'ServicePrincipal'
-    condition: rbacAdminCondition
-    conditionVersion: '2.0'
-  }
+resource kvResource 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+  name: kvName
 }
 
 // ── 1. Log Analytics Workspace ───────────────────────────────
@@ -185,27 +117,7 @@ module appInsights 'br/public:avm/res/insights/component:0.4.1' = {
   }
 }
 
-// ── 3. Key Vault (RBAC-enabled) ──────────────────────────────
-// AVM: https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/key-vault/vault
-
-module keyVault 'br/public:avm/res/key-vault/vault:0.12.1' = {
-  name: 'keyVaultDeployment'
-  params: {
-    name: kvName
-    location: location
-    sku: 'standard'
-    enableRbacAuthorization: true
-    enableSoftDelete: true
-    softDeleteRetentionInDays: 90
-    enablePurgeProtection: true
-    tags: {
-      environment: environmentName
-      managedBy: 'bicep-avm'
-    }
-  }
-}
-
-// ── 4. PostgreSQL Flexible Server ────────────────────────────
+// ── 3. PostgreSQL Flexible Server ────────────────────────────
 // AVM: https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/db-for-postgre-sql/flexible-server
 
 module postgresql 'br/public:avm/res/db-for-postgre-sql/flexible-server:0.4.0' = {
@@ -219,7 +131,9 @@ module postgresql 'br/public:avm/res/db-for-postgre-sql/flexible-server:0.4.0' =
     tier: 'Burstable'
     storageSizeGB: postgresStorageSizeGB
     version: '16'
-    highAvailabilityMode: 'Disabled'
+    highAvailability: {
+      mode: 'Disabled'
+    }
     backupRetentionDays: 7
     geoRedundantBackup: 'Disabled'
     databases: [
@@ -250,7 +164,7 @@ module postgresql 'br/public:avm/res/db-for-postgre-sql/flexible-server:0.4.0' =
   }
 }
 
-// ── 5. Azure Cache for Redis ─────────────────────────────────
+// ── 4. Azure Cache for Redis ─────────────────────────────────
 // AVM: https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/cache/redis
 
 module redis 'br/public:avm/res/cache/redis:0.4.0' = {
@@ -272,17 +186,14 @@ module redis 'br/public:avm/res/cache/redis:0.4.0' = {
   }
 }
 
-// ── 6. Key Vault secrets — connection strings ─────────────────
+// ── 5. Key Vault secrets — connection strings ─────────────────
 // Computed from deployed resources, stored in KV so App Service can reference them.
 
 var postgresUrl = 'postgresql://${postgresAdminLogin}:${postgresAdminPassword}@${postgresql.outputs.fqdn}:5432/${dbName}?sslmode=require'
-var redisKey    = listKeys(redis.outputs.resourceId, '2023-08-01').primaryKey
+var redisKey    = listKeys(resourceId('Microsoft.Cache/redis', redisName), '2023-08-01').primaryKey
 var redisUrl    = 'rediss://:${redisKey}@${redis.outputs.hostName}:6380'
 
-resource kvResource 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
-  name: kvName
-  dependsOn: [keyVault]
-}
+// kvResource is declared in section 0 (existing ref from bootstrap.bicep)
 
 resource secretDatabaseUrl 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   parent: kvResource
@@ -358,9 +269,7 @@ module appServicePlan 'br/public:avm/res/web/serverfarm:0.4.1' = {
   params: {
     name: aspName
     location: location
-    sku: {
-      name: appServicePlanSku
-    }
+    skuName: appServicePlanSku
     reserved: true  // Required for Linux
     tags: {
       environment: environmentName
@@ -387,7 +296,7 @@ module appService 'br/public:avm/res/web/site:0.12.0' = {
     kind: 'app,linux'
     serverFarmResourceId: appServicePlan.outputs.resourceId
     managedIdentities: {
-      userAssignedResourceIds: [uami.outputs.resourceId]
+      userAssignedResourceIds: [uamiExisting.id]
     }
     siteConfig: {
       linuxFxVersion: 'NODE|22-lts'
@@ -433,32 +342,58 @@ module appService 'br/public:avm/res/web/site:0.12.0' = {
   ]
 }
 
-// ── 9. Role assignment: KV Secrets User → App Service MI ─────
-// Grants the App Service managed identity permission to read Key Vault secrets.
+// ── 8. Budget (cost guardrail) ────────────────────────────────
+// Monthly cap of 100 €. Alerts at 80% actual (early warning), 100% actual,
+// and 100% forecasted. Subscription billing currency must be EUR.
 
-resource kvRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  scope: kvResource
-  name: guid(keyVault.outputs.resourceId, uami.outputs.principalId, kvSecretsUserRoleId)
+resource budget 'Microsoft.Consumption/budgets@2021-10-01' = {
+  name: 'budget-${appName}-${environmentName}'
   properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', kvSecretsUserRoleId)
-    principalId: uami.outputs.principalId
-    principalType: 'ServicePrincipal'
+    timePeriod: {
+      startDate: budgetStartDate
+    }
+    timeGrain: 'Monthly'
+    amount: budgetAmountEur
+    category: 'Cost'
+    notifications: {
+      actual80pct: {
+        enabled: true
+        operator: 'GreaterThan'
+        threshold: 80
+        contactEmails: [budgetAlertEmail]
+        thresholdType: 'Actual'
+      }
+      actual100pct: {
+        enabled: true
+        operator: 'GreaterThanOrEqualTo'
+        threshold: 100
+        contactEmails: [budgetAlertEmail]
+        thresholdType: 'Actual'
+      }
+      forecasted100pct: {
+        enabled: true
+        operator: 'GreaterThan'
+        threshold: 100
+        contactEmails: [budgetAlertEmail]
+        thresholdType: 'Forecasted'
+      }
+    }
   }
 }
 
 // ── Outputs ───────────────────────────────────────────────────
 
-@description('User-assigned managed identity resource ID')
-output uamiResourceId string = uami.outputs.resourceId
+@description('App runtime UAMI resource ID')
+output uamiResourceId string = uamiExisting.id
 
-@description('User-assigned managed identity principal ID')
-output uamiPrincipalId string = uami.outputs.principalId
+@description('App runtime UAMI principal ID')
+output uamiPrincipalId string = uamiExisting.properties.principalId
 
 @description('App Service default hostname')
 output appServiceUrl string = 'https://${appService.outputs.defaultHostname}'
 
 @description('Key Vault URI')
-output keyVaultUri string = keyVault.outputs.uri
+output keyVaultUri string = kvResource.properties.vaultUri
 
 @description('PostgreSQL FQDN')
 output postgresFqdn string = postgresql.outputs.fqdn
@@ -469,8 +404,5 @@ output redisHostName string = redis.outputs.hostName
 @description('Application Insights connection string')
 output appInsightsConnectionString string = appInsights.outputs.connectionString
 
-@description('GitHub Actions UAMI client ID — set as AZURE_CLIENT_ID GitHub Actions secret')
-output ghActionsClientId string = ghUami.outputs.clientId
-
-@description('Azure tenant ID — set as AZURE_TENANT_ID GitHub Actions secret')
+@description('Azure tenant ID')
 output tenantId string = subscription().tenantId

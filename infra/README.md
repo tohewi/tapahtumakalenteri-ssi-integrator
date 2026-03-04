@@ -16,51 +16,76 @@ Region: **Sweden Central** — migrate to Finland South when available (~Q1 2027
 
 ---
 
-## First-time deployment
+## First-time deployment (two phases)
 
-### 1. Login and select subscription
+Deployment is split into two phases so that **all secrets exist in Key Vault before
+any infrastructure reads them**. The postgres admin password is never passed on the
+command line — it lives only in Key Vault.
+
+---
+
+### Phase 1 — Bootstrap (Key Vault + identities)
+
+#### 1. Login and select subscription
 
 ```bash
 az login
-az account set --subscription "<your-subscription-id>"
+az account set --subscription 5bb1981d-8206-44e6-aed0-d6ba3b7aa900
 ```
 
-### 2. Create the resource group
+#### 2. Create the resource group (if not already done)
 
 ```bash
-az group create \
-  --name rg-turres-prod \
-  --location swedencentral
+az group create --name rg-turres-prod --location swedencentral
 ```
 
-### 3. Generate a strong PostgreSQL password
+#### 3. Get your Azure AD object ID
 
 ```bash
-POSTGRES_ADMIN_PASSWORD=$(openssl rand -base64 32)
-echo "Save this: $POSTGRES_ADMIN_PASSWORD"
+DEPLOYER_OID=$(az ad signed-in-user show --query id -o tsv)
 ```
 
-### 4. Deploy the Bicep template
+#### 4. Deploy bootstrap.bicep
+
+This creates `kv-turres-prod`, `id-turres-prod`, `id-github-turres-prod`, and all
+role assignments. Takes ~2 minutes.
 
 ```bash
 az deployment group create \
   --resource-group rg-turres-prod \
-  --template-file infra/main.bicep \
-  --parameters infra/main.bicepparam \
-  --parameters postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD" \
-  --name turres-prod-$(date +%Y%m%d%H%M)
+  --template-file infra/bootstrap.bicep \
+  --parameters deployerObjectId=$DEPLOYER_OID \
+  --name turres-bootstrap-$(date +%Y%m%d%H%M)
 ```
 
-The deployment takes approximately 10–15 minutes (PostgreSQL provisioning is the slowest step).
+#### 5. Read outputs (needed for GitHub Actions secrets)
 
-### 5. Populate secrets in Key Vault
+```bash
+az deployment group show \
+  --resource-group rg-turres-prod \
+  --name turres-bootstrap-$(date +%Y%m%d%H%M) \
+  --query properties.outputs
 
-After the template deploys, update the placeholder secrets with real values.
-The Key Vault name is `kv-turres-prod`.
+# Or query individually:
+az identity show -g rg-turres-prod -n id-github-turres-prod --query clientId -o tsv
+az account show --query tenantId -o tsv
+```
+
+---
+
+### Phase 2 — Populate ALL Key Vault secrets
+
+All secrets must be set before running `main.bicep`. The postgres password is read
+directly from KV via `az.getSecret()` in `main.bicepparam`.
 
 ```bash
 KV=kv-turres-prod
 
+# PostgreSQL admin password (min 12 chars, uppercase + lowercase + digit + symbol)
+az keyvault secret set --vault-name $KV --name PostgresAdminPassword \
+  --value "$(openssl rand -base64 24)"
+
+# Application secrets (auto-generated)
 az keyvault secret set --vault-name $KV --name SessionSecret \
   --value "$(openssl rand -hex 64)"
 
@@ -70,6 +95,7 @@ az keyvault secret set --vault-name $KV --name PlatformCredentialsKey \
 az keyvault secret set --vault-name $KV --name MfaSecretKey \
   --value "$(openssl rand -base64 32)"
 
+# Operator-supplied secrets
 az keyvault secret set --vault-name $KV --name SsiAdminEmail \
   --value "your-ssi-admin@example.com"
 
@@ -80,9 +106,25 @@ az keyvault secret set --vault-name $KV --name ResendApiKey \
   --value "re_xxxxxxxxxx"
 ```
 
-> `DatabaseUrl` and `RedisUrl` are populated automatically by the Bicep template.
+> `DatabaseUrl` and `RedisUrl` are computed from deployed resources and written to
+> Key Vault automatically by `main.bicep`.
 
-### 6. Restart App Service to pick up KV references
+---
+
+### Phase 3 — Deploy main infrastructure
+
+With all secrets in KV, deploy the rest of the stack. No password flags needed.
+Takes ~10–15 minutes (PostgreSQL is the slowest step).
+
+```bash
+az deployment group create \
+  --resource-group rg-turres-prod \
+  --template-file infra/main.bicep \
+  --parameters @infra/main.bicepparam \
+  --name turres-main-$(date +%Y%m%d%H%M)
+```
+
+#### Restart App Service to pick up KV references
 
 ```bash
 az webapp restart --resource-group rg-turres-prod --name app-turres-prod
@@ -90,7 +132,7 @@ az webapp restart --resource-group rg-turres-prod --name app-turres-prod
 
 The app should now be healthy at `https://app-turres-prod.azurewebsites.net`.
 
-### 7. Run the database schema migration
+#### Run the database schema migration
 
 ```bash
 # SSH into App Service or use the Kudu console:
@@ -104,16 +146,17 @@ node -e "import('./lib/db/postgres.js').then(m => m.initPostgres())"
 
 ## Subsequent deployments
 
-Application deployments are handled by GitHub Actions (`.github/workflows/azure-deploy.yml`).
-Infrastructure changes:
+Application deployments are handled automatically by GitHub Actions
+(`.github/workflows/azure-deploy.yml` triggers on every merge to `main`).
+
+For infrastructure changes (re-run `main.bicep`; password comes from KV automatically):
 
 ```bash
 az deployment group create \
   --resource-group rg-turres-prod \
   --template-file infra/main.bicep \
-  --parameters infra/main.bicepparam \
-  --parameters postgresAdminPassword="$POSTGRES_ADMIN_PASSWORD" \
-  --name turres-prod-$(date +%Y%m%d%H%M)
+  --parameters @infra/main.bicepparam \
+  --name turres-main-$(date +%Y%m%d%H%M)
 ```
 
 Bicep is idempotent — re-running only applies changes (no downtime for unchanged resources).
