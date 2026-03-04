@@ -58,10 +58,29 @@ var psqlName   = 'psql-${appName}-${environmentName}'
 var redisName  = 'redis-${appName}-${environmentName}'
 var aspName    = 'asp-${appName}-${environmentName}'
 var appSvcName = 'app-${appName}-${environmentName}'
+var uamiName   = 'id-${appName}-${environmentName}'
 var dbName     = 'turres_platform'
 
 // Key Vault Secrets User built-in role ID
 var kvSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
+
+// ── 0. User-Assigned Managed Identity ──────────────────────────
+// Created before all other resources so its principalId is available
+// for Key Vault role assignment and the identity survives App Service
+// recreation (unlike system-assigned).
+// AVM: https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/managed-identity/user-assigned-identity
+
+module uami 'br/public:avm/res/managed-identity/user-assigned-identity:0.4.0' = {
+  name: 'uamiDeployment'
+  params: {
+    name: uamiName
+    location: location
+    tags: {
+      environment: environmentName
+      managedBy: 'bicep-avm'
+    }
+  }
+}
 
 // ── 1. Log Analytics Workspace ───────────────────────────────
 // AVM: https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/operational-insights/workspace
@@ -300,7 +319,7 @@ module appService 'br/public:avm/res/web/site:0.12.0' = {
     kind: 'app,linux'
     serverFarmResourceId: appServicePlan.outputs.resourceId
     managedIdentities: {
-      systemAssigned: true
+      userAssignedResourceIds: [uami.outputs.resourceId]
     }
     siteConfig: {
       linuxFxVersion: 'NODE|22-lts'
@@ -351,15 +370,21 @@ module appService 'br/public:avm/res/web/site:0.12.0' = {
 
 resource kvRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: kvResource
-  name: guid(keyVault.outputs.resourceId, appService.outputs.systemAssignedMIPrincipalId, kvSecretsUserRoleId)
+  name: guid(keyVault.outputs.resourceId, uami.outputs.principalId, kvSecretsUserRoleId)
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', kvSecretsUserRoleId)
-    principalId: appService.outputs.systemAssignedMIPrincipalId
+    principalId: uami.outputs.principalId
     principalType: 'ServicePrincipal'
   }
 }
 
 // ── Outputs ───────────────────────────────────────────────────
+
+@description('User-assigned managed identity resource ID')
+output uamiResourceId string = uami.outputs.resourceId
+
+@description('User-assigned managed identity principal ID')
+output uamiPrincipalId string = uami.outputs.principalId
 
 @description('App Service default hostname')
 output appServiceUrl string = 'https://${appService.outputs.defaultHostname}'
