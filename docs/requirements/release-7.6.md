@@ -57,7 +57,7 @@ The following Release 7.2 requirement is **already implemented** and should be u
 
 | # | Origin | Requirement | Priority | Status |
 |---|--------|-------------|----------|--------|
-| R76-CUP1 | R7.2 CUP1 | **Move Squadded Shooter Between Squads**: In the "Squadit" section, add a `→ S?` squad move button for shooters already assigned to a squad. Backend `fix-squad` endpoint exists but UI only exposes it for inconsistent assignments. Need: add squad picker trigger to all squadded shooters in SquadCard, capacity enforcement (cannot move into full squad), same UX as "Ei Squadeissa" section. | HIGH | 📋 Specified |
+| R76-CUP1 | R7.2 CUP1 | **Move Squadded Shooter Between Squads**: In the "Squadit" section, add a `→ S?` squad move button for shooters already assigned to a squad. Backend `fix-squad` endpoint exists but UI only exposes it for inconsistent assignments. Need: add squad picker trigger to all squadded shooters in SquadCard, capacity enforcement (cannot move into full squad), same UX as "Ei Squadeissa" section. | HIGH | ✅ Implemented (Kupittaa Match Management — `SquadManagementPage`, `fix-squad` endpoint) |
 
 ### 7.6.2 — Architecture Completion (from R7.5)
 
@@ -70,10 +70,10 @@ The following Release 7.2 requirement is **already implemented** and should be u
 
 | # | Origin | Requirement | Priority | Status |
 |---|--------|-------------|----------|--------|
-| R76-MG2 | R6.0 MG2 | **Cup List Sorting by Proximity**: Sort cups ascending by proximity to today (closest first). Apply consistently to all cup lists: register, manage, scoring. Currently each feature may sort differently. | LOW | ⬚ Pending |
-| R76-MG3 | R6.0 MG3 | **Front Page & Scoring Route Change**: Move scoring app from `#/` to `#/scoring`. Root URL (`#/`) becomes a front page with navigation to: Scoring, Registration, Management, Tablet Scoring, Reports. Currently `#/` is the scoring app directly. | LOW | ⬚ Pending |
-| R76-MG4 | R6.0 MG4 | **Shared UI Components**: Extract and share common components (LoginScreen, CupList, visual design) between scoring, registration, and management features. Currently each feature has its own login and cup selection implementation. | LOW | ⬚ Pending |
-| R76-MG5 | R6.0 MG5 | **Manage Cup List Reuse**: Reuse the same CUP list component as Registration. Only change text from "ilmoittautuminen" to "hallitse". Currently management has separate cup list logic. | LOW | ⬚ Pending |
+| R76-MG2 | R6.0 MG2 | **Cup List Sorting by Proximity**: Sort cups ascending by proximity to today (closest first). Apply consistently to all cup lists: register, manage, scoring. | LOW | ✅ Implemented (`CupList` in `shared.jsx` sorts by `Math.abs(starts - now)` since R7.4) |
+| R76-MG3 | R6.0 MG3 | **Front Page & Scoring Route Change**: Move scoring app from `#/` to `#/scoring`. Root URL (`#/`) becomes a front page with navigation to: Scoring, Registration, Management, Tablet Scoring, Reports. | LOW | ✅ Implemented (`main.jsx` routes `#/scoring` → `<App>`, `#/` → `<HomePage>` with all feature links) |
+| R76-MG4 | R6.0 MG4 | **Shared UI Components**: Extract and share common components (LoginScreen, CupList, visual design) between scoring, registration, and management features. | LOW | ✅ Implemented (`components/shared.jsx` — `AppHeader`, `CupList`, `ErrorBanner`, `Spinner`, `BackButton`) |
+| R76-MG5 | R6.0 MG5 | **Manage Cup List Reuse**: Reuse the same CUP list component as Registration. Only change text from "ilmoittautuminen" to "hallitse". | LOW | ✅ Implemented (`ManagePage` imports `CupList` from `./shared` with `allClickable` + custom labels) |
 
 ### 7.6.4 — Security Hardening (from R7.0)
 
@@ -81,7 +81,7 @@ The following Release 7.2 requirement is **already implemented** and should be u
 |---|--------|-------------|----------|--------|
 | R76-SEC1 | R7.0 SEC1 | **OWASP Session Management Audit**: Formal review of session handling against OWASP Session Management Cheat Sheet. Document compliance status, identify gaps, and create remediation plan if needed. Current implementation follows guidelines but no formal audit has been performed. | MEDIUM | ⬚ Pending |
 | R76-SEC7 | R7.0 SEC7 | **Encrypted Token Storage**: SSI tokens are stored in Redis as plain JSON. Evaluate and implement at-rest encryption for SSI tokens in session store. Session keys already use `crypto.randomUUID()`. Risk assessment: Redis is same-host or Render internal network — evaluate if encryption at rest adds meaningful security vs. complexity. | LOW | ⬚ Pending |
-| R76-SES7 | R7.0 SES7 | **Session Monitoring Endpoint**: `getUserSessions()` and `getActiveSessionCount()` exist in code but are not exposed via any admin API endpoint. Add admin-only endpoints to view active sessions per user, last activity timestamps, and device information. Useful for security monitoring and debugging. | LOW | ⬚ Pending |
+| R76-SES7 | R7.0 SES7 | **Session Monitoring Endpoint**: `getUserSessions()` and `getActiveSessionCount()` exist in code but are not exposed via any admin API endpoint. Add admin-only endpoints to view active sessions per user, last activity timestamps, and device information. Useful for security monitoring and debugging. | LOW | ➜ Moved to BL-3 Admin Site (belongs with admin dashboard, not general R7.6 consolidation) |
 | R76-AUTH10 | R7.0 AUTH10 | **Registration Auth Evaluation**: Registration endpoints are intentionally public (no user auth required) — admin SSI credentials are used server-side. Evaluate whether this design is acceptable or if user authentication should be required before registration operations. Document the security trade-off. This is a design decision, not a bug. | LOW | ⬚ Pending |
 
 ### 7.6.5 — Test Coverage (from R7.0)
@@ -139,6 +139,6 @@ The following Release 7.2 requirement is **already implemented** and should be u
 ## Summary
 
 - **18 requirements** consolidated from 5 previous releases (R6.0, R7.0, R7.2, R7.5)
-- **1 HIGH priority**: R76-CUP1 (squad move) + R76-LOG1 (middleware logging)
-- **5 MEDIUM priority**: R76-ARCH3, R76-ARCH4, R76-SEC1, R76-TEST1/2/3
-- **12 LOW priority**: UI consolidation, security hardening, advanced testing
+- **6 now ✅ Implemented**: R76-CUP1 (squad move), R76-MG2/3/4/5 (UI consolidation) — all implemented prior to this release
+- **R76-SES7** moved to BL-3 Admin Site
+- **Remaining open**: R76-ARCH3, R76-ARCH4, R76-SEC1, R76-SEC7, R76-AUTH10, R76-TEST1–5/7, R76-LOG1

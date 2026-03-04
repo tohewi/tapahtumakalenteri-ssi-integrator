@@ -34,8 +34,8 @@
 | 31 | Cup has a Web Address with URL and description "Lisätietoa" | ✅ |
 | 32-33 | Squading schedule synced with registration | ✅ |
 | 34 | Match has a location "Kupittaan urheiluhalli, Tahkonkuja 5, 20520 TURKU" | ✅ |
-| 35 | Auto-approve pending registrations | ⏸️ On hold |
-| 36 | Copy shooter squadding from Match #1 to Matches #2 and #3 | ⏸️ On hold |
+| 35 | Auto-approve pending registrations | ❌ Will Not Implement |
+| 36 | Copy shooter squadding from Match #1 to Matches #2 and #3 | ❌ Will Not Implement |
 | 37 | Login with username/password instead of manual sessionid cookie | ✅ |
 
 ## Release 2.0 - WordPress Integration (Complete)
@@ -43,10 +43,10 @@
 | # | Requirement | Status |
 |---|-------------|--------|
 | 38 | **Tapahtumakalenteri Integration**: Create WordPress calendar event when Cup is created. Event as draft, Cup URL in content, permalink includes Cup ID. Single config file for both SSI and WordPress. | ✅ |
-| 39 | Mock testing capability | ⬚ Pending |
+| 39 | Mock testing capability | 🚫 Superseded (covered by Vitest unit tests + E2E harness) |
 | 40 | Upfront authentication for both SSI and WordPress | ✅ |
 | 41 | PowerShell secrets management | ⏸️ Parked (OTP required) |
-| 42 | Modularize for different event types | ⬚ Pending |
+| 42 | Modularize for different event types | 🚫 Superseded (Node.js platform fully modularised) |
 | 43 | **Statistics Update**: Update shots fired (participants × 100) in calendar event after Cup completion | ✅ |
 | 44 | **Auto-Publish**: Validate URLs and publish calendar event after successful creation | ✅ |
 | 45 | **Batch Creation**: Create multiple events from date list file, sequential processing, skip existing | ✅ |
@@ -155,10 +155,10 @@
 | # | Requirement | Status |
 |---|-------------|--------|
 | MG1 | **Match Management UI** (`#/manage`): Password-protected (SSI login). After login, pick an active Kupittaa cup. Shows consolidated squadding overview — per-squad cross-match table, unsquadded shooters, CUP/match membership mismatches | ✅ |
-| MG2 | **Cup list sorting**: Sort cups ascending by proximity to today (closest first). Applies to all cup lists (register, manage, scoring) | ⬚ Pending ➜ R7.6 (R76-MG2) |
-| MG3 | **Scoring route change**: Move scoring app from `#/` to `#/scoring`. Root URL (`#/`) becomes a front page with static links to the three main features: Scoring, Registration, Management | ⬚ Pending ➜ R7.6 (R76-MG3) |
-| MG4 | **Shared UI components**: Extract and share common components (LoginScreen, CupList, visual design) between scoring, registration, and management features | ⬚ Pending ➜ R7.6 (R76-MG4) |
-| MG5 | **Manage cup list**: Reuse the same CUP list component as Registration. Only change text from "ilmoittautuminen" to "hallitse" | ⬚ Pending ➜ R7.6 (R76-MG5) |
+| MG2 | **Cup list sorting**: Sort cups ascending by proximity to today (closest first). Applies to all cup lists (register, manage, scoring) | ✅ Implemented (`CupList` in `shared.jsx` sorts by proximity since R7.4) |
+| MG3 | **Scoring route change**: Move scoring app from `#/` to `#/scoring`. Root URL (`#/`) becomes a front page with static links to the three main features: Scoring, Registration, Management | ✅ Implemented (`#/scoring` route + `HomePage` with feature links since R7.5) |
+| MG4 | **Shared UI components**: Extract and share common components (LoginScreen, CupList, visual design) between scoring, registration, and management features | ✅ Implemented (`components/shared.jsx` exports `AppHeader`, `CupList`, `ErrorBanner`, `Spinner`, `BackButton`) |
+| MG5 | **Manage cup list**: Reuse the same CUP list component as Registration. Only change text from "ilmoittautuminen" to "hallitse" | ✅ Implemented (`ManagePage` imports `CupList` from `./shared` with `allClickable` prop) |
 
 ### Shooter Identification Requirements (Critical)
 
@@ -213,7 +213,7 @@
 | SES4 | **Session Security**: HttpOnly, Secure, SameSite=Lax cookies. Session fixation prevention. CSRF protection. | ✅ Implemented |
 | SES5 | **Concurrent Sessions**: Support multiple sessions per user (different devices). Each device gets separate session ID. | ✅ Implemented |
 | SES6 | **Session Revocation**: Immediate session revocation on logout, password change, or security events. | ✅ Implemented |
-| SES7 | **Session Monitoring**: Track active sessions per user, last activity, and device information. | ⬚ Pending ➜ R7.6 (R76-SES7) |
+| SES7 | **Session Monitoring**: Track active sessions per user, last activity, and device information. | ➜ Admin Site (moved to BL-3; belongs with admin dashboard, not R7.6) |
 
 ### Security Requirements
 
@@ -410,7 +410,7 @@ Patch release focused on authentication UX consistency across protected feature 
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| CUP1 | **Move Shooter Between Squads**: In the "Squadit" section, it must be possible to move a shooter from one squad to another. The UI must show the same `→ S?` button as in the "Ei Squadeissa" section and function identically (squad picker dialog, SSI sync). Move is only allowed within the same match via Squadit. | 📋 Specified ➜ R7.6 (R76-CUP1) |
+| CUP1 | **Move Shooter Between Squads**: In the "Squadit" section, it must be possible to move a shooter from one squad to another. The UI must show the same `→ S?` button as in the "Ei Squadeissa" section and function identically (squad picker dialog, SSI sync). Move is only allowed within the same match via Squadit. | ✅ Implemented (Kupittaa Match Management — `SquadManagementPage`, `fix-squad` endpoint) |
 | CUP2 | **Set Shooter as DNS (Did Not Start)**: SSI calls this "Did Not Show". Setting DNS must be applied at the **cup level** and on **all matches** in the cup. The button must appear next to every shooter regardless of which section they are in. Clicking it shows a confirmation dialog: "Set N.N as DNS?" / "Aseta Etu Suku DNS?" (fi/en). It must be possible to **undo** (reverse) DNS if set by accident. SSI endpoints: `GET /event/participant/{ct}/{id}/set-did-not-show/` (set) and `GET /event/participant/{ct}/{id}/undo-did-not-show/` (undo), applied to cup + each match. | ✅ Implemented |
 | CUP3 | **Mark Payment Received**: Per-competitor paid toggle at the **cup level only**. UI shows a button next to each shooter. When paid, the button must be **solid green** (high contrast) so it is immediately obvious who has paid when scanning the list. When unpaid, the button is gray/muted. State is stored in SSI via `GET /event/participant/{ct}/{id}/toggle-paid/`. Must reflect current paid status from SSI and allow toggling. | ✅ Implemented |
 
@@ -636,19 +636,20 @@ These requirements are planned for a future release, likely before billing integ
 |---|-------------|--------|----------|-------|
 | BL-1 | **Platform Admin Dashboard**: Match Management needs an admin site from which super-admins can see all tenants created and who their owners are. This admin site must be secure and access must be IP-whitelisted. | ⬚ Pending | Medium | Needed for operational oversight before commercial rollout |
 | BL-2 | **Production Hosting Strategy**: Compare production hosting solutions for this service. Evaluate where to cost-efficiently and securely run the web service, database, and Redis. Needs to support future agentic workflows. | ⬚ Pending | Medium | Evaluate Render vs AWS vs Azure vs Hetzner based on Finnish/EU requirements and cost |
+| BL-3 | **Admin Site — Session Monitoring** (moved from R7.0 SES7): Admin-only endpoints and UI to view active sessions per user, last activity timestamps, and device information. `getUserSessions()` + `getActiveSessionCount()` already exist in code but are not exposed. Belongs with the future admin dashboard (BL-1). | ⬚ Pending | Low | Implement together with BL-1 Admin Dashboard |
 
 ## Summary
 
-- **Release 1.0** (SSI Cup Automation): 37 requirements — 35 ✅, 2 on hold (35, 36)
-- **Release 2.0** (WordPress Integration): 9 requirements — 6 ✅, 1 on hold (41), 2 pending (39, 42)
+- **Release 1.0** (SSI Cup Automation): 37 requirements — 35 ✅, 2 ❌ WNI (35, 36)
+- **Release 2.0** (WordPress Integration): 9 requirements — 6 ✅, 1 on hold (41), 2 🚫 Superseded (39, 42)
 - **Release 3.0** (Scoring Application): 21 requirements — 20 ✅, 1 pending (SEC11)
 - **Release 3.1** (Data Integrity): 2 requirements — 2 pending (47, 48)
 - **Release 4.0** (Kupittaa Cup Registration Frontend): 25 requirements — 25 ✅
 - **Release 5.0** (SRA Training Staffing) — requirements in `sra-training-staffing-requirements.md`
-- **Release 6.0** (Match Management & UI Consolidation): 5 requirements — 1 ✅, 4 pending ➜ R7.6 (MG2–MG5)
-- **Release 7.0** (Authentication & Session Handling): 25 requirements — 19 ✅, 6 pending ➜ R7.6 (AUTH10, SES7, SEC1, SEC7, TEST1–5/7), 2 deferred (TEST6, TEST8)
+- **Release 6.0** (Match Management & UI Consolidation): 5 requirements — 5 ✅ (MG1–MG5 all implemented)
+- **Release 7.0** (Authentication & Session Handling): 25 requirements — 19 ✅, 5 pending ➜ R7.6 (AUTH10, SEC1, SEC7, TEST1–5/7), SES7 ➜ BL-3 Admin Site, 2 deferred (TEST6, TEST8)
 - **Release 7.1** (Management Availability): 1 requirement — 1 ✅
-- **Release 7.2** (Kupittaa Cup Management): 3 requirements — 2 ✅ (CUP2, CUP3), 1 📋 ➜ R7.6 (CUP1)
+- **Release 7.2** (Kupittaa Cup Management): 3 requirements — 3 ✅ (CUP1, CUP2, CUP3)
 - **Release 7.3** (Refactoring Analysis): 1 requirement — 1 ✅ (RFA1). 5 outdated docs removed
 - **Release 7.4** (Refactoring Implementation): 8 requirements — 8 ✅ (RFR1–RFR8)
 - **Release 7.4.1** (Authentication UX Hardening): 5 requirements — 5 ✅ (AUTH-UX1–AUTH-UX5)
