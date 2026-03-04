@@ -1,0 +1,88 @@
+name: Azure Deploy
+
+# Triggers after the CI / Deploy workflow completes successfully on main.
+# PRs continue to deploy to Render via pr-preview.yml and ci-deploy.yml.
+on:
+  workflow_run:
+    workflows: ["CI / Deploy"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy-azure:
+    runs-on: ubuntu-latest
+    # Only run when the upstream CI workflow succeeded
+    if: github.event.workflow_run.conclusion == 'success'
+
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: |
+            scoring-ui/package-lock.json
+            scoring-proxy/package-lock.json
+
+      # ── Build ─────────────────────────────────────────────────
+      - name: Install UI dependencies
+        run: npm ci
+        working-directory: scoring-ui
+
+      - name: Build UI
+        run: npm run build
+        working-directory: scoring-ui
+
+      - name: Install proxy dependencies (production only)
+        run: npm ci --omit=dev
+        working-directory: scoring-proxy
+
+      # ── Package ───────────────────────────────────────────────
+      # Structure: scoring-proxy/ + scoring-ui/dist/
+      # server.js resolves frontend via path.join(__dirname, '../scoring-ui/dist')
+      - name: Create deployment package
+        run: |
+          mkdir -p deploy/scoring-ui
+          cp -r scoring-proxy/. deploy/scoring-proxy/
+          cp -r scoring-ui/dist/. deploy/scoring-ui/dist/
+          cd deploy
+          zip -r ../deploy.zip . -x "*.git*"
+          echo "Package size: $(du -sh ../deploy.zip | cut -f1)"
+
+      # ── Deploy ────────────────────────────────────────────────
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ secrets.AZURE_APP_SERVICE_NAME }}
+          package: deploy.zip
+
+      - name: Verify deployment health
+        run: |
+          APP_URL="https://${{ secrets.AZURE_APP_SERVICE_NAME }}.azurewebsites.net/api/v1/"
+          echo "Waiting for App Service to warm up..."
+          sleep 30
+          for i in 1 2 3; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$APP_URL" || echo "000")
+            echo "Health check attempt $i: HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "App Service is healthy."
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "Warning: health check did not return 200 after 3 attempts. Check App Service logs."
+          exit 1
+
+      - name: Azure logout
+        if: always()
+        run: az logout
