@@ -877,6 +877,49 @@ export async function removeTenantMember(memberId) {
 }
 
 // ============================================================
+// SSI Discovered Disciplines (SSI-R3)
+// ============================================================
+
+export async function upsertSsiDiscoveredDisciplines(disciplines) {
+  if (!disciplines || disciplines.length === 0) return
+
+  const values = []
+  const params = []
+  let paramIdx = 1
+
+  for (const d of disciplines) {
+    values.push(`($${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++})`)
+    params.push(d.id, d.displayName, d.ssiCreateUrl, d.isCup ? true : false, d.ruleCode, d.description || null)
+  }
+
+  const queryStr = `
+    INSERT INTO ssi_discovered_disciplines (id, display_name, ssi_create_url, is_cup, rule_code, description)
+    VALUES ${values.join(', ')}
+    ON CONFLICT (id) DO UPDATE SET
+      display_name = EXCLUDED.display_name,
+      ssi_create_url = EXCLUDED.ssi_create_url,
+      is_cup = EXCLUDED.is_cup,
+      rule_code = EXCLUDED.rule_code,
+      description = EXCLUDED.description,
+      last_seen_at = NOW()
+  `
+  await query(queryStr, params)
+}
+
+export async function listSsiDiscoveredDisciplines() {
+  const { rows } = await query('SELECT * FROM ssi_discovered_disciplines ORDER BY display_name')
+  return rows.map(r => ({
+    id: r.id,
+    displayName: r.display_name,
+    ssiCreateUrl: r.ssi_create_url,
+    isCup: r.is_cup,
+    ruleCode: r.rule_code,
+    description: r.description,
+    lastSeenAt: r.last_seen_at
+  }))
+}
+
+// ============================================================
 // Tenant Invitations (DB)
 // ============================================================
 

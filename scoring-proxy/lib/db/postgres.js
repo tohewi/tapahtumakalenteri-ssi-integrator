@@ -307,6 +307,23 @@ export async function initPostgres() {
         await client.query('ALTER TABLE disciplines ADD COLUMN IF NOT EXISTS ssi_create_url TEXT')
       } catch { /* column already exists */ }
 
+      // M12: Create ssi_discovered_disciplines table for SSI-R3
+      try {
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS ssi_discovered_disciplines (
+            id            TEXT PRIMARY KEY,
+            display_name  TEXT NOT NULL,
+            ssi_create_url TEXT NOT NULL,
+            is_cup        BOOLEAN NOT NULL,
+            rule_code     TEXT NOT NULL,
+            description   TEXT,
+            last_seen_at  TIMESTAMPTZ DEFAULT NOW()
+          )
+        `)
+      } catch (err) {
+        log.warn('[postgres] M12 migration (ssi_discovered_disciplines):', err.message)
+      }
+
       // Optional unique constraints — may fail on existing data with duplicates.
       // App-level checks in createTenant/createAccountWithTenant still prevent new duplicates.
       try {

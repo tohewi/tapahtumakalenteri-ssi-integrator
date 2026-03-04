@@ -267,7 +267,15 @@ function makeTestApp({ signUpMax = 5, loginMax = 10 } = {}) {
     message: { error: 'Too many login attempts. Try again in 15 minutes.' },
   })
 
-  const platformRouter = createPlatformRouter({ platformSignUpLimiter, platformLoginLimiter })
+  const noopLimiter = (req, res, next) => next()
+
+  const platformRouter = createPlatformRouter({
+    platformSignUpLimiter,
+    platformLoginLimiter,
+    platformPasswordResetLimiter: noopLimiter,
+    platformMutationLimiter: noopLimiter,
+    platformSsiLimiter: noopLimiter,
+  })
   app.use('/api/v1/platform', platformRouter)
   app.use(errorHandler)
   return app
