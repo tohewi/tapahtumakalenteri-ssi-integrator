@@ -119,6 +119,11 @@ module appInsights 'br/public:avm/res/insights/component:0.4.1' = {
 
 // ── 3. PostgreSQL Flexible Server ────────────────────────────
 // AVM: https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/db-for-postgre-sql/flexible-server
+//
+// Microsoft Entra authentication only — password auth disabled.
+// App connects via UAMI token (same identity pattern as Redis).
+// administratorLogin/Password still required by the API at provisioning time
+// but cannot be used for authentication once passwordAuth is Disabled.
 
 module postgresql 'br/public:avm/res/db-for-postgre-sql/flexible-server:0.4.0' = {
   name: 'postgresqlDeployment'
@@ -134,6 +139,18 @@ module postgresql 'br/public:avm/res/db-for-postgre-sql/flexible-server:0.4.0' =
     highAvailability: 'Disabled'
     backupRetentionDays: 7
     geoRedundantBackup: 'Disabled'
+    // Entra ID only — UAMI is the Microsoft Entra administrator
+    activeDirectoryAuth: 'Enabled'
+    passwordAuth: 'Disabled'
+    tenantId: subscription().tenantId
+    administrators: [
+      {
+        principalType: 'ServicePrincipal'
+        principalName: uamiExisting.name
+        principalId: uamiExisting.properties.principalId
+        tenantId: subscription().tenantId
+      }
+    ]
     databases: [
       {
         name: dbName
@@ -204,7 +221,9 @@ resource redisAccessPolicyAssignment 'Microsoft.Cache/redis/accessPolicyAssignme
 // ── 5. Key Vault secrets — connection strings ─────────────────
 // Computed from deployed resources, stored in KV so App Service can reference them.
 
-var postgresUrl = 'postgresql://${postgresAdminLogin}:${postgresAdminPassword}@${postgresql.outputs.fqdn}:5432/${dbName}?sslmode=require'
+// Passwordless — app uses UAMI Entra ID token. UAMI display name is the PostgreSQL username.
+// No password in the URL; postgres.js detects empty password → token auth via @azure/identity.
+var postgresUrl = 'postgresql://${uamiExisting.name}@${postgresql.outputs.fqdn}:5432/${dbName}?sslmode=require'
 // No access key needed — Entra ID auth. redis.outputs.hostName used directly in app settings.
 
 // kvResource is declared in section 0 (existing ref from bootstrap.bicep)

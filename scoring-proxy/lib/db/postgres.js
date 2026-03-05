@@ -12,9 +12,13 @@
 // ============================================================
 
 import pg from 'pg'
+import { ManagedIdentityCredential } from '@azure/identity'
 import { log } from '../logger.js'
 
 const { Pool } = pg
+
+// Scope for Azure Database for PostgreSQL Flexible Server Entra ID tokens
+const PG_ENTRA_SCOPE = 'https://ossrdbms-aad.database.windows.net/.default'
 
 let pool = null
 
@@ -167,14 +171,40 @@ export async function initPostgres() {
   }
 
   try {
-    pool = new Pool({
-      connectionString: databaseUrl,
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
-      // Render Postgres requires SSL in production
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-    })
+    // Detect passwordless URL → Entra ID token auth (Azure UAMI).
+    // URL format: postgresql://<uami-name>@<host>:5432/<db>?sslmode=require
+    // pg v8 supports password as an async function — called on each new physical connection.
+    let parsed
+    try { parsed = new URL(databaseUrl) } catch { parsed = null }
+    const isEntraId = parsed && parsed.username && !parsed.password
+
+    if (isEntraId) {
+      const clientId = process.env.AZURE_CLIENT_ID
+      const credential = new ManagedIdentityCredential({ clientId })
+      log.info('[postgres] Using Entra ID token auth (UAMI)')
+      pool = new Pool({
+        host: parsed.hostname,
+        port: parseInt(parsed.port || '5432'),
+        user: decodeURIComponent(parsed.username),
+        database: parsed.pathname.slice(1),
+        password: async () => {
+          const token = await credential.getToken(PG_ENTRA_SCOPE)
+          return token.token
+        },
+        ssl: { rejectUnauthorized: false },
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 10000,
+      })
+    } else {
+      pool = new Pool({
+        connectionString: databaseUrl,
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 5000,
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      })
+    }
 
     // Verify connection
     const client = await pool.connect()
