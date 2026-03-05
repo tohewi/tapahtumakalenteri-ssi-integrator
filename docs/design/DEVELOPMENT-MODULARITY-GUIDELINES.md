@@ -1,8 +1,8 @@
 # Development Modularity Guidelines
 
-**Document Version:** 1.0
-**Date:** 2026-02-11
-**Status:** Approved
+**Document Version:** 1.1
+**Date:** 2026-03-05
+**Status:** Approved (updated after R80 platform feature additions)
 **Purpose:** Reduce merge conflicts and improve parallel development efficiency
 
 ---
@@ -11,11 +11,16 @@
 
 This document provides guidelines for modular development to minimize merge conflicts when multiple feature branches modify the codebase simultaneously. The goal is to enable efficient parallel development while maintaining code quality.
 
-**Key Findings:**
-- ✅ **Server routes modularized** - Already split into separate route files
-- ⚠️ **Large shared files** remain potential conflict hotspots (1060-line SSI client, 809-line ManagePage, 711-line App.jsx)
-- ⚠️ **Documentation** organized but needs modularity guidelines
-- ⚠️ **No formal process** for modifying shared components
+**Key Findings (v1.1 update, 2026-03-05):**
+- ✅ **Server routes modularized** - Scoring, management, staffing, registration, platform all split
+- ✅ **SSI client domain-split** - `ssi-core/` now has graphql.js, participants.js, management.js, scoring.js, event-creation.js, seed-import.js
+- ✅ **Multiple frontend API clients** - platform-api.js, register-api.js, staffing-api.js extracted from api.js
+- ✅ **ManagePage partial extraction** - manage/ sub-components created
+- 🔴 **`routes/platform.js` at 2550 lines** - new critical hotspot, not in original guidelines
+- 🔴 **`TenantDetailPage.jsx` at 1119 lines** - largest component, well over limit
+- ⚠️ **`client.js` grown to 1768 lines** (was 1060) - needs extraction of new functions to lib/services/
+- ⚠️ **`lib/services/` layer not in guidelines** - new patterns (event-builders, service files) need documenting
+- ⚠️ **`ManagePage.jsx` still 689 lines** - partial extraction done but not complete
 
 **Recommended Actions:**
 1. Follow the modularity guidelines below when adding new features
@@ -45,12 +50,16 @@ Based on codebase analysis, these files are most likely to cause merge conflicts
 
 | File | Lines | Risk Level | Why | Mitigation |
 |------|-------|------------|-----|------------|
-| **scoring-proxy/lib/ssi-core/client.js** | 1,060 | 🔴 CRITICAL | Core integration used by all routes | Follow [Shared Component Process](#shared-component-modification-process) |
-| **scoring-ui/src/App.jsx** | 711 | 🔴 HIGH | Central state management, all features touch this | Extract feature-specific logic to separate modules |
-| **scoring-ui/src/components/ManagePage.jsx** | 809 | 🔴 HIGH | Multiple admin features in one component | Extract sub-features to separate components |
-| **scoring-proxy/routes/management.js** | 693 | 🟡 MEDIUM | Multiple admin endpoints | Split by feature domain (see guidelines below) |
-| **scoring-ui/src/api.js** | 247 | 🟡 MEDIUM | All API client methods | Add methods at end of file, use clear naming |
-| **scoring-proxy/server.js** | 433 | 🟢 LOW | Mostly configuration, routes already split | Minimal changes needed |
+| **scoring-proxy/routes/platform.js** | 2,550 | 🔴 CRITICAL | Entire platform subsystem in one route file | Split by domain: accounts.js, tenants.js, members.js, events.js, mfa.js |
+| **scoring-ui/src/components/platform/TenantDetailPage.jsx** | 1,119 | 🔴 CRITICAL | All tenant management UI in one component | Extract tab-based sub-components |
+| **scoring-proxy/lib/ssi-core/client.js** | 1,768 | 🔴 HIGH | Core integration, grown 700 lines since v1.0 | New functions → lib/services/ not client.js |
+| **scoring-ui/src/App.jsx** | 792 | 🔴 HIGH | Central state management, all features touch this | Extract feature-specific logic to separate modules |
+| **scoring-ui/src/components/ManagePage.jsx** | 689 | 🟡 MEDIUM | Large but partially extracted to manage/ | Complete extraction; manage/ sub-components exist |
+| **scoring-ui/src/components/platform/SchedulePage.jsx** | 606 | 🟡 MEDIUM | Complex event scheduling UI | Extract sub-components for calendar vs list views |
+| **scoring-proxy/lib/services/event-creation-service.js** | 673 | 🟡 MEDIUM | Multi-step SSI event creation orchestration | Split date/form helpers to separate utility files |
+| **scoring-ui/src/components/TabletScoringView.jsx** | 600 | 🟡 MEDIUM | Full tablet scoring UI in one component | Extract scoring form, results panel |
+| **scoring-proxy/routes/management.js** | 550 | 🟡 MEDIUM | Multiple admin endpoints | Split by feature domain (see guidelines below) |
+| **scoring-proxy/server.js** | ~350 | 🟢 LOW | Mostly configuration, routes already split | Minimal changes needed |
 
 ### Conflict Patterns Observed
 
@@ -118,14 +127,24 @@ router.get('/pending-shooters', requireAuth('manage'), async (req, res) => {
 Large components should be split by feature area:
 
 ```javascript
-// scoring-ui/src/components/ManagePage.jsx (current: 809 lines)
+// scoring-ui/src/components/ManagePage.jsx (689 lines — partial extraction done)
 
-// RECOMMENDED STRUCTURE:
-// ManagePage.jsx (main orchestrator, 150-200 lines)
-// ├── ManageCupOverview.jsx (cup list and selection)
-// ├── ManagePendingShooters.jsx (pending shooter approval)
-// ├── ManageSquadAssignment.jsx (squad assignment UI)
-// └── ManageParticipantActions.jsx (add/remove participants)
+// CURRENT STATE: manage/ sub-components exist but ManagePage.jsx is still too large.
+// REMAINING WORK: continue extracting sections into manage/ directory.
+
+// RECOMMENDED STRUCTURE for NEW large pages (e.g. TenantDetailPage.jsx at 1119 lines):
+// TenantDetailPage.jsx (main orchestrator, 150-200 lines)
+// ├── TenantMembersTab.jsx (member management)
+// ├── TenantSsiCredentialsTab.jsx (SSI integration settings)
+// ├── TenantEventsTab.jsx (event calendar / schedule)
+// └── TenantDisciplinesTab.jsx (discipline configuration)
+```
+
+**Shared hooks pattern:** When the same auth+load pattern appears in multiple page components, extract it to `src/hooks/`.
+
+```javascript
+// src/hooks/useAuthenticatedPage.js — already exists
+// Extract more shared patterns here, not inline in page components.
 ```
 
 **Guidelines:**
@@ -139,6 +158,17 @@ Large components should be split by feature area:
 **Goal:** Reduce the number of developers touching the same files.
 
 #### API Client Pattern
+
+Multiple frontend API client files now exist — use the right one:
+
+| File | Purpose |
+|------|---------|
+| `api.js` | SSI scoring/manage operations (cups, matches, squads, participants) |
+| `platform-api.js` | Platform operations (accounts, tenants, members, MFA, invitations) |
+| `register-api.js` | Public self-registration API |
+| `staffing-api.js` | Staffing signup, resign, sync |
+
+**Rule:** If adding more than 3 methods for a new domain, create `[domain]-api.js` rather than adding to an existing file.
 
 When adding new API methods, use a consistent pattern:
 
@@ -175,35 +205,33 @@ export async function assignSquad(participantId, squadId) {
 
 #### SSI Client Extensions
 
-When adding new SSI operations, follow this pattern:
+⚠️ **`client.js` is frozen for new additions.** It is 1,768 lines and must not grow further.
+
+When adding new SSI raw HTTP operations:
+1. **Add to the appropriate `lib/ssi-core/` domain file** (graphql.js, participants.js, management.js, scoring.js) or create a new domain file
+2. **Add the business logic wrapper to `lib/services/`** — never put multi-step orchestration in ssi-core
 
 ```javascript
-// scoring-proxy/lib/ssi-core/client.js
-
-// ============================================================
-// SECTION: Cup participant management
-// ============================================================
-
-export async function ssiFindAndApproveCupParticipant(...) {
-  // Existing function
+// CORRECT: raw HTTP in ssi-core domain file
+// lib/ssi-core/participants.js  ← re-exports from client.js OR new domain file
+export async function ssiGetParticipantEmail(participantId, cookies) {
+  // Single-purpose HTTP scrape
 }
 
-export async function ssiFindAndDeleteCupParticipant(...) {
-  // Existing function
+// CORRECT: business logic in lib/services/
+// lib/services/cup-manage.js
+import { ssiGetParticipantEmail } from '../ssi-core/participants.js'
+export async function resolveParticipantIdentity(cupId, name, cookies) {
+  // Multi-step orchestration using ssi-core primitives
 }
 
-// ADD NEW FUNCTIONS HERE (at end of section)
-export async function ssiFindAndSuspendCupParticipant(...) {
-  // New function added by feature branch
-}
+// WRONG: new function appended to client.js
+// ← Do not add here anymore
 ```
 
-**Guidelines:**
-- Add new functions at the **end of their section**
-- Use consistent naming: `ssi[Action][Entity]` (e.g., `ssiUpdateMatchParticipant`)
-- Include comprehensive JSDoc with parameter descriptions
-- Keep functions focused (single responsibility)
-- If adding complex logic, consider extracting to a helper function
+**Naming conventions:**
+- `ssi-core/` functions: `ssi[Action][Entity]` (e.g., `ssiGetParticipantStatus`) — raw HTTP only
+- `lib/services/` functions: plain descriptive names (e.g., `resolveParticipant`, `createCupWithMatches`)
 
 ### Principle 3: Configuration Over Code
 
@@ -251,18 +279,20 @@ When adding a new feature:
 1. **Backend Route** (new endpoint or new file if substantial)
    - Add route handler in appropriate route file
    - Add to correct section with clear comments
+   - If route file exceeds 400 lines, split off a new `routes/[domain]-[subdomain].js`
 
 2. **SSI Integration** (if needed)
-   - Add new SSI function at end of appropriate section in `client.js`
-   - Use consistent naming and documentation
+   - Raw HTTP: add to appropriate `lib/ssi-core/` domain file (NOT client.js)
+   - Business logic: add to `lib/services/[domain].js`
 
 3. **API Client** (frontend)
-   - Add API method at end of appropriate section in `api.js`
-   - Use clear method names that match backend endpoints
+   - Add API method to the correct `[domain]-api.js` file
+   - If no domain file exists and you're adding 3+ methods, create one
 
 4. **UI Component** (frontend)
-   - Create new component file if feature is substantial
-   - Or add to existing component in appropriate section
+   - Create new component file if feature is substantial (>150 lines)
+   - Shared auth/load patterns → `src/hooks/`
+   - Sub-components of a page → `components/[pagename]/` directory
 
 5. **Documentation**
    - Add to appropriate section in existing docs
@@ -272,16 +302,17 @@ When adding a new feature:
 
 ```
 Backend:
-├── routes/management.js (add POST /bulk-import at end of "Participant management" section)
-├── lib/ssi-core/client.js (add ssiBulkImportShooters at end of "Bulk operations" section)
+├── routes/management.js (add POST /bulk-import section)
+├── lib/ssi-core/participants.js (add ssiBulkSearchParticipants — raw HTTP only)
+├── lib/services/bulk-import-service.js (NEW FILE — orchestration logic)
 
 Frontend:
 ├── api.js (add bulkImportShooters at end of "Management API" section)
-├── components/ManageBulkImport.jsx (NEW FILE - separate component)
+├── components/manage/ManageBulkImport.jsx (NEW FILE in manage/ sub-dir)
 ├── components/ManagePage.jsx (import and render ManageBulkImport)
 
 Documentation:
-├── docs/manage-page-design.md (add "Bulk Import" section at end)
+├── docs/design/manage-page-design.md (add "Bulk Import" section at end)
 ```
 
 ---
@@ -433,7 +464,9 @@ docs/features/management/
 | SSI client | 300 lines | 500 lines per section | Split into multiple modules |
 | Documentation | 300 lines | 500 lines | Split into topic-specific docs |
 
-**Note:** `scoring-proxy/lib/ssi-core/client.js` (1,060 lines) is an exception due to its comprehensive nature. Future additions should be carefully considered, and alternatives like separate utility modules should be evaluated.
+**Note:** `scoring-proxy/lib/ssi-core/client.js` (1,768 lines as of v1.1) is no longer an acceptable exception — it has grown 700 lines since v1.0. **New SSI operations must go into `lib/services/` (business logic) or new `lib/ssi-core/*.js` domain files (raw HTTP operations), not into client.js.** The existing content stays to preserve stability; new additions are prohibited in this file.
+
+**`lib/services/` file guidance:** Service files (e.g. `event-creation-service.js`, `cup-manage.js`) should target 300 lines and must not exceed 500 lines. When a service file exceeds 400 lines, extract helper functions to a `lib/services/helpers/` module or split by operation type (e.g. `event-creation-service.js` → `event-creation-service.js` + `event-deletion-service.js`).
 
 ### Section Organization
 
@@ -790,9 +823,11 @@ Track these metrics to evaluate modularity improvements:
 
 - [Branching Strategy](./BRANCHING-STRATEGY.md) - Git workflow and PR process
 - [PR Preview Deployments](./PR-PREVIEW-DEPLOYMENTS.md) - Preview environment setup
-- [AI Agent Guidelines](./ai-agent-guidelines.md) - Token optimization for AI development
-- [Refactoring Plan](./refactoring-plan.md) - Long-term architectural improvements
+- [Agent Instructions](../../AGENTS.md) - Cascade and Copilot agent guidelines (canonical)
 - [Developer Guide](./developer-guide.md) - Setup and development instructions
+- [SSI GraphQL Migration Analysis](./r7.9-graphql-migration-analysis.md) - Web scraping vs GraphQL audit
+- [SSI Dual Approach](./ssi-dual-approach-graphql-webscraping.md) - Original GraphQL/scraping architecture
+- [Architecture Review](./architecture-review.md) - Architecture review and roadmap
 
 ---
 
@@ -815,7 +850,7 @@ Following these modularity guidelines will:
 
 **Document Metadata:**
 - Author: Claude (AI Agent)
-- Version: 1.0
-- Last Updated: 2026-02-11
-- Review Status: Ready for Team Review
-- Related Issue: Development modularity
+- Version: 1.1
+- Last Updated: 2026-03-05
+- Review Status: Updated — reflects R80 platform additions
+- Changes in v1.1: Updated conflict hotspot table (platform.js, TenantDetailPage.jsx added); client.js frozen policy; lib/services/ guidance; multi-API-client pattern; corrected stale doc references
