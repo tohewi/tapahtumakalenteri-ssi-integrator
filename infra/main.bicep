@@ -38,8 +38,8 @@ param postgresAdminLogin string = 'pgadmin'
 @secure()
 param postgresAdminPassword string
 
-@description('App Service Plan SKU. P1v3 recommended for production (Premium v3, different capacity pool).')
-param appServicePlanSku string = 'P1v3'
+@description('App Service Plan SKU. F1=Free (60min/day CPU, no alwaysOn). B1=Basic (~$12/mo). P1v3=Premium (production).')
+param appServicePlanSku string = 'F1'
 
 @description('PostgreSQL Flexible Server compute SKU.')
 param postgresSkuName string = 'Standard_B2ms'
@@ -259,17 +259,23 @@ resource secretResend 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
 // ── 7. App Service Plan ───────────────────────────────────────
 // AVM: https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/web/serverfarm
 
-module appServicePlan 'br/public:avm/res/web/serverfarm:0.4.1' = {
-  name: 'appServicePlanDeployment'
-  params: {
-    name: aspName
-    location: location
-    skuName: appServicePlanSku
-    reserved: true  // Required for Linux
-    tags: {
-      environment: environmentName
-      managedBy: 'bicep-avm'
-    }
+// Direct resource (not AVM module) to control capacity=1 and zoneRedundant=false.
+// AVM web/serverfarm defaults to capacity>1 which is incompatible with F1/B1 SKUs.
+resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
+  name: aspName
+  location: location
+  sku: {
+    name: appServicePlanSku
+    capacity: 1
+  }
+  kind: 'linux'
+  properties: {
+    reserved: true
+    zoneRedundant: false
+  }
+  tags: {
+    environment: environmentName
+    managedBy: 'bicep'
   }
 }
 
@@ -291,14 +297,15 @@ module appService 'br/public:avm/res/web/site:0.12.0' = {
     name: appSvcName
     location: location
     kind: 'app,linux'
-    serverFarmResourceId: appServicePlan.outputs.resourceId
+    serverFarmResourceId: appServicePlan.id
     managedIdentities: {
       userAssignedResourceIds: [uamiExisting.id]
     }
     siteConfig: {
       linuxFxVersion: 'NODE|22-lts'
       appCommandLine: 'node scoring-proxy/server.js'
-      alwaysOn: true
+      // alwaysOn requires Basic tier or higher; disable on Free/Shared (F1/D1)
+      alwaysOn: (appServicePlanSku != 'F1' && appServicePlanSku != 'D1')
       minTlsVersion: '1.2'
       http20Enabled: true
       ftpsState: 'Disabled'
