@@ -37,10 +37,11 @@ function legacyApiAlias(req, res, next) {
   next()
 }
 
-// Trust exactly one reverse proxy (Render). Without this, req.ip is always
-// the Render proxy IP, making all rate limiters share a single counter.
-// This applies to both production and preview environments on Render.
-if (IS_RENDER) app.set('trust proxy', 1)
+// Trust exactly one reverse proxy hop. Required on Render and Azure App Service,
+// both of which terminate TLS and inject X-Forwarded-For before forwarding to Node.
+// Without this express-rate-limit cannot identify real client IPs.
+const IS_AZURE = !!process.env.WEBSITE_SITE_NAME // Azure App Service sets this
+if (IS_RENDER || IS_AZURE) app.set('trust proxy', 1)
 
 // ============================================================
 // Security middleware

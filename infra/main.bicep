@@ -315,6 +315,10 @@ module appService 'br/public:avm/res/web/site:0.12.0' = {
     managedIdentities: {
       userAssignedResourceIds: [uamiExisting.id]
     }
+    // CRITICAL: tells App Service which identity to use for KV reference resolution.
+    // Without this Azure defaults to SystemAssigned (which doesn't exist here),
+    // leaving all @Microsoft.KeyVault(...) app settings as unresolved literal strings.
+    keyVaultAccessIdentityResourceId: uamiExisting.id
     siteConfig: {
       linuxFxVersion: 'NODE|22-lts'
       appCommandLine: 'node scoring-proxy/server.js'
