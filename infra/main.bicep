@@ -281,7 +281,9 @@ module appServicePlan 'br/public:avm/res/web/serverfarm:0.4.1' = {
 //   scoring-proxy/ (Express server, __dirname = .../scoring-proxy)
 //   scoring-ui/dist/ (static frontend, resolved via ../scoring-ui/dist)
 
-var kvRef = 'VaultName=${kvName}'
+// ClientId is required when using a user-assigned managed identity for KV reference resolution.
+// Without it, Azure App Service tries the (non-existent) system-assigned identity and fails.
+var kvRef = 'VaultName=${kvName};ClientId=${uamiExisting.properties.clientId}'
 
 module appService 'br/public:avm/res/web/site:0.12.0' = {
   name: 'appServiceDeployment'
