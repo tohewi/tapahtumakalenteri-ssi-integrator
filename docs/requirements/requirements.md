@@ -545,14 +545,14 @@ Patch release to address critical file size violations, logging discipline regre
 
 | # | Requirement | Status | File |
 |---|-------------|--------|------|
-| LOG-1 | **Fix `console.warn` in rate-limit logger** (`server.js` lines 77, 82, 84): Replace `console.warn(...)` calls in `logRateLimit()` with `log.warn(...)`. This is a regression from the logging discipline enforced in ARCH1 (R7.5) — route files were fixed but `server.js` itself was missed. `console.warn` bypasses `LOG_LEVEL` control | ⬚ Pending | `server.js` |
+| LOG-1 | **Fix `console.warn` in rate-limit logger** (`server.js` lines 77, 82, 84): Replace `console.warn(...)` calls in `logRateLimit()` with `log.warn(...)`. This is a regression from the logging discipline enforced in ARCH1 (R7.5) — route files were fixed but `server.js` itself was missed. `console.warn` bypasses `LOG_LEVEL` control | ✅ Implemented | `server.js` |
 
 ### Code Quality
 
 | # | Requirement | Status |
 |---|-------------|--------|
 | COD-1 | **Deduplicate `token_auth` mutation in `getAdminSession()`** (`server.js`): The `token_auth` GraphQL mutation string is hardcoded 3 times in `getAdminSession()`. Refactor to call `ssiGraphQLAuth(credentials)` from `lib/ssi-core/graphql.js` instead. This eliminates the risk of mutation string drift and aligns with the established GraphQL auth pattern | ⬚ Pending |
-| COD-2 | **Fix cross-boundary import in `platform.js`**: `platform.js` imports `ssiGetMatchOfficials` directly from `lib/ssi-core/client.js` (line 21). This bypasses the domain module boundary. Change to import from `lib/ssi-core/management.js`, which is the correct domain module for management operations | ⬚ Pending |
+| COD-2 | **Fix cross-boundary import in `platform.js`**: `platform.js` imports `ssiGetMatchOfficials` directly from `lib/ssi-core/client.js` (line 21). This bypasses the domain module boundary. Change to import from `lib/ssi-core/management.js`, which is the correct domain module for management operations | ✅ Implemented |
 | COD-3 | **Migrate `StaffingPage` and `App.jsx` to `useAuthenticatedPage` hook**: Both still use duplicated auth boilerplate (5+ state variables + login/restore/expiry logic). Architecture §2.3 identified this; §3.3 specified the fix. `useAuthenticatedPage` already exists and is used by ManagePage, ReportPage, SummaryReportPage. Eliminate ~50 lines of boilerplate per page | ⬚ Pending |
 | COD-4 | **Extract platform input validation to service layer**: `validateSignUp()` and `validateTenantCreate()` are inline in `platform.js`. Move to a new `lib/services/platform-validation.js` module. All validation functions across the platform feature should live there, not in the route file | ⬚ Pending |
 
@@ -566,7 +566,7 @@ Patch release to address critical file size violations, logging discipline regre
 | TST-4 | **Platform route tests — Events and Staffing**: Add tests for scheduled event CRUD, SSI import, event execute (mock SSI), event cancel, staffing needs, signup/withdraw, leaderboard. Target: ≥15 tests | ⬚ Pending | 0 tests |
 | TST-5 | **Seed import tests**: Add unit tests for `seed-import.js` using GraphQL response fixtures. Test event search query building, structure import parsing, form field capture HTML parsing. Target: ≥8 tests | ⬚ Pending | 0 tests |
 | TST-6 | **Event builder tests**: Add unit tests for `nordic-cup-graphql-builder.js`, `sra-graphql-builder.js`, and `legacy-web-builder.js` with mocked SSI responses. Test form field application, schedule generation, error handling. Target: ≥10 tests | ⬚ Pending | 0 tests |
-| TST-7 | **Fix time-dependent test** (`shared.test.js` line 379): `isToday('2026-02-14T23:00:00Z')` will fail once the date passes. Replace with `vi.useFakeTimers()` to pin the date in the test. Architecture-review.md §4.4 flagged this — it has not been fixed | ⬚ Pending | CI flakiness |
+| TST-7 | **Fix time-dependent test** (`shared.test.js` line 379): `isToday('2026-02-14T23:00:00Z')` will fail once the date passes. Replace with `vi.useFakeTimers()` to pin the date in the test. Architecture-review.md §4.4 flagged this — it has not been fixed | ✅ Pre-resolved | Already uses `global.Date` mock correctly — no fix needed |
 | TST-8 | **Scoring, reports, staffing route tests**: Add route-level tests for scoring endpoints, report generation endpoints, and staffing endpoints. Architecture roadmap Phase 6 (§4.2 items 2–4). Target: ≥10 tests per module | ⬚ Pending | 0 tests |
 
 ### Architecture Pattern
@@ -721,7 +721,7 @@ These requirements are planned for a future release, likely before billing integ
 - **Release 8.0** (Platform Auth & Tenancy): 21 requirements — 21 ✅ (PA1–PA21)
 - **Release 8.1** (Match Management Platform): 8 requirements — 5 ✅ (MP1, MP2, MP4, MP10, MP12), 3 design phase (MP3, MP8, MP9). **MP12 — SSI Event Import**: Search existing SSI events via GraphQL (name, sport, date range, region filters) and import selected events as local scheduled_events with `ssi_created` status. Backend: `ssiSearchEvents` in seed-import.js, `importSsiEvent` in platform-store.js, `/ssi-search` + `/ssi-import` API routes. Frontend: `ImportSsiEventsModal` component in SchedulePage with search form, results table with checkboxes, and batch import action. Schema: `template_id` made nullable, `event_name` column added to `scheduled_events` for imported events without templates
 - **Release 8.2** (Platform Authorization & Workflows): 5 requirements — 5 ✅ (ACCT1, RBAC1, MP5, MP6, MP7)
-- **Release 8.2.1** (Architecture Technical Debt — Patch): 22 requirements — 0 ✅, 22 ⬚ pending (MOD-1–8, LOG-1, COD-1–4, TST-1–8, ARC-1–2)
+- **Release 8.2.1** (Architecture Technical Debt — Patch): 22 requirements — 3 ✅ (LOG-1, COD-2, TST-7), 19 ⬚ pending (MOD-1–8, COD-1, COD-3–4, TST-1–6, TST-8, ARC-1–2)
 - **Release 8.3** (Calendar Integration): 1 requirement — 0 ✅, 1 design phase (MP11)
 - **Release 9.0** (Event Staffing): Core platform staffing capabilities — **All Implemented ✅**
   - **Data Model**: `event_staffing_needs` and `staff_signups` tables linked to `scheduled_events` and `accounts`. Auto-populated from template rules.
