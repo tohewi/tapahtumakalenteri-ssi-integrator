@@ -59,6 +59,9 @@ param budgetAmountEur int = 100
 @description('Email address for budget breach notifications.')
 param budgetAlertEmail string = 'tohewi@gmail.com'
 
+@description('Verified sender address configured in Resend (e.g. noreply@yourdomain.com).')
+param emailFrom string = ''
+
 // ── Computed names ───────────────────────────────────────────
 
 var kvName     = 'kv-${appName}-${environmentName}'
@@ -239,54 +242,38 @@ resource secretDatabaseUrl 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
 // RedisUrl KV secret removed — Entra ID auth requires no password;
 // REDIS_URL is set directly in app settings as passwordless rediss:// URL.
 
-// Placeholder secrets — operator must populate these before the app can start.
-// The App Service will report unhealthy until all KV references resolve.
-resource secretSessionSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+// Operator-managed secrets — these must be populated in Key Vault manually
+// (or via infra/bootstrap.bicep) before running this template.
+// This template only READS them (existing); it never overwrites them.
+// Use: az keyvault secret set --vault-name <kv> --name <name> --value <value>
+resource secretSessionSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' existing = {
   parent: kvResource
   name: 'SessionSecret'
-  properties: {
-    value: 'REPLACE_ME_64_char_random_hex'
-  }
 }
 
-resource secretPlatformKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource secretPlatformKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' existing = {
   parent: kvResource
   name: 'PlatformCredentialsKey'
-  properties: {
-    value: 'REPLACE_ME_32_byte_base64_key'
-  }
 }
 
-resource secretMfaKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource secretMfaKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' existing = {
   parent: kvResource
   name: 'MfaSecretKey'
-  properties: {
-    value: 'REPLACE_ME_32_byte_base64_key'
-  }
 }
 
-resource secretSsiEmail 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource secretSsiEmail 'Microsoft.KeyVault/vaults/secrets@2023-07-01' existing = {
   parent: kvResource
   name: 'SsiAdminEmail'
-  properties: {
-    value: 'REPLACE_ME'
-  }
 }
 
-resource secretSsiPassword 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource secretSsiPassword 'Microsoft.KeyVault/vaults/secrets@2023-07-01' existing = {
   parent: kvResource
   name: 'SsiAdminPassword'
-  properties: {
-    value: 'REPLACE_ME'
-  }
 }
 
-resource secretResend 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource secretResend 'Microsoft.KeyVault/vaults/secrets@2023-07-01' existing = {
   parent: kvResource
   name: 'ResendApiKey'
-  properties: {
-    value: 'REPLACE_ME'
-  }
 }
 
 // ── 7. App Service Plan ───────────────────────────────────────
@@ -367,6 +354,8 @@ module appService 'br/public:avm/res/web/site:0.12.0' = {
       SSI_ADMIN_EMAIL: '@Microsoft.KeyVault(${kvRef};SecretName=SsiAdminEmail)'
       SSI_ADMIN_PASSWORD: '@Microsoft.KeyVault(${kvRef};SecretName=SsiAdminPassword)'
       RESEND_API_KEY: '@Microsoft.KeyVault(${kvRef};SecretName=ResendApiKey)'
+      // Sender email for Resend — set via --parameters emailFrom=noreply@yourdomain.com
+      EMAIL_FROM: !empty(emailFrom) ? emailFrom : 'REPLACE_WITH_VERIFIED_RESEND_SENDER'
     }
     httpsOnly: true
     tags: {
