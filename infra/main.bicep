@@ -147,7 +147,7 @@ module postgresql 'br/public:avm/res/db-for-postgre-sql/flexible-server:0.4.0' =
       {
         principalType: 'ServicePrincipal'
         principalName: uamiExisting.name
-        principalId: uamiExisting.properties.principalId
+        objectId: uamiExisting.properties.principalId
         tenantId: subscription().tenantId
       }
     ]
