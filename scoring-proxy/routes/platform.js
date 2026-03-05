@@ -17,8 +17,7 @@ import { sendEmail } from '../lib/email.js'
 import { ssiFetchEventStructure, ssiSearchEvents } from '../lib/ssi-core/seed-import.js'
 import { createSsiEvent, deleteSsiEvent } from '../lib/services/event-creation-service.js'
 import { ssiRegisterToTrainerSquad, ssiDeleteMatchParticipant, ssiSetParticipantSquad, ssiFindParticipantInEvent } from '../lib/ssi-core/participants.js'
-import { ssiGetMatchGroupId, ssiAddToMatchManagement, ssiRemoveFromMatchManagement } from '../lib/ssi-core/management.js'
-import { ssiGetMatchOfficials } from '../lib/ssi-core/client.js'
+import { ssiGetMatchGroupId, ssiAddToMatchManagement, ssiRemoveFromMatchManagement, ssiGetMatchOfficials } from '../lib/ssi-core/management.js'
 import { generateMfaSetup, verifyTotpCode, hashRecoveryCodes, verifyRecoveryCode } from '../lib/services/mfa-service.js'
 import {
   createAccountWithTenant,
