@@ -51,7 +51,7 @@ var rbacAdminRoleId        = 'f58310d9-a9f6-439a-9e8d-f62e7b41a168'  // Role Bas
 
 // ABAC condition: limits RBAC Admin to assigning ONLY Key Vault Secrets User.
 // Prevents privilege escalation from CI/CD.
-var rbacAdminCondition = '(!(ActionMatches{''Microsoft.Authorization/roleAssignments/write''}) OR @Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {4633458b-17de-408a-b874-0445c86b69e6}) AND (!(ActionMatches{''Microsoft.Authorization/roleAssignments/delete''}) OR @Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {4633458b-17de-408a-b874-0445c86b69e6})'
+var rbacAdminCondition = '''(!(ActionMatches{'Microsoft.Authorization/roleAssignments/write'}) OR @Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {4633458b-17de-408a-b874-0445c86b69e6}) AND (!(ActionMatches{'Microsoft.Authorization/roleAssignments/delete'}) OR @Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {4633458b-17de-408a-b874-0445c86b69e6})'''
 
 // ── 1. App Runtime UAMI ──────────────────────────────────────
 // Used by App Service to authenticate against Key Vault at runtime.
