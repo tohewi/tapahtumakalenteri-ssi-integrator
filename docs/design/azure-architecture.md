@@ -112,7 +112,15 @@ The App Service uses a **system-assigned managed identity** with the
 ## Future migration path
 
 1. **Finland South** (Q1 2027) — redeploy Bicep with `location = 'finlandsouth'`
-2. **VNet integration** — when moving to P-tier, add VNet, private endpoints for PostgreSQL + Redis + Key Vault
-3. **Zone-redundant PostgreSQL** — enable HA with standby in different zone
-4. **Azure Front Door** — CDN + WAF for edge caching and DDoS protection
-5. **Admin site (BL-1)** — separate App Service with IP restriction via Access Restrictions
+2. **Azure Managed Redis** (by Sep 30, 2028 — Azure Cache for Redis retirement)
+   - Replace `avm/res/cache/redis` with `avm/res/cache/redis-enterprise`
+   - **Breaking change:** Azure Managed Redis defaults to Entra ID auth (no access keys).
+     App code must switch from `REDIS_URL` password auth to managed identity token auth
+     (e.g., `@azure/identity` + `ioredis` with token provider).
+   - Smallest SKU: `Balanced_B0`. Pricing reportedly increased in 2026 — compare with
+     Azure Cache for Redis Basic C1 (~€16/mo) before migrating.
+   - Reassess cost and tooling readiness in 2027; hard deadline Sep 2028.
+3. **VNet integration** — when moving to P-tier, add VNet, private endpoints for PostgreSQL + Redis + Key Vault
+4. **Zone-redundant PostgreSQL** — enable HA with standby in different zone
+5. **Azure Front Door** — CDN + WAF for edge caching and DDoS protection
+6. **Admin site (BL-1)** — separate App Service with IP restriction via Access Restrictions

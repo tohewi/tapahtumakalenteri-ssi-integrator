@@ -164,6 +164,13 @@ module postgresql 'br/public:avm/res/db-for-postgre-sql/flexible-server:0.4.0' =
 
 // ── 4. Azure Cache for Redis ─────────────────────────────────
 // AVM: https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/cache/redis
+//
+// RETIREMENT NOTICE: Azure Cache for Redis retires September 30, 2028.
+// Migration path: avm/res/cache/redis-enterprise (Azure Managed Redis).
+// Breaking change on migration: Azure Managed Redis defaults to Entra ID auth
+// (no access keys) — app code must switch from REDIS_URL password auth to
+// managed identity token auth. Reassess in 2027.
+// See: https://aka.ms/AzureCacheForRedisRetirement
 
 module redis 'br/public:avm/res/cache/redis:0.4.0' = {
   name: 'redisDeployment'
