@@ -13,6 +13,9 @@ test-harness/send-*.mjs
 scripts-graphql/schema-output.json
 scripts-graphql/*.raw.html
 
+# Compiled Bicep ARM template (build artifact — source is infra/main.bicep)
+infra/main.json
+
 # PowerShell module cache
 *.psm1.cache
 
