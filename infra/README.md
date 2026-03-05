@@ -173,6 +173,11 @@ az deployment group create \
 
 Bicep is idempotent — re-running only applies changes (no downtime for unchanged resources).
 
+> **swedencentral capacity note:** Basic (B1/B2) and Standard (S1) tiers consistently return
+> "No available instances" in swedencentral for this subscription. Use `appServicePlanSku=P1v3`
+> if B1 fails. Try B1 again periodically — capacity frees up over time. F1 (free) works but
+> has a 60 min/day CPU quota (sufficient for light testing; quota resets daily at midnight UTC).
+
 ---
 
 ## GitHub Actions secrets required

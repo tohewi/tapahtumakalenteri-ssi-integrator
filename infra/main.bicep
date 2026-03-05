@@ -38,8 +38,8 @@ param postgresAdminLogin string = 'pgadmin'
 @secure()
 param postgresAdminPassword string
 
-@description('App Service Plan SKU. F1=Free (60min/day CPU, no alwaysOn). B1=Basic (~$12/mo). P1v3=Premium (production).')
-param appServicePlanSku string = 'F1'
+@description('App Service Plan SKU. B1=Basic (~€13/mo, target). P1v3=Premium (~€130/mo, use if B1 unavailable in region). F1=Free (60min CPU/day limit, dev only).')
+param appServicePlanSku string = 'B1'
 
 @description('PostgreSQL Flexible Server compute SKU.')
 param postgresSkuName string = 'Standard_B2ms'
