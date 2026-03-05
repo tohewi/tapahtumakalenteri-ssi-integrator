@@ -38,8 +38,8 @@ param postgresAdminLogin string = 'pgadmin'
 @secure()
 param postgresAdminPassword string
 
-@description('App Service Plan SKU (B2 minimum for production; upgrade to P1v3 for VNet).')
-param appServicePlanSku string = 'B2'
+@description('App Service Plan SKU. P1v3 recommended for production (Premium v3, different capacity pool).')
+param appServicePlanSku string = 'P1v3'
 
 @description('PostgreSQL Flexible Server compute SKU.')
 param postgresSkuName string = 'Standard_B2ms'
@@ -131,9 +131,7 @@ module postgresql 'br/public:avm/res/db-for-postgre-sql/flexible-server:0.4.0' =
     tier: 'Burstable'
     storageSizeGB: postgresStorageSizeGB
     version: '16'
-    highAvailability: {
-      mode: 'Disabled'
-    }
+    highAvailability: 'Disabled'
     backupRetentionDays: 7
     geoRedundantBackup: 'Disabled'
     databases: [
@@ -176,9 +174,6 @@ module redis 'br/public:avm/res/cache/redis:0.4.0' = {
     capacity: 1
     enableNonSslPort: false
     minimumTlsVersion: '1.2'
-    redisConfiguration: {
-      maxmemoryPolicy: 'allkeys-lru'
-    }
     tags: {
       environment: environmentName
       managedBy: 'bicep-avm'
