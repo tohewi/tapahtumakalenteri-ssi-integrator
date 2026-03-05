@@ -74,15 +74,12 @@ function logRateLimit(limiterName, windowMs, ip, message) {
   if (!rateLimitLog.has(key)) {
     rateLimitLog.set(key, { ip, limiter: limiterName, firstThrottled: now })
   }
-  console.warn(`[rate-limit] ${limiterName}: IP ${ip} throttled at ${now.toISOString()}`)
+  log.warn(`[rate-limit] ${limiterName}: IP ${ip} throttled at ${now.toISOString()}`)
 
   // Log all currently active throttled IPs
   const active = [...rateLimitLog.values()]
   if (active.length > 0) {
-    console.warn(`[rate-limit] Currently throttled IPs (${active.length}):`)
-    for (const entry of active) {
-      console.warn(`  ${entry.limiter}: ${entry.ip} since ${entry.firstThrottled.toISOString()}`)
-    }
+    log.warn(`[rate-limit] Currently throttled IPs (${active.length}):`, active.map(e => `${e.limiter}:${e.ip} since ${e.firstThrottled.toISOString()}`))
   }
 
   return message
