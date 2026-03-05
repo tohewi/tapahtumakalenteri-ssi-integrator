@@ -165,12 +165,10 @@ module postgresql 'br/public:avm/res/db-for-postgre-sql/flexible-server:0.4.0' =
 // ── 4. Azure Cache for Redis ─────────────────────────────────
 // AVM: https://github.com/Azure/bicep-registry-modules/tree/main/avm/res/cache/redis
 //
-// RETIREMENT NOTICE: Azure Cache for Redis retires September 30, 2028.
-// Migration path: avm/res/cache/redis-enterprise (Azure Managed Redis).
-// Breaking change on migration: Azure Managed Redis defaults to Entra ID auth
-// (no access keys) — app code must switch from REDIS_URL password auth to
-// managed identity token auth. Reassess in 2027.
-// See: https://aka.ms/AzureCacheForRedisRetirement
+// Entra ID auth enabled; access keys disabled — app uses managed identity token auth.
+// RETIREMENT: Azure Cache for Redis retires Sep 30, 2028.
+//   Migration path → avm/res/cache/redis-enterprise; same Entra ID auth pattern applies.
+//   See: https://aka.ms/AzureCacheForRedisRetirement
 
 module redis 'br/public:avm/res/cache/redis:0.4.0' = {
   name: 'redisDeployment'
@@ -181,6 +179,9 @@ module redis 'br/public:avm/res/cache/redis:0.4.0' = {
     capacity: 1
     enableNonSslPort: false
     minimumTlsVersion: '1.2'
+    redisConfiguration: {
+      'aad-enabled': 'True'    // Entra ID auth enabled
+    }
     tags: {
       environment: environmentName
       managedBy: 'bicep-avm'
@@ -188,12 +189,23 @@ module redis 'br/public:avm/res/cache/redis:0.4.0' = {
   }
 }
 
+// Grant App Service UAMI the built-in Data Owner role on Redis.
+// Data Owner allows all key operations needed for session storage (GET/SET/DEL/EXPIRE).
+resource redisAccessPolicyAssignment 'Microsoft.Cache/redis/accessPolicyAssignments@2024-03-01' = {
+  name: '${redisName}/${appSvcName}-uami'
+  properties: {
+    objectId: uamiExisting.properties.principalId
+    objectIdAlias: appSvcName
+    accessPolicyName: 'Data Owner'
+  }
+  dependsOn: [redis]
+}
+
 // ── 5. Key Vault secrets — connection strings ─────────────────
 // Computed from deployed resources, stored in KV so App Service can reference them.
 
 var postgresUrl = 'postgresql://${postgresAdminLogin}:${postgresAdminPassword}@${postgresql.outputs.fqdn}:5432/${dbName}?sslmode=require'
-var redisKey    = listKeys(resourceId('Microsoft.Cache/redis', redisName), '2023-08-01').primaryKey
-var redisUrl    = 'rediss://:${redisKey}@${redis.outputs.hostName}:6380'
+// No access key needed — Entra ID auth. redis.outputs.hostName used directly in app settings.
 
 // kvResource is declared in section 0 (existing ref from bootstrap.bicep)
 
@@ -205,13 +217,8 @@ resource secretDatabaseUrl 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   }
 }
 
-resource secretRedisUrl 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
-  parent: kvResource
-  name: 'RedisUrl'
-  properties: {
-    value: redisUrl
-  }
-}
+// RedisUrl KV secret removed — Entra ID auth requires no password;
+// REDIS_URL is set directly in app settings as passwordless rediss:// URL.
 
 // Placeholder secrets — operator must populate these before the app can start.
 // The App Service will report unhealthy until all KV references resolve.
@@ -325,9 +332,12 @@ module appService 'br/public:avm/res/web/site:0.12.0' = {
       // Application Insights — not sensitive, set directly
       APPLICATIONINSIGHTS_CONNECTION_STRING: appInsights.outputs.connectionString
       ApplicationInsightsAgent_EXTENSION_VERSION: '~3'
-      // All sensitive settings via Key Vault references
+      // Redis — not sensitive (no password); hostname + identity refs set directly
+      REDIS_URL: 'rediss://${redis.outputs.hostName}:6380'  // passwordless = Entra ID auth
+      REDIS_PRINCIPAL_ID: uamiExisting.properties.principalId  // Redis AUTH username
+      AZURE_CLIENT_ID: uamiExisting.properties.clientId         // for ManagedIdentityCredential
+      // Sensitive settings via Key Vault references
       DATABASE_URL: '@Microsoft.KeyVault(${kvRef};SecretName=DatabaseUrl)'
-      REDIS_URL: '@Microsoft.KeyVault(${kvRef};SecretName=RedisUrl)'
       SESSION_SECRET: '@Microsoft.KeyVault(${kvRef};SecretName=SessionSecret)'
       PLATFORM_CREDENTIALS_KEY: '@Microsoft.KeyVault(${kvRef};SecretName=PlatformCredentialsKey)'
       MFA_SECRET_KEY: '@Microsoft.KeyVault(${kvRef};SecretName=MfaSecretKey)'
@@ -343,7 +353,6 @@ module appService 'br/public:avm/res/web/site:0.12.0' = {
   }
   dependsOn: [
     secretDatabaseUrl
-    secretRedisUrl
     secretSessionSecret
     secretPlatformKey
     secretMfaKey

@@ -12,6 +12,7 @@
     "node": ">=24.0.0"
   },
   "dependencies": {
+    "@azure/identity": "^4.13.0",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
