@@ -60,7 +60,7 @@ param budgetAmountEur int = 100
 param budgetAlertEmail string = 'tohewi@gmail.com'
 
 @description('Verified sender address configured in Resend (e.g. noreply@yourdomain.com).')
-param emailFrom string = ''
+param emailFrom string = 'no-reply@ssi.towi.me'
 
 // ── Computed names ───────────────────────────────────────────
 
