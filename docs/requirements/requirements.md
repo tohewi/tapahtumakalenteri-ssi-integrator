@@ -522,6 +522,67 @@ Full ACCT1 flow: (1) User clicks "Forgot password?" link on the Sign In page. (2
 | MP6 | **Event Status Dashboard**: Visual status indicators for each scheduled event (planned, creating, active, completed, cancelled). Batch status view for upcoming week/month. **Implemented:** status summary strip (counts per status), time filter (Upcoming/Next 7d/Next 30d/Past/All), `cancelled` status with orange badge. | ✅ Implemented |
 | MP7 | **Event Cancellation**: Cancel a scheduled event — optionally delete from SSI if already created. Status: `ssi_created` → `cancelled`. Requires confirmation dialog with impact summary. **Implemented:** `POST /events/:id/cancel` route, soft-cancel keeps DB record, `CancelEventModal` with SSI removal checkbox + staffing impact warning, Cancel button in list + calendar popover. | ✅ Implemented |
 
+## Release 8.2.1 — Architecture Technical Debt (Patch)
+
+Patch release to address critical file size violations, logging discipline regressions, test coverage gaps, and code quality issues found in the comprehensive architecture audit (2026-03-05). No new user-facing features.
+
+**Reference:** `docs/design/DEVELOPMENT-MODULARITY-GUIDELINES.md` v1.1, `docs/design/architecture-review.md`, `docs/design/r7.9-graphql-migration-analysis.md`
+
+### Modularity — Critical Size Violations
+
+| # | Requirement | Status | Size |
+|---|-------------|--------|------|
+| MOD-1 | **Split `routes/platform.js`** (2550 lines → ≤400/file): Extract into domain-specific route files: `routes/platform-accounts.js` (sign-up, login, logout, me, password, MFA), `routes/platform-tenants.js` (tenant CRUD, SSI credentials, disciplines, templates), `routes/platform-members.js` (member CRUD, invitations, RBAC), `routes/platform-events.js` (scheduled events, SSI import/search, execute/cancel), `routes/platform-staffing.js` (staffing needs, signups, leaderboard). Each file ≤400 lines. `platform.js` becomes a thin module that mounts all sub-routers | ⬚ Pending |  2550 → 5 × ~400 |
+| MOD-2 | **Split `lib/db/platform-store.js`** (2124 lines → ≤500/file): Extract by entity domain — `lib/db/accounts-store.js` (accounts, sessions, password-reset, MFA), `lib/db/tenants-store.js` (tenants, disciplines, templates, credentials), `lib/db/members-store.js` (tenant_members, invitations, RBAC helpers), `lib/db/events-store.js` (scheduled_events, ssi_import), `lib/db/staffing-store.js` (event_staffing_needs, staff_signups, leaderboard). Barrel export from `lib/db/platform-store.js` preserves all existing import paths | ⬚ Pending | 2124 → 5 × ~400 |
+| MOD-3 | **Move actual code out of `lib/ssi-core/client.js`** (1768 lines): Phase 5 of architecture roadmap (§3.1). Domain re-export shims (graphql.js, participants.js, management.js, scoring.js, http-helpers.js) currently just re-export from client.js — move the actual function bodies into those files. client.js becomes a compatibility barrel. Target ≤200 lines per domain file | ⬚ Pending | 1768 → shims only |
+| MOD-4 | **Split `TenantDetailPage.jsx`** (1119 lines): Extract tab-based sub-components into `components/platform/tenant/`: `TenantGeneralTab.jsx`, `TenantSsiTab.jsx`, `TenantDisciplinesTab.jsx`, `TenantTemplatesTab.jsx`, `TenantMembersTab.jsx`. `TenantDetailPage.jsx` becomes the tab shell (~150 lines) | ⬚ Pending | 1119 → 6 × ~150 |
+| MOD-5 | **Split `lib/services/event-creation-service.js`** (673 lines): Extract `lib/services/event-form-helpers.js` (CSRF fetch, form parsing, `postForm`, `extractEventIds`, `extractFormErrors`) and `lib/services/event-deletion-service.js` (`deleteSsiEvent`). Core service file targets ≤400 lines | ⬚ Pending | 673 → 3 × ~200 |
+| MOD-6 | **Split `lib/ssi-core/seed-import.js`** (631 lines): Extract `lib/ssi-core/seed-graphql.js` (GraphQL search + structure queries) and `lib/ssi-core/seed-form-capture.js` (form field scraping `captureEventFormFields`). Core file targets ≤300 lines | ⬚ Pending | 631 → 3 × ~200 |
+| MOD-7 | **Split `App.jsx`** (792 lines) and **`TabletScoringView.jsx`** (600 lines): Continue architecture roadmap Phase 8. Extract scoring state-machine phases from App.jsx into `components/scoring/` sub-components. Extract scoring form and results panel from TabletScoringView. Targets: App.jsx ≤300 lines, TabletScoringView ≤300 lines | ⬚ Pending | 792 + 600 → ~4 × 250 |
+| MOD-8 | **Split `SchedulePage.jsx`** (606 lines): Extract calendar view and list view into `components/platform/schedule/` sub-components. SchedulePage becomes the shell with time filter and view toggle (~150 lines) | ⬚ Pending | 606 → 3 × ~150 |
+
+### Logging Discipline
+
+| # | Requirement | Status | File |
+|---|-------------|--------|------|
+| LOG-1 | **Fix `console.warn` in rate-limit logger** (`server.js` lines 77, 82, 84): Replace `console.warn(...)` calls in `logRateLimit()` with `log.warn(...)`. This is a regression from the logging discipline enforced in ARCH1 (R7.5) — route files were fixed but `server.js` itself was missed. `console.warn` bypasses `LOG_LEVEL` control | ⬚ Pending | `server.js` |
+
+### Code Quality
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| COD-1 | **Deduplicate `token_auth` mutation in `getAdminSession()`** (`server.js`): The `token_auth` GraphQL mutation string is hardcoded 3 times in `getAdminSession()`. Refactor to call `ssiGraphQLAuth(credentials)` from `lib/ssi-core/graphql.js` instead. This eliminates the risk of mutation string drift and aligns with the established GraphQL auth pattern | ⬚ Pending |
+| COD-2 | **Fix cross-boundary import in `platform.js`**: `platform.js` imports `ssiGetMatchOfficials` directly from `lib/ssi-core/client.js` (line 21). This bypasses the domain module boundary. Change to import from `lib/ssi-core/management.js`, which is the correct domain module for management operations | ⬚ Pending |
+| COD-3 | **Migrate `StaffingPage` and `App.jsx` to `useAuthenticatedPage` hook**: Both still use duplicated auth boilerplate (5+ state variables + login/restore/expiry logic). Architecture §2.3 identified this; §3.3 specified the fix. `useAuthenticatedPage` already exists and is used by ManagePage, ReportPage, SummaryReportPage. Eliminate ~50 lines of boilerplate per page | ⬚ Pending |
+| COD-4 | **Extract platform input validation to service layer**: `validateSignUp()` and `validateTenantCreate()` are inline in `platform.js`. Move to a new `lib/services/platform-validation.js` module. All validation functions across the platform feature should live there, not in the route file | ⬚ Pending |
+
+### Test Coverage
+
+| # | Requirement | Status | Gap |
+|---|-------------|--------|-----|
+| TST-1 | **Platform route tests — Accounts**: Add vitest route-level tests for account registration, login, logout, status, me, password change, password reset (happy path + validation errors + rate limit responses). Target: ≥15 tests | ⬚ Pending | 0 tests |
+| TST-2 | **Platform route tests — Tenants, Disciplines, Templates**: Add tests for tenant CRUD, SSI credential update (masking for non-owners), discipline CRUD, template CRUD, template-discipline cross-check on create. Target: ≥15 tests | ⬚ Pending | 0 tests |
+| TST-3 | **Platform route tests — Members and Invitations**: Add tests for member list, add, update roles, remove (last-owner protection), invitation create, accept, revoke, role assignment matrix enforcement. Target: ≥15 tests | ⬚ Pending | 0 tests |
+| TST-4 | **Platform route tests — Events and Staffing**: Add tests for scheduled event CRUD, SSI import, event execute (mock SSI), event cancel, staffing needs, signup/withdraw, leaderboard. Target: ≥15 tests | ⬚ Pending | 0 tests |
+| TST-5 | **Seed import tests**: Add unit tests for `seed-import.js` using GraphQL response fixtures. Test event search query building, structure import parsing, form field capture HTML parsing. Target: ≥8 tests | ⬚ Pending | 0 tests |
+| TST-6 | **Event builder tests**: Add unit tests for `nordic-cup-graphql-builder.js`, `sra-graphql-builder.js`, and `legacy-web-builder.js` with mocked SSI responses. Test form field application, schedule generation, error handling. Target: ≥10 tests | ⬚ Pending | 0 tests |
+| TST-7 | **Fix time-dependent test** (`shared.test.js` line 379): `isToday('2026-02-14T23:00:00Z')` will fail once the date passes. Replace with `vi.useFakeTimers()` to pin the date in the test. Architecture-review.md §4.4 flagged this — it has not been fixed | ⬚ Pending | CI flakiness |
+| TST-8 | **Scoring, reports, staffing route tests**: Add route-level tests for scoring endpoints, report generation endpoints, and staffing endpoints. Architecture roadmap Phase 6 (§4.2 items 2–4). Target: ≥10 tests per module | ⬚ Pending | 0 tests |
+
+### Architecture Pattern
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| ARC-1 | **Configure ESLint module boundary rules**: The import boundary rules in `architecture-review.md` §8.3 and §8.4 are documented but not enforced. Add ESLint rules (or a custom plugin) to prevent: (a) importing from `client.js` directly in routes, (b) cross-domain imports within ssi-core/ (e.g., scoring.js importing from participants.js), (c) barrel imports that hide coupling. Failing rules block CI | ⬚ Pending |
+| ARC-2 | **Update `architecture-review.md`**: File is stale (last updated 2026-02-23). Needs: updated line counts for all files (client.js 1474→1768, plus new files), addition of platform.js (2550), platform-store.js (2124), TenantDetailPage.jsx (1119), updated test counts (now 662 passing), corrected event builder section (Nordic builder uses form POST, not GraphQL), updated Phase 5 roadmap status | ⬚ Pending |
+
+### Design Decisions (Release 8.2.1)
+
+- **Patch release scope**: No new features. All work is internal architecture cleanup. External API shape and behavior are unchanged.
+- **Backward compatibility**: MOD-1 and MOD-2 use barrel exports — all existing `import { ... } from '../lib/db/platform-store.js'` imports continue to work without changes in other files.
+- **Order of execution**: MOD-3 (client.js split) should precede any new SSI operations. MOD-1 + MOD-2 are highest-risk changes (most lines moved) and should be done on short-lived branches merged quickly.
+- **Test-first for MOD-1**: Write TST-1 through TST-4 before or alongside MOD-1 to ensure behavior is preserved during the route split.
+
 ## Release 9.2 — SSI Discipline Registry
 
 Built-in registry of SSI discipline types so that users don't need to manually enter SSI-specific URLs and metadata when configuring disciplines. When creating or editing a discipline, users select "SSI-linked" and pick from a known list of SSI discipline types.
@@ -660,6 +721,7 @@ These requirements are planned for a future release, likely before billing integ
 - **Release 8.0** (Platform Auth & Tenancy): 21 requirements — 21 ✅ (PA1–PA21)
 - **Release 8.1** (Match Management Platform): 8 requirements — 5 ✅ (MP1, MP2, MP4, MP10, MP12), 3 design phase (MP3, MP8, MP9). **MP12 — SSI Event Import**: Search existing SSI events via GraphQL (name, sport, date range, region filters) and import selected events as local scheduled_events with `ssi_created` status. Backend: `ssiSearchEvents` in seed-import.js, `importSsiEvent` in platform-store.js, `/ssi-search` + `/ssi-import` API routes. Frontend: `ImportSsiEventsModal` component in SchedulePage with search form, results table with checkboxes, and batch import action. Schema: `template_id` made nullable, `event_name` column added to `scheduled_events` for imported events without templates
 - **Release 8.2** (Platform Authorization & Workflows): 5 requirements — 5 ✅ (ACCT1, RBAC1, MP5, MP6, MP7)
+- **Release 8.2.1** (Architecture Technical Debt — Patch): 22 requirements — 0 ✅, 22 ⬚ pending (MOD-1–8, LOG-1, COD-1–4, TST-1–8, ARC-1–2)
 - **Release 8.3** (Calendar Integration): 1 requirement — 0 ✅, 1 design phase (MP11)
 - **Release 9.0** (Event Staffing): Core platform staffing capabilities — **All Implemented ✅**
   - **Data Model**: `event_staffing_needs` and `staff_signups` tables linked to `scheduled_events` and `accounts`. Auto-populated from template rules.

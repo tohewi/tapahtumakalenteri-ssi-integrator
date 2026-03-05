@@ -5,6 +5,68 @@
 
 ---
 
+## Release 8.2.1 — Architecture Technical Debt (Patch) — Planned
+
+**Requirements:** MOD-1–8, LOG-1, COD-1–4, TST-1–8, ARC-1–2 (22 items, all ⬚ Pending)
+
+### Overview
+
+Patch release addressing critical architecture findings from the 2026-03-05 comprehensive codebase audit. No new user-facing features. All changes are internal cleanup: splitting oversized files, fixing a logging discipline regression, adding missing test coverage, and enforcing architectural boundaries.
+
+### Motivation
+
+The R80 platform feature additions (PA1–PA21, R8.1, R8.2, R9.0, R9.1, R9.2) added substantial code that was not audited against the modularity guidelines in `DEVELOPMENT-MODULARITY-GUIDELINES.md`. The audit revealed:
+
+- Two files exceeding 2000 lines (`routes/platform.js` at 2550, `lib/db/platform-store.js` at 2124)
+- `lib/ssi-core/client.js` grew from 1474 → 1768 lines despite the "freeze" policy
+- Entire platform subsystem (PA routes) has zero automated route-level tests
+- A `console.warn` regression in `server.js` bypasses `LOG_LEVEL` control
+
+### Tasks
+
+#### Critical — File Size Violations
+
+| Task | Target files | Target size |
+|------|-------------|------------|
+| MOD-1: Split `routes/platform.js` | → `platform-accounts.js`, `platform-tenants.js`, `platform-members.js`, `platform-events.js`, `platform-staffing.js` | ≤400 lines each |
+| MOD-2: Split `lib/db/platform-store.js` | → `accounts-store.js`, `tenants-store.js`, `members-store.js`, `events-store.js`, `staffing-store.js` | ≤500 lines each |
+| MOD-3: Move code from `client.js` into domain modules | `participants.js`, `management.js`, `scoring.js`, `http-helpers.js` | client.js → barrel only |
+| MOD-4: Split `TenantDetailPage.jsx` | → `tenant/` sub-components | ≤150 lines each |
+| MOD-5: Split `event-creation-service.js` | → `event-form-helpers.js`, `event-deletion-service.js` | ≤400 lines |
+| MOD-6: Split `seed-import.js` | → `seed-graphql.js`, `seed-form-capture.js` | ≤300 lines |
+| MOD-7: Split `App.jsx` + `TabletScoringView.jsx` | → `components/scoring/` | ≤300 lines each |
+| MOD-8: Split `SchedulePage.jsx` | → `components/platform/schedule/` | ≤150 lines each |
+
+#### Logging Discipline
+- **LOG-1**: Replace `console.warn` in `server.js` `logRateLimit()` (lines 77, 82, 84) with `log.warn`
+
+#### Code Quality
+- **COD-1**: Deduplicate `token_auth` mutation in `getAdminSession()` → use `ssiGraphQLAuth()`
+- **COD-2**: Fix `platform.js` import of `ssiGetMatchOfficials` from `client.js` → use `management.js`
+- **COD-3**: Migrate `StaffingPage` and `App.jsx` to `useAuthenticatedPage` hook
+- **COD-4**: Extract `validateSignUp()` / `validateTenantCreate()` to `lib/services/platform-validation.js`
+
+#### Test Coverage
+- **TST-1–4**: Platform route tests (accounts, tenants, members, events/staffing) — target ≥60 new tests
+- **TST-5**: Seed import unit tests — target ≥8 tests
+- **TST-6**: Event builder unit tests — target ≥10 tests
+- **TST-7**: Fix time-dependent test `shared.test.js:379` with `vi.useFakeTimers()`
+- **TST-8**: Scoring, reports, staffing route tests — target ≥30 new tests
+
+#### Architecture
+- **ARC-1**: Configure ESLint module boundary rules (block `client.js` direct imports, cross-domain ssi-core imports)
+- **ARC-2**: Update `architecture-review.md` with current line counts, test counts, builder section
+
+### Requirements Met
+
+*(To be filled on completion)*
+
+### Test Status
+
+*(To be updated when tasks complete)*
+
+---
+
 ## Release 8.2 — Template-Driven Event Creation (2026-03-02)
 
 **Requirements:** MP5 (Event Execution Workflow) — bug fixes and refactoring
