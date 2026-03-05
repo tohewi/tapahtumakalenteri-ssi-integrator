@@ -295,7 +295,7 @@ module appService 'br/public:avm/res/web/site:0.12.0' = {
     }
     siteConfig: {
       linuxFxVersion: 'NODE|22-lts'
-      appCommandFile: 'node scoring-proxy/server.js'
+      appCommandLine: 'node scoring-proxy/server.js'
       alwaysOn: true
       minTlsVersion: '1.2'
       http20Enabled: true

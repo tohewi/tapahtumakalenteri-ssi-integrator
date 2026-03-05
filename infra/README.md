@@ -152,12 +152,24 @@ Application deployments are handled automatically by GitHub Actions
 For infrastructure changes (re-run `main.bicep`; password comes from KV automatically):
 
 ```bash
+# Read postgres password from KV, then deploy with inline params
+# (Azure CLI 2.40 does not support .bicepparam files; use inline params instead)
+PGPWD=$(az keyvault secret show --vault-name kv-turres-prod --name PostgresAdminPassword --query value -o tsv)
+
 az deployment group create \
   --resource-group rg-turres-prod \
   --template-file infra/main.bicep \
-  --parameters @infra/main.bicepparam \
+  --parameters environmentName=prod appName=turres location=swedencentral \
+               postgresAdminLogin=pgadmin postgresAdminPassword="$PGPWD" \
+               appServicePlanSku=P1v3 postgresSkuName=Standard_B2ms \
+               postgresStorageSizeGB=32 logRetentionDays=30 \
+               budgetStartDate=2026-03-01T00:00:00Z budgetAmountEur=100 \
+               budgetAlertEmail=tohewi@gmail.com \
   --name turres-main-$(date +%Y%m%d%H%M)
 ```
+
+> **Note:** `.bicepparam` files with `az.getSecret()` require Azure CLI ≥ 2.53.
+> Until upgraded, pass `postgresAdminPassword` as an inline param read from KV (never hard-coded).
 
 Bicep is idempotent — re-running only applies changes (no downtime for unchanged resources).
 
