@@ -39,3 +39,25 @@ export const SSI_DISCIPLINE_REGISTRY = [
 export function getSsiDisciplineType(id) {
   return SSI_DISCIPLINE_REGISTRY.find(d => d.id === id)
 }
+
+/**
+ * Find a discipline type by SSI event properties (rule code + cup flag).
+ * Used by SSI-R4 to detect the type of an imported seed event.
+ * @param {string} rule - SSI rule code (e.g. 'sra', 'rl', 'resul')
+ * @param {boolean} isCup - whether the event is a cup/series
+ * @param {string} [eventTypeName] - optional event type name for disambiguation
+ * @returns {Object|undefined}
+ */
+export function getSsiDisciplineByProperties(rule, isCup, eventTypeName) {
+  return SSI_DISCIPLINE_REGISTRY.find(d => d.ruleCode === rule && d.isCup === isCup)
+}
+
+/**
+ * Find a discipline type by its SSI create URL.
+ * Used by SSI-R4 to resolve the expected type from a template's discipline config.
+ * @param {string} ssiCreateUrl
+ * @returns {Object|undefined}
+ */
+export function getSsiDisciplineByUrl(ssiCreateUrl) {
+  return SSI_DISCIPLINE_REGISTRY.find(d => d.ssiCreateUrl === ssiCreateUrl)
+}
