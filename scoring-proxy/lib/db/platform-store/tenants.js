@@ -1,0 +1,226 @@
+// ============================================================
+// Platform Store — Tenant CRUD
+// ============================================================
+
+import { query, withTransaction } from '../postgres.js'
+import { NotFoundError } from '../../errors/AppError.js'
+import { generateId, encryptCredentials, decryptCredentials } from './utils.js'
+
+// ---- Row mapper ----
+
+function rowToTenant(row, { includeCredentials = false } = {}) {
+  if (!row) return null
+
+  // SSI credentials: by default, return only metadata (email + configured flags).
+  // Full credentials are only returned when includeCredentials is true (internal use).
+  let ssiCredentials = null
+  if (row.ssi_credentials) {
+    const decrypted = decryptCredentials(row.ssi_credentials)
+    if (includeCredentials) {
+      ssiCredentials = decrypted
+    } else {
+      // Masked response: show email (not secret), flag password/apiKey as configured
+      ssiCredentials = {
+        email: decrypted.email || null,
+        hasPassword: !!decrypted.password,
+        hasApiKey: !!decrypted.apiKey,
+      }
+    }
+  }
+
+  return {
+    id: row.id,
+    accountId: row.account_id,
+    name: row.name,
+    subscription: row.subscription || {},
+    ssiCredentials,
+    calendarConfig: row.calendar_config || null,
+    disciplines: row.disciplines || [],
+    createdAt: new Date(row.created_at).getTime(),
+    updatedAt: new Date(row.updated_at).getTime(),
+  }
+}
+
+// ---- Tenant CRUD ----
+
+/**
+ * Create a new tenant for an account.
+ * Starts with a 30-day free trial.
+ * Uses a transaction with SELECT ... FOR UPDATE to lock the account row,
+ * preventing race conditions when concurrent requests create tenants for
+ * the same account simultaneously.
+ */
+export async function createTenant({ accountId, name }) {
+  const tenantId = generateId('ten')
+  const now = Date.now()
+  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000
+
+  const subscription = {
+    plan: 'free_trial',
+    status: 'trial',
+    trialEndsAt: now + THIRTY_DAYS,
+    currentPeriodEnd: null,
+    paymentMethod: null,
+    cancelledAt: null,
+    cancellationReason: null,
+  }
+
+  const tenant = await withTransaction(async (client) => {
+    // Lock the account row to prevent concurrent tenant creation from
+    // losing updates to the tenants array (race condition guard).
+    const { rows: accountRows } = await client.query(
+      'SELECT id FROM accounts WHERE id = $1 FOR UPDATE',
+      [accountId]
+    )
+    if (accountRows.length === 0) {
+      throw new NotFoundError('Account')
+    }
+
+    // Check for duplicate tenant name (case-insensitive)
+    const { rows: dupTenant } = await client.query(
+      'SELECT id FROM tenants WHERE LOWER(name) = LOWER($1)',
+      [name.trim()]
+    )
+    if (dupTenant.length > 0) {
+      throw new Error('A tenant with this name already exists.')
+    }
+
+    // Insert the new tenant
+    const { rows } = await client.query(
+      `INSERT INTO tenants (id, account_id, name, subscription, disciplines)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [tenantId, accountId, name.trim(), JSON.stringify(subscription), JSON.stringify([])]
+    )
+
+    // Append tenant ID to the locked account's tenants array
+    await client.query(
+      `UPDATE accounts
+       SET tenants = tenants || $1::jsonb, updated_at = NOW()
+       WHERE id = $2`,
+      [JSON.stringify([tenantId]), accountId]
+    )
+
+    // Create owner membership — the creator is automatically the owner
+    const memberId = generateId('mbr')
+    await client.query(
+      `INSERT INTO tenant_members (id, tenant_id, account_id, roles, invited_by, status)
+       VALUES ($1, $2, $3, $4, NULL, 'active')`,
+      [memberId, tenantId, accountId, ['owner']]
+    )
+
+    return rowToTenant(rows[0])
+  })
+
+  return { tenantId, tenant }
+}
+
+/**
+ * Get tenant by ID.
+ */
+export async function getTenant(tenantId) {
+  const { rows } = await query(
+    'SELECT * FROM tenants WHERE id = $1',
+    [tenantId]
+  )
+  if (rows.length === 0) return null
+  return rowToTenant(rows[0])
+}
+
+/**
+ * Get tenant by ID with full decrypted SSI credentials.
+ * INTERNAL USE ONLY — for SSI operations that need actual password/apiKey.
+ * Never expose this directly in API responses.
+ */
+export async function getTenantWithCredentials(tenantId) {
+  const { rows } = await query(
+    'SELECT * FROM tenants WHERE id = $1',
+    [tenantId]
+  )
+  if (rows.length === 0) return null
+  return rowToTenant(rows[0], { includeCredentials: true })
+}
+
+/**
+ * List all tenants where the account has an active membership.
+ * Falls back to account_id ownership for backward compatibility with
+ * tenants created before the RBAC migration.
+ */
+export async function listAccountTenants(accountId) {
+  const { rows } = await query(
+    `SELECT DISTINCT t.* FROM tenants t
+     LEFT JOIN tenant_members tm ON tm.tenant_id = t.id AND tm.account_id = $1 AND tm.status = 'active'
+     WHERE t.account_id = $1 OR tm.id IS NOT NULL
+     ORDER BY t.created_at`,
+    [accountId]
+  )
+  return rows.map(rowToTenant)
+}
+
+/**
+ * Update tenant fields.
+ */
+export async function updateTenant(tenantId, updates) {
+  const allowedFields = {
+    name: 'name',
+    ssiCredentials: 'ssi_credentials',
+    calendarConfig: 'calendar_config',
+    disciplines: 'disciplines',
+    subscription: 'subscription',
+  }
+
+  // Reject any key not in the allowlist to prevent unexpected column references
+  for (const key of Object.keys(updates)) {
+    if (!(key in allowedFields)) {
+      throw new Error(`updateTenant: unknown field '${key}'`)
+    }
+  }
+
+  const setClauses = []
+  const params = [tenantId]
+  let paramIndex = 2
+  let row_ssi_credentials_cache
+
+  for (const [key, column] of Object.entries(allowedFields)) {
+    if (updates[key] !== undefined) {
+      let value
+      if (key === 'ssiCredentials' && updates[key] !== null) {
+        // Merge with existing credentials — omitted fields keep their current values
+        // This supports write-only password/apiKey: frontend sends only changed fields
+        let merged = updates[key]
+        if (row_ssi_credentials_cache === undefined) {
+          const { rows: currentRows } = await query('SELECT ssi_credentials FROM tenants WHERE id = $1', [tenantId])
+          row_ssi_credentials_cache = currentRows[0]?.ssi_credentials || null
+        }
+        if (row_ssi_credentials_cache) {
+          const existing = decryptCredentials(row_ssi_credentials_cache)
+          merged = {
+            email: updates[key].email ?? existing.email,
+            password: updates[key].password || existing.password,
+            apiKey: updates[key].apiKey ?? existing.apiKey,
+          }
+        }
+        // Encrypt merged credentials before storing
+        value = JSON.stringify(encryptCredentials(merged))
+      } else {
+        value = typeof updates[key] === 'object' ? JSON.stringify(updates[key]) : updates[key]
+      }
+      setClauses.push(`${column} = $${paramIndex}`)
+      params.push(value)
+      paramIndex++
+    }
+  }
+
+  if (setClauses.length === 0) {
+    return getTenant(tenantId)
+  }
+
+  setClauses.push(`updated_at = NOW()`)
+
+  const { rows } = await query(
+    `UPDATE tenants SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`,
+    params
+  )
+  if (rows.length === 0) return null
+  return rowToTenant(rows[0])
+}
