@@ -49,6 +49,10 @@ class TestPgPool {
   constructor() {
     this.accounts = new Map()
     this.tenants = new Map()
+    this.members = []
+    this.disciplines = new Map()
+    this.templates = new Map()
+    this.events = new Map()
   }
 
   /**
@@ -237,7 +241,128 @@ class TestPgPool {
       return { rows: [row] }
     }
 
-    throw new Error(`TestPgPool: unhandled query: ${sql}`)
+    // SELECT tenant_id, COUNT(*) — discipline counts for listAccountTenants
+    if (sql.startsWith('SELECT tenant_id, COUNT(*)')) {
+      return { rows: [] }
+    }
+
+    // SELECT DISTINCT t.* FROM tenants — listAccountTenants
+    if (sql.startsWith('SELECT DISTINCT t.* FROM tenants')) {
+      const accountId = params[0]
+      const rows = [...this.tenants.values()]
+        .filter(t => t.account_id === accountId)
+        .sort((a, b) => a.created_at - b.created_at)
+      return { rows }
+    }
+
+    // INSERT INTO disciplines
+    if (sql.startsWith('INSERT INTO disciplines')) {
+      const now = new Date()
+      const row = {
+        id: params[0], tenant_id: params[1], name: params[2],
+        label_fi: params[3], label_en: params[4],
+        ssi_group_id: params[5], ssi_organizer_id: params[6], ssi_create_url: params[7],
+        created_at: now, updated_at: now,
+      }
+      this.disciplines.set(row.id, row)
+      return { rows: [row] }
+    }
+
+    // SELECT * FROM disciplines WHERE id
+    if (sql.startsWith('SELECT * FROM disciplines WHERE id')) {
+      const row = this.disciplines.get(params[0])
+      return { rows: row ? [row] : [] }
+    }
+
+    // INSERT INTO match_templates
+    // params: [id, tenant_id, discipline_id, name, ssi_seed_event_id, ssi_seed_snapshot, overrides, ...]
+    if (sql.startsWith('INSERT INTO match_templates')) {
+      const now = new Date()
+      const row = {
+        id: params[0], tenant_id: params[1], discipline_id: params[2], name: params[3],
+        ssi_seed_event_id: params[4],
+        ssi_seed_snapshot: params[5] ? JSON.parse(params[5]) : null,
+        overrides: params[6] ? JSON.parse(params[6]) : null,
+        created_at: now, updated_at: now,
+      }
+      this.templates.set(row.id, row)
+      return { rows: [row] }
+    }
+
+    // SELECT * FROM match_templates WHERE id
+    if (sql.startsWith('SELECT * FROM match_templates WHERE id')) {
+      const row = this.templates.get(params[0])
+      return { rows: row ? [row] : [] }
+    }
+
+    // INSERT INTO scheduled_events
+    // params: [id, tenant_id, template_id, discipline_id, event_name, event_date, created_by]
+    if (sql.startsWith('INSERT INTO scheduled_events')) {
+      const now = new Date()
+      const row = {
+        id: params[0], tenant_id: params[1], template_id: params[2],
+        discipline_id: params[3], event_name: params[4], event_date: params[5],
+        status: 'planned', ssi_references: null, calendar_reference: null,
+        assigned_staff: [], error_details: null, created_by: params[6],
+        created_at: now, updated_at: now,
+      }
+      this.events.set(row.id, row)
+      return { rows: [row] }
+    }
+
+    // SELECT * FROM scheduled_events WHERE id
+    if (sql.startsWith('SELECT * FROM scheduled_events WHERE id')) {
+      const row = this.events.get(params[0])
+      return { rows: row ? [row] : [] }
+    }
+
+    // SELECT * FROM scheduled_events WHERE tenant_id
+    if (sql.startsWith('SELECT * FROM scheduled_events WHERE tenant_id')) {
+      const rows = [...this.events.values()]
+        .filter(e => e.tenant_id === params[0])
+        .sort((a, b) => (a.event_date < b.event_date ? -1 : 1))
+      return { rows }
+    }
+
+    // UPDATE scheduled_events SET — updateScheduledEvent
+    if (sql.startsWith('UPDATE scheduled_events SET')) {
+      const id = params[0]
+      const row = this.events.get(id)
+      if (!row) return { rows: [] }
+      const setMatch = sql.match(/SET (.+) WHERE/i)
+      if (setMatch) {
+        const clauses = setMatch[1].split(',').map(c => c.trim())
+        for (const clause of clauses) {
+          if (clause === 'updated_at = NOW()') { row.updated_at = new Date(); continue }
+          const m = clause.match(/(\w+)\s*=\s*\$(\d+)/)
+          if (m) {
+            const col = m[1]
+            const val = params[parseInt(m[2]) - 1]
+            try { row[col] = JSON.parse(val) } catch { row[col] = val }
+          }
+        }
+      }
+      return { rows: [row] }
+    }
+
+    // DELETE FROM scheduled_events WHERE id
+    if (sql.startsWith('DELETE FROM scheduled_events WHERE id')) {
+      const existed = this.events.has(params[0])
+      this.events.delete(params[0])
+      return { rows: existed ? [{ id: params[0] }] : [] }
+    }
+
+    // INSERT INTO event_staffing_needs — auto-populated from template, ignore in tests
+    if (sql.startsWith('INSERT INTO event_staffing_needs')) {
+      return { rows: [] }
+    }
+
+    // INSERT INTO audit_log — fire-and-forget
+    if (sql.startsWith('INSERT INTO audit_log')) {
+      return { rows: [] }
+    }
+
+    throw new Error(`TestPgPool: unhandled query: ${sql.substring(0, 120)}`)
   }
 }
 
@@ -387,5 +512,234 @@ describe('DELETE /events — stale SSI error classification', () => {
 
   it('does NOT classify network error as stale', () => {
     expect(isStaleOrMissing('fetch failed: ECONNREFUSED')).toBe(false)
+  })
+})
+
+// ============================================================
+// GET /api/v1/platform/tenants/:tenantId/events
+// ============================================================
+
+describe('GET /api/v1/platform/tenants/:tenantId/events', () => {
+  it('returns 401 without authentication', async () => {
+    const res = await request('GET', '/api/v1/platform/tenants/ten_123/events')
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 200 with empty events list', async () => {
+    const { cookie, res: regRes } = await registerAndGetCookie({ email: 'evt-list1@test.com' })
+    const tenantId = regRes.data.tenant.id
+    const res = await request('GET', `/api/v1/platform/tenants/${tenantId}/events`, { cookies: cookie })
+    expect(res.status).toBe(200)
+    expect(Array.isArray(res.data.events)).toBe(true)
+    expect(res.data.events.length).toBe(0)
+  })
+})
+
+// ============================================================
+// POST /api/v1/platform/tenants/:tenantId/events
+// ============================================================
+
+describe('POST /api/v1/platform/tenants/:tenantId/events', () => {
+  it('returns 400 when templateId is missing', async () => {
+    const { cookie, res: regRes } = await registerAndGetCookie({ email: 'evt-create1@test.com' })
+    const tenantId = regRes.data.tenant.id
+    const res = await request('POST', `/api/v1/platform/tenants/${tenantId}/events`, {
+      cookies: cookie,
+      body: { dates: ['2026-06-15'] },
+    })
+    expect(res.status).toBe(400)
+    expect(res.data.error).toMatch(/templateId/i)
+  })
+
+  it('returns 400 when dates array is missing', async () => {
+    const { cookie, res: regRes } = await registerAndGetCookie({ email: 'evt-create2@test.com' })
+    const tenantId = regRes.data.tenant.id
+    const res = await request('POST', `/api/v1/platform/tenants/${tenantId}/events`, {
+      cookies: cookie,
+      body: { templateId: 'tmpl_fake' },
+    })
+    expect(res.status).toBe(400)
+    expect(res.data.error).toMatch(/dates/i)
+  })
+
+  it('returns 400 for template not found in tenant', async () => {
+    const { cookie, res: regRes } = await registerAndGetCookie({ email: 'evt-create3@test.com' })
+    const tenantId = regRes.data.tenant.id
+    const res = await request('POST', `/api/v1/platform/tenants/${tenantId}/events`, {
+      cookies: cookie,
+      body: { templateId: 'tmpl_nonexistent', dates: ['2026-06-15'] },
+    })
+    expect(res.status).toBe(400)
+    expect(res.data.error).toMatch(/template not found/i)
+  })
+
+  it('returns 400 for invalid date format', async () => {
+    const { cookie, res: regRes } = await registerAndGetCookie({ email: 'evt-create4@test.com' })
+    const tenantId = regRes.data.tenant.id
+    const discRes = await request('POST', `/api/v1/platform/tenants/${tenantId}/disciplines`, {
+      cookies: cookie, body: { name: 'Test Disc' },
+    })
+    const tmplRes = await request('POST', `/api/v1/platform/tenants/${tenantId}/templates`, {
+      cookies: cookie, body: { name: 'Test Template', disciplineId: discRes.data.discipline.id },
+    })
+    const res = await request('POST', `/api/v1/platform/tenants/${tenantId}/events`, {
+      cookies: cookie,
+      body: { templateId: tmplRes.data.template.id, dates: ['not-a-date'] },
+    })
+    expect(res.status).toBe(400)
+    expect(res.data.error).toMatch(/invalid date format/i)
+  })
+
+  it('returns 201 and creates a planned event', async () => {
+    const { cookie, res: regRes } = await registerAndGetCookie({ email: 'evt-create5@test.com' })
+    const tenantId = regRes.data.tenant.id
+    const discRes = await request('POST', `/api/v1/platform/tenants/${tenantId}/disciplines`, {
+      cookies: cookie, body: { name: 'Test Disc' },
+    })
+    const tmplRes = await request('POST', `/api/v1/platform/tenants/${tenantId}/templates`, {
+      cookies: cookie, body: { name: 'Test Template', disciplineId: discRes.data.discipline.id },
+    })
+    const res = await request('POST', `/api/v1/platform/tenants/${tenantId}/events`, {
+      cookies: cookie,
+      body: { templateId: tmplRes.data.template.id, dates: ['2026-06-15'] },
+    })
+    expect(res.status).toBe(201)
+    expect(res.data.event.status).toBe('planned')
+    expect(res.data.event.eventDate).toBe('2026-06-15')
+    expect(res.data.event.id).toBeDefined()
+  })
+
+  it('returns 201 and creates multiple events in batch', async () => {
+    const { cookie, res: regRes } = await registerAndGetCookie({ email: 'evt-create6@test.com' })
+    const tenantId = regRes.data.tenant.id
+    const discRes = await request('POST', `/api/v1/platform/tenants/${tenantId}/disciplines`, {
+      cookies: cookie, body: { name: 'Test Disc' },
+    })
+    const tmplRes = await request('POST', `/api/v1/platform/tenants/${tenantId}/templates`, {
+      cookies: cookie, body: { name: 'Test Template', disciplineId: discRes.data.discipline.id },
+    })
+    const res = await request('POST', `/api/v1/platform/tenants/${tenantId}/events`, {
+      cookies: cookie,
+      body: { templateId: tmplRes.data.template.id, dates: ['2026-06-15', '2026-06-22', '2026-06-29'] },
+    })
+    expect(res.status).toBe(201)
+    expect(Array.isArray(res.data.results)).toBe(true)
+    expect(res.data.results.length).toBe(3)
+    expect(res.data.results.every(r => r.success)).toBe(true)
+  })
+})
+
+// ============================================================
+// GET /api/v1/platform/tenants/:tenantId/events/:id
+// ============================================================
+
+describe('GET /api/v1/platform/tenants/:tenantId/events/:id', () => {
+  it('returns 404 for non-existent event', async () => {
+    const { cookie, res: regRes } = await registerAndGetCookie({ email: 'evt-get1@test.com' })
+    const tenantId = regRes.data.tenant.id
+    const res = await request('GET', `/api/v1/platform/tenants/${tenantId}/events/evt_nonexistent`, { cookies: cookie })
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 200 with event details', async () => {
+    const { cookie, res: regRes } = await registerAndGetCookie({ email: 'evt-get2@test.com' })
+    const tenantId = regRes.data.tenant.id
+    const discRes = await request('POST', `/api/v1/platform/tenants/${tenantId}/disciplines`, {
+      cookies: cookie, body: { name: 'Test Disc' },
+    })
+    const tmplRes = await request('POST', `/api/v1/platform/tenants/${tenantId}/templates`, {
+      cookies: cookie, body: { name: 'Test Template', disciplineId: discRes.data.discipline.id },
+    })
+    const createRes = await request('POST', `/api/v1/platform/tenants/${tenantId}/events`, {
+      cookies: cookie,
+      body: { templateId: tmplRes.data.template.id, dates: ['2026-06-22'] },
+    })
+    const eventId = createRes.data.event.id
+    const res = await request('GET', `/api/v1/platform/tenants/${tenantId}/events/${eventId}`, { cookies: cookie })
+    expect(res.status).toBe(200)
+    expect(res.data.event.id).toBe(eventId)
+    expect(res.data.event.status).toBe('planned')
+  })
+})
+
+// ============================================================
+// PATCH /api/v1/platform/tenants/:tenantId/events/:id
+// ============================================================
+
+describe('PATCH /api/v1/platform/tenants/:tenantId/events/:id', () => {
+  async function createEvent(cookie, tenantId) {
+    const discRes = await request('POST', `/api/v1/platform/tenants/${tenantId}/disciplines`, {
+      cookies: cookie, body: { name: 'Test Disc' },
+    })
+    const tmplRes = await request('POST', `/api/v1/platform/tenants/${tenantId}/templates`, {
+      cookies: cookie, body: { name: 'Test Template', disciplineId: discRes.data.discipline.id },
+    })
+    const evtRes = await request('POST', `/api/v1/platform/tenants/${tenantId}/events`, {
+      cookies: cookie,
+      body: { templateId: tmplRes.data.template.id, dates: ['2026-07-06'] },
+    })
+    return evtRes.data.event.id
+  }
+
+  it('returns 400 for unknown field', async () => {
+    const { cookie, res: regRes } = await registerAndGetCookie({ email: 'evt-patch1@test.com' })
+    const tenantId = regRes.data.tenant.id
+    const eventId = await createEvent(cookie, tenantId)
+    const res = await request('PATCH', `/api/v1/platform/tenants/${tenantId}/events/${eventId}`, {
+      cookies: cookie,
+      body: { unknownField: 'value' },
+    })
+    expect(res.status).toBe(400)
+    expect(res.data.error).toMatch(/unknown field/i)
+  })
+
+  it('returns 200 and updates event status', async () => {
+    const { cookie, res: regRes } = await registerAndGetCookie({ email: 'evt-patch2@test.com' })
+    const tenantId = regRes.data.tenant.id
+    const eventId = await createEvent(cookie, tenantId)
+    const res = await request('PATCH', `/api/v1/platform/tenants/${tenantId}/events/${eventId}`, {
+      cookies: cookie,
+      body: { status: 'cancelled' },
+    })
+    expect(res.status).toBe(200)
+    expect(res.data.event.status).toBe('cancelled')
+  })
+})
+
+// ============================================================
+// DELETE /api/v1/platform/tenants/:tenantId/events/:id
+// ============================================================
+
+describe('DELETE /api/v1/platform/tenants/:tenantId/events/:id', () => {
+  async function createEvent(cookie, tenantId) {
+    const discRes = await request('POST', `/api/v1/platform/tenants/${tenantId}/disciplines`, {
+      cookies: cookie, body: { name: 'Test Disc' },
+    })
+    const tmplRes = await request('POST', `/api/v1/platform/tenants/${tenantId}/templates`, {
+      cookies: cookie, body: { name: 'Test Template', disciplineId: discRes.data.discipline.id },
+    })
+    const evtRes = await request('POST', `/api/v1/platform/tenants/${tenantId}/events`, {
+      cookies: cookie,
+      body: { templateId: tmplRes.data.template.id, dates: ['2026-07-13'] },
+    })
+    return evtRes.data.event.id
+  }
+
+  it('returns 404 for non-existent event', async () => {
+    const { cookie, res: regRes } = await registerAndGetCookie({ email: 'evt-del1@test.com' })
+    const tenantId = regRes.data.tenant.id
+    const res = await request('DELETE', `/api/v1/platform/tenants/${tenantId}/events/evt_nonexistent`, { cookies: cookie })
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 200 and deletes a planned event', async () => {
+    const { cookie, res: regRes } = await registerAndGetCookie({ email: 'evt-del2@test.com' })
+    const tenantId = regRes.data.tenant.id
+    const eventId = await createEvent(cookie, tenantId)
+    const res = await request('DELETE', `/api/v1/platform/tenants/${tenantId}/events/${eventId}`, { cookies: cookie })
+    expect(res.status).toBe(200)
+    expect(res.data.success).toBe(true)
+    const getRes = await request('GET', `/api/v1/platform/tenants/${tenantId}/events/${eventId}`, { cookies: cookie })
+    expect(getRes.status).toBe(404)
   })
 })
