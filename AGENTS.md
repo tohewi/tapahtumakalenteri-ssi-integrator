@@ -10,7 +10,7 @@
 - **Keep instructions in sync:** if you modify these agent instructions, update **both** `AGENTS.md` and `.github/copilot-instructions.md` with the same changes.
 - **Tooling limitations:**
   - `grep` is not available in this environment. Use `grep_search` tool, or `Select-String` in PowerShell, or other file-finding tools instead.
-  - **Do NOT use `node -e` for multi-line code or code with template literals/backticks/dollar signs.** PowerShell escaping is fundamentally broken for these. Instead: use the `edit`/`multi_edit` tool to modify files directly, or `write_to_file` to create a temp `.js` script and run it with `node temp_script.js`. Only use `node -e` for trivial single-expression commands with no special characters.
+  - `node -e` does not work for multi-line code or code with template literals/backticks/dollar signs. PowerShell escaping is fundamentally broken for these. Instead: use the `edit`/`multi_edit` tool to modify files directly, or `write_to_file` to create a temp `.js` script and run it with `node temp_script.js`. Only use `node -e` for trivial single-expression commands with no special characters.
 - **Track token usage:** At the end of each session (or when asked), provide a rough token usage summary per requirement. Count words read (file reads, search results, command output) and words written (edits, new files, commands) during the session. Summarize in a table like:
 
   | Requirement | Words Read | Words Written | Total (approx tokens) |
