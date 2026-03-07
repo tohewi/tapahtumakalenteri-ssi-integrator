@@ -42,7 +42,7 @@ async function fetchFormPage(createUrl, cookies) {
  * @param {object} snapshotFormFields - From snapshot.formFields (may be null)
  * @param {object} overrideFormFields - From overrides.formFields (may be null, takes priority)
  */
-function applyTemplateFormFields(body, arrayFields, snapshotFormFields, overrideFormFields) {
+export function applyTemplateFormFields(body, arrayFields, snapshotFormFields, overrideFormFields) {
   // Merge: overrides take priority over snapshot
   const merged = {}
   if (snapshotFormFields) {
