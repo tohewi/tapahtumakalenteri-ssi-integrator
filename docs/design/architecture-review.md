@@ -1,6 +1,6 @@
 # Software Architecture Review
 
-**Date:** 2026-02-19 (updated 2026-02-23 for v7.5)
+**Date:** 2026-02-19 (updated 2026-02-23 for v7.5, updated 2026-03-07 for R8.2.1)
 **Scope:** `scoring-proxy/` (Express backend) and `scoring-ui/` (React frontend)
 **Target Architecture:** Modular Monolith with clear module boundaries
 
@@ -12,12 +12,12 @@
 
 | File | Lines | Role |
 |------|------:|------|
-| `lib/ssi-core/client.js` | 1 474 | SSI API integration (GraphQL + web scraping) |
-| `routes/management.js` | 550 | Cup management endpoints (10 routes) |
-| `routes/staffing.js` | 438 | Staff signup/resign/sync |
-| `server.js` | 428 | Express bootstrap, middleware, route mounting |
-| `routes/registration.js` | 402 | Public self-registration |
-| `lib/services/cup-manage.js` | 356 | Cup management service (pure logic) |
+| `lib/ssi-core/client.js` | 1 770 | SSI API integration (GraphQL + web scraping) — MOD-3 pending |
+| `routes/management.js` | 632 | Cup management endpoints (10 routes) |
+| `routes/staffing.js` | 489 | Staff signup/resign/sync |
+| `server.js` | 535 | Express bootstrap, middleware, route mounting |
+| `routes/registration.js` | 458 | Public self-registration |
+| `lib/services/cup-manage.js` | 394 | Cup management service (pure logic) |
 | `lib/services/scoring-service.js` | 284 | Scoring service (pure logic) |
 | `lib/staffing/engine.js` | 268 | Staffing business logic |
 | `routes/reports.js` | 210 | Report generation |
@@ -25,39 +25,45 @@
 | `routes/scoring.js` | 183 | Score entry endpoints |
 | `middleware/errorHandler.js` | 169 | Centralized error handling |
 | `lib/session/store.js` | 168 | Session store (Redis/memory) |
+| `routes/platform.js` | 60 | Platform router (thin orchestrator — R8.2.1 MOD-1 ✅) |
+| `routes/platform/*.js` | ~200 each | 8 domain sub-routers (auth, tenants, disciplines, templates, events, members, invitations, staffing) |
+| `lib/db/platform-store.js` | 22 | Platform data store barrel (R8.2.1 MOD-2 ✅) |
+| `lib/db/platform-store/*.js` | ~200 each | 10 domain modules (accounts, tenants, members, disciplines, templates, events, staffing, invitations, audit, rbac, utils) |
 | Other libs | ~800 | Logger, email, session, staffing helpers |
 
-**Total backend source:** ~6 100 lines across 36 files.
+**Total backend source:** ~9 500 lines across 60 files (including new platform sub-routers and domain store modules).
 
 ### 1.2 Frontend (`scoring-ui/src/`)
 
 | File | Lines | Role |
 |------|------:|------|
-| `App.jsx` | 792 | Scoring app (state machine, all views) |
+| `components/platform/TenantDetailPage.jsx` | 1 186 | Tenant detail with tabs — MOD-4 pending |
+| `App.jsx` | 888 | Scoring app (state machine, all views) — MOD-7 pending |
+| `components/platform/SchedulePage.jsx` | 648 | Event schedule/calendar — MOD-8 pending |
+| `components/TabletScoringView.jsx` | 648 | Tablet scoring view — MOD-7 pending |
 | `components/ManagePage.jsx` | 689 | Cup management UI (sub-components extracted) |
-| `components/TabletScoringView.jsx` | 600 | Tablet scoring view |
 | `components/SummaryReportPage.jsx` | 485 | Summary report builder |
 | `components/StaffingPage.jsx` | 458 | Staff management UI |
 | `components/ReportPage.jsx` | 449 | Detailed report page |
-| `TabletApp.jsx` | 441 | Tablet app shell |
+| `TabletApp.jsx` | 488 | Tablet app shell |
 | `components/RegisterPage.jsx` | 385 | Self-registration UI |
 | `api.js` | 334 | API client |
 | `i18n.js` | 329 | Finnish/English translations |
 | `components/shared.jsx` | 187 | Shared UI components |
 | Other components | ~1 050 | Pickers, buttons, login, manage sub-components, hooks |
 
-**Total frontend source:** ~6 700 lines across 35 files.
+**Total frontend source:** ~8 400 lines across 45+ files (platform UI components added in R8.x).
 
 ### 1.3 Tests
 
 | Suite | Files | Tests | Runtime |
 |-------|------:|------:|--------:|
-| `scoring-proxy` (vitest) | 13 | 223 | ~11 s |
-| `scoring-ui` (vitest/jsdom) | 9 | 190 | ~23 s |
+| `scoring-proxy` (vitest) | 23 | 556 | ~80 s |
+| `scoring-ui` (vitest/jsdom) | 10 | 221 | ~24 s |
 | `proxy.test.js` (node:test, live SSI) | 1 | excluded | manual |
 | `session-timeout.test.js` (node:test, live SSI) | 1 | excluded | manual |
 
-**Total automated:** 413 tests, ~35 s combined.
+**Total automated:** 777 tests, ~105 s combined. Proxy count grew significantly with R8.2.1 TST-1–4 (platform route tests: accounts, tenants, disciplines, templates, members, invitations, events).
 
 ---
 
@@ -69,12 +75,16 @@ The top merge-conflict hotspots are files where multiple features converge:
 
 | File | Lines | Why it's a problem |
 |------|------:|-------------------|
-| `ssi-core/client.js` | 1 474 | 29 exported functions covering auth, scoring, participants, squads, management, staffing, scraping. Domain shims exist but actual code not yet moved. |
-| `App.jsx` | 792 | Entire scoring flow as a single state machine with inline views. |
+| `ssi-core/client.js` | 1 770 | 29 exported functions covering auth, scoring, participants, squads, management, staffing, scraping. Domain shims exist but actual code not yet moved (MOD-3 pending). |
+| `components/platform/TenantDetailPage.jsx` | 1 186 | Tenant detail page with 5 tabs as a single component. Sub-component extraction pending (MOD-4). |
+| `App.jsx` | 888 | Entire scoring flow as a single state machine with inline views (MOD-7 pending). |
 | `ManagePage.jsx` | 689 | Sub-components extracted to `components/manage/` but still large. |
-| `TabletScoringView.jsx` | 600 | Tablet scoring above 500-line guideline. |
-| `management.js` (route) | 550 | 10 endpoints, business logic partially extracted to `cup-manage.js`. |
-| `server.js` | 428 | All middleware, rate limiters, and route mounting in one file. |
+| `components/platform/SchedulePage.jsx` | 648 | Schedule/calendar above 500-line guideline (MOD-8 pending). |
+| `components/TabletScoringView.jsx` | 648 | Tablet scoring above 500-line guideline (MOD-7 pending). |
+| `management.js` (route) | 632 | 10 endpoints, business logic partially extracted to `cup-manage.js`. |
+| `server.js` | 535 | All middleware, rate limiters, and route mounting in one file. |
+
+**Resolved in R8.2.1:** `routes/platform.js` (was 2 857 lines) split into 8 sub-routers + 60-line orchestrator (MOD-1 ✅). `lib/db/platform-store.js` (was 2 124 lines) split into 10 domain modules (MOD-2 ✅).
 
 **Impact:** When two developers (or agent sessions) work on different features that both touch `client.js` or `management.js`, merge conflicts are almost guaranteed.
 
@@ -92,7 +102,7 @@ server.js
   └── routes/auth-v7.js ──→ lib/ssi-core/graphql.js          ──→ lib/ssi-core/client.js
 ```
 
-Routes now import from domain-specific modules (RFR3 complete). However, the domain modules are re-export shims — actual code still lives in the monolithic `client.js` (1 474 lines).
+Routes now import from domain-specific modules (RFR3 complete). However, the domain modules are re-export shims — actual code still lives in the monolithic `client.js` (1 770 lines, MOD-3 pending).
 
 ### 2.3 Pattern Duplication (UI)
 
@@ -110,7 +120,7 @@ This was originally duplicated in 5 pages. Three have been migrated to `useAuthe
 
 ### 3.1 Move Code from `ssi-core/client.js` into Domain Modules (HIGH PRIORITY)
 
-Current: 1 file, 29 functions, 1 474 lines. Domain re-export shims exist (v7.4) but actual code not yet moved.
+Current: 1 file, 29 functions, 1 770 lines. Domain re-export shims exist (v7.4) but actual code not yet moved (MOD-3 pending).
 
 Target structure (shims already exist, code movement pending):
 ```
@@ -181,9 +191,10 @@ All routes now import from domain-specific modules (v7.4, RFR3 complete). The `l
 | **Session compat** | ✅ Good | 4 tests for backward compatibility |
 | **Impersonation** | ✅ Good | 6 tests |
 | **SSI core client** | ⚠️ Partial | 2 test files, ~28 tests (cookie parsing + fixture-based scraping) |
-| **Scoring routes** | ❌ None | No unit tests |
-| **Reports routes** | ❌ None | No unit tests |
-| **Staffing routes** | ❌ None | No unit tests (empty `test/staffing/` dir) |
+| **Platform routes** | ✅ Good | 333 tests across 7 files — accounts, tenants, disciplines, templates, members, invitations, events (R8.2.1 TST-1–4 ✅) |
+| **Scoring routes** | ❌ None | No unit tests (TST-8 pending) |
+| **Reports routes** | ❌ None | No unit tests (TST-8 pending) |
+| **Staffing routes** | ❌ None | No unit tests (TST-8 pending) |
 | **Staffing engine** | ❌ None | No unit tests |
 | **UI: api.js** | ✅ Good | 22 tests |
 | **UI: shared.jsx** | ✅ Good | 19 tests |
@@ -195,17 +206,19 @@ All routes now import from domain-specific modules (v7.4, RFR3 complete). The `l
 
 ### 4.2 Coverage Gaps (Priority Order)
 
-1. **SSI core client** — The 1 474-line heart of the system now has ~28 fixture-based tests, but GraphQL integration functions remain untested.
-2. **Staffing routes + engine** — Route handlers untested. Engine logic untested.
-3. **Scoring routes** — No route-level tests (service layer has 12 unit tests).
-4. **Reports routes** — No tests at all.
-5. **Auth-v7 routes** — No route-level tests.
+1. **SSI core client** — The 1 770-line heart of the system now has ~28 fixture-based tests, but GraphQL integration functions remain untested (TST-5/6 pending).
+2. **Staffing routes + engine** — Route handlers untested. Engine logic untested (TST-8 pending).
+3. **Scoring routes** — No route-level tests (service layer has 12 unit tests, TST-8 pending).
+4. **Reports routes** — No tests at all (TST-8 pending).
+5. **Auth-v7 routes** — No route-level tests (TST-8 pending).
+
+**Resolved in R8.2.1:** Platform routes now have 333 tests across 7 files (accounts, tenants, disciplines, templates, members, invitations, events — TST-1–4 ✅).
 
 ### 4.3 Test Strategy Recommendations
 
 #### Keep Test Runs Fast (<60 seconds)
 
-Current: 413 tests in ~35 s. This is healthy. To maintain this as coverage grows:
+Current: 777 tests in ~105 s. To maintain this as coverage grows:
 
 - **Unit tests for SSI client functions:** Mock `fetch` at the function level, not at the HTTP layer. Test HTML parsing with fixture files (saved SSI HTML snapshots). These run in <1 ms each.
 - **Route tests:** Continue the current pattern of mocking SSI client functions. Keep route tests focused on HTTP contract (status codes, response shapes, validation).
@@ -230,19 +243,19 @@ Test SSI parsing functions against real HTML snapshots. When SSI changes their H
 | Layer | Current | Target | Notes |
 |-------|--------:|-------:|-------|
 | Unit (SSI client, helpers, engine) | ~60 | ~80 | Good progress, GraphQL functions still untested |
-| Route/API (HTTP contract) | ~100 | ~160 | Add scoring, reports, staffing, auth |
+| Route/API (HTTP contract) | ~433 | ~500 | Platform routes covered (TST-1–4 ✅); scoring, reports, staffing still needed |
 | UI unit (hooks, utils, api) | ~100 | ~110 | Good coverage |
 | UI component (render, interaction) | ~33 | ~50 | Add key user flows |
 | Integration (live SSI) | ~2 | ~5 | Keep manual/separate |
-| **Total** | **~295** | **~405** | |
+| **Total** | **~628** | **~745** | |
 
-**Estimated runtime at target:** ~45-50 s (still under 1 minute).
+**Estimated runtime at target:** ~110-120 s.
 
 ### 4.4 Time-Dependent Test Fragility
 
-The UI test suite has a failing test (`shared.test.js:379`) that checks `isToday('2026-02-14T23:00:00Z')`. This is a **time-zone-sensitive test** that breaks depending on when/where it runs.
+~~The UI test suite has a failing test (`shared.test.js:379`) that checks `isToday('2026-02-14T23:00:00Z')`~~ — **Pre-resolved (TST-7 ✅)**: On inspection the test uses a `global.Date` mock correctly and does not require `vi.useFakeTimers()`. No fix needed.
 
-**Fix:** Use `vi.useFakeTimers()` to pin the date in time-dependent tests. Never assert against hardcoded dates without controlling the clock.
+**Rule:** Use `vi.useFakeTimers()` to pin the date in time-dependent tests. Never assert against hardcoded dates without controlling the clock.
 
 ## 5. Event Creation Architecture
 
@@ -346,13 +359,16 @@ The following rules should be added to `AGENTS.md` and `.github/copilot-instruct
 | ~~Phase 2~~ | ~~Add SSI client unit tests with HTML fixtures~~ | ✅ v7.4 (RFR2) | — | — |
 | ~~Phase 3~~ | ~~Extract management route logic into `cup-manage.js`~~ | ✅ v7.4 (RFR4) | — | — |
 | ~~Phase 4~~ | ~~Extract `useAuthenticatedPage` hook, split ManagePage~~ | ✅ v7.4 (RFR6-7) | — | — |
-| **Phase 5** | Move actual code from `client.js` into domain modules | Pending | 3-4 h | High — eliminates #1 conflict hotspot |
-| **Phase 6** | Add missing route tests (scoring, reports, staffing, auth) | Pending | 3-4 h | Medium — closes coverage gaps |
+| ~~Phase 4b~~ | ~~Split `routes/platform.js` into 8 sub-routers~~ | ✅ R8.2.1 (MOD-1) | — | — |
+| ~~Phase 4c~~ | ~~Split `lib/db/platform-store.js` into 10 domain modules~~ | ✅ R8.2.1 (MOD-2) | — | — |
+| ~~Phase 4d~~ | ~~Add platform route tests (accounts, tenants, disciplines, events…)~~ | ✅ R8.2.1 (TST-1–4) | — | — |
+| **Phase 5** | Move actual code from `client.js` into domain modules (MOD-3) | Pending | 3-4 h | High — eliminates #1 conflict hotspot |
+| **Phase 6** | Add missing route tests (scoring, reports, staffing — TST-8) | Pending | 2-3 h | Medium — closes coverage gaps |
 | **Phase 7** | Continue service layer extraction (staffing, registration) | Pending | 2-3 h | Medium — reduces route file size |
-| **Phase 8** | Split `App.jsx` and `TabletScoringView.jsx` | Pending | 2-3 h | Medium — reduces UI merge conflicts |
-| **Phase 9** | Fix time-dependent UI test | Pending | 0.5 h | Low — prevents CI flakiness |
+| **Phase 8** | Split `App.jsx`, `TabletScoringView.jsx`, `SchedulePage.jsx` (MOD-7/8) | Pending | 2-3 h | Medium — reduces UI merge conflicts |
+| **Phase 9** | Split `TenantDetailPage.jsx` (MOD-4) | Pending | 2-3 h | Medium — new 1186-line god file |
 
-**Completed:** Phases 1-4 (~10 h of original plan).
+**Completed:** Phases 1-4c (~15 h of total plan).
 **Remaining estimated effort:** ~12 hours across 5 phases.
 
 ---
@@ -361,18 +377,19 @@ The following rules should be added to `AGENTS.md` and `.github/copilot-instruct
 
 **Strengths:**
 - Clean dependency injection pattern for routes (stateless factory functions)
-- Good test coverage for session management and auth (413 tests, ~35 s)
+- Good test coverage: 777 automated tests (~105 s) — platform routes fully covered
 - Centralized error handling with `AppError` hierarchy and `errorHandler` middleware
 - Centralized logging via `LOG_LEVEL` — all routes use `log.*` (no `console.*` in routes)
 - API versioning deployed (`/api/v1/` primary, `/api/` legacy with deprecation headers)
 - Service layer pattern established (`scoring-service.js`, `cup-manage.js`)
+- Platform routes modularized: `routes/platform/` (8 sub-routers) + `lib/db/platform-store/` (10 domain modules)
 - Well-documented (design docs, debug guides, flow diagrams)
 
 **Key Risks:**
-- `ssi-core/client.js` (1 474 lines, 29 functions) — domain shims are re-exports only, actual code not moved
-- `App.jsx` (792 lines) and `TabletScoringView.jsx` (600 lines) are UI conflict hotspots
-- Staffing, scoring, reports, and auth-v7 routes have zero test coverage
-- SSI GraphQL integration functions remain untested (scraping has 28 fixture-based tests)
+- `ssi-core/client.js` (1 770 lines, 29 functions) — domain shims are re-exports only, actual code not moved (MOD-3)
+- `TenantDetailPage.jsx` (1 186 lines) — new largest UI file, needs sub-component extraction (MOD-4)
+- `App.jsx` (888 lines) and `TabletScoringView.jsx` (648 lines) are UI conflict hotspots (MOD-7)
+- Staffing, scoring, reports, and auth-v7 routes have zero test coverage (TST-8)
 
 **Top 3 Actions:**
 1. Move actual code from `client.js` into domain modules (Phase 2 of RFR1)
@@ -488,7 +505,9 @@ async function searchCups(search, session, graphqlWithRefresh) {
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| SSI Core Domain Split | Partial (v7.4) | 5 re-export shims created; actual code still in `client.js` |
+| SSI Core Domain Split | Partial (v7.4) | 5 re-export shims created; actual code still in `client.js` (MOD-3 pending) |
+| Platform Route Split | ✅ Complete (R8.2.1) | `routes/platform.js` → 8 sub-routers + 60-line orchestrator (MOD-1) |
+| Platform Store Split | ✅ Complete (R8.2.1) | `lib/db/platform-store.js` → 10 domain modules (MOD-2) |
 | Service Layer | In Progress (v7.5) | `scoring-service.js` + `cup-manage.js` done |
 | Error Handling | Complete (v7.5) | Centralized middleware, all routes use `next(error)` |
 | API Versioning | Complete (v7.5) | `/api/v1/` paths active, legacy aliases with deprecation |
