@@ -58,7 +58,16 @@ This is a **shooting competition management system** to help setting up events i
 │   ├── server.js            # Main server, middleware, route mounting
 │   ├── routes/
 │   │   ├── auth-v7.js       # SSI authentication (dual-session login/logout/status)
-│   │   ├── platform.js      # Platform routes (accounts, tenants, members, MFA, invitations, events)
+│   │   ├── platform.js      # Platform router (thin orchestrator, mounts routes/platform/* sub-routers)
+│   │   ├── platform/        # Platform domain sub-routers (each exports mountXxxRoutes(router, deps))
+│   │   │   ├── auth.js      # Register, login, logout, MFA, account profile
+│   │   │   ├── tenants.js   # Tenant CRUD
+│   │   │   ├── disciplines.js # Discipline CRUD + SSI registry
+│   │   │   ├── templates.js # Match template CRUD + SSI seed import
+│   │   │   ├── events.js    # Scheduled events CRUD + SSI execute/search/import
+│   │   │   ├── members.js   # Tenant member management
+│   │   │   ├── invitations.js # Tenant invitations (protected + public accept)
+│   │   │   └── staffing.js  # Event staffing roster + SSI sync
 │   │   ├── scoring.js       # Score entry endpoints
 │   │   ├── management.js    # Cup management endpoints
 │   │   ├── registration.js  # Public self-registration
@@ -67,12 +76,14 @@ This is a **shooting competition management system** to help setting up events i
 │   │   └── v1/index.js      # API version info endpoint
 │   ├── middleware/
 │   │   ├── auth-v7.js       # SSI auth middleware (requireAuthV7, requireScopeV7)
-│   │   ├── platform-auth.js # Platform auth middleware (requirePlatformAuth)
+│   │   ├── platform-auth.js # Platform auth middleware (requirePlatformAuth, requireTenantRole, COOKIE_OPTIONS)
 │   │   └── errorHandler.js  # Centralized error handling + asyncHandler
 │   ├── lib/
 │   │   ├── db/              # Database layer
 │   │   │   ├── postgres.js  # PostgreSQL pool, schema DDL, migrations
-│   │   │   └── platform-store.js # Platform data store (accounts, tenants, members, RBAC, events)
+│   │   │   ├── platform-store.js # Platform data store barrel (re-exports from platform-store/)
+│   │   │   └── platform-store/   # Domain modules: accounts, tenants, members, disciplines, templates,
+│   │   │                         #   events, staffing, invitations, audit, rbac, utils
 │   │   ├── ssi-core/        # SSI API integration (split by domain)
 │   │   │   ├── client.js    # Monolithic SSI client (legacy, code move pending)
 │   │   │   ├── graphql.js   # Auth, JWT, login
@@ -84,7 +95,8 @@ This is a **shooting competition management system** to help setting up events i
 │   │   ├── services/        # Business logic (pure functions)
 │   │   │   ├── cup-manage.js          # Cup management operations
 │   │   │   ├── mfa-service.js         # TOTP MFA (setup, verify, recovery codes)
-│   │   │   └── event-creation-service.js # SSI event creation (cups, matches, squads)
+│   │   │   ├── event-creation-service.js # SSI event creation (cups, matches, squads)
+│   │   │   └── platform-validation.js # Platform input validation (validateSignUp, validateTenantCreate)
 │   │   ├── errors/          # Custom error classes
 │   │   │   └── AppError.js  # AppError hierarchy (9 error types)
 │   │   ├── session/         # SSI session management (Redis/memory)
@@ -240,11 +252,12 @@ Use these to check deploy status, view logs, monitor service performance, and ma
 | Modify staffing config | `config/training-staffing-configuration.yml`, `scoring-proxy/lib/staffing/config-loader.js` |
 | Add/update translations | `scoring-ui/src/i18n.js` |
 | Modify SSI authentication | `scoring-proxy/routes/auth-v7.js`, `scoring-proxy/middleware/auth-v7.js` |
-| Modify platform auth | `scoring-proxy/routes/platform.js`, `scoring-proxy/middleware/platform-auth.js` |
+| Add platform API endpoint | `scoring-proxy/routes/platform/<domain>.js` (add to mount function), `scoring-ui/src/platform-api.js` (client) |
+| Modify platform auth | `scoring-proxy/routes/platform/auth.js`, `scoring-proxy/middleware/platform-auth.js` |
 | Modify platform data | `scoring-proxy/lib/db/platform-store.js`, `scoring-proxy/lib/db/postgres.js` |
 | Modify platform UI | `scoring-ui/src/components/platform/*.jsx`, `scoring-ui/src/platform-api.js` |
-| Modify MFA | `scoring-proxy/lib/services/mfa-service.js`, `scoring-proxy/routes/platform.js` |
-| Modify SSI event import | `scoring-proxy/lib/ssi-core/seed-import.js`, `scoring-proxy/routes/platform.js` |
+| Modify MFA | `scoring-proxy/lib/services/mfa-service.js`, `scoring-proxy/routes/platform/auth.js` |
+| Modify SSI event import | `scoring-proxy/lib/ssi-core/seed-import.js`, `scoring-proxy/routes/platform/events.js` |
 | Modify error handling | `scoring-proxy/middleware/errorHandler.js`, `scoring-proxy/lib/errors/AppError.js` |
 | Modify session management | `scoring-proxy/lib/session/store.js`, `scoring-proxy/lib/session/config.js` |
 
@@ -405,6 +418,39 @@ export function createXxxRouter({ requireAuth, graphqlWithRefresh, ... }) {
 - Router instance created **inside** the factory (no module-level shared state)
 - Dependencies injected via factory parameters (testable, no hidden coupling)
 - Factory exported as named export
+
+### Platform Sub-Router Pattern
+
+Platform routes are split into domain sub-routers under `routes/platform/`. Each domain file exports a **mount function** instead of a router:
+
+```javascript
+// routes/platform/disciplines.js
+export function mountDisciplineRoutes(router, { requirePlatformAuth, requireTenantRole, platformMutationLimiter }) {
+  router.get('/tenants/:tenantId/disciplines', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res) => {
+    // ...
+  })
+}
+```
+
+The orchestrator (`routes/platform.js`) builds a shared `deps` object and calls all mount functions:
+
+```javascript
+export function createPlatformRouter(limiters) {
+  const router = express.Router()
+  const deps = { requirePlatformAuth, requireTenantRole, ...limiters }
+  mountAuthRoutes(router, deps)
+  mountDisciplineRoutes(router, deps)
+  // ...
+  return router
+}
+```
+
+**Rules:**
+- Each domain file (`routes/platform/<domain>.js`) handles one functional area only
+- All imports are local to the domain file — never import from sibling domain files
+- Shared middleware (`requirePlatformAuth`, `requireTenantRole`, `COOKIE_OPTIONS`) is imported from `middleware/platform-auth.js`
+- New platform endpoints go into the appropriate existing domain file, not into `platform.js` directly
+- Platform data access always goes through `lib/db/platform-store.js` (barrel) → `lib/db/platform-store/<domain>.js`
 
 ### API Versioning
 
