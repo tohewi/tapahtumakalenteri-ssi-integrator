@@ -107,9 +107,22 @@ export function useAuthenticatedPage({
     if (onLogout) onLogout()
   }
 
+  // --- Check for an existing valid session (call on mount for auto-restore) ---
+  const checkSession = useCallback(async () => {
+    try {
+      const status = await api.getAuthStatus()
+      if (status?.authenticated) {
+        setAuthed(true)
+        return true
+      }
+    } catch { /* ignore */ }
+    return false
+  }, [])
+
   return {
     // State
     authed,
+    setAuthed,
     view,
     setView,
     loading,
@@ -117,11 +130,14 @@ export function useAuthenticatedPage({
     error,
     setError,
     sessionExpiredMessage,
+    setSessionExpiredMessage,
     savedCreds,
+    handleRememberMe,
 
     // Handlers
     handleLogin,
     handleLogout,
     withSessionCheck,
+    checkSession,
   }
 }

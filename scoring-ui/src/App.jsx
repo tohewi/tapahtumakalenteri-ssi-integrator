@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { useRememberMe } from './hooks/useRememberMe'
+import { useAuthenticatedPage } from './hooks/useAuthenticatedPage'
 import MatchPicker from './components/MatchPicker'
 import SquadPicker from './components/SquadPicker'
 import ScoringForm from './components/ScoringForm'
@@ -174,8 +174,6 @@ function setMatchDoubleSeriesEnabled(matchId, enabled) {
 }
 
 export function App() {
-  const { savedCreds, handleRememberMe } = useRememberMe('ssi_credentials_scoring')
-  
   const [view, setView] = useState('restoring') // 'restoring' | 'login' | 'cup' | 'match' | 'squad' | 'series' | 'scoring'
   const [selectedCup, setSelectedCup] = useState(null)
   const [matches, setMatches] = useState([])
@@ -185,41 +183,21 @@ export function App() {
   const [selectedShooterId, setSelectedShooterId] = useState(null)
   const [allScores, setAllScores] = useState({})
   const [doubleSeries, setDoubleSeries] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
   const [saving, setSaving] = useState(false)
-  const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
 
-  // --- Helper to handle session expiry ---
-  const handleSessionExpired = useCallback(() => {
-    setSessionExpiredMessage('Session expired. Please login again.')
-    // Navigation state is already saved in localStorage via useEffect
-    // It will be restored after successful re-login via restoreNavState()
-    setView('login')
-  }, [])
-
-  // --- Helper to handle scope mismatch ---
-  const handleScopeMismatch = useCallback(() => {
-    setSessionExpiredMessage('Please login to access this feature.')
-    setView('login')
-  }, [])
-
-  // --- Wrapper to catch SessionExpiredError and ScopeMismatchError ---
-  const withSessionCheck = useCallback(async (fn) => {
-    try {
-      return await fn()
-    } catch (err) {
-      if (err instanceof api.SessionExpiredError) {
-        handleSessionExpired()
-        throw err // Re-throw so caller knows it failed
-      }
-      if (err instanceof api.ScopeMismatchError) {
-        handleScopeMismatch()
-        throw err
-      }
-      throw err
-    }
-  }, [handleSessionExpired, handleScopeMismatch])
+  // Auth hook — provides session management infrastructure
+  const {
+    loading, setLoading,
+    error, setError,
+    sessionExpiredMessage, setSessionExpiredMessage,
+    savedCreds,
+    handleRememberMe,
+    withSessionCheck,
+  } = useAuthenticatedPage({
+    scope: 'scoring',
+    credsKey: 'ssi_credentials_scoring',
+    onSessionExpired: () => setView('login'),
+  })
 
   // --- Save navigation state on changes ---
   useEffect(() => {
