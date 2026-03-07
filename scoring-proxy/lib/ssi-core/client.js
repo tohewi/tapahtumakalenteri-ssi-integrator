@@ -89,7 +89,10 @@ export async function ssiGraphQLAuth({ email, password, apiKey }) {
     throw new Error('SSI GraphQL Authentication failed')
   }
 
-  return result.token_auth.token.token
+  return {
+    token: result.token_auth.token.token,
+    refreshToken: result.token_auth.refresh_token?.token || null,
+  }
 }
 
 // ============================================================

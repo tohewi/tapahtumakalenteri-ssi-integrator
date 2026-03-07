@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit'
 import path from 'path'
 import { existsSync } from 'fs'
 import { fileURLToPath } from 'url'
-import { ssiGraphQL, ssiLogin, ssiRefreshJWT } from './lib/ssi-core/graphql.js'
+import { ssiGraphQL, ssiGraphQLAuth, ssiLogin, ssiRefreshJWT } from './lib/ssi-core/graphql.js'
 import { log } from './lib/logger.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { createScoringRouter } from './routes/scoring.js'
@@ -225,16 +225,9 @@ async function getAdminSession() {
     adminCookies = await ssiLogin(email, password)
     adminCookieTime = now
 
-    const authResult = await ssiGraphQL(null, `
-      mutation Auth($email: String!, $password: String!) {
-        token_auth(email: $email, password: $password) {
-          token { token }
-          refresh_token { token }
-        }
-      }
-    `, { email, password }, apiKey)
-    adminJwt = authResult.token_auth?.token?.token || null
-    adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
+    const authResult = await ssiGraphQLAuth({ email, password, apiKey })
+    adminJwt = authResult.token || null
+    adminRefreshToken = authResult.refreshToken || null
     adminJwtTime = now
 
     log.debug('[admin] Session ready (fresh login)')
@@ -253,16 +246,9 @@ async function getAdminSession() {
         log.debug('[admin] JWT refreshed via refresh token')
       } else {
         // No refresh token — full re-auth for JWT
-        const authResult = await ssiGraphQL(null, `
-          mutation Auth($email: String!, $password: String!) {
-            token_auth(email: $email, password: $password) {
-              token { token }
-              refresh_token { token }
-            }
-          }
-        `, { email, password }, apiKey)
-        adminJwt = authResult.token_auth?.token?.token || null
-        adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
+        const authResult = await ssiGraphQLAuth({ email, password, apiKey })
+        adminJwt = authResult.token || null
+        adminRefreshToken = authResult.refreshToken || null
         adminJwtTime = now
         log.debug('[admin] JWT refreshed via re-auth')
       }
@@ -271,16 +257,9 @@ async function getAdminSession() {
       // Full re-login as fallback
       adminCookies = await ssiLogin(email, password)
       adminCookieTime = now
-      const authResult = await ssiGraphQL(null, `
-        mutation Auth($email: String!, $password: String!) {
-          token_auth(email: $email, password: $password) {
-            token { token }
-            refresh_token { token }
-          }
-        }
-      `, { email, password }, apiKey)
-      adminJwt = authResult.token_auth?.token?.token || null
-      adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
+      const authResult = await ssiGraphQLAuth({ email, password, apiKey })
+      adminJwt = authResult.token || null
+      adminRefreshToken = authResult.refreshToken || null
       adminJwtTime = now
     }
   }
