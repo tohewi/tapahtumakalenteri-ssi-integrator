@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import * as api from '../api'
-import { useRememberMe } from '../hooks/useRememberMe'
+import { useAuthenticatedPage } from '../hooks/useAuthenticatedPage'
 import LoginScreen from './LoginScreen'
 import { AppHeader } from './shared'
 import t from '../i18n'
@@ -40,61 +40,44 @@ function InlineBanner({ message, type = 'success', onDismiss }) {
 }
 
 export default function StaffingPage() {
-  const [authed, setAuthed] = useState(false)
   const [events, setEvents] = useState([])
   const [isAdmin, setIsAdmin] = useState(false)
   const [userEmail, setUserEmail] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
   const [filter, setFilter] = useState('all') // 'all' | 'missingRoles' | 'myEvents'
 
-  // Saved credentials for pre-fill (shared hook — handles save AND clear)
-  const { savedCreds, handleRememberMe } = useRememberMe(LS_CREDS)
+  const {
+    authed,
+    loading, setLoading,
+    error, setError,
+    sessionExpiredMessage,
+    savedCreds,
+    handleLogin,
+    handleLogout,
+    withSessionCheck,
+    checkSession,
+  } = useAuthenticatedPage({
+    scope: 'staffing',
+    credsKey: LS_CREDS,
+    onLogout: () => setEvents([]),
+  })
 
   // Check existing session on mount (survives page reload)
-  useEffect(() => {
-    api.getAuthStatus().then(status => {
-      if (status.authenticated) setAuthed(true)
-    }).catch(() => {})
-  }, [])
-
-  // Session expiry handler
-  const handleSessionExpired = useCallback(() => {
-    setSessionExpiredMessage('Session expired. Please login again.')
-    setAuthed(false)
-  }, [])
-
-  // Login handler — scope: 'staffing', instructor list checked server-side
-  const handleLogin = async (email, password, apiKey, rememberMe) => {
-    setSessionExpiredMessage(null)
-    await api.login(email, password, apiKey, 'staffing')
-    await handleRememberMe(email, password, apiKey, rememberMe)
-    setAuthed(true)
-  }
-
-  // Logout handler
-  const handleLogout = async () => {
-    try { await api.logout() } catch { /* ignore */ }
-    setAuthed(false)
-    setEvents([])
-    setError(null)
-  }
+  useEffect(() => { checkSession() }, [checkSession])
 
   async function loadEvents() {
+    setLoading(true)
+    setError(null)
     try {
-      setLoading(true)
-      setError(null)
-      const data = await fetchStaffingEvents()
-      setEvents(data.events || [])
-      setIsAdmin(data.isAdmin || false)
-      setUserEmail(data.userEmail || null)
+      await withSessionCheck(async () => {
+        const data = await fetchStaffingEvents()
+        setEvents(data.events || [])
+        setIsAdmin(data.isAdmin || false)
+        setUserEmail(data.userEmail || null)
+      })
     } catch (err) {
-      if (err.sessionExpired || err.status === 403) {
-        handleSessionExpired()
-        return
+      if (!(err instanceof api.SessionExpiredError) && !(err instanceof api.ScopeMismatchError)) {
+        setError(err.message)
       }
-      setError(err.message)
     } finally {
       setLoading(false)
     }
