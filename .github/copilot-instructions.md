@@ -230,9 +230,10 @@ Use these to check deploy status, view logs, monitor service performance, and ma
 
 ## Git Workflow
 
-- **Production branch:** `main` (auto-deploys to Render)
+- **`main` branch:** Contains the **Release 7 code stream only**. Will NOT be updated with Release 8 or later work.
+- **Release 8+ base branch:** `release/r80-match-manager-base` — this is the integration branch for all R8.x work.
 - **Remote name:** `origin` (repo: `tohewi/tapahtumakalenteri-ssi-integrator`)
-- **Feature branches:** Create from `main`, open PR targeting `main`
+- **Feature/hotfix branches:** Create from the appropriate `release/rXX-*` branch, open PR targeting that same branch. Never target `main` for R8+ work.
 - **Preview environments:** Automatically created by GitHub Actions for every PR
 - **CI/CD:** Two workflows run on PRs:
   - `ci-deploy.yml` - Tests, audit, build (required to pass)
