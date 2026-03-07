@@ -551,7 +551,7 @@ Patch release to address critical file size violations, logging discipline regre
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| COD-1 | **Deduplicate `token_auth` mutation in `getAdminSession()`** (`server.js`): The `token_auth` GraphQL mutation string is hardcoded 3 times in `getAdminSession()`. Refactor to call `ssiGraphQLAuth(credentials)` from `lib/ssi-core/graphql.js` instead. This eliminates the risk of mutation string drift and aligns with the established GraphQL auth pattern | ⬚ Pending |
+| COD-1 | **Deduplicate `token_auth` mutation in `getAdminSession()`** (`server.js`): The `token_auth` GraphQL mutation string is hardcoded 3 times in `getAdminSession()`. Refactor to call `ssiGraphQLAuth(credentials)` from `lib/ssi-core/graphql.js` instead. This eliminates the risk of mutation string drift and aligns with the established GraphQL auth pattern | ✅ Implemented/Ready |
 | COD-2 | **Fix cross-boundary import in `platform.js`**: `platform.js` imports `ssiGetMatchOfficials` directly from `lib/ssi-core/client.js` (line 21). This bypasses the domain module boundary. Change to import from `lib/ssi-core/management.js`, which is the correct domain module for management operations | ✅ Implemented |
 | COD-3 | **Migrate `StaffingPage` and `App.jsx` to `useAuthenticatedPage` hook**: Both still use duplicated auth boilerplate (5+ state variables + login/restore/expiry logic). Architecture §2.3 identified this; §3.3 specified the fix. `useAuthenticatedPage` already exists and is used by ManagePage, ReportPage, SummaryReportPage. Eliminate ~50 lines of boilerplate per page | ⬚ Pending |
 | COD-4 | **Extract platform input validation to service layer**: `validateSignUp()` and `validateTenantCreate()` are inline in `platform.js`. Move to a new `lib/services/platform-validation.js` module. All validation functions across the platform feature should live there, not in the route file | ✅ Implemented/Ready |
@@ -574,7 +574,7 @@ Patch release to address critical file size violations, logging discipline regre
 | # | Requirement | Status |
 |---|-------------|--------|
 | ARC-1 | **Configure ESLint module boundary rules**: The import boundary rules in `architecture-review.md` §8.3 and §8.4 are documented but not enforced. Add ESLint rules (or a custom plugin) to prevent: (a) importing from `client.js` directly in routes, (b) cross-domain imports within ssi-core/ (e.g., scoring.js importing from participants.js), (c) barrel imports that hide coupling. Failing rules block CI | ⬚ Pending |
-| ARC-2 | **Update `architecture-review.md`**: File is stale (last updated 2026-02-23). Needs: updated line counts for all files (client.js 1474→1768, plus new files), addition of platform.js (2550), platform-store.js (2124), TenantDetailPage.jsx (1119), updated test counts (now 662 passing), corrected event builder section (Nordic builder uses form POST, not GraphQL), updated Phase 5 roadmap status | ⬚ Pending |
+| ARC-2 | **Update `architecture-review.md`**: File is stale (last updated 2026-02-23). Needs: updated line counts for all files (client.js 1474→1768, plus new files), addition of platform.js (2550), platform-store.js (2124), TenantDetailPage.jsx (1119), updated test counts (now 662 passing), corrected event builder section (Nordic builder uses form POST, not GraphQL), updated Phase 5 roadmap status | ✅ Implemented/Ready |
 
 ### Design Decisions (Release 8.2.1)
 
@@ -721,7 +721,7 @@ These requirements are planned for a future release, likely before billing integ
 - **Release 8.0** (Platform Auth & Tenancy): 21 requirements — 21 ✅ (PA1–PA21)
 - **Release 8.1** (Match Management Platform): 8 requirements — 5 ✅ (MP1, MP2, MP4, MP10, MP12), 3 design phase (MP3, MP8, MP9). **MP12 — SSI Event Import**: Search existing SSI events via GraphQL (name, sport, date range, region filters) and import selected events as local scheduled_events with `ssi_created` status. Backend: `ssiSearchEvents` in seed-import.js, `importSsiEvent` in platform-store.js, `/ssi-search` + `/ssi-import` API routes. Frontend: `ImportSsiEventsModal` component in SchedulePage with search form, results table with checkboxes, and batch import action. Schema: `template_id` made nullable, `event_name` column added to `scheduled_events` for imported events without templates
 - **Release 8.2** (Platform Authorization & Workflows): 5 requirements — 5 ✅ (ACCT1, RBAC1, MP5, MP6, MP7)
-- **Release 8.2.1** (Architecture Technical Debt — Patch): 23 requirements — 10 ✅ (LOG-1, COD-2, COD-4, TST-7, MOD-1, MOD-2, TST-1, TST-2, TST-3, TST-4), 13 ⬚ pending (MOD-3–8, COD-1, COD-3, TST-5, TST-6, TST-8, ARC-1–2)
+- **Release 8.2.1** (Architecture Technical Debt — Patch): 23 requirements — 12 ✅ (LOG-1, COD-1, COD-2, COD-4, TST-7, MOD-1, MOD-2, TST-1, TST-2, TST-3, TST-4, ARC-2), 11 ⬚ pending (MOD-3–8, COD-3, TST-5, TST-6, TST-8, ARC-1)
 - **Release 8.3** (Calendar Integration): 1 requirement — 0 ✅, 1 design phase (MP11)
 - **Release 9.0** (Event Staffing): Core platform staffing capabilities — **All Implemented ✅**
   - **Data Model**: `event_staffing_needs` and `staff_signups` tables linked to `scheduled_events` and `accounts`. Auto-populated from template rules.
