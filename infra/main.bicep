@@ -38,11 +38,11 @@ param postgresAdminLogin string = 'pgadmin'
 @secure()
 param postgresAdminPassword string
 
-@description('App Service Plan SKU. B1=Basic (~€13/mo, target). P1v3=Premium (~€130/mo, use if B1 unavailable in region). F1=Free (60min CPU/day limit, dev only).')
+@description('App Service Plan SKU. B1=Basic (~€13/mo, target for low-traffic). P1v3=Premium (~€130/mo, use if B1 unavailable). F1=Free (60min CPU/day, dev only).')
 param appServicePlanSku string = 'B1'
 
-@description('PostgreSQL Flexible Server compute SKU.')
-param postgresSkuName string = 'Standard_B2ms'
+@description('PostgreSQL Flexible Server compute SKU. B1ms=1 vCore/2GB (~€21/mo). B2ms=2 vCores/4GB (~€42/mo).')
+param postgresSkuName string = 'Standard_B1ms'
 
 @description('PostgreSQL storage size in GB.')
 param postgresStorageSizeGB int = 32
@@ -196,12 +196,13 @@ module redis 'br/public:avm/res/cache/redis:0.4.0' = {
     name: redisName
     location: location
     skuName: 'Basic'
-    capacity: 1
+    capacity: 0              // C0 = 250 MB (~€8/mo) — sufficient for session store
     enableNonSslPort: false
     minimumTlsVersion: '1.2'
     redisConfiguration: {
       'aad-enabled': 'True'    // Entra ID auth enabled
     }
+    disableAccessKeyAuthentication: true  // Entra ID only — no shared keys
     tags: {
       environment: environmentName
       managedBy: 'bicep-avm'
