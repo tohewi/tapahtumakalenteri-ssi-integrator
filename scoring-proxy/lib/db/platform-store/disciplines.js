@@ -149,19 +149,19 @@ export async function upsertSsiDiscoveredDisciplines(disciplines) {
 
   for (const d of disciplines) {
     values.push(`($${paramIdx}, $${paramIdx + 1}, $${paramIdx + 2}, $${paramIdx + 3}, $${paramIdx + 4}, $${paramIdx + 5})`)
-    params.push(d.id, d.displayName, d.groupId || null, d.organizerId || null, d.isCup || false, d.ruleCode || null)
+    params.push(d.id, d.displayName, d.ssiCreateUrl || null, d.isCup || false, d.ruleCode || null, d.description || null)
     paramIdx += 6
   }
 
   const queryStr = `
-    INSERT INTO ssi_discovered_disciplines (id, display_name, group_id, organizer_id, is_cup, rule_code, last_seen_at)
+    INSERT INTO ssi_discovered_disciplines (id, display_name, ssi_create_url, is_cup, rule_code, description)
     VALUES ${values.join(', ')}
     ON CONFLICT (id) DO UPDATE
       SET display_name = EXCLUDED.display_name,
-          group_id = EXCLUDED.group_id,
-          organizer_id = EXCLUDED.organizer_id,
+          ssi_create_url = EXCLUDED.ssi_create_url,
           is_cup = EXCLUDED.is_cup,
           rule_code = EXCLUDED.rule_code,
+          description = EXCLUDED.description,
           last_seen_at = NOW()
   `
   await query(queryStr, params)
@@ -172,8 +172,7 @@ export async function listSsiDiscoveredDisciplines() {
   return rows.map(r => ({
     id: r.id,
     displayName: r.display_name,
-    groupId: r.group_id,
-    organizerId: r.organizer_id,
+    ssiCreateUrl: r.ssi_create_url,
     isCup: r.is_cup,
     ruleCode: r.rule_code,
     description: r.description,
