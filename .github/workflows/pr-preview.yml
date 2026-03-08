@@ -96,6 +96,8 @@ jobs:
           PREVIEW_SSI_BASE_URL: ${{ secrets.SSI_BASE_URL }}
           PREVIEW_STAFFING_CRON_SECRET: ${{ secrets.STAFFING_CRON_SECRET }}
           PREVIEW_STAFFING_API_URL: ${{ secrets.STAFFING_API_URL }}
+          PREVIEW_PLATFORM_CREDENTIALS_KEY: ${{ secrets.PLATFORM_CREDENTIALS_KEY }}
+          PREVIEW_MFA_SECRET_KEY: ${{ secrets.MFA_SECRET_KEY }}
         run: |
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
           BRANCH_NAME="${{ github.head_ref }}"
@@ -122,6 +124,8 @@ jobs:
             --arg ssiBaseUrl "${PREVIEW_SSI_BASE_URL}" \
             --arg staffingCronSecret "${PREVIEW_STAFFING_CRON_SECRET}" \
             --arg staffingApiUrl "${PREVIEW_STAFFING_API_URL}" \
+            --arg platformCredentialsKey "${PREVIEW_PLATFORM_CREDENTIALS_KEY}" \
+            --arg mfaSecretKey "${PREVIEW_MFA_SECRET_KEY}" \
             '[
               {"key": "NODE_ENV", "value": $nodeEnv},
               {"key": "SESSION_SECRET", "value": $sessionSecret},
@@ -138,7 +142,9 @@ jobs:
             + (if $emailFrom != "" then [{"key": "EMAIL_FROM", "value": $emailFrom}] else [] end)
             + (if $ssiBaseUrl != "" then [{"key": "SSI_BASE_URL", "value": $ssiBaseUrl}] else [] end)
             + (if $staffingCronSecret != "" then [{"key": "STAFFING_CRON_SECRET", "value": $staffingCronSecret}] else [] end)
-            + (if $staffingApiUrl != "" then [{"key": "STAFFING_API_URL", "value": $staffingApiUrl}] else [] end)')
+            + (if $staffingApiUrl != "" then [{"key": "STAFFING_API_URL", "value": $staffingApiUrl}] else [] end)
+            + (if $platformCredentialsKey != "" then [{"key": "PLATFORM_CREDENTIALS_KEY", "value": $platformCredentialsKey}] else [] end)
+            + (if $mfaSecretKey != "" then [{"key": "MFA_SECRET_KEY", "value": $mfaSecretKey}] else [] end)')
 
           PAYLOAD=$(jq -cn \
             --arg serviceName "${SERVICE_NAME}" \
