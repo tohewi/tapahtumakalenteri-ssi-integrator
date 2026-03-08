@@ -206,9 +206,29 @@ export async function initPostgres() {
       })
     }
 
+    // ---- Schema isolation (DB_SCHEMA env var) ----
+    // PR preview services set DB_SCHEMA=pr_{N} so each branch gets its own
+    // PostgreSQL schema within the shared database. Production uses 'public'.
+    const dbSchema = process.env.DB_SCHEMA || 'public'
+
+    if (dbSchema !== 'public') {
+      // Set search_path for every new physical connection in the pool
+      pool.on('connect', (pgClient) => {
+        pgClient.query(`SET search_path TO "${dbSchema}"`)
+      })
+    }
+
     // Verify connection
     const client = await pool.connect()
     try {
+      if (dbSchema !== 'public') {
+        // Create the schema if it doesn't exist (runs in default search_path)
+        await client.query(`CREATE SCHEMA IF NOT EXISTS "${dbSchema}"`)
+        // Switch this client to the target schema
+        await client.query(`SET search_path TO "${dbSchema}"`)
+        log.info(`[postgres] Using schema: ${dbSchema}`)
+      }
+
       await client.query('SELECT 1')
       log.info('[postgres] Connected to PostgreSQL')
 

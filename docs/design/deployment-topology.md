@@ -108,8 +108,38 @@ graph TB
 - Open a PR targeting `release/r80-match-manager-base`
 - `pr-preview.yml` creates a **web-only** Render service: `turres-ssi-tools-v8-pr-{N}`
 - The preview service uses the **shared v8 DATABASE_URL and REDIS_URL** (from GitHub secrets)
-- When the PR is closed/merged, only the web service is deleted — shared DB is preserved
-- ⚠️ Schema migrations in any PR will affect all v8 services sharing the database
+- **Schema isolation:** Each PR gets `DB_SCHEMA=pr_{N}` → all tables are created in a dedicated PostgreSQL schema (`pr_42`, `pr_43`, etc.) within the shared database
+- When the PR is closed/merged, the PR's PostgreSQL schema is dropped (`DROP SCHEMA ... CASCADE`) and the web service is deleted
+- Production uses the default `public` schema — PR data never touches production data
+
+### Database Schema Isolation
+
+PR preview services share a single PostgreSQL instance but use **PostgreSQL schemas** for data isolation:
+
+```
+turres-ssi-tools-v8-db (single Render Starter PG)
+├── public              ← v8 production (DB_SCHEMA not set)
+├── pr_42               ← PR #42 preview (DB_SCHEMA=pr_42)
+├── pr_43               ← PR #43 preview (DB_SCHEMA=pr_43)
+└── ...
+```
+
+**How it works:**
+1. `postgres.js` reads `DB_SCHEMA` env var (default: `public`)
+2. If non-public, creates the schema (`CREATE SCHEMA IF NOT EXISTS`) on startup
+3. Sets `search_path` on every pool connection so all queries target the correct schema
+4. Each schema gets its own copy of all tables (via `CREATE TABLE IF NOT EXISTS`)
+5. On PR close, `pr-preview.yml` runs `DROP SCHEMA IF EXISTS "pr_{N}" CASCADE` to clean up
+
+**Benefits:**
+- Zero extra cost (schemas are free within a single PG instance)
+- Full data isolation between PRs and production
+- Destructive migrations in a PR don't affect other branches
+- Automatic cleanup on PR close
+
+**Limitations:**
+- All schemas share the same PG resources (CPU, memory, connections, disk)
+- Schema cleanup requires the `RENDER_V8_DATABASE_EXTERNAL_URL` GitHub secret
 
 ### GitHub Secrets Required
 
@@ -118,8 +148,9 @@ graph TB
 | `RENDER_API_KEY` | Render API token |
 | `RENDER_OWNER_ID` | `tea-d62r4ucoud1c73d50qg0` |
 | `RENDER_DEPLOY_HOOK` | V7 production deploy hook URL |
-| `RENDER_V8_DATABASE_URL` | Shared v8 PostgreSQL external connection string |
-| `RENDER_V8_REDIS_URL` | Shared v8 Redis external connection string |
+| `RENDER_V8_DATABASE_URL` | Shared v8 PostgreSQL internal connection string (for preview services) |
+| `RENDER_V8_DATABASE_EXTERNAL_URL` | Shared v8 PostgreSQL external URL (for schema cleanup via `psql`) |
+| `RENDER_V8_REDIS_URL` | Shared v8 Redis internal connection string |
 | `SSI_ADMIN_EMAIL` | SSI admin credentials (optional for previews) |
 | `SSI_ADMIN_PASSWORD` | SSI admin credentials (optional for previews) |
 

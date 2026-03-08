@@ -3,6 +3,7 @@ name: V8 PR Preview Environment
 # Creates, updates, and deletes Render preview environments for v8 pull requests.
 #
 # Key design: PR previews share the v8 project's PostgreSQL and Redis instances.
+# Each PR gets its own PostgreSQL schema (DB_SCHEMA=pr_{NUMBER}) for data isolation.
 # Only a web service is created per PR — no per-PR database provisioning.
 # This keeps costs low ($7/mo per active PR) and avoids free-tier DB expiry issues.
 #
@@ -10,7 +11,7 @@ name: V8 PR Preview Environment
 # 1. Creates a new Render web service when a PR is opened (format: turres-ssi-tools-v8-pr-{NUMBER})
 # 2. Connects it to the shared v8 DATABASE_URL and REDIS_URL (from GitHub secrets)
 # 3. Triggers redeployment when new commits are pushed to the PR
-# 4. Deletes only the web service when the PR is closed or merged
+# 4. Drops the PR's PostgreSQL schema and deletes the web service when the PR is closed/merged
 # 5. Posts preview URLs and status as PR comments
 #
 # Required GitHub Secrets:
@@ -98,15 +99,19 @@ jobs:
         run: |
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
           BRANCH_NAME="${{ github.head_ref }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
           APP_URL="https://${SERVICE_NAME}.onrender.com"
           SESSION_SECRET=$(openssl rand -base64 32)
+          DB_SCHEMA="pr_${PR_NUMBER}"
 
           # Build env vars — uses shared v8 DATABASE_URL and REDIS_URL from GitHub secrets
+          # DB_SCHEMA isolates each PR into its own PostgreSQL schema within the shared DB
           ENV_VARS=$(jq -cn \
             --arg nodeEnv "production" \
             --arg sessionSecret "${SESSION_SECRET}" \
             --arg logLevel "info" \
             --arg appUrl "${APP_URL}" \
+            --arg dbSchema "${DB_SCHEMA}" \
             --arg databaseUrl "${{ secrets.RENDER_V8_DATABASE_URL }}" \
             --arg redisUrl "${{ secrets.RENDER_V8_REDIS_URL }}" \
             --arg ssiAdminEmail "${PREVIEW_SSI_ADMIN_EMAIL}" \
@@ -121,7 +126,8 @@ jobs:
               {"key": "NODE_ENV", "value": $nodeEnv},
               {"key": "SESSION_SECRET", "value": $sessionSecret},
               {"key": "LOG_LEVEL", "value": $logLevel},
-              {"key": "APP_URL", "value": $appUrl}
+              {"key": "APP_URL", "value": $appUrl},
+              {"key": "DB_SCHEMA", "value": $dbSchema}
             ]
             + (if $databaseUrl != "" then [{"key": "DATABASE_URL", "value": $databaseUrl}] else [] end)
             + (if $redisUrl != "" then [{"key": "REDIS_URL", "value": $redisUrl}] else [] end)
@@ -214,7 +220,7 @@ jobs:
 
             ${isNewService ? '⏳ **First deployment in progress** — the preview will be available in a few minutes.' : '⏳ **Deployment in progress** — your changes are being deployed.'}
 
-            > Uses shared v8 database — schema migrations will affect all v8 services.
+            > Uses shared v8 database with isolated PostgreSQL schema (\`pr_${context.issue.number}\`). Schema is auto-cleaned on PR close.
 
             This preview will be automatically deleted when this PR is closed or merged.`;
 
@@ -243,6 +249,22 @@ jobs:
                 body: body
               });
             }
+
+      - name: Clean up PR database schema
+        if: github.event.action == 'closed'
+        env:
+          DATABASE_URL: ${{ secrets.RENDER_V8_DATABASE_EXTERNAL_URL }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          SCHEMA_NAME="pr_${PR_NUMBER}"
+
+          if [ -n "${DATABASE_URL}" ]; then
+            echo "Dropping schema: ${SCHEMA_NAME}"
+            psql "${DATABASE_URL}?sslmode=require" -c "DROP SCHEMA IF EXISTS \"${SCHEMA_NAME}\" CASCADE" 2>&1 || true
+            echo "✅ Database schema cleaned up: ${SCHEMA_NAME}"
+          else
+            echo "⚠️  RENDER_V8_DATABASE_EXTERNAL_URL not set — skipping schema cleanup"
+          fi
 
       - name: Delete preview service (web only — shared DB preserved)
         if: github.event.action == 'closed'
@@ -286,7 +308,8 @@ jobs:
         with:
           script: |
             const serviceName = '${{ steps.preview-name.outputs.service_name }}';
-            const body = `🗑️ **V8 Preview environment deleted**\n\nThe preview service \`${serviceName}\` has been deleted. The shared v8 database was preserved.`;
+            const prNumber = context.issue.number;
+            const body = `🗑️ **V8 Preview environment deleted**\n\nThe preview service \`${serviceName}\` and database schema \`pr_${prNumber}\` have been cleaned up.`;
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
