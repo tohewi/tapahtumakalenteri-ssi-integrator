@@ -133,7 +133,10 @@ export async function getAccountWithMfaSecrets(accountId) {
   if (rows.length === 0) return null
 
   const account = rowToAccount(rows[0])
-  const mfaSecret = rows[0].mfa_secret ? decrypt(rows[0].mfa_secret) : null
+  let mfaSecret = null
+  if (rows[0].mfa_secret) {
+    try { mfaSecret = decrypt(rows[0].mfa_secret) } catch { /* key mismatch — treat as no MFA */ }
+  }
   const mfaRecoveryCodes = rows[0].mfa_recovery_codes || []
 
   return {

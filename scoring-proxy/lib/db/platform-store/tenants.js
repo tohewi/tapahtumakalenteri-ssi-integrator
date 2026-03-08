@@ -15,16 +15,22 @@ function rowToTenant(row, { includeCredentials = false } = {}) {
   // Full credentials are only returned when includeCredentials is true (internal use).
   let ssiCredentials = null
   if (row.ssi_credentials) {
-    const decrypted = decryptCredentials(row.ssi_credentials)
-    if (includeCredentials) {
-      ssiCredentials = decrypted
-    } else {
-      // Masked response: show email (not secret), flag password/apiKey as configured
-      ssiCredentials = {
-        email: decrypted.email || null,
-        hasPassword: !!decrypted.password,
-        hasApiKey: !!decrypted.apiKey,
+    try {
+      const decrypted = decryptCredentials(row.ssi_credentials)
+      if (includeCredentials) {
+        ssiCredentials = decrypted
+      } else {
+        // Masked response: show email (not secret), flag password/apiKey as configured
+        ssiCredentials = {
+          email: decrypted.email || null,
+          hasPassword: !!decrypted.password,
+          hasApiKey: !!decrypted.apiKey,
+        }
       }
+    } catch {
+      // Decryption failed — key mismatch or corrupted data. Treat as unconfigured.
+      // Credentials will need to be re-entered via the tenant settings UI.
+      ssiCredentials = null
     }
   }
 
