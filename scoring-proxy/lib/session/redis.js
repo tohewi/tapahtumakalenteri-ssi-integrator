@@ -108,7 +108,10 @@ export async function initRedis() {
 
   try {
     const parsed = new URL(url)
-    const isEntraId = !parsed.password && !parsed.username
+    // Only use Entra ID when Azure env vars are present AND URL has no credentials.
+    // Render Redis uses plain redis://host:port with no auth — should take the standard path.
+    const hasAzureEnv = !!(process.env.REDIS_PRINCIPAL_ID && process.env.AZURE_CLIENT_ID)
+    const isEntraId = hasAzureEnv && !parsed.password && !parsed.username
 
     if (isEntraId) {
       client = await _connectWithEntraId(parsed.hostname, parsed.port || '6380')
