@@ -83,18 +83,47 @@ async function migrate() {
     } catch (e) { console.error(`  ✗ ${table}: ${e.message}`); }
   }
 
-  // Step 2: Copy data in FK-safe order
+  // Step 2: Copy data in FK-safe order (with type-aware casting)
   console.log('\n=== Copying data ===');
   for (const table of toMigrate) {
+    // Get target column types so we can cast properly
+    const { rows: tgtCols } = await tgt.query(
+      `SELECT column_name, data_type, udt_name FROM information_schema.columns
+       WHERE table_schema='public' AND table_name=$1 ORDER BY ordinal_position`, [table]
+    );
+    const colTypes = {};
+    for (const c of tgtCols) colTypes[c.column_name] = c.udt_name; // e.g. jsonb, _text, timestamptz
+
     const { rows, rowCount } = await src.query(`SELECT * FROM "${table}"`);
     if (!rowCount) { console.log(`  ${table}: 0 rows (empty)`); continue; }
 
     const colNames = Object.keys(rows[0]);
     const colList = colNames.map(c => `"${c}"`).join(', ');
+
+    // Build placeholders with casts for JSONB and array columns
+    const placeholders = colNames.map((c, i) => {
+      const udt = colTypes[c] || '';
+      if (udt === 'jsonb') return `$${i + 1}::jsonb`;
+      if (udt === 'json') return `$${i + 1}::json`;
+      if (udt.startsWith('_')) return `$${i + 1}::${udt.slice(1)}[]`; // e.g. _text -> text[]
+      return `$${i + 1}`;
+    }).join(', ');
+
     let ok = 0, fail = 0;
     for (const row of rows) {
-      const placeholders = colNames.map((_, i) => `$${i + 1}`).join(', ');
-      const values = colNames.map(c => row[c]);
+      // Convert values: ensure JSONB columns get valid JSON strings
+      const values = colNames.map(c => {
+        const val = row[c];
+        if (val === null || val === undefined) return null;
+        const udt = colTypes[c] || '';
+        if ((udt === 'jsonb' || udt === 'json') && typeof val !== 'string') {
+          return JSON.stringify(val);
+        }
+        if (udt.startsWith('_') && Array.isArray(val)) {
+          return val; // pg handles arrays natively
+        }
+        return val;
+      });
       try {
         await tgt.query(`INSERT INTO "${table}" (${colList}) VALUES (${placeholders})`, values);
         ok++;
