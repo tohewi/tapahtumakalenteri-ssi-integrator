@@ -19,6 +19,7 @@ export default [
       // Enable architectural rules
       'no-cross-domain-imports': 'error',
       'no-barrel-imports': 'error',
+      'no-direct-client-imports': 'error',
       
       // Recommended rules for maintainability
       'no-console': 'off', // Console logging is used for server logs

@@ -49,6 +49,41 @@ module.exports = {
       },
     },
     
+    'no-direct-client-imports': {
+      meta: {
+        type: 'error',
+        docs: {
+          description: 'Disallow direct imports from ssi-core/client.js in route files',
+          category: 'Best Practices',
+          recommended: true,
+        },
+        fixable: null,
+        schema: [],
+        messages: {
+          noDirectClient: 'Do not import from ssi-core/client.js directly. Use domain-specific modules: graphql.js, scoring.js, participants.js, management.js, http-helpers.js.',
+        },
+      },
+      create(context) {
+        const filename = context.getFilename()
+
+        // Only apply to route and service files, not to client.js itself or shim files
+        if (!filename.includes('/routes/') && !filename.includes('/lib/services/')) {
+          return {}
+        }
+
+        return {
+          ImportDeclaration(node) {
+            const source = node.source.value
+            if (source.endsWith('ssi-core/client.js') ||
+                source === '../lib/ssi-core/client' ||
+                source.endsWith('/ssi-core/client')) {
+              context.report({ node, messageId: 'noDirectClient' })
+            }
+          },
+        }
+      },
+    },
+
     'no-barrel-imports': {
       meta: {
         type: 'error',

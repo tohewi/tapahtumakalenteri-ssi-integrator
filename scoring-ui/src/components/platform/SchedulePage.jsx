@@ -13,141 +13,9 @@ import { useState, useEffect, useMemo } from 'react'
 import { listTemplates, listEvents, createEventsApi, deleteEventApi, cancelEventApi, executeEventApi, getUpcomingStaffingApi } from '../../platform-api.js'
 import ImportSsiEventsModal from './ImportSsiEventsModal.jsx'
 import EventCalendar from './EventCalendar.jsx'
-
-// ---- Status badge colors ----
-const STATUS_COLORS = {
-  planned: 'bg-gray-100 text-gray-600',
-  ssi_created: 'bg-blue-100 text-blue-700',
-  calendar_published: 'bg-green-100 text-green-700',
-  staffed: 'bg-purple-100 text-purple-700',
-  ready: 'bg-emerald-100 text-emerald-800',
-  completed: 'bg-gray-200 text-gray-500',
-  cancelled: 'bg-orange-100 text-orange-600',
-  failed: 'bg-red-100 text-red-700',
-}
-
-const STATUS_LABELS = {
-  planned: 'Planned',
-  ssi_created: 'SSI Created',
-  calendar_published: 'Published',
-  staffed: 'Staffed',
-  ready: 'Ready',
-  completed: 'Completed',
-  cancelled: 'Cancelled',
-  failed: 'Failed',
-}
-
-// Which statuses allow cancellation (soft cancel keeps DB record)
-const CANCELLABLE_STATUSES = new Set(['planned', 'ssi_created', 'calendar_published', 'staffed', 'ready'])
-
-function StatusBadge({ status }) {
-  return (
-    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS[status] || 'bg-gray-100 text-gray-500'}`}>
-      {STATUS_LABELS[status] || status}
-    </span>
-  )
-}
-
-// ---- Cancel Confirmation Modal (MP7) ----
-function CancelEventModal({ event, staffingStatus, tplMap, onConfirm, onClose }) {
-  const [removeFromSsi, setRemoveFromSsi] = useState(event?.status === 'ssi_created')
-  const [loading, setLoading] = useState(false)
-
-  if (!event) return null
-
-  const staffing = staffingStatus?.[event.id]
-  const matchCount = event.ssiReferences?.matches?.length || 0
-  const eventLabel = event.eventName || tplMap?.[event.templateId]?.name || 'Event'
-
-  async function handleConfirm() {
-    setLoading(true)
-    await onConfirm(event, removeFromSsi)
-    setLoading(false)
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
-        <div className="flex items-start justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-gray-900">Cancel Event?</h3>
-            <p className="text-sm text-gray-500 mt-0.5">
-              {eventLabel} &mdash; {formatEventDate(event.eventDate)}
-            </p>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none ml-4">×</button>
-        </div>
-
-        {/* Impact summary */}
-        <div className="space-y-2">
-          {event.status === 'ssi_created' && (
-            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-800">
-              <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-              </svg>
-              <span>
-                This event exists in SSI ({matchCount > 0 ? `Cup + ${matchCount} match${matchCount !== 1 ? 'es' : ''}` : 'event'}).
-                {' '}Cancelling will keep the platform record but the SSI event will remain unless you check the option below.
-              </span>
-            </div>
-          )}
-          {staffing?.hasNeeds && (
-            <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-sm text-blue-800">
-              <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <span>This event has staff members signed up. They will not be automatically notified.</span>
-            </div>
-          )}
-        </div>
-
-        {/* SSI removal option */}
-        {event.status === 'ssi_created' && (
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={removeFromSsi}
-              onChange={e => setRemoveFromSsi(e.target.checked)}
-              className="rounded border-gray-300 text-sky-600 focus:ring-sky-200"
-            />
-            <span className="text-sm text-gray-700">Also remove this event from SSI</span>
-          </label>
-        )}
-
-        <div className="flex gap-2 justify-end pt-2">
-          <button
-            onClick={onClose}
-            disabled={loading}
-            className="px-4 py-2 text-sm rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-          >
-            Keep Event
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={loading}
-            className="px-4 py-2 text-sm rounded-md bg-orange-600 text-white font-medium hover:bg-orange-700 disabled:opacity-50"
-          >
-            {loading ? 'Cancelling...' : 'Cancel Event'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function formatEventDate(dateStr) {
-  if (!dateStr) return '—'
-  // Handle both YYYY-MM-DD strings and ISO timestamps from API
-  // PostgreSQL DATE serializes as '2026-03-04T00:00:00.000Z' in JSON
-  let isoDate = dateStr
-  if (typeof dateStr === 'string' && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-    isoDate = dateStr + 'T12:00:00Z' // noon UTC to avoid DST edge
-  }
-  const d = new Date(isoDate)
-  if (isNaN(d.getTime())) return 'Invalid Date'
-  return d.toLocaleDateString('fi-FI', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })
-}
+import StatusBadge, { STATUS_COLORS, STATUS_LABELS, CANCELLABLE_STATUSES, formatEventDate } from './schedule/StatusBadge.jsx'
+import CancelEventModal from './schedule/CancelEventModal.jsx'
+import CreateEventsPanel from './schedule/CreateEventsPanel.jsx'
 
 export default function SchedulePage({ tenantId, onBack }) {
   const [templates, setTemplates] = useState([])
@@ -384,86 +252,19 @@ export default function SchedulePage({ tenantId, onBack }) {
         )}
 
         {/* Create Events Section */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
-          <h2 className="text-base font-semibold text-gray-900">Schedule New Events</h2>
-
-          {/* Template selector */}
-          <div>
-            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">Template</label>
-            <select
-              value={selectedTemplateId}
-              onChange={e => setSelectedTemplateId(e.target.value)}
-              className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
-            >
-              <option value="">Select template...</option>
-              {templates.filter(t => t.ssiSeedSnapshot).map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-            {templates.length > 0 && templates.filter(t => t.ssiSeedSnapshot).length === 0 && (
-              <p className="text-xs text-amber-600 mt-1">No templates have imported seed events yet. Import a seed first.</p>
-            )}
-          </div>
-
-          {/* Date picker */}
-          {selectedTemplateId && (
-            <div>
-              <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">Add Dates</label>
-              <div className="flex gap-2">
-                <input
-                  type="date" value={dateInput}
-                  onChange={e => setDateInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addDate() } }}
-                  min={new Date().toISOString().split('T')[0]}
-                  className="flex-1 border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
-                />
-                <button
-                  onClick={addDate} disabled={!dateInput}
-                  className="bg-gray-100 text-gray-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-200 disabled:opacity-50 transition-colors"
-                >
-                  + Add
-                </button>
-              </div>
-
-              {/* Selected dates */}
-              {dates.length > 0 && (
-                <div className="mt-3 space-y-1">
-                  <div className="text-xs text-gray-500 font-medium">{dates.length} date{dates.length > 1 ? 's' : ''} selected:</div>
-                  <div className="flex flex-wrap gap-2">
-                    {dates.map(d => (
-                      <span key={d} className="inline-flex items-center gap-1 bg-sky-50 text-sky-700 px-3 py-1 rounded-full text-sm">
-                        {formatEventDate(d)}
-                        <button onClick={() => removeDate(d)} className="text-sky-400 hover:text-sky-600 ml-1">×</button>
-                      </span>
-                    ))}
-                  </div>
-                  <button
-                    onClick={handleCreate} disabled={creating}
-                    className="mt-3 bg-sky-600 text-white px-6 py-2 rounded-md text-sm font-semibold hover:bg-sky-700 disabled:opacity-50 transition-colors"
-                  >
-                    {creating ? 'Creating...' : `Create ${dates.length} Event${dates.length > 1 ? 's' : ''}`}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Batch results */}
-          {batchResults && (
-            <div className="mt-4 space-y-1 border-t pt-3">
-              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Creation Results</div>
-              {batchResults.map((r, i) => (
-                <div key={i} className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded ${
-                  r.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-                }`}>
-                  <span>{r.success ? '✓' : '✗'}</span>
-                  <span>{formatEventDate(r.date)}</span>
-                  {!r.success && <span className="text-xs">— {r.error}</span>}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <CreateEventsPanel
+          templates={templates}
+          selectedTemplateId={selectedTemplateId}
+          onTemplateChange={setSelectedTemplateId}
+          dateInput={dateInput}
+          onDateInputChange={setDateInput}
+          dates={dates}
+          onAddDate={addDate}
+          onRemoveDate={removeDate}
+          creating={creating}
+          onCreate={handleCreate}
+          batchResults={batchResults}
+        />
 
         {/* MP6: Status summary bar */}
         {events.length > 0 && (
