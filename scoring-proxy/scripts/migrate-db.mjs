@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// One-time migration: copy data from old free PG to new Starter PG
-// Run on Render shell where internal URLs work without SSL:
-//   MIGRATE_SOURCE_URL=<old-internal-url> MIGRATE_TARGET_URL=<new-internal-url> node scripts/migrate-db.mjs
+// One-time migration: copy data from old PG (pr-102) to new Starter PG (v8)
+// Runs on Render where internal URLs work without SSL.
+// Target schema must already exist (created by initPostgres on first startup).
 //
-// Can also use external URLs if SSL works:
-//   MIGRATE_SOURCE_URL=<old-external-url> MIGRATE_TARGET_URL=<new-external-url> node scripts/migrate-db.mjs
+// Usage:
+//   MIGRATE_SOURCE_URL=<old-url> MIGRATE_TARGET_URL=<new-url> node scripts/migrate-db.mjs
 
 import pg from 'pg';
 const { Client } = pg;
@@ -16,7 +16,14 @@ if (!SRC_URL || !TGT_URL) {
   process.exit(1);
 }
 
-// Detect if URL is internal (no SSL) or external (needs SSL)
+// FK-safe insert order (parents before children)
+const INSERT_ORDER = [
+  'accounts', 'tenants', 'disciplines', 'match_templates',
+  'scheduled_events', 'tenant_members', 'tenant_invitations', 'audit_log'
+];
+// Reverse for truncation (children before parents)
+const TRUNCATE_ORDER = [...INSERT_ORDER].reverse();
+
 function clientOpts(url) {
   const isInternal = !url.includes('.render.com');
   return { connectionString: url, ssl: isInternal ? false : { rejectUnauthorized: false } };
@@ -26,116 +33,92 @@ async function migrate() {
   const src = new Client(clientOpts(SRC_URL));
   const tgt = new Client(clientOpts(TGT_URL));
 
-  console.log('Source URL:', SRC_URL.replace(/:[^:@]+@/, ':***@'));
-  console.log('Target URL:', TGT_URL.replace(/:[^:@]+@/, ':***@'));
+  console.log('Source:', SRC_URL.replace(/:[^:@]+@/, ':***@'));
+  console.log('Target:', TGT_URL.replace(/:[^:@]+@/, ':***@'));
 
-  console.log('Connecting to source...');
   await src.connect();
-  console.log('Connecting to target...');
   await tgt.connect();
   console.log('Both connected.');
 
-  // Diagnostics: verify connection identity
-  const srcInfo = await src.query("SELECT current_database(), current_user, current_schema()");
-  console.log('Source DB:', srcInfo.rows[0].current_database, '| user:', srcInfo.rows[0].current_user, '| schema:', srcInfo.rows[0].current_schema);
-  const tgtInfo = await tgt.query("SELECT current_database(), current_user, current_schema()");
-  console.log('Target DB:', tgtInfo.rows[0].current_database, '| user:', tgtInfo.rows[0].current_user, '| schema:', tgtInfo.rows[0].current_schema);
+  // Diagnostics
+  const srcInfo = await src.query("SELECT current_database(), current_user");
+  const tgtInfo = await tgt.query("SELECT current_database(), current_user");
+  console.log('Source DB:', srcInfo.rows[0].current_database, '| user:', srcInfo.rows[0].current_user);
+  console.log('Target DB:', tgtInfo.rows[0].current_database, '| user:', tgtInfo.rows[0].current_user);
 
-  // Check ALL schemas for tables
-  const { rows: allTables } = await src.query(
-    "SELECT schemaname, tablename FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema') ORDER BY schemaname, tablename"
-  );
-  console.log('Source all tables:', allTables.map(t => t.schemaname + '.' + t.tablename).join(', ') || '(none in any schema)');
-
-  // Get source tables (public schema)
-  const { rows: tables } = await src.query(
+  // Get tables in both source and target
+  const { rows: srcTables } = await src.query(
     "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename"
   );
-  console.log('Source public tables:', tables.map(t => t.tablename).join(', ') || '(none)');
+  const { rows: tgtTables } = await tgt.query(
+    "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename"
+  );
+  const srcSet = new Set(srcTables.map(t => t.tablename));
+  const tgtSet = new Set(tgtTables.map(t => t.tablename));
 
-  if (tables.length === 0) {
-    console.log('No tables to migrate in public schema.');
+  console.log('Source tables:', [...srcSet].join(', '));
+  console.log('Target tables:', [...tgtSet].join(', '));
+
+  // Only migrate tables in INSERT_ORDER that exist in both
+  const toMigrate = INSERT_ORDER.filter(t => srcSet.has(t) && tgtSet.has(t));
+  const srcOnly = [...srcSet].filter(t => !tgtSet.has(t));
+  const tgtOnly = [...tgtSet].filter(t => !srcSet.has(t));
+  console.log('Will migrate:', toMigrate.join(', '));
+  if (srcOnly.length) console.log('Source-only (skipped):', srcOnly.join(', '));
+  if (tgtOnly.length) console.log('Target-only (kept):', tgtOnly.join(', '));
+
+  if (toMigrate.length === 0) {
+    console.log('No tables to migrate.');
     await src.end(); await tgt.end();
     return;
   }
 
-  // Step 1: Recreate tables
-  console.log('\n=== Creating tables ===');
-  for (const { tablename } of tables) {
-    const { rows: cols } = await src.query(
-      `SELECT column_name, data_type, character_maximum_length, column_default, is_nullable, udt_name
-       FROM information_schema.columns WHERE table_schema='public' AND table_name=$1 ORDER BY ordinal_position`,
-      [tablename]
-    );
-
-    const colDefs = cols.map(c => {
-      let def = `"${c.column_name}" `;
-      if (c.data_type === 'USER-DEFINED') def += c.udt_name;
-      else if (c.character_maximum_length) def += `${c.data_type}(${c.character_maximum_length})`;
-      else def += c.data_type;
-      if (c.column_default) def += ` DEFAULT ${c.column_default}`;
-      if (c.is_nullable === 'NO') def += ' NOT NULL';
-      return def;
-    });
-
-    const { rows: pkRows } = await src.query(
-      `SELECT kcu.column_name FROM information_schema.table_constraints tc
-       JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
-       WHERE tc.table_name=$1 AND tc.constraint_type='PRIMARY KEY' AND tc.table_schema='public'
-       ORDER BY kcu.ordinal_position`,
-      [tablename]
-    );
-
-    let sql = `CREATE TABLE IF NOT EXISTS "${tablename}" (\n  ${colDefs.join(',\n  ')}`;
-    if (pkRows.length) sql += `,\n  PRIMARY KEY (${pkRows.map(r => `"${r.column_name}"`).join(', ')})`;
-    sql += '\n);';
-
-    try { await tgt.query(sql); console.log(`  ✓ ${tablename}`); }
-    catch (e) { console.error(`  ✗ ${tablename}: ${e.message}`); }
+  // Step 1: Truncate target tables in reverse FK order
+  console.log('\n=== Truncating target tables ===');
+  const toTruncate = TRUNCATE_ORDER.filter(t => toMigrate.includes(t));
+  for (const table of toTruncate) {
+    try {
+      await tgt.query(`TRUNCATE "${table}" CASCADE`);
+      console.log(`  ✓ ${table}`);
+    } catch (e) { console.error(`  ✗ ${table}: ${e.message}`); }
   }
 
-  // Step 2: Copy data
+  // Step 2: Copy data in FK-safe order
   console.log('\n=== Copying data ===');
-  for (const { tablename } of tables) {
-    const { rows, rowCount } = await src.query(`SELECT * FROM "${tablename}"`);
-    if (!rowCount) { console.log(`  ${tablename}: 0 rows`); continue; }
+  for (const table of toMigrate) {
+    const { rows, rowCount } = await src.query(`SELECT * FROM "${table}"`);
+    if (!rowCount) { console.log(`  ${table}: 0 rows (empty)`); continue; }
 
     const colNames = Object.keys(rows[0]);
     const colList = colNames.map(c => `"${c}"`).join(', ');
-    let ok = 0;
+    let ok = 0, fail = 0;
     for (const row of rows) {
-      const vals = colNames.map((_, i) => `$${i + 1}`).join(', ');
+      const placeholders = colNames.map((_, i) => `$${i + 1}`).join(', ');
+      const values = colNames.map(c => row[c]);
       try {
-        await tgt.query(`INSERT INTO "${tablename}" (${colList}) VALUES (${vals}) ON CONFLICT DO NOTHING`,
-          colNames.map(c => row[c]));
+        await tgt.query(`INSERT INTO "${table}" (${colList}) VALUES (${placeholders})`, values);
         ok++;
-      } catch (e) { console.error(`  INSERT ${tablename}: ${e.message}`); }
+      } catch (e) {
+        fail++;
+        if (fail <= 3) console.error(`  INSERT ${table}: ${e.message}`);
+        if (fail === 4) console.error(`  INSERT ${table}: ... (suppressing further errors)`);
+      }
     }
-    console.log(`  ${tablename}: ${ok}/${rowCount} rows`);
+    console.log(`  ${table}: ${ok}/${rowCount} rows` + (fail ? ` (${fail} failed)` : ''));
   }
 
-  // Step 3: Recreate indexes
-  console.log('\n=== Recreating indexes ===');
-  const { rows: idxs } = await src.query(
-    "SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND indexname NOT LIKE '%_pkey' ORDER BY tablename"
-  );
-  for (const { indexdef } of idxs) {
-    try {
-      await tgt.query(indexdef.replace('CREATE INDEX', 'CREATE INDEX IF NOT EXISTS'));
-      console.log(`  ✓ index`);
-    } catch (e) { console.error(`  ✗ index: ${e.message}`); }
-  }
-
-  // Verify
+  // Step 3: Verify counts
   console.log('\n=== Verification ===');
-  for (const { tablename } of tables) {
-    const s = await src.query(`SELECT count(*) as n FROM "${tablename}"`);
-    const t = await tgt.query(`SELECT count(*) as n FROM "${tablename}"`);
-    const match = s.rows[0].n === t.rows[0].n ? '✓' : '✗';
-    console.log(`  ${match} ${tablename}: src=${s.rows[0].n} tgt=${t.rows[0].n}`);
+  let allMatch = true;
+  for (const table of toMigrate) {
+    const s = await src.query(`SELECT count(*) as n FROM "${table}"`);
+    const t = await tgt.query(`SELECT count(*) as n FROM "${table}"`);
+    const match = s.rows[0].n === t.rows[0].n;
+    if (!match) allMatch = false;
+    console.log(`  ${match ? '✓' : '✗'} ${table}: src=${s.rows[0].n} tgt=${t.rows[0].n}`);
   }
 
-  console.log('\n=== Migration complete ===');
+  console.log(allMatch ? '\n✅ Migration complete — all counts match!' : '\n⚠️  Migration complete with mismatches');
   await src.end(); await tgt.end();
 }
 
