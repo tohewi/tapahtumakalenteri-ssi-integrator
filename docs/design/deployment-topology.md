@@ -4,188 +4,134 @@
 
 ---
 
-## Current Branch → Deployment Map
+## Branch → Deployment Map (Render-Only)
 
 ```mermaid
 graph TB
     subgraph "GitHub Repository"
-        main["main branch<br/>(R7.x stable)"]
-        r80["release/r80-match-manager-base<br/>(R8.0–R9.2, all enhancements)"]
-        feature["Feature branches<br/>(R821-hotfix-*, etc.)"]
+        main["main branch<br/>(v7.x stable)"]
+        r80["release/r80-match-manager-base<br/>(v8+ development & production)"]
+        feature["Feature branches<br/>(R*-feature-*, R*-hotfix-*)"]
     end
 
     subgraph "CI/CD Workflows"
-        ci["ci-deploy.yml<br/>Tests + Build"]
-        azure_wf["azure-deploy.yml<br/>OIDC + ZIP deploy"]
-        pr_preview["pr-preview.yml<br/>Render API calls"]
+        ci["ci-deploy.yml<br/>Tests on main + r80"]
+        pr_preview["pr-preview.yml<br/>V8 PR previews (web-only)"]
     end
 
-    subgraph "Render (Frankfurt)"
-        render_prod["turres-ssi-tools<br/>Starter $7/mo<br/>⚠️ REDUNDANT"]
-        render_redis["turres-ssi-tools-redis<br/>Starter $7/mo<br/>⚠️ REDUNDANT"]
-        render_pr["turres-ssi-tools-pr-{N}<br/>Starter $7/mo per PR"]
-        render_pr_db["PR Postgres<br/>Free (30-day expiry)"]
-        render_pr_redis["PR Redis<br/>Free"]
+    subgraph "Render — V7 Project (prj-d62r8oogjchc73bv7feg)"
+        v7_web["turres-ssi-tools<br/>Starter $7/mo<br/>branch: main"]
+        v7_redis["turres-ssi-tools-redis<br/>Starter $7/mo"]
     end
 
-    subgraph "Azure (Sweden Central)"
-        azure_app["app-turres-prod<br/>App Service B1 ~€13/mo"]
-        azure_pg["psql-turres-prod<br/>PostgreSQL B1ms ~€21/mo"]
-        azure_redis["redis-turres-prod<br/>Redis C1 ~€16/mo"]
-        azure_kv["kv-turres-prod<br/>Key Vault"]
+    subgraph "Render — V8 Project (prj-d6mohibh46gs73br5mj0)"
+        v8_web["turres-ssi-tools-v8<br/>Starter $7/mo<br/>branch: r80, autoDeploy"]
+        v8_db["turres-ssi-tools-v8-db<br/>Starter $7/mo<br/>SHARED by all v8 services"]
+        v8_redis["turres-ssi-tools-v8-redis<br/>Free"]
+        v8_pr["turres-ssi-tools-v8-pr-{N}<br/>Starter $7/mo per PR<br/>web-only, shares v8 DB"]
     end
 
-    %% Triggers
+    %% CI triggers
     main -->|"push"| ci
-    ci -->|"success on main"| azure_wf
-    ci -->|"deploy hook"| render_prod
-    main -.->|"PR opened"| pr_preview
+    r80 -->|"push"| ci
+    main -->|"deploy hook"| v7_web
 
-    %% Deployments
-    azure_wf -->|"ZIP deploy"| azure_app
-    azure_app --> azure_pg
-    azure_app --> azure_redis
-    azure_app --> azure_kv
+    %% V7 connections
+    v7_web --> v7_redis
 
-    render_prod --> render_redis
-    pr_preview -->|"creates per PR"| render_pr
-    render_pr --> render_pr_db
-    render_pr --> render_pr_redis
+    %% V8 production — auto-deploys on commit
+    r80 -->|"autoDeploy"| v8_web
+    v8_web --> v8_db
+    v8_web --> v8_redis
 
-    %% Manual
-    r80 -.->|"manual az deploy"| azure_app
+    %% V8 PR previews
+    r80 -.->|"PR opened"| pr_preview
+    pr_preview -->|"creates web-only"| v8_pr
+    v8_pr -.->|"shared"| v8_db
+    v8_pr -.->|"shared"| v8_redis
+
+    %% Feature branches
     feature -->|"merge"| r80
 
-    style render_prod fill:#ff9999,stroke:#cc0000
-    style render_redis fill:#ff9999,stroke:#cc0000
-    style render_pr fill:#ffcc99,stroke:#ff8800
-    style azure_app fill:#99ccff,stroke:#0066cc
-    style azure_pg fill:#99ccff,stroke:#0066cc
-    style azure_redis fill:#99ccff,stroke:#0066cc
+    style v7_web fill:#99ccff,stroke:#0066cc
+    style v8_web fill:#99ff99,stroke:#009900
+    style v8_db fill:#ffff99,stroke:#cccc00
+    style v8_pr fill:#ffcc99,stroke:#ff8800
 ```
 
 ---
 
-## Cost Summary (Current — Dual Deployment)
+## Render Resource Inventory
 
-| Platform | Resource | Monthly Cost | Notes |
-|----------|----------|-------------|-------|
-| **Azure** | App Service B1 | ~€13 | Stopped when idle |
-| **Azure** | PostgreSQL B1ms | ~€21 | Stopped when idle (~€4 storage only) |
-| **Azure** | Redis C1 | ~€16 | Always running |
-| **Azure** | KV + Logs | ~€1 | Negligible |
-| **Render** | Production web | $7 (~€6.50) | ⚠️ **Redundant** — same app runs on Azure |
-| **Render** | Production Redis | $7 (~€6.50) | ⚠️ **Redundant** — sessions on Azure |
-| **Render** | Per-PR preview web | $7 (~€6.50) | Per active PR |
-| **Render** | Per-PR Postgres | $0 | Free tier, **expires after 30 days** |
-| **Render** | Per-PR Redis | $0 | Free tier |
-| **Total running** | | **~€70/mo** | Azure + Render overlap |
-| **Total stopped** | | **~€46/mo** | Azure stopped + Render still running |
+### V7 Project (`prj-d62r8oogjchc73bv7feg`, env `evm-d66usornv86c73dbvdng`)
 
----
+| Resource | Type | Plan | Cost | Notes |
+|----------|------|------|------|-------|
+| `turres-ssi-tools` | Web service | Starter | $7/mo | branch: `main`, autoDeploy via deploy hook |
+| `turres-ssi-tools-redis` | Key Value | Starter | $7/mo | Session storage for v7 |
 
-## Problem: PR Preview Environments
+### V8 Project (`prj-d6mohibh46gs73br5mj0`, env `evm-d6mohuf5r7bs73cistqg`)
 
-The `pr-preview.yml` workflow triggers on every PR to `main` and provisions:
-1. **Web service** (Starter plan, $7/mo) — runs until PR is closed
-2. **PostgreSQL** (Free, 30-day expiry) — will become paid when Render drops free tier
-3. **Redis** (Free) — will become paid when Render drops free tier
+| Resource | Type | Plan | Cost | Notes |
+|----------|------|------|------|-------|
+| `turres-ssi-tools-v8` | Web service | Starter | $7/mo | branch: `release/r80-match-manager-base`, autoDeploy |
+| `turres-ssi-tools-v8-db` | PostgreSQL | Starter | $7/mo | **Shared** by v8 production + all PR previews |
+| `turres-ssi-tools-v8-redis` | Key Value | Free | $0 | **Shared** session storage for v8 |
+| `turres-ssi-tools-v8-pr-{N}` | Web service | Starter | $7/mo | Per-PR, web-only, shares v8 DB+Redis |
 
-**Issues observed:**
-- Previews sometimes fail to build/deploy (wasted cost)
-- Stale previews persist (e.g., PR-138 is still running)
-- Free Postgres expires after 30 days, breaking long-lived PRs
-- Each PR costs **$7/mo minimum** even if never actually tested
-- Production on Render is **redundant** now that Azure is the primary
+### Cost Summary
+
+| Item | Monthly Cost |
+|------|-------------|
+| V7 web + Redis | $14 |
+| V8 web + DB + Redis | $14 + $7 = $21 |
+| Per active V8 PR | $7 each |
+| **Base total (no PRs)** | **$35/mo (~€32)** |
+| **With 1 active PR** | **$42/mo (~€39)** |
 
 ---
 
-## Proposed Options
+## How It Works
 
-### Option A: Remove Render Production, Keep Lightweight PR Previews (Recommended)
+### V7 Production (main branch)
+- Push to `main` → `ci-deploy.yml` runs tests → triggers Render deploy hook
+- Render auto-deploys the `turres-ssi-tools` service
+- Uses its own Redis for sessions
 
-```mermaid
-graph TB
-    subgraph "GitHub"
-        main["main"]
-        r80["release/r80"]
-        feature["Feature branches"]
-    end
+### V8 Production (release/r80 branch)
+- Push to `release/r80-match-manager-base` → `ci-deploy.yml` runs tests
+- Render auto-deploys `turres-ssi-tools-v8` (autoDeploy=yes on the service)
+- Uses shared `turres-ssi-tools-v8-db` PostgreSQL
+- Uses shared `turres-ssi-tools-v8-redis` for sessions
 
-    subgraph "CI/CD"
-        ci["ci-deploy.yml<br/>Tests only (remove deploy hook)"]
-        azure_wf["azure-deploy.yml<br/>OIDC + ZIP deploy"]
-        pr_preview["pr-preview.yml<br/>Lightweight: web only, no DB/Redis"]
-    end
+### V8 PR Previews
+- Open a PR targeting `release/r80-match-manager-base`
+- `pr-preview.yml` creates a **web-only** Render service: `turres-ssi-tools-v8-pr-{N}`
+- The preview service uses the **shared v8 DATABASE_URL and REDIS_URL** (from GitHub secrets)
+- When the PR is closed/merged, only the web service is deleted — shared DB is preserved
+- ⚠️ Schema migrations in any PR will affect all v8 services sharing the database
 
-    subgraph "Render (previews only)"
-        render_pr["turres-ssi-tools-pr-{N}<br/>Free/Starter, no DB"]
-    end
+### GitHub Secrets Required
 
-    subgraph "Azure (production)"
-        azure_app["app-turres-prod"]
-        azure_pg["psql-turres-prod"]
-        azure_redis["redis-turres-prod"]
-    end
+| Secret | Description |
+|--------|-------------|
+| `RENDER_API_KEY` | Render API token |
+| `RENDER_OWNER_ID` | `tea-d62r4ucoud1c73d50qg0` |
+| `RENDER_DEPLOY_HOOK` | V7 production deploy hook URL |
+| `RENDER_V8_DATABASE_URL` | Shared v8 PostgreSQL external connection string |
+| `RENDER_V8_REDIS_URL` | Shared v8 Redis external connection string |
+| `SSI_ADMIN_EMAIL` | SSI admin credentials (optional for previews) |
+| `SSI_ADMIN_PASSWORD` | SSI admin credentials (optional for previews) |
 
-    main -->|"push"| ci
-    ci -->|"success"| azure_wf
-    azure_wf --> azure_app
-    azure_app --> azure_pg
-    azure_app --> azure_redis
+---
 
-    main -.->|"PR"| pr_preview
-    pr_preview --> render_pr
+## Azure (Standby)
 
-    feature -->|"merge"| r80
-    r80 -.->|"merge to main"| main
+Azure infrastructure (`rg-turres-prod`) is maintained as IaC in `infra/main.bicep` but currently **stopped** to save costs. Can be reactivated for production use with:
 
-    style render_pr fill:#ffffcc,stroke:#cccc00
-    style azure_app fill:#99ccff,stroke:#0066cc
+```powershell
+./infra/scripts/Start-TurresInfra.ps1   # Start PostgreSQL + App Service
+./infra/scripts/Stop-TurresInfra.ps1    # Stop to save costs (~€25/mo stopped)
 ```
 
-**Changes:**
-1. **Delete** Render production web service + Redis ($14/mo saved)
-2. **Simplify** PR previews: web service only (no Postgres, no Redis)
-   - App works without DB (platform login disabled, scoring still works)
-   - App works without Redis (falls back to in-memory sessions)
-3. **Use Free tier** for PR previews (sleeps after 15min — acceptable for review)
-4. Remove `RENDER_DEPLOY_HOOK` from `ci-deploy.yml` (Azure is primary)
-
-**Cost:** Azure ~€50/mo running (~€25 stopped) + $0 Render free previews = **~€50/mo running**
-
-### Option B: Remove Render Entirely
-
-**Changes:**
-- Delete all Render resources
-- No PR preview environments
-- Test changes manually or via Azure staging slot (requires P-tier, expensive)
-- Or: run locally for testing
-
-**Cost:** Azure only ~€50/mo running (~€25 stopped)
-**Downside:** No way to share a live preview URL for PR review
-
-### Option C: Keep Render as Primary, Remove Azure
-
-**Changes:**
-- Revert to Render-only deployment
-- No auto-stop capability (Render always runs)
-- PostgreSQL and Redis will become paid soon
-
-**Cost:** ~$21/mo now, ~$35/mo when free tiers expire
-**Downside:** No Entra ID auth, no auto-stop, weaker security model
-
----
-
-## Recommendation: Option A
-
-1. **Delete** Render production resources (web + Redis) — saves $14/mo immediately
-2. **Simplify** `pr-preview.yml` to deploy **web-only on Free tier** (no DB/Redis provisioning)
-3. **Remove** deploy hook from `ci-deploy.yml` (line 101-108)
-4. **Clean up** stale PR-138 preview and databases
-5. **Azure remains primary** with auto-stop scripts for cost management
-
-**Resulting cost:**
-- Running: ~€50/mo (Azure only)
-- Stopped: ~€25/mo (Azure stopped)
-- PR previews: $0 (Render Free tier)
+See `docs/design/azure-architecture.md` for full Azure infrastructure details.
