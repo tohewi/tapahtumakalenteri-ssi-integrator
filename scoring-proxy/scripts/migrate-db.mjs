@@ -26,20 +26,35 @@ async function migrate() {
   const src = new Client(clientOpts(SRC_URL));
   const tgt = new Client(clientOpts(TGT_URL));
 
+  console.log('Source URL:', SRC_URL.replace(/:[^:@]+@/, ':***@'));
+  console.log('Target URL:', TGT_URL.replace(/:[^:@]+@/, ':***@'));
+
   console.log('Connecting to source...');
   await src.connect();
   console.log('Connecting to target...');
   await tgt.connect();
   console.log('Both connected.');
 
-  // Get source tables
+  // Diagnostics: verify connection identity
+  const srcInfo = await src.query("SELECT current_database(), current_user, current_schema()");
+  console.log('Source DB:', srcInfo.rows[0].current_database, '| user:', srcInfo.rows[0].current_user, '| schema:', srcInfo.rows[0].current_schema);
+  const tgtInfo = await tgt.query("SELECT current_database(), current_user, current_schema()");
+  console.log('Target DB:', tgtInfo.rows[0].current_database, '| user:', tgtInfo.rows[0].current_user, '| schema:', tgtInfo.rows[0].current_schema);
+
+  // Check ALL schemas for tables
+  const { rows: allTables } = await src.query(
+    "SELECT schemaname, tablename FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema') ORDER BY schemaname, tablename"
+  );
+  console.log('Source all tables:', allTables.map(t => t.schemaname + '.' + t.tablename).join(', ') || '(none in any schema)');
+
+  // Get source tables (public schema)
   const { rows: tables } = await src.query(
     "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename"
   );
-  console.log('Source tables:', tables.map(t => t.tablename).join(', ') || '(none)');
+  console.log('Source public tables:', tables.map(t => t.tablename).join(', ') || '(none)');
 
   if (tables.length === 0) {
-    console.log('No tables to migrate.');
+    console.log('No tables to migrate in public schema.');
     await src.end(); await tgt.end();
     return;
   }
