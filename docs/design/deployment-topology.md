@@ -153,6 +153,8 @@ turres-ssi-tools-v8-db (single Render Starter PG)
 | `RENDER_V8_REDIS_URL` | Shared v8 Redis internal connection string |
 | `SSI_ADMIN_EMAIL` | SSI admin credentials (optional for previews) |
 | `SSI_ADMIN_PASSWORD` | SSI admin credentials (optional for previews) |
+| `PLATFORM_CREDENTIALS_KEY` | AES-256 key for SSI credential encryption (see [key-management.md](key-management.md)) |
+| `MFA_SECRET_KEY` | AES-256 key for MFA secret encryption (see [key-management.md](key-management.md)) |
 
 ---
 
