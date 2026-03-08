@@ -196,13 +196,14 @@ module redis 'br/public:avm/res/cache/redis:0.4.0' = {
     name: redisName
     location: location
     skuName: 'Basic'
-    capacity: 0              // C0 = 250 MB (~€8/mo) — sufficient for session store
+    capacity: 1              // C1 = 1 GB (~€16/mo). Cannot downscale C1→C0 in-place; would need delete+recreate.
     enableNonSslPort: false
     minimumTlsVersion: '1.2'
     redisConfiguration: {
       'aad-enabled': 'True'    // Entra ID auth enabled
     }
-    disableAccessKeyAuthentication: true  // Entra ID only — no shared keys
+    // NOTE: disableAccessKeyAuthentication not supported by AVM module v0.4.0.
+    // Apply post-deploy: az redis update -n redis-turres-prod -g rg-turres-prod --set disableAccessKeyAuthentication=true
     tags: {
       environment: environmentName
       managedBy: 'bicep-avm'
