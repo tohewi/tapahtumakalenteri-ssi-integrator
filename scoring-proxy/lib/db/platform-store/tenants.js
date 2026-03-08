@@ -199,11 +199,15 @@ export async function updateTenant(tenantId, updates) {
           row_ssi_credentials_cache = currentRows[0]?.ssi_credentials || null
         }
         if (row_ssi_credentials_cache) {
-          const existing = decryptCredentials(row_ssi_credentials_cache)
-          merged = {
-            email: updates[key].email ?? existing.email,
-            password: updates[key].password || existing.password,
-            apiKey: updates[key].apiKey ?? existing.apiKey,
+          try {
+            const existing = decryptCredentials(row_ssi_credentials_cache)
+            merged = {
+              email: updates[key].email ?? existing.email,
+              password: updates[key].password || existing.password,
+              apiKey: updates[key].apiKey ?? existing.apiKey,
+            }
+          } catch {
+            // Old credentials can't be decrypted (key mismatch) — use new values only
           }
         }
         // Encrypt merged credentials before storing
