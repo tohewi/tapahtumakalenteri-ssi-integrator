@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head><title>Log In &lsaquo; Test Site &#8212; WordPress</title></head>
+<body class="login">
+<div id="login">
+<h1><a href="https://wordpress.org/">Test Site</a></h1>
+<form name="validate_2fa_form" id="validate_2fa_form" action="https://example.com/wp-login.php?action=validate_2fa" method="post">
+  <p>Varmennuskoodi on lähetetty sähköpostiisi.</p>
+  <p>
+    <label for="two-factor-email-code">Varmennuskoodi:</label>
+    <input type="text" name="two-factor-email-code" id="two-factor-email-code" class="input" value="" size="20" />
+  </p>
+  <input type="hidden" name="provider" value="Two_Factor_Email" />
+  <input type="hidden" name="wp-auth-id" value="42" />
+  <input type="hidden" name="wp-auth-nonce" value="abc123nonce" />
+  <input type="hidden" name="redirect_to" value="https://example.com/wp-admin/" />
+  <input type="hidden" name="rememberme" value="0" />
+  <p class="submit">
+    <input type="submit" name="submit" id="wp-submit" class="button button-primary button-large" value="Varmista" />
+  </p>
+  <p>
+    <input type="submit" name="two-factor-email-code-resend" class="button" value="Lähetä koodi uudelleen" />
+  </p>
+</form>
+</div>
+</body>
+</html>
