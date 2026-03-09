@@ -11,6 +11,9 @@ import { join } from 'path'
 import { CookieJar } from 'tough-cookie'
 import {
   extractFormTokens,
+  extractAcfFieldValues,
+  extractPostTitle,
+  extractPostStatus,
   formatAcfDate,
   generateSlug,
   buildFormBody,
@@ -22,6 +25,7 @@ import {
 
 const FIXTURES_DIR = join(import.meta.dirname, 'fixtures')
 const newEventFormHtml = readFileSync(join(FIXTURES_DIR, 'wp-new-event-form.html'), 'utf8')
+const editEventHtml = readFileSync(join(FIXTURES_DIR, 'wp-edit-event.html'), 'utf8')
 
 // ---- Helpers ----
 
@@ -339,5 +343,275 @@ describe('ACF_FIELDS', () => {
     expect(ACF_FIELDS.shotsFired).toBe('field_4k2esk3rske32')
     expect(ACF_FIELDS.attendeeCount).toBe('field_6j3ak3kj2kjs2')
     expect(ACF_FIELDS.eventCount).toBe('field_4k3ak3sj2kj6b')
+  })
+})
+
+// ---- Cycle 2: Pure function tests ----
+
+describe('extractAcfFieldValues', () => {
+  it('extracts input field values from edit page HTML', () => {
+    const values = extractAcfFieldValues(editEventHtml)
+    expect(values[ACF_FIELDS.startDate]).toBe('20260131')
+    expect(values[ACF_FIELDS.endDate]).toBe('20260131')
+    expect(values[ACF_FIELDS.time]).toBe('Klo 09.00-12.00')
+    expect(values[ACF_FIELDS.shotsFired]).toBe('500')
+    expect(values[ACF_FIELDS.attendeeCount]).toBe('5')
+    expect(values[ACF_FIELDS.eventCount]).toBe('1')
+  })
+
+  it('extracts textarea field values', () => {
+    const values = extractAcfFieldValues(editEventHtml)
+    expect(values[ACF_FIELDS.shortDescription]).toBe('Kupittaa Cup lauantaina')
+  })
+
+  it('extracts nested group fields (location)', () => {
+    const values = extractAcfFieldValues(editEventHtml)
+    // Location group contains nested fields
+    const locationGroup = values[ACF_FIELDS.locationGroup]
+    expect(locationGroup).toBeDefined()
+    expect(locationGroup[ACF_FIELDS.locationAddress]).toBe('Kupittaan urheiluhallin ampumarata')
+    expect(locationGroup[ACF_FIELDS.locationMapLink]).toBe('https://maps.google.com/test')
+  })
+
+  it('returns empty object for null/empty input', () => {
+    expect(extractAcfFieldValues(null)).toEqual({})
+    expect(extractAcfFieldValues('')).toEqual({})
+  })
+})
+
+describe('extractPostTitle', () => {
+  it('extracts title from edit page', () => {
+    expect(extractPostTitle(editEventHtml)).toBe('Kupittaan ampumavuoro 31.01.2026')
+  })
+
+  it('returns null for missing title', () => {
+    expect(extractPostTitle('<html><body>no title</body></html>')).toBeNull()
+    expect(extractPostTitle(null)).toBeNull()
+  })
+})
+
+describe('extractPostStatus', () => {
+  it('extracts status from edit page', () => {
+    expect(extractPostStatus(editEventHtml)).toBe('publish')
+  })
+
+  it('returns null for missing status', () => {
+    expect(extractPostStatus('<html><body>no status</body></html>')).toBeNull()
+    expect(extractPostStatus(null)).toBeNull()
+  })
+})
+
+// ---- Cycle 2: Integration tests (mocked fetch) ----
+
+describe('WpCalendarAdapter — Cycle 2', () => {
+  let originalFetch
+
+  beforeEach(() => {
+    originalFetch = global.fetch
+  })
+
+  afterEach(() => {
+    global.fetch = originalFetch
+  })
+
+  describe('updateEvent', () => {
+    it('updates ACF statistics fields on an existing event', async () => {
+      const calls = stubFetch([
+        // GET edit page for nonce
+        mockResponse(editEventHtml),
+        // POST update
+        mockResponse('', {
+          status: 302,
+          location: 'https://example.com/wp-admin/post.php?post=12345&action=edit&message=1',
+        }),
+        // GET follow redirect
+        mockResponse('<div id="post-body">Updated</div>'),
+      ])
+
+      const adapter = new WpCalendarAdapter(makeSession())
+      const result = await adapter.updateEvent('12345', {
+        shotsFired: 1000,
+        attendeeCount: 10,
+        eventCount: 1,
+      })
+
+      expect(result.eventId).toBe('12345')
+      expect(result.status).toBe('updated')
+
+      // Verify POST body contains statistics ACF fields
+      const postCall = calls.find(c => c.options?.method === 'POST')
+      expect(postCall.options.body).toContain('acf%5Bfield_4k2esk3rske32%5D=1000')  // shotsFired
+      expect(postCall.options.body).toContain('acf%5Bfield_6j3ak3kj2kjs2%5D=10')    // attendeeCount
+      expect(postCall.options.body).toContain('acf%5Bfield_4k3ak3sj2kj6b%5D=1')     // eventCount
+    })
+
+    it('preserves current post status by default', async () => {
+      const calls = stubFetch([
+        mockResponse(editEventHtml),
+        mockResponse('', {
+          status: 302,
+          location: 'https://example.com/wp-admin/post.php?post=12345&action=edit&message=1',
+        }),
+        mockResponse(''),
+      ])
+
+      const adapter = new WpCalendarAdapter(makeSession())
+      await adapter.updateEvent('12345', { shotsFired: 500 })
+
+      const postCall = calls.find(c => c.options?.method === 'POST')
+      expect(postCall.options.body).toContain('post_status=publish')
+    })
+
+    it('allows overriding post status', async () => {
+      const calls = stubFetch([
+        mockResponse(editEventHtml),
+        mockResponse('', {
+          status: 302,
+          location: 'https://example.com/wp-admin/post.php?post=12345&action=edit&message=1',
+        }),
+        mockResponse(''),
+      ])
+
+      const adapter = new WpCalendarAdapter(makeSession())
+      await adapter.updateEvent('12345', { shotsFired: 500, postStatus: 'draft' })
+
+      const postCall = calls.find(c => c.options?.method === 'POST')
+      expect(postCall.options.body).toContain('post_status=draft')
+    })
+
+    it('throws when eventId is missing', async () => {
+      const adapter = new WpCalendarAdapter(makeSession())
+      await expect(adapter.updateEvent('')).rejects.toThrow('eventId is required')
+    })
+
+    it('throws when nonce cannot be extracted', async () => {
+      stubFetch([mockResponse('<html><body>Access denied</body></html>')])
+      const adapter = new WpCalendarAdapter(makeSession())
+      await expect(adapter.updateEvent('12345', { shotsFired: 100 }))
+        .rejects.toThrow('Could not extract nonce')
+    })
+
+    it('returns unknown status when update response has no message code', async () => {
+      stubFetch([
+        mockResponse(editEventHtml),
+        mockResponse('', {
+          status: 302,
+          location: 'https://example.com/wp-admin/post.php?post=12345&action=edit',
+        }),
+        mockResponse(''),
+      ])
+
+      const adapter = new WpCalendarAdapter(makeSession())
+      const result = await adapter.updateEvent('12345', { shotsFired: 500 })
+      expect(result.status).toBe('unknown')
+    })
+  })
+
+  describe('getEvent', () => {
+    it('returns event details from edit page', async () => {
+      stubFetch([mockResponse(editEventHtml)])
+
+      const adapter = new WpCalendarAdapter(makeSession())
+      const result = await adapter.getEvent('12345')
+
+      expect(result.eventId).toBe('12345')
+      expect(result.title).toBe('Kupittaan ampumavuoro 31.01.2026')
+      expect(result.status).toBe('publish')
+      expect(result.editUrl).toContain('post=12345')
+      expect(result.acfFields[ACF_FIELDS.startDate]).toBe('20260131')
+      expect(result.acfFields[ACF_FIELDS.shotsFired]).toBe('500')
+      expect(result.acfFields[ACF_FIELDS.attendeeCount]).toBe('5')
+    })
+
+    it('throws when eventId is missing', async () => {
+      const adapter = new WpCalendarAdapter(makeSession())
+      await expect(adapter.getEvent('')).rejects.toThrow('eventId is required')
+    })
+
+    it('throws when edit page cannot be loaded', async () => {
+      stubFetch([mockResponse('<html><body>Not found</body></html>')])
+      const adapter = new WpCalendarAdapter(makeSession())
+      await expect(adapter.getEvent('99999'))
+        .rejects.toThrow('Could not load edit page')
+    })
+  })
+
+  describe('deleteEvent', () => {
+    it('trashes an event successfully', async () => {
+      stubFetch([
+        // GET edit page for trash nonce
+        mockResponse(editEventHtml),
+        // GET trash URL — redirect to list with trashed=1
+        mockResponse('', {
+          status: 302,
+          location: 'https://example.com/wp-admin/edit.php?post_type=event&trashed=1&ids=12345',
+        }),
+        // GET follow redirect
+        mockResponse('<div>1 post moved to the Trash.</div>'),
+      ])
+
+      const adapter = new WpCalendarAdapter(makeSession())
+      const result = await adapter.deleteEvent('12345')
+
+      expect(result.eventId).toBe('12345')
+      expect(result.status).toBe('trashed')
+    })
+
+    it('throws when eventId is missing', async () => {
+      const adapter = new WpCalendarAdapter(makeSession())
+      await expect(adapter.deleteEvent('')).rejects.toThrow('eventId is required')
+    })
+
+    it('throws when trash nonce cannot be extracted', async () => {
+      stubFetch([mockResponse('<html><body>No trash link</body></html>')])
+      const adapter = new WpCalendarAdapter(makeSession())
+      await expect(adapter.deleteEvent('12345'))
+        .rejects.toThrow('Could not extract trash nonce')
+    })
+
+    it('returns unknown status when trash redirect missing', async () => {
+      stubFetch([
+        mockResponse(editEventHtml),
+        mockResponse('<html><body>Something else happened</body></html>'),
+      ])
+
+      const adapter = new WpCalendarAdapter(makeSession())
+      const result = await adapter.deleteEvent('12345')
+      expect(result.status).toBe('unknown')
+    })
+  })
+
+  describe('findEventBySlug', () => {
+    it('finds event by slug in search results', async () => {
+      const searchResultsHtml = `
+        <table class="wp-list-table">
+        <tr>
+          <td><a href="https://example.com/wp-admin/post.php?post=12345&amp;action=edit">Kupittaan ampumavuoro</a></td>
+        </tr>
+        </table>`
+
+      stubFetch([mockResponse(searchResultsHtml)])
+
+      const adapter = new WpCalendarAdapter(makeSession())
+      const result = await adapter.findEventBySlug('cup141')
+
+      expect(result.eventId).toBe('12345')
+      expect(result.editUrl).toContain('post=12345')
+    })
+
+    it('returns null when no event found', async () => {
+      stubFetch([mockResponse('<table class="wp-list-table"><tbody></tbody></table>')])
+
+      const adapter = new WpCalendarAdapter(makeSession())
+      const result = await adapter.findEventBySlug('cup999')
+
+      expect(result.eventId).toBeNull()
+      expect(result.editUrl).toBeNull()
+    })
+
+    it('throws when slug is missing', async () => {
+      const adapter = new WpCalendarAdapter(makeSession())
+      await expect(adapter.findEventBySlug('')).rejects.toThrow('slug is required')
+    })
   })
 })

@@ -1,18 +1,27 @@
 // ============================================================
-// WordPress Calendar Adapter — Cycle 1 (CAL-3)
+// WordPress Calendar Adapter (CAL-3)
 // ============================================================
-// Creates and publishes events in WordPress Tapahtumakalenteri
-// via admin form POST (web scraping approach matching the legacy
-// PowerShell script New-TapahtumakalenteriEvent.ps1).
+// Full CRUD for WordPress Tapahtumakalenteri events via admin
+// form POST (web scraping approach matching the legacy PowerShell
+// scripts New-TapahtumakalenteriEvent.ps1 and
+// Update-TapahtumakalenteriEvent.ps1).
 //
-// Cycle 1: createEvent + publishEvent
-// Cycle 2 (future): updateEvent, getEvent, deleteEvent
+// Public API:
+//   createEvent(params)     — create draft event with ACF fields
+//   publishEvent(eventId)   — change status from draft to publish
+//   updateEvent(eventId, changes) — update ACF fields on existing event
+//   getEvent(eventId)       — read event details from edit page
+//   deleteEvent(eventId)    — trash a post via WP admin
+//   findEventBySlug(slug)   — search events by permalink slug
 //
 // Usage:
 //   import { WpCalendarAdapter } from './wp-adapter.js'
 //   const adapter = new WpCalendarAdapter(wpSession)
 //   const event = await adapter.createEvent({ title, date, ... })
 //   await adapter.publishEvent(event.eventId)
+//   await adapter.updateEvent(event.eventId, { shotsFired: 500, attendeeCount: 5 })
+//   const details = await adapter.getEvent(event.eventId)
+//   await adapter.deleteEvent(event.eventId)
 // ============================================================
 
 import { log } from '../logger.js'
@@ -84,6 +93,76 @@ export function generateSlug(date, ssiCupId) {
   let slug = `kupittaan-ampumavuoro-${dd}-${mm}-${yyyy}`
   if (ssiCupId) slug += `-cup${ssiCupId}`
   return slug
+}
+
+/**
+ * Extract ACF field values from a WordPress edit page HTML.
+ * Looks for input/textarea elements with name="acf[field_xxx]" or similar patterns.
+ *
+ * @param {string} html - HTML of the WordPress edit page
+ * @returns {object} Map of ACF field key → value
+ */
+export function extractAcfFieldValues(html) {
+  if (!html) return {}
+
+  const values = {}
+
+  // Match input fields: <input ... name="acf[field_xxx]" ... value="yyy" />
+  // Anchored to <input to prevent matching across elements
+  const inputPattern = /<input\s[^>]*?name="acf\[([^\]]+)\](?:\[([^\]]+)\])?"[^>]*?value="([^"]*)"/g
+  let match
+  while ((match = inputPattern.exec(html)) !== null) {
+    const fieldKey = match[1]
+    const nestedKey = match[2]
+    const value = match[3]
+    if (nestedKey) {
+      if (!values[fieldKey]) values[fieldKey] = {}
+      values[fieldKey][nestedKey] = value
+    } else {
+      values[fieldKey] = value
+    }
+  }
+
+  // Match textarea fields: <textarea ... name="acf[field_xxx]">content</textarea>
+  // Anchored to <textarea to prevent matching input elements
+  const textareaPattern = /<textarea\s[^>]*?name="acf\[([^\]]+)\](?:\[([^\]]+)\])?"[^>]*?>([\s\S]*?)<\/textarea>/g
+  while ((match = textareaPattern.exec(html)) !== null) {
+    const fieldKey = match[1]
+    const nestedKey = match[2]
+    const value = match[3].trim()
+    if (nestedKey) {
+      if (!values[fieldKey]) values[fieldKey] = {}
+      values[fieldKey][nestedKey] = value
+    } else {
+      values[fieldKey] = value
+    }
+  }
+
+  return values
+}
+
+/**
+ * Extract the post title from a WordPress edit page.
+ * @param {string} html
+ * @returns {string|null}
+ */
+export function extractPostTitle(html) {
+  if (!html) return null
+  const match = html.match(/name="post_title"[^>]*value="([^"]*)"/)
+  return match?.[1] || null
+}
+
+/**
+ * Extract the post status from a WordPress edit page.
+ * @param {string} html
+ * @returns {string|null}
+ */
+export function extractPostStatus(html) {
+  if (!html) return null
+  // Hidden input: <input type="hidden" id="original_post_status" name="original_post_status" value="publish" />
+  const match = html.match(/name="original_post_status"[^>]*value="([^"]*)"/)
+    || html.match(/id="post_status"[^>]*value="([^"]*)"/)
+  return match?.[1] || null
 }
 
 /**
@@ -366,5 +445,207 @@ export class WpCalendarAdapter {
 
     log.warn(`[wp-adapter] Event ${eventId} publish may have failed. Final URL: ${finalUrl}`)
     return { eventId, status: 'unknown' }
+  }
+
+  /**
+   * Update an existing event's ACF fields (e.g., statistics after event completion).
+   *
+   * @param {string} eventId - WordPress post ID
+   * @param {object} changes - Fields to update
+   * @param {number} [changes.shotsFired] - Ammuttujen laukausten lukumäärä
+   * @param {number} [changes.attendeeCount] - Osallistujien lukumäärä
+   * @param {number} [changes.eventCount] - Tapahtumien lukumäärä
+   * @param {string} [changes.shortDescription] - Updated short description
+   * @param {string} [changes.content] - Updated HTML content
+   * @param {string} [changes.postStatus] - Post status to set (default: keep current)
+   * @returns {Promise<{eventId: string, status: string}>}
+   */
+  async updateEvent(eventId, changes = {}) {
+    if (!eventId) throw new Error('[wp-adapter] eventId is required')
+
+    log.info(`[wp-adapter] Updating event ${eventId}...`)
+
+    // Step 1: Fetch the edit page to get nonces and current status
+    const editUrl = `${this.baseUrl}/wp-admin/post.php?post=${eventId}&action=edit`
+    const { body: editHtml } = await wpFetch(this.session, editUrl, {
+      method: 'GET',
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    })
+
+    const tokens = extractFormTokens(editHtml)
+    if (!tokens.wpNonce) {
+      throw new Error(`[wp-adapter] Could not extract nonce from edit page for post ${eventId}`)
+    }
+
+    const currentStatus = extractPostStatus(editHtml) || 'publish'
+
+    // Step 2: Build form data with only the changed ACF fields
+    const fields = {
+      '_wpnonce': tokens.wpNonce,
+      '_wp_http_referer': `/wp-admin/post.php?post=${eventId}&action=edit`,
+      'action': 'editpost',
+      'originalaction': 'editpost',
+      'post_type': 'event',
+      'post_ID': eventId,
+      'post_status': changes.postStatus || currentStatus,
+      '_acf_screen': 'post',
+      '_acf_post_id': eventId,
+      '_acf_nonce': tokens.acfNonce || '',
+      '_acf_changed': '1',
+    }
+
+    // Map changes to ACF field keys
+    if (changes.shotsFired !== undefined) {
+      fields[`acf[${ACF_FIELDS.shotsFired}]`] = String(changes.shotsFired)
+    }
+    if (changes.attendeeCount !== undefined) {
+      fields[`acf[${ACF_FIELDS.attendeeCount}]`] = String(changes.attendeeCount)
+    }
+    if (changes.eventCount !== undefined) {
+      fields[`acf[${ACF_FIELDS.eventCount}]`] = String(changes.eventCount)
+    }
+    if (changes.shortDescription !== undefined) {
+      fields[`acf[${ACF_FIELDS.shortDescription}]`] = changes.shortDescription
+    }
+    if (changes.content !== undefined) {
+      fields[`acf[${ACF_FIELDS.content}]`] = changes.content
+    }
+
+    const formBody = buildFormBody(fields)
+    const postUrl = `${this.baseUrl}/wp-admin/post.php`
+
+    const { finalUrl } = await wpFetch(this.session, postUrl, {
+      method: 'POST',
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+        'Origin': this.baseUrl,
+        'Referer': editUrl,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: formBody,
+    })
+
+    // Check for success (message=1 = post updated)
+    const messageMatch = finalUrl.match(/message=(\d+)/)
+    if (messageMatch && messageMatch[1] === '1') {
+      log.info(`[wp-adapter] Event ${eventId} updated successfully`)
+      return { eventId, status: 'updated' }
+    }
+
+    log.warn(`[wp-adapter] Event ${eventId} update uncertain. Final URL: ${finalUrl}`)
+    return { eventId, status: 'unknown' }
+  }
+
+  /**
+   * Get event details by reading the WordPress edit page.
+   *
+   * @param {string} eventId - WordPress post ID
+   * @returns {Promise<{eventId: string, title: string|null, status: string|null, acfFields: object, editUrl: string}>}
+   */
+  async getEvent(eventId) {
+    if (!eventId) throw new Error('[wp-adapter] eventId is required')
+
+    log.info(`[wp-adapter] Fetching event ${eventId}...`)
+
+    const editUrl = `${this.baseUrl}/wp-admin/post.php?post=${eventId}&action=edit`
+    const { body: editHtml } = await wpFetch(this.session, editUrl, {
+      method: 'GET',
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    })
+
+    // Check if the page loaded (has post form)
+    if (!editHtml.includes('post_ID')) {
+      throw new Error(`[wp-adapter] Could not load edit page for post ${eventId}`)
+    }
+
+    const title = extractPostTitle(editHtml)
+    const status = extractPostStatus(editHtml)
+    const acfFields = extractAcfFieldValues(editHtml)
+
+    return {
+      eventId,
+      title,
+      status,
+      acfFields,
+      editUrl,
+    }
+  }
+
+  /**
+   * Delete (trash) a WordPress event post.
+   * Uses the admin trash action URL with nonce.
+   *
+   * @param {string} eventId - WordPress post ID
+   * @returns {Promise<{eventId: string, status: string}>}
+   */
+  async deleteEvent(eventId) {
+    if (!eventId) throw new Error('[wp-adapter] eventId is required')
+
+    log.info(`[wp-adapter] Trashing event ${eventId}...`)
+
+    // WordPress trash URL format: /wp-admin/post.php?post=NNN&action=trash&_wpnonce=xxx
+    // We need a nonce first — fetch the edit page
+    const editUrl = `${this.baseUrl}/wp-admin/post.php?post=${eventId}&action=edit`
+    const { body: editHtml } = await wpFetch(this.session, editUrl, {
+      method: 'GET',
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    })
+
+    // Extract the trash nonce from the "Move to Trash" link
+    // Pattern: href="...action=trash&amp;_wpnonce=xxx" or href="...action=trash&_wpnonce=xxx"
+    const trashNonceMatch = editHtml.match(/action=trash&(?:amp;)?_wpnonce=([a-zA-Z0-9_]+)/)
+    if (!trashNonceMatch) {
+      throw new Error(`[wp-adapter] Could not extract trash nonce for post ${eventId}`)
+    }
+    const trashNonce = trashNonceMatch[1]
+
+    // Navigate to the trash URL
+    const trashUrl = `${this.baseUrl}/wp-admin/post.php?post=${eventId}&action=trash&_wpnonce=${trashNonce}`
+    const { finalUrl } = await wpFetch(this.session, trashUrl, {
+      method: 'GET',
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    })
+
+    // Success: redirects to edit.php?post_type=event&trashed=1
+    if (finalUrl.includes('trashed=1') || finalUrl.includes('trashed%3D1')) {
+      log.info(`[wp-adapter] Event ${eventId} trashed successfully`)
+      return { eventId, status: 'trashed' }
+    }
+
+    log.warn(`[wp-adapter] Event ${eventId} trash uncertain. Final URL: ${finalUrl}`)
+    return { eventId, status: 'unknown' }
+  }
+
+  /**
+   * Find a calendar event by searching for a permalink slug.
+   * Uses WordPress admin post search (edit.php?post_type=event&s=slug).
+   *
+   * @param {string} slug - Slug or partial slug to search for (e.g., 'cup141')
+   * @returns {Promise<{eventId: string|null, editUrl: string|null}>}
+   */
+  async findEventBySlug(slug) {
+    if (!slug) throw new Error('[wp-adapter] slug is required')
+
+    log.info(`[wp-adapter] Searching for event with slug containing: ${slug}`)
+
+    const searchUrl = `${this.baseUrl}/wp-admin/edit.php?post_type=event&s=${encodeURIComponent(slug)}`
+    const { body: searchHtml } = await wpFetch(this.session, searchUrl, {
+      method: 'GET',
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    })
+
+    // Look for post.php?post=NNN&action=edit in search results
+    const postMatch = searchHtml.match(/post\.php\?post=(\d+)&(?:amp;)?action=edit/)
+    if (postMatch) {
+      const eventId = postMatch[1]
+      log.info(`[wp-adapter] Found event: Post ID ${eventId}`)
+      return {
+        eventId,
+        editUrl: `${this.baseUrl}/wp-admin/post.php?post=${eventId}&action=edit`,
+      }
+    }
+
+    log.info(`[wp-adapter] No event found for slug: ${slug}`)
+    return { eventId: null, editUrl: null }
   }
 }
