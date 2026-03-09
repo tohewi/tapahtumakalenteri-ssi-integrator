@@ -21,6 +21,12 @@
 
   Use the approximation: **1 token ≈ 0.75 words** (i.e., total tokens ≈ total words × 1.33). This is a rough estimate for cost awareness, not exact billing.
 
+- **Ralph Loop workflow:** Follow the `/ralph` workflow (`.windsurf/workflows/ralph.md`) for structured task execution. Key discipline:
+  - **Start of session:** Read `progress.md` first — it's your cross-session memory.
+  - **One task at a time:** Implement, test, commit, push before starting the next task.
+  - **End of session:** Update `progress.md` with what was done, current branch/commit, test counts, and what's next.
+  - **PRD authority:** `docs/requirements/requirements.md` defines "done". `progress.md` tracks where we are.
+
 ## Project Overview
 
 This is a **shooting competition management system** to help setting up events in SSI (ShootnScoreIt, a SaaS service for competition management) with two main components:
