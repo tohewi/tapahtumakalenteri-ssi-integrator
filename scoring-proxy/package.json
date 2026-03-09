@@ -20,6 +20,8 @@
     "express": "^5.1.0",
     "express-rate-limit": "^8.2.1",
     "helmet": "^8.1.0",
+    "imapflow": "^1.2.13",
+    "mailparser": "^3.9.4",
     "otpauth": "^9.5.0",
     "pg": "^8.19.0",
     "qrcode": "^1.5.4",
