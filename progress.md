@@ -1,7 +1,7 @@
 # Progress
 
-Last updated: 2026-03-10 (evening) by Cascade
-Branch: `release/r80-match-manager-base` at `f79607d`
+Last updated: 2026-03-10 (late evening) by Cascade
+Branch: `release/r80-match-manager-base` at `840d5e8`
 Tests: 757 backend (32 files), all passing
 
 ---
@@ -15,6 +15,9 @@ Tests: 757 backend (32 files), all passing
 8. **UAT fix: ACF fields cleared on publish** (`1929c6e`) — `publishEvent()` wasn't re-submitting ACF values, so WordPress/ACF cleared all content on status change. Now reads + re-submits current ACF field values.
 9. **UAT fix: re-publish button** (`1f880b4`) — Added "Publish Calendar", "Retry Calendar", "Re-publish Calendar" (force=true) buttons for all event states.
 10. **UAT fix: content field name mismatch** (`f79607d`) — UI stores `calendarTemplate.content` but service read `.contentTemplate`. Fixed to read `.content` first.
+11. **UAT fix: HTML entity encoding in ACF values** (`b616f3d`) — `extractAcfFieldValues()` extracted entity-encoded content (`&lt;div&gt;`) from WP edit page HTML. Added `decodeHtmlEntities()` to convert back to raw HTML before re-submitting.
+12. **UAT fix: {ssiCupLink} placeholder missing** (`773834a`) — UI hint told users to use `{ssiCupLink}` but `buildEventContent()` only handled `{ssiCupUrl}`. Added `{ssiCupLink}` replacement.
+13. **UAT fix: {ssiCupLink} as full HTML anchor** (`840d5e8`) — `{ssiCupLink}` was producing raw URL. Now produces `<a href="url" target="_blank">Cup Name</a>` matching original PowerShell solution.
 
 ### Completed — 2026-03-10: R8.3 CAL-4 Calendar Publishing in Event Execution
 
@@ -56,7 +59,7 @@ Tests: 757 backend (32 files), all passing
 - **R8.1 (PA1–PA21)**: Platform auth & tenancy — 21/21 ✅ (accounts, tenants, RBAC, MFA, invitations, templates)
 - **R8.2**: Authorization & workflows — 5/5 ✅ (RBAC matrix, password reset, event execution/status/cancel)
 - **R8.2.1**: Architecture tech debt — 23/23 ✅ (modularity splits, tests, ESLint boundaries)
-- **R8.3**: Calendar integration — 4/9 ✅ (CAL-1 WP auth, CAL-2 Gmail OTP, CAL-3 WP adapter, CAL-4 publish flow + UI). UAT in progress on PR-138 preview.
+- **R8.3**: Calendar integration — 4/9 ✅ (CAL-1 WP auth, CAL-2 Gmail OTP, CAL-3 WP adapter, CAL-4 publish flow + UI). UAT passed on PR-138 preview (7 bug fixes).
 - **R9.0**: Event staffing — all implemented (needs, signups, leaderboard, notifications)
 - **R9.1**: API security hardening — 4/5 ✅ (rate limits, cross-tenant validation, audit log)
 - **R9.2**: SSI discipline registry — 4/4 ✅ (built-in + GraphQL auto-discovery)
