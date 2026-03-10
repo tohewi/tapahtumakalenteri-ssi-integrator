@@ -406,7 +406,12 @@ export class WpCalendarAdapter {
       throw new Error(`[wp-adapter] Could not extract nonce from edit page for post ${eventId}`)
     }
 
-    // Step 2: POST the status change
+    // Step 2: Read current ACF field values so they are preserved during publish.
+    // WordPress/ACF clears any ACF fields not included in the POST body.
+    const currentAcf = extractAcfFieldValues(editHtml)
+    const currentTitle = extractPostTitle(editHtml)
+
+    // Step 3: POST the status change with all current ACF values re-submitted
     const fields = {
       '_wpnonce': tokens.wpNonce,
       '_wp_http_referer': `/wp-admin/post.php?post=${eventId}&action=edit`,
@@ -415,11 +420,25 @@ export class WpCalendarAdapter {
       'post_type': 'event',
       'original_post_status': 'draft',
       'post_ID': eventId,
+      'post_title': currentTitle || '',
       'post_status': 'publish',
-      // ACF fields to prevent clearing them
+      // ACF control fields
       '_acf_screen': 'post',
       '_acf_post_id': eventId,
       '_acf_nonce': tokens.acfNonce || '',
+      '_acf_changed': '0',
+    }
+
+    // Re-submit all current ACF field values to prevent WordPress from clearing them
+    for (const [fieldKey, value] of Object.entries(currentAcf)) {
+      if (typeof value === 'object' && value !== null) {
+        // Nested fields (e.g., location group)
+        for (const [nestedKey, nestedValue] of Object.entries(value)) {
+          fields[`acf[${fieldKey}][${nestedKey}]`] = nestedValue || ''
+        }
+      } else {
+        fields[`acf[${fieldKey}]`] = value || ''
+      }
     }
 
     const formBody = buildFormBody(fields)
