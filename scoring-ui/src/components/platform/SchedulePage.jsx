@@ -151,12 +151,12 @@ export default function SchedulePage({ tenantId, onBack }) {
     }
   }
 
-  // Retry calendar publishing for an event
-  async function handlePublishCalendar(eventId) {
+  // Publish or re-publish calendar event (force=true for already-published events)
+  async function handlePublishCalendar(eventId, { force = false } = {}) {
     setExecutingId(eventId)
     setStatus(null)
     try {
-      const data = await publishCalendarApi(tenantId, eventId)
+      const data = await publishCalendarApi(tenantId, eventId, { force })
       setStatus({ type: 'success', message: `Calendar event published successfully` })
       await refreshEvents()
     } catch (err) {
@@ -425,7 +425,16 @@ export default function SchedulePage({ tenantId, onBack }) {
                             {isBusy ? 'Retrying...' : 'Retry'}
                           </button>
                         )}
-                        {/* Calendar retry: for ssi_created events with calendar error */}
+                        {/* Calendar publish/retry/re-publish */}
+                        {evt.status === 'ssi_created' && !evt.calendarReference && (
+                          <button
+                            onClick={() => handlePublishCalendar(evt.id)}
+                            disabled={isBusy}
+                            className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-50"
+                          >
+                            {isBusy ? 'Publishing...' : 'Publish Calendar'}
+                          </button>
+                        )}
                         {evt.status === 'ssi_created' && evt.calendarReference?.status === 'error' && (
                           <button
                             onClick={() => handlePublishCalendar(evt.id)}
@@ -433,6 +442,15 @@ export default function SchedulePage({ tenantId, onBack }) {
                             className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-50"
                           >
                             {isBusy ? 'Publishing...' : 'Retry Calendar'}
+                          </button>
+                        )}
+                        {evt.status === 'calendar_published' && (
+                          <button
+                            onClick={() => handlePublishCalendar(evt.id, { force: true })}
+                            disabled={isBusy}
+                            className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-50"
+                          >
+                            {isBusy ? 'Publishing...' : 'Re-publish Calendar'}
                           </button>
                         )}
                         {/* Cancel: soft cancel for active events (MP7) */}

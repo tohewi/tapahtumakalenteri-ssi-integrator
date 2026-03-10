@@ -401,6 +401,15 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                                 {executingId === evt.id ? 'Retrying...' : 'Retry'}
                               </button>
                             )}
+                            {evt.status === 'ssi_created' && !evt.calendarReference && onPublishCalendar && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onPublishCalendar(evt.id) }}
+                                disabled={executingId === evt.id}
+                                className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-50"
+                              >
+                                {executingId === evt.id ? 'Publishing...' : 'Publish Calendar'}
+                              </button>
+                            )}
                             {evt.status === 'ssi_created' && evt.calendarReference?.status === 'error' && onPublishCalendar && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); onPublishCalendar(evt.id) }}
@@ -408,6 +417,15 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                                 className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-50"
                               >
                                 {executingId === evt.id ? 'Publishing...' : 'Retry Calendar'}
+                              </button>
+                            )}
+                            {evt.status === 'calendar_published' && onPublishCalendar && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onPublishCalendar(evt.id, { force: true }) }}
+                                disabled={executingId === evt.id}
+                                className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-50"
+                              >
+                                {executingId === evt.id ? 'Publishing...' : 'Re-publish Calendar'}
                               </button>
                             )}
                             {CANCELLABLE_STATUSES.has(evt.status) && onCancel && (
