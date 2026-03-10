@@ -1,12 +1,16 @@
 # Progress
 
-Last updated: 2026-03-09 by Cascade
-Branch: `release/r80-match-manager-base` at `a57daef`
-Tests: 722 backend (31 files), all passing
+Last updated: 2026-03-10 by Cascade
+Branch: `release/r80-match-manager-base` at `39ac055`
+Tests: 757 backend (32 files), all passing
 
 ---
 
 ## Current Session Work
+
+### Completed — 2026-03-10: R8.3 CAL-4 Calendar Publishing in Event Execution
+
+5. **CAL-4: Calendar Publishing Service** (`39ac055`) — `lib/services/calendar-publish-service.js`: orchestrates WP auth (with 2FA + Gmail OTP) → create → publish. Wired into execute endpoint (after SSI creation, non-fatal on failure). Manual retry endpoint POST /publish-calendar. 35 tests.
 
 ### Completed — 2026-03-09: R8.3 Calendar Integration (CAL-1, CAL-2, CAL-3) + Ralph Workflow
 
@@ -44,14 +48,13 @@ Tests: 722 backend (31 files), all passing
 - **R8.1 (PA1–PA21)**: Platform auth & tenancy — 21/21 ✅ (accounts, tenants, RBAC, MFA, invitations, templates)
 - **R8.2**: Authorization & workflows — 5/5 ✅ (RBAC matrix, password reset, event execution/status/cancel)
 - **R8.2.1**: Architecture tech debt — 23/23 ✅ (modularity splits, tests, ESLint boundaries)
-- **R8.3**: Calendar integration — 3/9 ✅ (CAL-1 WP auth, CAL-2 Gmail OTP, CAL-3 WP adapter)
+- **R8.3**: Calendar integration — 4/9 ✅ (CAL-1 WP auth, CAL-2 Gmail OTP, CAL-3 WP adapter, CAL-4 publish flow)
 - **R9.0**: Event staffing — all implemented (needs, signups, leaderboard, notifications)
 - **R9.1**: API security hardening — 4/5 ✅ (rate limits, cross-tenant validation, audit log)
 - **R9.2**: SSI discipline registry — 4/4 ✅ (built-in + GraphQL auto-discovery)
 
 ## What's Next (unprioritized — pick from PRD)
 
-- **R8.3 CAL-4**: Calendar Publishing in Event Execution Workflow — wire adapter into MP5's flow, status transition ssi_created → calendar_published
 - **R8.3 CAL-5**: Calendar Statistics Update — query SSI for participants, update WP event (uses adapter.updateEvent)
 - **R8.3 CAL-6**: Calendar Data Integrity — cross-reference validation SSI ↔ WP
 - **R7.6**: Consolidation & completion (deferred items from R7.0/R7.5)
