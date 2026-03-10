@@ -1,12 +1,16 @@
 # Progress
 
-Last updated: 2026-03-10 (late night) by Cascade
-Branch: `release/r80-match-manager-base` at `4c873f0`
-Tests: 783 backend (34 files), 780 passing (3 flaky registration timeouts — pre-existing)
+Last updated: 2026-03-11 (midnight) by Cascade
+Branch: `release/r80-match-manager-base` at `560a5a0`
+Tests: 804 backend (36 files), 801 passing (3 flaky registration timeouts — pre-existing)
 
 ---
 
 ## Current Session Work
+
+### Completed — 2026-03-11 (midnight): CAL-7 SSI Event Completion
+
+17. **CAL-7: SSI Event Completion** (`560a5a0`) — Mark SSI events as "Completed" via web form POST. SSI GraphQL has no `update_event` mutation (confirmed by introspection + direct call tests). Uses Django edit form at `/event/{ct}/{id}/edit/`. New files: `lib/ssi-core/event-status.js` (ssiSetEventStatus — GET edit page, parseFormFields, override status, POST), `lib/services/event-complete-service.js` (completeEvent — cup: complete matches first then cup; standalone: complete directly). API: POST `/events/:id/complete-ssi` with RBAC + audit. UI: purple "Complete SSI" button in SchedulePage list view + EventCalendar popover for ssi_created/calendar_published events. 21 new tests.
 
 ### Completed — 2026-03-10 (late night): CAL-5 Calendar Statistics Update
 
