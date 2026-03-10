@@ -113,7 +113,7 @@ function getCalendarDays(year, month) {
   return days
 }
 
-export default function EventCalendar({ events, staffingStatus, tplMap, onExecute, onDelete, onCancel, onPublishCalendar, onUpdateCalendarStats, executingId }) {
+export default function EventCalendar({ events, staffingStatus, tplMap, onExecute, onDelete, onCancel, onPublishCalendar, onUpdateCalendarStats, onCompleteSsiEvent, executingId }) {
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
@@ -440,6 +440,15 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                                 className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50"
                               >
                                 {executingId === evt.id ? 'Updating...' : 'Update Stats'}
+                              </button>
+                            )}
+                            {(evt.status === 'ssi_created' || evt.status === 'calendar_published') && onCompleteSsiEvent && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onCompleteSsiEvent(evt.id) }}
+                                disabled={executingId === evt.id}
+                                className="text-xs text-purple-600 hover:text-purple-800 font-medium disabled:opacity-50"
+                              >
+                                {executingId === evt.id ? 'Completing...' : 'Complete SSI'}
                               </button>
                             )}
                             {CANCELLABLE_STATUSES.has(evt.status) && onCancel && (

@@ -451,6 +451,18 @@ export async function updateCalendarStatsApi(tenantId, eventId) {
   })
 }
 
+/**
+ * Complete an SSI event — set status to 'cp' (CAL-7).
+ * For cups: completes all component matches, then the cup.
+ * @param {string} tenantId
+ * @param {string} eventId
+ */
+export async function completeSsiEventApi(tenantId, eventId) {
+  return platformFetch(`/tenants/${tenantId}/events/${eventId}/complete-ssi`, {
+    method: 'POST',
+  })
+}
+
 // ---- SSI Event Search & Import ----
 
 /**

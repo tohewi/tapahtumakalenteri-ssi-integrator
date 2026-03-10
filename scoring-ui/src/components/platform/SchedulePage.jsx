@@ -10,7 +10,7 @@
 // ============================================================
 
 import { useState, useEffect, useMemo } from 'react'
-import { listTemplates, listEvents, createEventsApi, deleteEventApi, cancelEventApi, executeEventApi, publishCalendarApi, updateCalendarStatsApi, getUpcomingStaffingApi } from '../../platform-api.js'
+import { listTemplates, listEvents, createEventsApi, deleteEventApi, cancelEventApi, executeEventApi, publishCalendarApi, updateCalendarStatsApi, completeSsiEventApi, getUpcomingStaffingApi } from '../../platform-api.js'
 import ImportSsiEventsModal from './ImportSsiEventsModal.jsx'
 import EventCalendar from './EventCalendar.jsx'
 import StatusBadge, { STATUS_COLORS, STATUS_LABELS, CANCELLABLE_STATUSES, formatEventDate } from './schedule/StatusBadge.jsx'
@@ -178,6 +178,23 @@ export default function SchedulePage({ tenantId, onBack }) {
       await refreshEvents()
     } catch (err) {
       setStatus({ type: 'error', message: `Statistics update failed: ${err.message}` })
+      await refreshEvents()
+    } finally {
+      setExecutingId(null)
+    }
+  }
+
+  // Complete SSI event — set status to 'cp' (CAL-7)
+  async function handleCompleteSsiEvent(eventId) {
+    setExecutingId(eventId)
+    setStatus(null)
+    try {
+      const data = await completeSsiEventApi(tenantId, eventId)
+      const matchCount = data.completion?.matchResults?.length || 0
+      setStatus({ type: 'success', message: `SSI event completed${matchCount > 0 ? ` (${matchCount} matches)` : ''}` })
+      await refreshEvents()
+    } catch (err) {
+      setStatus({ type: 'error', message: `SSI complete failed: ${err.message}` })
       await refreshEvents()
     } finally {
       setExecutingId(null)
@@ -371,6 +388,7 @@ export default function SchedulePage({ tenantId, onBack }) {
             onCancel={setCancelTarget}
             onPublishCalendar={handlePublishCalendar}
             onUpdateCalendarStats={handleUpdateCalendarStats}
+            onCompleteSsiEvent={handleCompleteSsiEvent}
             executingId={executingId}
           />
         ) : (
@@ -483,6 +501,15 @@ export default function SchedulePage({ tenantId, onBack }) {
                             className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50"
                           >
                             {isBusy ? 'Updating...' : 'Update Stats'}
+                          </button>
+                        )}
+                        {(evt.status === 'ssi_created' || evt.status === 'calendar_published') && (
+                          <button
+                            onClick={() => handleCompleteSsiEvent(evt.id)}
+                            disabled={isBusy}
+                            className="text-xs text-purple-600 hover:text-purple-800 font-medium disabled:opacity-50"
+                          >
+                            {isBusy ? 'Completing...' : 'Complete SSI'}
                           </button>
                         )}
                         {/* Cancel: soft cancel for active events (MP7) */}

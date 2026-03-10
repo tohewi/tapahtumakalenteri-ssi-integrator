@@ -9,6 +9,7 @@ import { ssiFetchEventStructure, ssiSearchEvents } from '../../lib/ssi-core/seed
 import { createSsiEvent, deleteSsiEvent } from '../../lib/services/event-creation-service.js'
 import { publishCalendarEvent, validateCalendarConfig } from '../../lib/services/calendar-publish-service.js'
 import { updateCalendarStats } from '../../lib/services/calendar-stats-service.js'
+import { completeEvent } from '../../lib/services/event-complete-service.js'
 import {
   createScheduledEvent,
   createScheduledEventBatch,
@@ -514,6 +515,96 @@ export function mountEventRoutes(router, { requirePlatformAuth, requireTenantRol
     } catch (err) {
       log.error(`[platform] POST /update-calendar-stats failed for event ${req.params.id}:`, err.message)
       return next(new AppError('Calendar statistics update failed', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // ============================================================
+  // SSI Event Complete (CAL-7)
+  // ============================================================
+
+  // POST /api/v1/platform/tenants/:tenantId/events/:id/complete-ssi
+  // Complete an SSI event (set status to 'cp').
+  // For cups: completes all component matches, then the cup.
+  // Requires: owner, tenant_admin, or match_admin
+  router.post('/tenants/:tenantId/events/:id/complete-ssi', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
+    try {
+      const event = await getScheduledEvent(req.params.id)
+      if (!event) return res.status(404).json({ error: 'Event not found' })
+      if (event.tenant_id !== req.params.tenantId) return res.status(403).json({ error: 'Event belongs to another tenant' })
+
+      // Must have SSI references
+      const ssiRefs = event.ssi_references
+      if (!ssiRefs?.cupId) {
+        return res.status(400).json({ error: 'Event has no SSI references — cannot complete' })
+      }
+
+      // Must be in ssi_created or calendar_published status
+      const validStatuses = ['ssi_created', 'calendar_published']
+      if (!validStatuses.includes(event.status)) {
+        return res.status(400).json({ error: `Event status "${event.status}" cannot be completed. Must be one of: ${validStatuses.join(', ')}` })
+      }
+
+      // Fetch tenant SSI credentials
+      const tenantFull = await getTenantWithCredentials(req.params.tenantId)
+      if (!tenantFull?.ssiCredentials?.email || !tenantFull?.ssiCredentials?.password) {
+        return res.status(400).json({ error: 'Tenant SSI credentials must be configured before completing events' })
+      }
+
+      log.info(`[platform] POST /complete-ssi for event ${req.params.id} (SSI ${ssiRefs.cupTypeId}/${ssiRefs.cupId}) by account ${req.platformUser.id}`)
+
+      const result = await completeEvent({
+        ssiReferences: ssiRefs,
+        ssiCredentials: {
+          email: tenantFull.ssiCredentials.email,
+          password: tenantFull.ssiCredentials.password,
+        },
+      })
+
+      if (result.success) {
+        // Update event with completion info
+        const completionInfo = {
+          completedAt: new Date().toISOString(),
+          completedBy: req.platformUser.id,
+          matchResults: result.results,
+          cupResult: result.cupResult,
+        }
+
+        // Store completion info in ssi_references
+        await updateScheduledEvent(req.params.id, {
+          ssi_references: {
+            ...ssiRefs,
+            ssiStatus: 'cp',
+            completion: completionInfo,
+          },
+        })
+
+        // Audit log
+        const { auditLog } = req.app.locals
+        if (auditLog) {
+          await auditLog({
+            tenant_id: req.params.tenantId,
+            account_id: req.platformUser.id,
+            action: 'event.complete_ssi',
+            target_type: 'scheduled_event',
+            target_id: req.params.id,
+            details: {
+              ssiCupId: ssiRefs.cupId,
+              matchesCompleted: result.results?.length || 0,
+              cupCompleted: result.cupResult?.success || false,
+            },
+          })
+        }
+
+        // Return updated event
+        const updated = await getScheduledEvent(req.params.id)
+        res.json({ success: true, event: updated, completion: completionInfo })
+      } else {
+        log.warn(`[platform] SSI complete failed: ${result.error}`)
+        res.status(502).json({ success: false, error: result.error, results: result.results })
+      }
+    } catch (err) {
+      log.error(`[platform] POST /complete-ssi failed for event ${req.params.id}:`, err.message)
+      return next(new AppError('SSI event completion failed', 500, 'INTERNAL_ERROR'))
     }
   })
 
