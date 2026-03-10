@@ -474,6 +474,13 @@ export function createPlatformRouter(limiters) {
 - **Refactors:** Must not reduce test count. Run `npm test` in both `scoring-proxy/` and `scoring-ui/` before committing
 - **Time-dependent tests:** Must use `vi.useFakeTimers()` to pin the clock. Never hardcode dates that will expire
 
+### WordPress / Tapahtumakalenteri Integration Gotchas
+
+- **ACF fields are cleared if omitted from POST:** When POSTing to `wp-admin/post.php`, WordPress/ACF interprets any ACF fields NOT included in the body as "clear this field". Always re-submit all current ACF values when changing post status (e.g., draft → publish). Use `extractAcfFieldValues()` to read current values from the edit page before POSTing.
+- **wpLogin URL normalization:** Users often paste `https://site.fi/wp-admin` as the WordPress URL. `wpLogin()` normalizes this by stripping `/wp-admin` and trailing slashes. The login endpoint is always at the site root: `/wp-login.php`.
+- **Field name consistency UI ↔ service:** The template editor UI field names (stored in JSONB) must exactly match what the backend service reads. E.g., UI stores `calendarTemplate.content` — service must read `.content`, not `.contentTemplate`. Always verify field names end-to-end when adding new template fields.
+- **calendarConfig secrets are encrypted:** Like `ssiCredentials`, the `calendarConfig` JSONB is encrypted with AES-256-GCM. Passwords are write-only (never returned to frontend). The store returns `hasWpPassword`/`hasGmailAppPassword` flags instead. Use `getTenantWithCredentials()` for internal operations that need actual passwords.
+
 ### Merge Conflict Prevention
 
 - Before starting work, check if the target files are being modified in other active branches

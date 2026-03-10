@@ -1,12 +1,20 @@
 # Progress
 
-Last updated: 2026-03-10 by Cascade
-Branch: `release/r80-match-manager-base` at `39ac055`
+Last updated: 2026-03-10 (evening) by Cascade
+Branch: `release/r80-match-manager-base` at `f79607d`
 Tests: 757 backend (32 files), all passing
 
 ---
 
 ## Current Session Work
+
+### Completed — 2026-03-10 (evening): CAL-4 UI + UAT Bug Fixes
+
+6. **CAL-4-UI: Calendar Integration UI** (`64e26e0`) — TenantCalendarTab form (WP URL, creds, Gmail OTP), calendarConfig encryption/masking in tenant store, publishCalendarApi(), calendar links/error/retry in SchedulePage + EventCalendar.
+7. **UAT fix: wpBaseUrl normalization** (`6ce96e7`) — Users pasting `/wp-admin` URL caused login to hit wrong path. `wpLogin()` now strips `/wp-admin`. UI also strips on save.
+8. **UAT fix: ACF fields cleared on publish** (`1929c6e`) — `publishEvent()` wasn't re-submitting ACF values, so WordPress/ACF cleared all content on status change. Now reads + re-submits current ACF field values.
+9. **UAT fix: re-publish button** (`1f880b4`) — Added "Publish Calendar", "Retry Calendar", "Re-publish Calendar" (force=true) buttons for all event states.
+10. **UAT fix: content field name mismatch** (`f79607d`) — UI stores `calendarTemplate.content` but service read `.contentTemplate`. Fixed to read `.content` first.
 
 ### Completed — 2026-03-10: R8.3 CAL-4 Calendar Publishing in Event Execution
 
@@ -48,7 +56,7 @@ Tests: 757 backend (32 files), all passing
 - **R8.1 (PA1–PA21)**: Platform auth & tenancy — 21/21 ✅ (accounts, tenants, RBAC, MFA, invitations, templates)
 - **R8.2**: Authorization & workflows — 5/5 ✅ (RBAC matrix, password reset, event execution/status/cancel)
 - **R8.2.1**: Architecture tech debt — 23/23 ✅ (modularity splits, tests, ESLint boundaries)
-- **R8.3**: Calendar integration — 4/9 ✅ (CAL-1 WP auth, CAL-2 Gmail OTP, CAL-3 WP adapter, CAL-4 publish flow)
+- **R8.3**: Calendar integration — 4/9 ✅ (CAL-1 WP auth, CAL-2 Gmail OTP, CAL-3 WP adapter, CAL-4 publish flow + UI). UAT in progress on PR-138 preview.
 - **R9.0**: Event staffing — all implemented (needs, signups, leaderboard, notifications)
 - **R9.1**: API security hardening — 4/5 ✅ (rate limits, cross-tenant validation, audit log)
 - **R9.2**: SSI discipline registry — 4/4 ✅ (built-in + GraphQL auto-discovery)
