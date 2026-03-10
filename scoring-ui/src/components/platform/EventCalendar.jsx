@@ -113,7 +113,7 @@ function getCalendarDays(year, month) {
   return days
 }
 
-export default function EventCalendar({ events, staffingStatus, tplMap, onExecute, onDelete, onCancel, executingId }) {
+export default function EventCalendar({ events, staffingStatus, tplMap, onExecute, onDelete, onCancel, onPublishCalendar, executingId }) {
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
@@ -371,9 +371,15 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                             {(evt.ssiReferences?.cupUrl || evt.ssiReferences?.url) && (
                               <span> • <a href={evt.ssiReferences.cupUrl || evt.ssiReferences.url} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline" onClick={e => e.stopPropagation()}>SSI</a></span>
                             )}
+                            {evt.calendarReference?.eventUrl && (
+                              <span> • <a href={evt.calendarReference.eventUrl} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline" onClick={e => e.stopPropagation()}>Calendar</a></span>
+                            )}
                           </div>
                           {evt.status === 'failed' && evt.errorDetails && (
                             <div className="text-xs text-red-500 mt-1">{evt.errorDetails}</div>
+                          )}
+                          {evt.calendarReference?.status === 'error' && (
+                            <div className="text-xs text-amber-600 mt-1">Calendar: {evt.calendarReference.error || 'Publishing failed'}</div>
                           )}
                           {/* Actions */}
                           <div className="flex items-center gap-3 mt-2">
@@ -393,6 +399,15 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                                 className="text-xs text-sky-600 hover:text-sky-800 font-medium disabled:opacity-50"
                               >
                                 {executingId === evt.id ? 'Retrying...' : 'Retry'}
+                              </button>
+                            )}
+                            {evt.status === 'ssi_created' && evt.calendarReference?.status === 'error' && onPublishCalendar && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onPublishCalendar(evt.id) }}
+                                disabled={executingId === evt.id}
+                                className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-50"
+                              >
+                                {executingId === evt.id ? 'Publishing...' : 'Retry Calendar'}
                               </button>
                             )}
                             {CANCELLABLE_STATUSES.has(evt.status) && onCancel && (

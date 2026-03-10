@@ -34,13 +34,51 @@ function rowToTenant(row, { includeCredentials = false } = {}) {
     }
   }
 
+  // Calendar config: contains encrypted secrets (wpPassword, gmailAppPassword).
+  // Same pattern as SSI credentials — mask secrets for API, return full for internal use.
+  let calendarConfig = null
+  if (row.calendar_config) {
+    try {
+      // Check if calendar_config is encrypted (has iv/tag/data envelope)
+      const rawCfg = row.calendar_config
+      if (rawCfg.iv && rawCfg.tag && rawCfg.data) {
+        const decrypted = decryptCredentials(rawCfg)
+        if (includeCredentials) {
+          calendarConfig = decrypted
+        } else {
+          // Masked response: strip secrets, add has* flags
+          const { wpPassword, gmailAppPassword, ...safe } = decrypted
+          calendarConfig = {
+            ...safe,
+            hasWpPassword: !!wpPassword,
+            hasGmailAppPassword: !!gmailAppPassword,
+          }
+        }
+      } else {
+        // Legacy unencrypted — return as-is (will be encrypted on next save)
+        if (includeCredentials) {
+          calendarConfig = rawCfg
+        } else {
+          const { wpPassword, gmailAppPassword, ...safe } = rawCfg
+          calendarConfig = {
+            ...safe,
+            hasWpPassword: !!wpPassword,
+            hasGmailAppPassword: !!gmailAppPassword,
+          }
+        }
+      }
+    } catch {
+      calendarConfig = null
+    }
+  }
+
   return {
     id: row.id,
     accountId: row.account_id,
     name: row.name,
     subscription: row.subscription || {},
     ssiCredentials,
-    calendarConfig: row.calendar_config || null,
+    calendarConfig,
     disciplines: row.disciplines || [],
     createdAt: new Date(row.created_at).getTime(),
     updatedAt: new Date(row.updated_at).getTime(),
@@ -211,6 +249,27 @@ export async function updateTenant(tenantId, updates) {
           }
         }
         // Encrypt merged credentials before storing
+        value = JSON.stringify(encryptCredentials(merged))
+      } else if (key === 'calendarConfig' && updates[key] !== null) {
+        // Merge with existing calendar config — omitted password fields keep current values
+        let merged = updates[key]
+        const { rows: cfgRows } = await query('SELECT calendar_config FROM tenants WHERE id = $1', [tenantId])
+        const existing = cfgRows[0]?.calendar_config
+        if (existing) {
+          try {
+            // Decrypt existing (encrypted or legacy plain)
+            const prev = (existing.iv && existing.tag && existing.data)
+              ? decryptCredentials(existing)
+              : existing
+            merged = {
+              ...prev,
+              ...updates[key],
+              // Write-only fields: keep existing if not provided in update
+              wpPassword: updates[key].wpPassword || prev.wpPassword,
+              gmailAppPassword: updates[key].gmailAppPassword || prev.gmailAppPassword,
+            }
+          } catch { /* can't decrypt existing — use new values only */ }
+        }
         value = JSON.stringify(encryptCredentials(merged))
       } else {
         value = typeof updates[key] === 'object' ? JSON.stringify(updates[key]) : updates[key]

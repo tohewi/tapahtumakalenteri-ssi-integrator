@@ -98,7 +98,7 @@ export default function TenantDetailPage({ tenantId, account, onBack, onLogout, 
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Settings</h1>
             <p className="text-sm text-gray-400 mb-6">Integration credentials and configuration.</p>
             <TenantSsiTab tenant={tenant} onSave={handleSave} />
-            <TenantCalendarTab tenant={tenant} />
+            <TenantCalendarTab tenant={tenant} onSave={handleSave} />
           </>
         )}
       </div>

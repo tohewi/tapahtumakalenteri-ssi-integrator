@@ -425,6 +425,21 @@ export async function cancelEventApi(tenantId, eventId, { removeFromSsi = false 
   })
 }
 
+// ---- Calendar Publishing ----
+
+/**
+ * Manually trigger or retry calendar publishing for an event.
+ * @param {string} tenantId
+ * @param {string} eventId
+ * @param {{ force?: boolean }} options
+ */
+export async function publishCalendarApi(tenantId, eventId, { force = false } = {}) {
+  return platformFetch(`/tenants/${tenantId}/events/${eventId}/publish-calendar`, {
+    method: 'POST',
+    body: JSON.stringify({ force }),
+  })
+}
+
 // ---- SSI Event Search & Import ----
 
 /**

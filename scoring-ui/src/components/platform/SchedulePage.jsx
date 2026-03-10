@@ -10,7 +10,7 @@
 // ============================================================
 
 import { useState, useEffect, useMemo } from 'react'
-import { listTemplates, listEvents, createEventsApi, deleteEventApi, cancelEventApi, executeEventApi, getUpcomingStaffingApi } from '../../platform-api.js'
+import { listTemplates, listEvents, createEventsApi, deleteEventApi, cancelEventApi, executeEventApi, publishCalendarApi, getUpcomingStaffingApi } from '../../platform-api.js'
 import ImportSsiEventsModal from './ImportSsiEventsModal.jsx'
 import EventCalendar from './EventCalendar.jsx'
 import StatusBadge, { STATUS_COLORS, STATUS_LABELS, CANCELLABLE_STATUSES, formatEventDate } from './schedule/StatusBadge.jsx'
@@ -135,11 +135,33 @@ export default function SchedulePage({ tenantId, onBack }) {
     setStatus(null)
     try {
       const data = await executeEventApi(tenantId, eventId)
-      setStatus({ type: 'success', message: `SSI event created: ${data.ssiReferences?.cupName || 'Cup'} — ${data.ssiReferences?.matches?.length || 0} matches` })
+      const parts = [`SSI event created: ${data.ssiReferences?.cupName || 'Cup'} — ${data.ssiReferences?.matches?.length || 0} matches`]
+      if (data.calendarResult?.success) {
+        parts.push('Calendar event published')
+      } else if (data.calendarResult && !data.calendarResult.success) {
+        parts.push(`Calendar publishing failed (can retry): ${data.calendarResult.error}`)
+      }
+      setStatus({ type: data.calendarResult && !data.calendarResult.success ? 'warning' : 'success', message: parts.join(' · ') })
       await refreshEvents()
     } catch (err) {
       setStatus({ type: 'error', message: err.message })
       await refreshEvents() // refresh to show failed status
+    } finally {
+      setExecutingId(null)
+    }
+  }
+
+  // Retry calendar publishing for an event
+  async function handlePublishCalendar(eventId) {
+    setExecutingId(eventId)
+    setStatus(null)
+    try {
+      const data = await publishCalendarApi(tenantId, eventId)
+      setStatus({ type: 'success', message: `Calendar event published successfully` })
+      await refreshEvents()
+    } catch (err) {
+      setStatus({ type: 'error', message: `Calendar publish failed: ${err.message}` })
+      await refreshEvents()
     } finally {
       setExecutingId(null)
     }
@@ -330,6 +352,7 @@ export default function SchedulePage({ tenantId, onBack }) {
             onExecute={handleExecute}
             onDelete={handleDelete}
             onCancel={setCancelTarget}
+            onPublishCalendar={handlePublishCalendar}
             executingId={executingId}
           />
         ) : (
@@ -372,12 +395,15 @@ export default function SchedulePage({ tenantId, onBack }) {
                           {(evt.ssiReferences?.cupUrl || evt.ssiReferences?.url) && (
                             <span> • <a href={evt.ssiReferences.cupUrl || evt.ssiReferences.url} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">SSI</a></span>
                           )}
-                          {evt.calendarReference?.calendarUrl && (
-                            <span> • <a href={evt.calendarReference.calendarUrl} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">Calendar</a></span>
+                          {evt.calendarReference?.eventUrl && (
+                            <span> • <a href={evt.calendarReference.eventUrl} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">Calendar</a></span>
                           )}
                         </div>
                         {evt.status === 'failed' && evt.errorDetails && (
                           <div className="text-xs text-red-500 mt-1">{evt.errorDetails}</div>
+                        )}
+                        {evt.calendarReference?.status === 'error' && (
+                          <div className="text-xs text-amber-600 mt-1">Calendar: {evt.calendarReference.error || 'Publishing failed'}</div>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
@@ -397,6 +423,16 @@ export default function SchedulePage({ tenantId, onBack }) {
                             className="text-xs text-sky-600 hover:text-sky-800 font-medium disabled:opacity-50"
                           >
                             {isBusy ? 'Retrying...' : 'Retry'}
+                          </button>
+                        )}
+                        {/* Calendar retry: for ssi_created events with calendar error */}
+                        {evt.status === 'ssi_created' && evt.calendarReference?.status === 'error' && (
+                          <button
+                            onClick={() => handlePublishCalendar(evt.id)}
+                            disabled={isBusy}
+                            className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-50"
+                          >
+                            {isBusy ? 'Publishing...' : 'Retry Calendar'}
                           </button>
                         )}
                         {/* Cancel: soft cancel for active events (MP7) */}
