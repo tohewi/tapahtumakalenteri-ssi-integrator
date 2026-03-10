@@ -172,7 +172,11 @@ export function buildEventTitle(calendarTemplate, context) {
 export function buildEventContent(calendarTemplate, ssiReferences) {
   let content = calendarTemplate.content || calendarTemplate.contentTemplate || ''
 
-  content = content.replace(/\{ssiCupLink\}/gi, ssiReferences?.cupUrl || '')
+  // {ssiCupLink} produces a full HTML anchor: <a href="url" target="_blank">Cup Name</a>
+  const cupUrl = ssiReferences?.cupUrl || ''
+  const cupName = ssiReferences?.cupName || cupUrl
+  const cupLink = cupUrl ? `<a href="${cupUrl}" target="_blank">${cupName}</a>` : ''
+  content = content.replace(/\{ssiCupLink\}/gi, cupLink)
   content = content.replace(/\{ssiCupUrl\}/gi, ssiReferences?.cupUrl || '')
   content = content.replace(/\{ssiCupName\}/gi, ssiReferences?.cupName || '')
   content = content.replace(/\{ssiCupId\}/gi, ssiReferences?.cupId || '')
