@@ -172,6 +172,7 @@ export function buildEventTitle(calendarTemplate, context) {
 export function buildEventContent(calendarTemplate, ssiReferences) {
   let content = calendarTemplate.content || calendarTemplate.contentTemplate || ''
 
+  content = content.replace(/\{ssiCupLink\}/gi, ssiReferences?.cupUrl || '')
   content = content.replace(/\{ssiCupUrl\}/gi, ssiReferences?.cupUrl || '')
   content = content.replace(/\{ssiCupName\}/gi, ssiReferences?.cupName || '')
   content = content.replace(/\{ssiCupId\}/gi, ssiReferences?.cupId || '')
