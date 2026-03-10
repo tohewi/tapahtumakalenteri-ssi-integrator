@@ -21,7 +21,7 @@
 //     { adapter, wpBaseUrl, wpUsername, wpPassword,
 //       gmailAddress, gmailAppPassword, gmailSenderFilter, gmailSubjectFilter }
 //   calendarTemplate (on match_template):
-//     { titleTemplate, shortDescription, contentTemplate, location, mapLink,
+//     { titleTemplate, shortDescription, content, location, mapLink,
 //       startTime, endTime, taxonomyIds }
 // ============================================================
 
@@ -170,7 +170,7 @@ export function buildEventTitle(calendarTemplate, context) {
  * @returns {string} HTML content for the calendar event
  */
 export function buildEventContent(calendarTemplate, ssiReferences) {
-  let content = calendarTemplate.contentTemplate || ''
+  let content = calendarTemplate.content || calendarTemplate.contentTemplate || ''
 
   content = content.replace(/\{ssiCupUrl\}/gi, ssiReferences?.cupUrl || '')
   content = content.replace(/\{ssiCupName\}/gi, ssiReferences?.cupName || '')
