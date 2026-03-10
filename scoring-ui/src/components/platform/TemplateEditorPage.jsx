@@ -435,6 +435,13 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
             rows={12}
           />
           <TextInput
+            label="Shots Per Participant" hint="Used for statistics: total shots = participants × this value (default: 100)"
+            value={calendarTemplate.shotsPerParticipant ?? ''}
+            onChange={v => updateCalendar('shotsPerParticipant', v === '' ? undefined : parseInt(v, 10) || 0)}
+            placeholder="100"
+            type="number"
+          />
+          <TextInput
             label="Event Format Taxonomy IDs" hint="Comma-separated WordPress taxonomy IDs"
             value={(calendarTemplate.taxonomyIds || []).join(', ')}
             onChange={v => updateCalendar('taxonomyIds', v.split(',').map(s => s.trim()).filter(Boolean))}

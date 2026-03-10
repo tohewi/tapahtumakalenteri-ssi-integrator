@@ -113,7 +113,7 @@ function getCalendarDays(year, month) {
   return days
 }
 
-export default function EventCalendar({ events, staffingStatus, tplMap, onExecute, onDelete, onCancel, onPublishCalendar, executingId }) {
+export default function EventCalendar({ events, staffingStatus, tplMap, onExecute, onDelete, onCancel, onPublishCalendar, onUpdateCalendarStats, executingId }) {
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
@@ -375,6 +375,11 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                               <span> • <a href={evt.calendarReference.eventUrl} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline" onClick={e => e.stopPropagation()}>Calendar</a></span>
                             )}
                           </div>
+                          {evt.calendarReference?.stats && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              📊 {evt.calendarReference.stats.approvedCount} participants · {evt.calendarReference.stats.shotsFired} shots
+                            </div>
+                          )}
                           {evt.status === 'failed' && evt.errorDetails && (
                             <div className="text-xs text-red-500 mt-1">{evt.errorDetails}</div>
                           )}
@@ -426,6 +431,15 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                                 className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-50"
                               >
                                 {executingId === evt.id ? 'Publishing...' : 'Re-publish Calendar'}
+                              </button>
+                            )}
+                            {evt.status === 'calendar_published' && onUpdateCalendarStats && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onUpdateCalendarStats(evt.id) }}
+                                disabled={executingId === evt.id}
+                                className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50"
+                              >
+                                {executingId === evt.id ? 'Updating...' : 'Update Stats'}
                               </button>
                             )}
                             {CANCELLABLE_STATUSES.has(evt.status) && onCancel && (

@@ -8,6 +8,7 @@ import { AppError } from '../../lib/errors/AppError.js'
 import { ssiFetchEventStructure, ssiSearchEvents } from '../../lib/ssi-core/seed-import.js'
 import { createSsiEvent, deleteSsiEvent } from '../../lib/services/event-creation-service.js'
 import { publishCalendarEvent, validateCalendarConfig } from '../../lib/services/calendar-publish-service.js'
+import { updateCalendarStats } from '../../lib/services/calendar-stats-service.js'
 import {
   createScheduledEvent,
   createScheduledEventBatch,
@@ -429,6 +430,90 @@ export function mountEventRoutes(router, { requirePlatformAuth, requireTenantRol
     } catch (err) {
       log.error(`[platform] POST /publish-calendar failed for event ${req.params.id}:`, err.message)
       return next(new AppError('Calendar publishing failed', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // POST /api/v1/platform/tenants/:tenantId/events/:id/update-calendar-stats
+  // Update WordPress calendar event with statistics from SSI (CAL-5).
+  // Queries SSI GraphQL for approved participant count, calculates shots fired,
+  // and updates the calendar event's ACF fields.
+  // Requires: calendar must be published + SSI references must exist.
+  // Requires: owner, tenant_admin, or match_admin
+  router.post('/tenants/:tenantId/events/:id/update-calendar-stats', platformSsiLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
+    try {
+      const event = await getScheduledEvent(req.params.id)
+      if (!event || event.tenantId !== req.params.tenantId) {
+        return res.status(404).json({ error: 'Event not found' })
+      }
+
+      // Require SSI references (event must have been executed)
+      if (!event.ssiReferences?.cupId || !event.ssiReferences?.cupTypeId) {
+        return res.status(400).json({ error: 'Event has no SSI references — execute the event first' })
+      }
+
+      // Require calendar reference (calendar must have been published)
+      if (!event.calendarReference?.eventId) {
+        return res.status(400).json({ error: 'Event has no calendar reference — publish the calendar event first' })
+      }
+
+      // Load tenant with credentials
+      const tenantFull = await getTenantWithCredentials(req.params.tenantId)
+      if (!tenantFull?.calendarConfig) {
+        return res.status(400).json({ error: 'Tenant calendarConfig must be configured' })
+      }
+
+      if (!tenantFull?.ssiCredentials?.email || !tenantFull?.ssiCredentials?.password) {
+        return res.status(400).json({ error: 'Tenant SSI credentials must be configured' })
+      }
+
+      // Load template for shotsPerParticipant
+      let calendarTemplate = {}
+      if (event.templateId) {
+        const template = await getMatchTemplate(event.templateId)
+        calendarTemplate = template?.calendarTemplate || {}
+      }
+
+      log.info(`[platform] Updating calendar stats for event ${req.params.id}`)
+      const result = await updateCalendarStats({
+        ssiReferences: event.ssiReferences,
+        calendarReference: event.calendarReference,
+        calendarConfig: tenantFull.calendarConfig,
+        calendarTemplate,
+        ssiCredentials: tenantFull.ssiCredentials,
+      })
+
+      if (result.success) {
+        // Store stats in calendarReference for display
+        const updatedCalRef = {
+          ...event.calendarReference,
+          stats: result.stats,
+        }
+        const updated = await updateScheduledEvent(req.params.id, {
+          calendarReference: updatedCalRef,
+        })
+
+        await createAuditLog({
+          tenantId: req.params.tenantId,
+          accountId: req.platformUser.id,
+          action: 'update_calendar_stats',
+          resourceType: 'scheduled_event',
+          resourceId: req.params.id,
+          details: {
+            approvedCount: result.stats.approvedCount,
+            shotsFired: result.stats.shotsFired,
+            calendarEventId: event.calendarReference.eventId,
+          },
+        }).catch(() => {})
+
+        log.info(`[platform] Calendar stats updated: ${result.stats.approvedCount} participants, ${result.stats.shotsFired} shots`)
+        res.json({ success: true, event: updated, stats: result.stats })
+      } else {
+        log.warn(`[platform] Calendar stats update failed: ${result.error}`)
+        res.status(502).json({ success: false, error: result.error })
+      }
+    } catch (err) {
+      log.error(`[platform] POST /update-calendar-stats failed for event ${req.params.id}:`, err.message)
+      return next(new AppError('Calendar statistics update failed', 500, 'INTERNAL_ERROR'))
     }
   })
 

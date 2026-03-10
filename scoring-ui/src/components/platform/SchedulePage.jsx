@@ -10,7 +10,7 @@
 // ============================================================
 
 import { useState, useEffect, useMemo } from 'react'
-import { listTemplates, listEvents, createEventsApi, deleteEventApi, cancelEventApi, executeEventApi, publishCalendarApi, getUpcomingStaffingApi } from '../../platform-api.js'
+import { listTemplates, listEvents, createEventsApi, deleteEventApi, cancelEventApi, executeEventApi, publishCalendarApi, updateCalendarStatsApi, getUpcomingStaffingApi } from '../../platform-api.js'
 import ImportSsiEventsModal from './ImportSsiEventsModal.jsx'
 import EventCalendar from './EventCalendar.jsx'
 import StatusBadge, { STATUS_COLORS, STATUS_LABELS, CANCELLABLE_STATUSES, formatEventDate } from './schedule/StatusBadge.jsx'
@@ -161,6 +161,23 @@ export default function SchedulePage({ tenantId, onBack }) {
       await refreshEvents()
     } catch (err) {
       setStatus({ type: 'error', message: `Calendar publish failed: ${err.message}` })
+      await refreshEvents()
+    } finally {
+      setExecutingId(null)
+    }
+  }
+
+  // Update calendar statistics from SSI (CAL-5)
+  async function handleUpdateCalendarStats(eventId) {
+    setExecutingId(eventId)
+    setStatus(null)
+    try {
+      const data = await updateCalendarStatsApi(tenantId, eventId)
+      const stats = data.stats || {}
+      setStatus({ type: 'success', message: `Statistics updated: ${stats.approvedCount} participants, ${stats.shotsFired} shots` })
+      await refreshEvents()
+    } catch (err) {
+      setStatus({ type: 'error', message: `Statistics update failed: ${err.message}` })
       await refreshEvents()
     } finally {
       setExecutingId(null)
@@ -353,6 +370,7 @@ export default function SchedulePage({ tenantId, onBack }) {
             onDelete={handleDelete}
             onCancel={setCancelTarget}
             onPublishCalendar={handlePublishCalendar}
+            onUpdateCalendarStats={handleUpdateCalendarStats}
             executingId={executingId}
           />
         ) : (
@@ -405,6 +423,11 @@ export default function SchedulePage({ tenantId, onBack }) {
                         {evt.calendarReference?.status === 'error' && (
                           <div className="text-xs text-amber-600 mt-1">Calendar: {evt.calendarReference.error || 'Publishing failed'}</div>
                         )}
+                        {evt.calendarReference?.stats && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            📊 {evt.calendarReference.stats.approvedCount} participants · {evt.calendarReference.stats.shotsFired} shots
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         {evt.status === 'planned' && (
@@ -451,6 +474,15 @@ export default function SchedulePage({ tenantId, onBack }) {
                             className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-50"
                           >
                             {isBusy ? 'Publishing...' : 'Re-publish Calendar'}
+                          </button>
+                        )}
+                        {evt.status === 'calendar_published' && (
+                          <button
+                            onClick={() => handleUpdateCalendarStats(evt.id)}
+                            disabled={isBusy}
+                            className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50"
+                          >
+                            {isBusy ? 'Updating...' : 'Update Stats'}
                           </button>
                         )}
                         {/* Cancel: soft cancel for active events (MP7) */}

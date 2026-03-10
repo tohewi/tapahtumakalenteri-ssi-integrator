@@ -440,6 +440,17 @@ export async function publishCalendarApi(tenantId, eventId, { force = false } = 
   })
 }
 
+/**
+ * Update WordPress calendar event with statistics from SSI (CAL-5).
+ * @param {string} tenantId
+ * @param {string} eventId
+ */
+export async function updateCalendarStatsApi(tenantId, eventId) {
+  return platformFetch(`/tenants/${tenantId}/events/${eventId}/update-calendar-stats`, {
+    method: 'POST',
+  })
+}
+
 // ---- SSI Event Search & Import ----
 
 /**
