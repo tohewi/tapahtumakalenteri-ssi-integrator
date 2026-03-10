@@ -26,6 +26,23 @@
 
 import { log } from '../logger.js'
 
+/**
+ * Decode common HTML entities back to raw characters.
+ * WordPress edit page HTML encodes field values (e.g., &lt; → <).
+ * We must decode before re-submitting to avoid double-encoding.
+ */
+function decodeHtmlEntities(str) {
+  if (!str) return str
+  return str
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+}
+
 // ---- ACF Field Keys ----
 // WordPress Advanced Custom Fields IDs from the Tapahtumakalenteri theme.
 // These are stable — they're defined in the theme's field group configuration.
@@ -109,12 +126,13 @@ export function extractAcfFieldValues(html) {
 
   // Match input fields: <input ... name="acf[field_xxx]" ... value="yyy" />
   // Anchored to <input to prevent matching across elements
+  // Values are HTML-entity-encoded in the page source — decode before storing.
   const inputPattern = /<input\s[^>]*?name="acf\[([^\]]+)\](?:\[([^\]]+)\])?"[^>]*?value="([^"]*)"/g
   let match
   while ((match = inputPattern.exec(html)) !== null) {
     const fieldKey = match[1]
     const nestedKey = match[2]
-    const value = match[3]
+    const value = decodeHtmlEntities(match[3])
     if (nestedKey) {
       if (!values[fieldKey]) values[fieldKey] = {}
       values[fieldKey][nestedKey] = value
@@ -125,11 +143,12 @@ export function extractAcfFieldValues(html) {
 
   // Match textarea fields: <textarea ... name="acf[field_xxx]">content</textarea>
   // Anchored to <textarea to prevent matching input elements
+  // Textarea content is HTML-entity-encoded in the page source — decode before storing.
   const textareaPattern = /<textarea\s[^>]*?name="acf\[([^\]]+)\](?:\[([^\]]+)\])?"[^>]*?>([\s\S]*?)<\/textarea>/g
   while ((match = textareaPattern.exec(html)) !== null) {
     const fieldKey = match[1]
     const nestedKey = match[2]
-    const value = match[3].trim()
+    const value = decodeHtmlEntities(match[3].trim())
     if (nestedKey) {
       if (!values[fieldKey]) values[fieldKey] = {}
       values[fieldKey][nestedKey] = value
