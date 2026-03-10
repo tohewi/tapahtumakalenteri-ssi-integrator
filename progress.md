@@ -1,12 +1,16 @@
 # Progress
 
-Last updated: 2026-03-10 (night) by Cascade
-Branch: `release/r80-match-manager-base` at `1d4ecf1`
-Tests: 757 backend (32 files), all passing
+Last updated: 2026-03-10 (late night) by Cascade
+Branch: `release/r80-match-manager-base` at `4c873f0`
+Tests: 783 backend (34 files), 780 passing (3 flaky registration timeouts — pre-existing)
 
 ---
 
 ## Current Session Work
+
+### Completed — 2026-03-10 (late night): CAL-5 Calendar Statistics Update
+
+16. **CAL-5: Calendar Statistics Update** (`4c873f0`) — Query SSI GraphQL for approved participant count (`number_of_mainmatch_competitors_approved`), calculate shots fired (×`shotsPerParticipant`), update WordPress ACF fields via `adapter.updateEvent()`. New files: `lib/ssi-core/stats-graphql.js` (ssiGetEventStats with inline fragments for Nordic/IPSC/Precision/PPC), `lib/services/calendar-stats-service.js` (updateCalendarStats — pure function for PEW-3 automation). API: POST `/update-calendar-stats` with RBAC + audit. UI: "Update Stats" button + stats display in both SchedulePage list view and EventCalendar popover. Template: `shotsPerParticipant` field (default 100). 26 new tests. Replaces `Update-TapahtumakalenteriEvent.ps1` (246 lines).
 
 ### Completed — 2026-03-10 (evening): CAL-4 UI + UAT Bug Fixes
 
@@ -64,14 +68,13 @@ Tests: 757 backend (32 files), all passing
 - **R8.1 (PA1–PA21)**: Platform auth & tenancy — 21/21 ✅ (accounts, tenants, RBAC, MFA, invitations, templates)
 - **R8.2**: Authorization & workflows — 5/5 ✅ (RBAC matrix, password reset, event execution/status/cancel)
 - **R8.2.1**: Architecture tech debt — 23/23 ✅ (modularity splits, tests, ESLint boundaries)
-- **R8.3**: Calendar integration — 4/9 ✅ (CAL-1 WP auth, CAL-2 Gmail OTP, CAL-3 WP adapter, CAL-4 publish flow + UI). UAT passed on PR-138 preview (7 bug fixes).
+- **R8.3**: Calendar integration — 5/9 ✅ (CAL-1 WP auth, CAL-2 Gmail OTP, CAL-3 WP adapter, CAL-4 publish flow + UI, CAL-5 statistics update via GraphQL). UAT passed on PR-138 preview (7 bug fixes).
 - **R9.0**: Event staffing — all implemented (needs, signups, leaderboard, notifications)
 - **R9.1**: API security hardening — 4/5 ✅ (rate limits, cross-tenant validation, audit log)
 - **R9.2**: SSI discipline registry — 4/4 ✅ (built-in + GraphQL auto-discovery)
 
 ## What's Next (unprioritized — pick from PRD)
 
-- **R8.3 CAL-5**: Calendar Statistics Update — query SSI for participants, update WP event (uses adapter.updateEvent)
 - **R8.3 CAL-6**: Calendar Data Integrity — cross-reference validation SSI ↔ WP
 - **R7.6**: Consolidation & completion (deferred items from R7.0/R7.5)
 - **R7.9**: GraphQL cup management (GQL1–GQL7) — migrate from web scraping
