@@ -1,7 +1,7 @@
 # Progress
 
-Last updated: 2026-03-10 (late evening) by Cascade
-Branch: `release/r80-match-manager-base` at `840d5e8`
+Last updated: 2026-03-10 (night) by Cascade
+Branch: `release/r80-match-manager-base` at `1d4ecf1`
 Tests: 757 backend (32 files), all passing
 
 ---
@@ -18,6 +18,11 @@ Tests: 757 backend (32 files), all passing
 11. **UAT fix: HTML entity encoding in ACF values** (`b616f3d`) — `extractAcfFieldValues()` extracted entity-encoded content (`&lt;div&gt;`) from WP edit page HTML. Added `decodeHtmlEntities()` to convert back to raw HTML before re-submitting.
 12. **UAT fix: {ssiCupLink} placeholder missing** (`773834a`) — UI hint told users to use `{ssiCupLink}` but `buildEventContent()` only handled `{ssiCupUrl}`. Added `{ssiCupLink}` replacement.
 13. **UAT fix: {ssiCupLink} as full HTML anchor** (`840d5e8`) — `{ssiCupLink}` was producing raw URL. Now produces `<a href="url" target="_blank">Cup Name</a>` matching original PowerShell solution.
+
+### Completed — 2026-03-10 (night): Backlog Requirements
+
+14. **PEW-1..PEW-4: Post-Event Workflows** (`a729f39`) — Added framework + 3 concrete workflow types (email shooter count, tapahtumakalenteri stats, publish scores) to backlog.
+15. **INT-1: Multi-System Integration Architecture** (`1d4ecf1`) — Added design requirement for tenant-level integration configuration (event management + event scheduling systems, adapter abstraction, multi-system support).
 
 ### Completed — 2026-03-10: R8.3 CAL-4 Calendar Publishing in Event Execution
 
@@ -71,4 +76,4 @@ Tests: 757 backend (32 files), all passing
 - **R7.6**: Consolidation & completion (deferred items from R7.0/R7.5)
 - **R7.9**: GraphQL cup management (GQL1–GQL7) — migrate from web scraping
 - **Regulatory**: GDPR, ToS, accessibility (21 design-phase requirements)
-- **Backlog**: Admin dashboard (BL-1), tenant context/URL strategy (TEN-1), page-load perf (PRF-1)
+- **Backlog**: Admin dashboard (BL-1), tenant context/URL strategy (TEN-1), page-load perf (PRF-1), post-event workflows (PEW-1..4), multi-system integration architecture (INT-1)
