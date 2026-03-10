@@ -7,6 +7,7 @@ import { log } from '../../lib/logger.js'
 import { AppError } from '../../lib/errors/AppError.js'
 import { ssiFetchEventStructure, ssiSearchEvents } from '../../lib/ssi-core/seed-import.js'
 import { createSsiEvent, deleteSsiEvent } from '../../lib/services/event-creation-service.js'
+import { publishCalendarEvent, validateCalendarConfig } from '../../lib/services/calendar-publish-service.js'
 import {
   createScheduledEvent,
   createScheduledEventBatch,
@@ -306,13 +307,43 @@ export function mountEventRoutes(router, { requirePlatformAuth, requireTenantRol
       })
 
       // Update scheduled event with SSI references and status
-      const updated = await updateScheduledEvent(req.params.id, {
+      let updated = await updateScheduledEvent(req.params.id, {
         status: 'ssi_created',
         ssiReferences,
       })
 
       log.info(`[platform] SSI event created for ${event.eventDate}: cup ${ssiReferences.cupId}, ${ssiReferences.matches.length} matches`)
-      res.json({ success: true, event: updated, ssiReferences })
+
+      // CAL-4: Attempt calendar publishing if tenant has calendarConfig
+      let calendarResult = null
+      if (tenantFull.calendarConfig && validateCalendarConfig(tenantFull.calendarConfig).valid) {
+        const calendarTemplate = template.calendarTemplate
+        if (calendarTemplate && Object.keys(calendarTemplate).length > 0) {
+          log.info(`[platform] Attempting calendar publishing for event ${req.params.id}...`)
+          calendarResult = await publishCalendarEvent({
+            calendarConfig: tenantFull.calendarConfig,
+            calendarTemplate,
+            eventDate: event.eventDate,
+            ssiReferences,
+          })
+
+          if (calendarResult.success) {
+            updated = await updateScheduledEvent(req.params.id, {
+              status: 'calendar_published',
+              calendarReference: calendarResult.calendarReference,
+            })
+            log.info(`[platform] Calendar event published: ${calendarResult.calendarReference.eventId}`)
+          } else {
+            // Calendar failure — keep ssi_created status, store error
+            await updateScheduledEvent(req.params.id, {
+              calendarReference: calendarResult.calendarReference || { status: 'error', error: calendarResult.error },
+            }).catch(() => {})
+            log.warn(`[platform] Calendar publishing failed (non-fatal): ${calendarResult.error}`)
+          }
+        }
+      }
+
+      res.json({ success: true, event: updated, ssiReferences, calendarResult })
     } catch (err) {
       // Mark event as failed with error details
       await updateScheduledEvent(req.params.id, {
@@ -325,6 +356,79 @@ export function mountEventRoutes(router, { requirePlatformAuth, requireTenantRol
         return res.status(401).json({ error: 'SSI authentication failed — check tenant credentials' })
       }
       return res.status(500).json({ error: `SSI event creation failed: ${err.message}` })
+    }
+  })
+
+  // POST /api/v1/platform/tenants/:tenantId/events/:id/publish-calendar
+  // Manual (re)trigger of calendar publishing for an event that has SSI references.
+  // Useful when automatic calendar publishing failed during execute, or when
+  // calendarConfig was configured after SSI creation.
+  // Requires: owner, tenant_admin, or match_admin
+  router.post('/tenants/:tenantId/events/:id/publish-calendar', platformSsiLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
+    try {
+      const event = await getScheduledEvent(req.params.id)
+      if (!event || event.tenantId !== req.params.tenantId) {
+        return res.status(404).json({ error: 'Event not found' })
+      }
+
+      // Only allow for events that have SSI references
+      if (!event.ssiReferences || !event.ssiReferences.cupId) {
+        return res.status(400).json({ error: 'Event has no SSI references — execute the event first' })
+      }
+
+      // Don't re-publish if already published (unless forced)
+      if (event.status === 'calendar_published' && !req.body.force) {
+        return res.status(400).json({ error: 'Calendar event already published. Set force=true to re-publish.' })
+      }
+
+      // Load tenant with calendar config
+      const tenantFull = await getTenantWithCredentials(req.params.tenantId)
+      if (!tenantFull?.calendarConfig) {
+        return res.status(400).json({ error: 'Tenant calendarConfig must be configured' })
+      }
+
+      const configCheck = validateCalendarConfig(tenantFull.calendarConfig)
+      if (!configCheck.valid) {
+        return res.status(400).json({ error: `Calendar config missing fields: ${configCheck.missing.join(', ')}` })
+      }
+
+      // Load template for calendarTemplate
+      let calendarTemplate = {}
+      if (event.templateId) {
+        const template = await getMatchTemplate(event.templateId)
+        calendarTemplate = template?.calendarTemplate || {}
+      }
+
+      if (!calendarTemplate.titleTemplate) {
+        return res.status(400).json({ error: 'Template has no calendarTemplate.titleTemplate configured' })
+      }
+
+      log.info(`[platform] Manual calendar publish for event ${req.params.id}`)
+      const calendarResult = await publishCalendarEvent({
+        calendarConfig: tenantFull.calendarConfig,
+        calendarTemplate,
+        eventDate: event.eventDate,
+        ssiReferences: event.ssiReferences,
+      })
+
+      if (calendarResult.success) {
+        const updated = await updateScheduledEvent(req.params.id, {
+          status: 'calendar_published',
+          calendarReference: calendarResult.calendarReference,
+        })
+        log.info(`[platform] Calendar event published: ${calendarResult.calendarReference.eventId}`)
+        res.json({ success: true, event: updated, calendarResult })
+      } else {
+        // Store error but don't change status
+        await updateScheduledEvent(req.params.id, {
+          calendarReference: calendarResult.calendarReference || { status: 'error', error: calendarResult.error },
+        }).catch(() => {})
+        log.warn(`[platform] Manual calendar publish failed: ${calendarResult.error}`)
+        res.status(502).json({ success: false, error: calendarResult.error })
+      }
+    } catch (err) {
+      log.error(`[platform] POST /publish-calendar failed for event ${req.params.id}:`, err.message)
+      return next(new AppError('Calendar publishing failed', 500, 'INTERNAL_ERROR'))
     }
   })
 
