@@ -67,7 +67,7 @@ export function TenantCalendarTab({ tenant, onSave }) {
       // Build config — only include password fields if they have values
       const value = {
         adapter: 'wordpress',
-        wpBaseUrl: form.wpBaseUrl.trim().replace(/\/+$/, ''), // strip trailing slashes
+        wpBaseUrl: form.wpBaseUrl.trim().replace(/\/wp-admin\/?.*$/i, '').replace(/\/+$/, ''), // strip /wp-admin and trailing slashes
         wpUsername: form.wpUsername.trim(),
         gmailAddress: form.gmailAddress.trim(),
         gmailSenderFilter: form.gmailSenderFilter.trim(),

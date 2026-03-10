@@ -161,15 +161,17 @@ export function parse2faForm(html) {
  * @returns {Promise<WpSession>} Session object
  */
 export async function wpLogin({ baseUrl, username, password }) {
+  // Normalize baseUrl: strip /wp-admin*, trailing slashes — users often paste the admin URL
+  const normalizedBase = baseUrl.replace(/\/wp-admin\/?.*$/i, '').replace(/\/+$/, '')
   const jar = new CookieJar()
-  const loginUrl = `${baseUrl}${LOGIN_PATH}`
+  const loginUrl = `${normalizedBase}${LOGIN_PATH}`
 
-  log.info(`[wp-auth] Authenticating to ${baseUrl} as ${username}...`)
+  log.info(`[wp-auth] Authenticating to ${normalizedBase} as ${username}...`)
 
   // Step 1: Fetch login page to get initial cookies
   const { body: loginPageHtml } = await fetchWithCookies(loginUrl, {
     method: 'GET',
-    headers: buildHeaders(baseUrl, loginUrl),
+    headers: buildHeaders(normalizedBase, loginUrl),
   }, jar)
 
   if (!loginPageHtml) {
@@ -181,30 +183,30 @@ export async function wpLogin({ baseUrl, username, password }) {
     key: 'wordpress_test_cookie',
     value: 'WP%20Cookie%20check',
     path: '/',
-    domain: new URL(baseUrl).hostname,
+    domain: new URL(normalizedBase).hostname,
   })
-  jar.setCookieSync(testCookie.toString(), baseUrl)
+  jar.setCookieSync(testCookie.toString(), normalizedBase)
 
   // Step 3: POST credentials
   const loginBody = new URLSearchParams({
     log: username,
     pwd: password,
     'wp-submit': 'Kirjaudu sisään',
-    redirect_to: `${baseUrl}/wp-admin/`,
+    redirect_to: `${normalizedBase}/wp-admin/`,
     testcookie: '1',
   })
 
   const { body: postLoginHtml } = await fetchWithCookies(loginUrl, {
     method: 'POST',
-    headers: buildHeaders(baseUrl, loginUrl),
+    headers: buildHeaders(normalizedBase, loginUrl),
     body: loginBody.toString(),
   }, jar)
 
   // Step 4: Check if already logged in (no 2FA)
-  if (hasAuthCookie(jar, baseUrl)) {
+  if (hasAuthCookie(jar, normalizedBase)) {
     log.info(`[wp-auth] Logged in as ${username} (no 2FA required)`)
     return {
-      baseUrl,
+      baseUrl: normalizedBase,
       username,
       cookieJar: jar,
       needs2fa: false,
@@ -219,7 +221,7 @@ export async function wpLogin({ baseUrl, username, password }) {
   if (twoFa.needs2fa) {
     log.info(`[wp-auth] 2FA required (${twoFa.provider}). OTP sent to email automatically.`)
     return {
-      baseUrl,
+      baseUrl: normalizedBase,
       username,
       cookieJar: jar,
       needs2fa: true,
