@@ -1,12 +1,16 @@
 # Progress
 
 Last updated: 2026-03-11 (night) by Cascade
-Branch: `release/r80-match-manager-base` at `4100b8b`
-Tests: 858 backend (38 files) + 221 frontend (10 files) = 1079, all passing
+Branch: `release/r80-match-manager-base` at `8234024`
+Tests: 870 backend (39 files) + 221 frontend (10 files) = 1091, all passing
 
 ---
 
 ## Current Session Work
+
+### Completed — 2026-03-11 (night): BL-1 Admin Dashboard
+
+22. **BL-1: Admin Dashboard** (`8234024`) — Super-admin dashboard at `#/admin`. Backend: `routes/admin.js` with `ADMIN_API_KEY` Bearer token auth. Endpoints: GET `/admin/tenants` (all tenants + owner info + member count), GET `/admin/accounts` (all accounts + tenant count), GET `/admin/sessions` (SSI session count), GET `/admin/overview` (combined). DB: `listAllTenants()`, `listAllAccounts()` with JOIN queries. UI: `AdminPage.jsx` — API key login, stats cards (tenants, accounts, sessions), tabbed data tables with SSI/calendar config status badges, MFA status. 12 new tests.
 
 ### Completed — 2026-03-11 (night): PEW-1..4 Post-Event Workflows
 
@@ -96,8 +100,8 @@ Tests: 858 backend (38 files) + 221 frontend (10 files) = 1079, all passing
 ## What's Next (unprioritized — pick from PRD)
 
 - **R8.3 remaining**: MP3 gap analysis (staffing vs original MP3 scope), MP8 localization, MP9 branding — design/analysis tasks
-- **PEW-1..4**: Post-event workflows — automate email, calendar stats, score publishing after event completion
+- **BL-3**: Admin session monitoring (extend BL-1 with per-user session view)
 - **R7.6**: Consolidation & completion (deferred items from R7.0/R7.5)
 - **R7.9**: GraphQL cup management (GQL1–GQL7) — migrate from web scraping
 - **Regulatory**: GDPR, ToS, accessibility (21 design-phase requirements)
-- **Backlog**: Admin dashboard (BL-1), tenant context/URL strategy (TEN-1), page-load perf (PRF-1), multi-system integration architecture (INT-1)
+- **Backlog**: Tenant context/URL strategy (TEN-1), page-load perf (PRF-1), multi-system integration architecture (INT-1)
