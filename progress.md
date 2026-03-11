@@ -1,12 +1,16 @@
 # Progress
 
-Last updated: 2026-03-11 (evening) by Cascade
-Branch: `release/r80-match-manager-base` at `8a737d1`
-Tests: 831 backend (37 files) + 221 frontend (10 files) = 1052, all passing
+Last updated: 2026-03-11 (night) by Cascade
+Branch: `release/r80-match-manager-base` at `4100b8b`
+Tests: 858 backend (38 files) + 221 frontend (10 files) = 1079, all passing
 
 ---
 
 ## Current Session Work
+
+### Completed — 2026-03-11 (night): PEW-1..4 Post-Event Workflows
+
+21. **PEW-1..4: Post-Event Workflows** (`4100b8b`) — Configurable post-event workflows per template, executed sequentially. Three workflow types: `complete_ssi` (PEW-4, calls CAL-7), `update_calendar_stats` (PEW-3, calls CAL-5), `email_shooter_count` (PEW-2, SSI GraphQL + Resend). New file: `lib/services/post-event-workflow-service.js`. DB: M13 migration adds `post_event_workflows` JSONB column to `match_templates`. API: POST `/events/:id/run-post-event` (RBAC owner/tenant_admin, audit logged), GET `/workflow-types`. UI: emerald "Run Workflows" button in SchedulePage for calendar_published/completed events. Dependency injection design for full testability. 27 new tests.
 
 ### Completed — 2026-03-11 (evening): CAL-6 Calendar Data Integrity
 
