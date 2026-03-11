@@ -19,6 +19,7 @@ import { requireAuthV7 } from './middleware/auth-v7.js'
 import { createAuthV7Router } from './routes/auth-v7.js'
 import apiV1Router from './routes/v1/index.js'
 import { createPlatformRouter } from './routes/platform.js'
+import { createAdminRouter } from './routes/admin.js'
 import { initPostgres } from './lib/db/postgres.js'
 import { startSsiDisciplineSync } from './lib/services/ssi-discipline-sync.js'
 
@@ -450,6 +451,10 @@ const platformRouter = createPlatformRouter({
   getAdminSession
 })
 app.use(`${API_V1_BASE}/platform`, platformRouter)
+
+// Admin routes (BL-1 — secured by ADMIN_API_KEY)
+const adminRouter = createAdminRouter()
+app.use(`${API_V1_BASE}/admin`, adminRouter)
 
 // Staffing routes
 const staffingRouter = createStaffingRouter({

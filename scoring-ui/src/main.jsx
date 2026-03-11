@@ -10,6 +10,7 @@ import ReportPage from './components/ReportPage.jsx'
 import SummaryReportPage from './components/SummaryReportPage.jsx'
 import StaffingPage from './components/StaffingPage.jsx'
 import { PlatformApp } from './components/platform/index.js'
+import AdminPage from './components/AdminPage.jsx'
 
 // Error boundary to catch runtime crashes and display a useful error instead of a blank page
 class ErrorBoundary extends Component {
@@ -73,6 +74,9 @@ function Router() {
   }
   if (route === '#/platform' || route.startsWith('#/platform/')) {
     return <PlatformApp route={route} />
+  }
+  if (route === '#/admin') {
+    return <AdminPage />
   }
   return <HomePage />
 }

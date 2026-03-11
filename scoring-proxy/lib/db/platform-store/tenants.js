@@ -202,6 +202,27 @@ export async function listAccountTenants(accountId) {
 }
 
 /**
+ * List ALL tenants (admin only). Includes owner info and member count.
+ * Does NOT include credentials — uses default masking.
+ */
+export async function listAllTenants() {
+  const { rows } = await query(
+    `SELECT t.*,
+       a.email AS owner_email, a.name AS owner_name,
+       (SELECT COUNT(*) FROM tenant_members tm WHERE tm.tenant_id = t.id AND tm.status = 'active') AS member_count
+     FROM tenants t
+     LEFT JOIN accounts a ON a.id = t.account_id
+     ORDER BY t.created_at DESC`
+  )
+  return rows.map(row => ({
+    ...rowToTenant(row),
+    ownerEmail: row.owner_email || null,
+    ownerName: row.owner_name || null,
+    memberCount: parseInt(row.member_count, 10) || 0,
+  }))
+}
+
+/**
  * Update tenant fields.
  */
 export async function updateTenant(tenantId, updates) {

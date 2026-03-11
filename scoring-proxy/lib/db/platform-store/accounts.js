@@ -122,6 +122,25 @@ export async function getAccount(accountId) {
 }
 
 /**
+ * List ALL accounts (admin only). Includes tenant count per account.
+ * Does NOT include passwordHash or MFA secrets.
+ */
+export async function listAllAccounts() {
+  const { rows } = await query(
+    `SELECT a.*,
+       (SELECT COUNT(DISTINCT t.id) FROM tenants t
+        LEFT JOIN tenant_members tm ON tm.tenant_id = t.id AND tm.account_id = a.id AND tm.status = 'active'
+        WHERE t.account_id = a.id OR tm.id IS NOT NULL) AS tenant_count
+     FROM accounts a
+     ORDER BY a.created_at DESC`
+  )
+  return rows.map(row => ({
+    ...rowToAccount(row),
+    tenantCount: parseInt(row.tenant_count, 10) || 0,
+  }))
+}
+
+/**
  * Get account with full MFA secrets for verification.
  * Only use this internally for MFA verification!
  */
