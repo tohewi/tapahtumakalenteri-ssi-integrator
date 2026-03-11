@@ -10,7 +10,7 @@
 // ============================================================
 
 import { useState, useEffect, useMemo } from 'react'
-import { listTemplates, listEvents, createEventsApi, deleteEventApi, cancelEventApi, executeEventApi, publishCalendarApi, updateCalendarStatsApi, completeSsiEventApi, getUpcomingStaffingApi } from '../../platform-api.js'
+import { listTemplates, listEvents, createEventsApi, deleteEventApi, cancelEventApi, executeEventApi, publishCalendarApi, updateCalendarStatsApi, completeSsiEventApi, integrityCheckApi, getUpcomingStaffingApi } from '../../platform-api.js'
 import ImportSsiEventsModal from './ImportSsiEventsModal.jsx'
 import EventCalendar from './EventCalendar.jsx'
 import StatusBadge, { STATUS_COLORS, STATUS_LABELS, CANCELLABLE_STATUSES, formatEventDate } from './schedule/StatusBadge.jsx'
@@ -33,6 +33,8 @@ export default function SchedulePage({ tenantId, onBack }) {
   const [viewMode, setViewMode] = useState('calendar') // 'list' | 'calendar'
   const [timeFilter, setTimeFilter] = useState('upcoming') // 'all' | 'next7' | 'next30' | 'upcoming' | 'past'
   const [cancelTarget, setCancelTarget] = useState(null) // event being cancelled
+  const [integrityResult, setIntegrityResult] = useState(null) // CAL-6 integrity check result
+  const [integrityRunning, setIntegrityRunning] = useState(false)
 
   // Load templates, events, and staffing status
   useEffect(() => {
@@ -201,6 +203,26 @@ export default function SchedulePage({ tenantId, onBack }) {
     }
   }
 
+  // Run calendar data integrity check (CAL-6)
+  async function handleIntegrityCheck(liveCheck = false) {
+    setIntegrityRunning(true)
+    setIntegrityResult(null)
+    setStatus(null)
+    try {
+      const result = await integrityCheckApi(tenantId, { liveCheck })
+      setIntegrityResult(result)
+      if (result.summary?.passed) {
+        setStatus({ type: 'success', message: `Integrity check passed (${result.summary.totalEvents} events checked)` })
+      } else {
+        setStatus({ type: 'warning', message: `Integrity check: ${result.summary?.errorCount || 0} errors, ${result.summary?.warningCount || 0} warnings` })
+      }
+    } catch (err) {
+      setStatus({ type: 'error', message: `Integrity check failed: ${err.message}` })
+    } finally {
+      setIntegrityRunning(false)
+    }
+  }
+
   // Cancel an event (soft cancel — keeps DB record)
   async function handleCancel(evt, removeFromSsi) {
     try {
@@ -322,15 +344,64 @@ export default function SchedulePage({ tenantId, onBack }) {
           batchResults={batchResults}
         />
 
-        {/* MP6: Status summary bar */}
+        {/* MP6: Status summary bar + CAL-6 integrity check */}
         {events.length > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {Object.entries(statusCounts).map(([st, count]) => (
               <span key={st} className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full ${STATUS_COLORS[st] || 'bg-gray-100 text-gray-500'}`}>
                 {STATUS_LABELS[st] || st}
                 <span className="opacity-70">{count}</span>
               </span>
             ))}
+            <span className="flex-1" />
+            <button
+              onClick={() => handleIntegrityCheck(false)}
+              disabled={integrityRunning}
+              className="text-[11px] text-teal-600 hover:text-teal-800 font-medium disabled:opacity-50"
+            >
+              {integrityRunning ? 'Checking...' : 'Integrity Check'}
+            </button>
+          </div>
+        )}
+
+        {/* CAL-6: Integrity check results */}
+        {integrityResult && (
+          <div className={`rounded-lg border p-4 text-sm ${
+            integrityResult.summary?.passed
+              ? 'bg-green-50 border-green-200'
+              : 'bg-amber-50 border-amber-200'
+          }`}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-semibold text-gray-800">
+                {integrityResult.summary?.passed ? '✅ Integrity Check Passed' : '⚠️ Integrity Issues Found'}
+              </span>
+              <button
+                onClick={() => setIntegrityResult(null)}
+                className="text-xs text-gray-400 hover:text-gray-600"
+              >
+                Dismiss
+              </button>
+            </div>
+            <div className="text-xs text-gray-600 mb-2">
+              {integrityResult.summary?.totalEvents} events checked
+              {integrityResult.summary?.liveCheckPerformed && ' (incl. live WP verification)'}
+              {integrityResult.wpAuthError && (
+                <span className="text-amber-600"> · WP auth skipped: {integrityResult.wpAuthError}</span>
+              )}
+            </div>
+            {integrityResult.issues?.length > 0 && (
+              <div className="space-y-1 mt-2">
+                {integrityResult.issues.map((issue, i) => (
+                  <div key={i} className={`text-xs px-2 py-1 rounded ${
+                    issue.severity === 'error' ? 'bg-red-100 text-red-700'
+                      : issue.severity === 'warning' ? 'bg-amber-100 text-amber-700'
+                      : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    <span className="font-medium">{issue.type}</span>: {issue.message}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

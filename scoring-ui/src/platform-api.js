@@ -463,6 +463,18 @@ export async function completeSsiEventApi(tenantId, eventId) {
   })
 }
 
+/**
+ * Run calendar data integrity check (CAL-6).
+ * @param {string} tenantId
+ * @param {{ liveCheck?: boolean }} [options]
+ */
+export async function integrityCheckApi(tenantId, options = {}) {
+  return platformFetch(`/tenants/${tenantId}/events/integrity-check`, {
+    method: 'POST',
+    body: JSON.stringify(options),
+  })
+}
+
 // ---- SSI Event Search & Import ----
 
 /**

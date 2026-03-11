@@ -10,6 +10,7 @@ import { createSsiEvent, deleteSsiEvent } from '../../lib/services/event-creatio
 import { publishCalendarEvent, validateCalendarConfig } from '../../lib/services/calendar-publish-service.js'
 import { updateCalendarStats } from '../../lib/services/calendar-stats-service.js'
 import { completeEvent } from '../../lib/services/event-complete-service.js'
+import { checkIntegrity } from '../../lib/services/calendar-integrity-service.js'
 import {
   createScheduledEvent,
   createScheduledEventBatch,
@@ -605,6 +606,87 @@ export function mountEventRoutes(router, { requirePlatformAuth, requireTenantRol
     } catch (err) {
       log.error(`[platform] POST /complete-ssi failed for event ${req.params.id}:`, err.message)
       return next(new AppError('SSI event completion failed', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // ============================================================
+  // Calendar Data Integrity Check (CAL-6)
+  // ============================================================
+
+  // POST /api/v1/platform/tenants/:tenantId/events/integrity-check
+  // Cross-reference validation between SSI events and WordPress calendar.
+  // Body: { liveCheck?: boolean } — if true and calendarConfig exists, verifies WP posts live.
+  // Requires: owner or tenant_admin
+  router.post('/tenants/:tenantId/events/integrity-check', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
+    try {
+      const { liveCheck = false } = req.body || {}
+      const tenantId = req.params.tenantId
+
+      // Fetch all events for this tenant
+      const events = await listScheduledEvents(tenantId)
+
+      if (events.length === 0) {
+        return res.json({
+          summary: { totalEvents: 0, issueCount: 0, passed: true, liveCheckPerformed: false },
+          issues: [],
+          checkedAt: new Date().toISOString(),
+        })
+      }
+
+      // Build options — optionally include live WP adapter
+      const options = {}
+
+      if (liveCheck) {
+        const tenant = await getTenantWithCredentials(tenantId)
+        const calendarConfig = tenant?.calendarConfig
+
+        if (calendarConfig?.wpBaseUrl && calendarConfig?.wpUsername && calendarConfig?.wpPassword) {
+          try {
+            const { validateCalendarConfig: validateCal } = await import('../../lib/services/calendar-publish-service.js')
+            const { WpCalendarAdapter } = await import('../../lib/calendar/wp-adapter.js')
+            const { wpLogin } = await import('../../lib/calendar/wp-auth.js')
+
+            const validConfig = validateCal(calendarConfig)
+
+            // Authenticate to WordPress
+            const session = await wpLogin(validConfig.wpBaseUrl, validConfig.wpUsername, validConfig.wpPassword)
+            options.adapter = new WpCalendarAdapter(session, validConfig.wpBaseUrl)
+          } catch (err) {
+            log.warn(`[integrity] Live WP check requested but auth failed: ${err.message}`)
+            // Continue with DB-only checks, include auth error in response
+            options.wpAuthError = err.message
+          }
+        } else {
+          log.info(`[integrity] Live WP check requested but no calendarConfig configured`)
+          options.wpAuthError = 'Calendar configuration not set up for this tenant'
+        }
+      }
+
+      const result = await checkIntegrity(events, options)
+
+      // Add auth error info if live check was requested but failed
+      if (liveCheck && options.wpAuthError) {
+        result.wpAuthError = options.wpAuthError
+      }
+
+      await createAuditLog({
+        tenantId,
+        accountId: req.account.id,
+        action: 'integrity_check',
+        resourceType: 'scheduled_event',
+        resourceId: tenantId,
+        details: {
+          totalEvents: result.summary.totalEvents,
+          issueCount: result.summary.issueCount,
+          liveCheck: result.summary.liveCheckPerformed,
+          passed: result.summary.passed,
+        },
+      })
+
+      res.json(result)
+    } catch (err) {
+      log.error(`[integrity] Integrity check failed:`, err.message)
+      return next(new AppError('Integrity check failed', 500, 'INTERNAL_ERROR'))
     }
   })
 
