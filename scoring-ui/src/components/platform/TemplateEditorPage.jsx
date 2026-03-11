@@ -6,12 +6,14 @@
 //   2. Event Overrides — name template, descriptions, timing, registration
 //   3. Calendar Template — title, location, content HTML
 //   4. Staffing Rules — min/max instructors, required roles
+//   5. Post-Event Workflows — complete SSI, update calendar, email report
+//   6. Pre-Event Workflows — placeholder for future
 //
 // All edits are saved to the template's JSONB override columns.
 // ============================================================
 
 import { useState, useEffect, useCallback } from 'react'
-import { getTemplateApi, updateTemplateApi, importTemplateSeed } from '../../platform-api.js'
+import { getTemplateApi, updateTemplateApi, importTemplateSeed, getTenantDetails } from '../../platform-api.js'
 
 // ---- Helpers ----
 
@@ -79,6 +81,60 @@ function NumberInput({ label, hint, value, onChange, min, max, placeholder }) {
         min={min} max={max} placeholder={placeholder}
         className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
       />
+    </div>
+  )
+}
+
+// ---- Workflow Toggle ----
+
+/**
+ * Toggle a workflow type on/off in the postEventWorkflows array.
+ * @param {string} type — workflow type key (e.g. 'complete_ssi')
+ * @param {string} label — display label
+ * @param {string} description — short explanation
+ * @param {boolean} always — if true, shown as always-enabled (no toggle, just info)
+ * @param {Array} workflows — current postEventWorkflows array
+ * @param {Function} onChange — called with updated array
+ */
+function WorkflowToggle({ type, label, description, always, workflows, onChange }) {
+  const existing = workflows.find(w => w.type === type)
+  const enabled = always || existing?.enabled
+
+  function handleToggle() {
+    if (always) return // always-enabled workflows can't be toggled
+    if (existing) {
+      // Toggle existing entry
+      onChange(workflows.map(w => w.type === type ? { ...w, enabled: !w.enabled } : w))
+    } else {
+      // Add new entry as enabled
+      onChange([...workflows, { type, enabled: true }])
+    }
+  }
+
+  return (
+    <div className="flex items-start gap-3 p-3 rounded-lg border border-gray-100 bg-gray-50">
+      {always ? (
+        <div className="mt-0.5 w-9 h-5 rounded-full bg-emerald-500 flex items-center justify-end px-0.5 shrink-0" title="Always enabled">
+          <div className="w-4 h-4 rounded-full bg-white shadow" />
+        </div>
+      ) : (
+        <button
+          onClick={handleToggle}
+          className={`mt-0.5 w-9 h-5 rounded-full flex items-center px-0.5 shrink-0 transition-colors ${
+            enabled ? 'bg-emerald-500 justify-end' : 'bg-gray-300 justify-start'
+          }`}
+          title={enabled ? 'Disable' : 'Enable'}
+        >
+          <div className="w-4 h-4 rounded-full bg-white shadow" />
+        </button>
+      )}
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-gray-800">
+          {label}
+          {always && <span className="ml-2 text-xs text-emerald-600 font-normal">(always enabled)</span>}
+        </div>
+        <div className="text-xs text-gray-500 mt-0.5">{description}</div>
+      </div>
     </div>
   )
 }
@@ -175,6 +231,11 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
   const [overrides, setOverrides] = useState({})
   const [calendarTemplate, setCalendarTemplate] = useState({})
   const [staffingRules, setStaffingRules] = useState({})
+  const [postEventWorkflows, setPostEventWorkflows] = useState([])
+
+  // Tenant integration flags (loaded once for conditional UI)
+  const [hasSsi, setHasSsi] = useState(false)
+  const [hasCalendar, setHasCalendar] = useState(false)
 
   // Load template
   useEffect(() => {
@@ -198,6 +259,15 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
         })
         setCalendarTemplate(data.template.calendarTemplate || {})
         setStaffingRules(data.template.staffingRules || {})
+        setPostEventWorkflows(data.template.postEventWorkflows || [])
+
+        // Load tenant to detect which integrations are configured
+        try {
+          const tenantData = await getTenantDetails(tenantId)
+          const tenant = tenantData.tenant || tenantData
+          setHasSsi(!!tenant.ssiCredentials?.email)
+          setHasCalendar(!!tenant.calendarConfig?.wpBaseUrl)
+        } catch { /* non-critical — toggles hidden if tenant load fails */ }
       } catch (err) {
         setStatus({ type: 'error', message: err.message })
       }
@@ -242,10 +312,21 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
     setSaving(true)
     setStatus(null)
     try {
+      // Ensure email_shooter_count is always present and enabled
+      let finalWorkflows = [...postEventWorkflows]
+      const hasEmail = finalWorkflows.some(w => w.type === 'email_shooter_count')
+      if (!hasEmail) {
+        finalWorkflows = [{ type: 'email_shooter_count', enabled: true }, ...finalWorkflows]
+      } else {
+        finalWorkflows = finalWorkflows.map(w =>
+          w.type === 'email_shooter_count' ? { ...w, enabled: true } : w
+        )
+      }
       const data = await updateTemplateApi(tenantId, templateId, {
         overrides,
         calendarTemplate,
         staffingRules,
+        postEventWorkflows: finalWorkflows,
       })
       setTemplate(data.template)
       setDirty(false)
@@ -562,6 +643,49 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
           )}
         </SectionCard>
 
+        {/* Section 5: Post-Event Workflows */}
+        <SectionCard title="Post-Event Workflows" description="Actions to run after an event completes. Toggle workflows based on your tenant integrations.">
+          {/* Email shooter count — always enabled */}
+          <WorkflowToggle
+            type="email_shooter_count"
+            label="Email Shooter Count Report"
+            description="Send event name, date, and final shooter count via email after every event."
+            always
+            workflows={postEventWorkflows}
+            onChange={wfs => { setPostEventWorkflows(wfs); setDirty(true) }}
+          />
+          {/* Complete SSI — only if tenant has SSI credentials */}
+          {hasSsi && (
+            <WorkflowToggle
+              type="complete_ssi"
+              label="Mark Event Completed in SSI"
+              description="Publishes final scores and marks the SSI event as completed."
+              workflows={postEventWorkflows}
+              onChange={wfs => { setPostEventWorkflows(wfs); setDirty(true) }}
+            />
+          )}
+          {/* Calendar stats — only if tenant has calendar config */}
+          {hasCalendar && (
+            <WorkflowToggle
+              type="update_calendar_stats"
+              label="Update Tapahtumakalenteri Statistics"
+              description="Reports shooter count and shots fired to the WordPress calendar event."
+              workflows={postEventWorkflows}
+              onChange={wfs => { setPostEventWorkflows(wfs); setDirty(true) }}
+            />
+          )}
+          {!hasSsi && !hasCalendar && (
+            <p className="text-xs text-gray-400">Configure SSI credentials or calendar settings in tenant settings to enable additional workflows.</p>
+          )}
+        </SectionCard>
+
+        {/* Section 6: Pre-Event Workflows (placeholder) */}
+        <SectionCard title="Pre-Event Workflows" description="Actions to run before an event starts." defaultOpen={false}>
+          <div className="text-sm text-gray-400 text-center py-4">
+            Pre-event workflows are not yet available. This section will support automated actions like sending reminders or syncing registrations before the event date.
+          </div>
+        </SectionCard>
+
         {/* Sticky save bar */}
         {dirty && (
           <div className="sticky bottom-4 bg-white rounded-xl shadow-lg border border-sky-200 px-6 py-3 flex items-center justify-between">
@@ -572,6 +696,7 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
                   setOverrides(template.overrides || {})
                   setCalendarTemplate(template.calendarTemplate || {})
                   setStaffingRules(template.staffingRules || {})
+                  setPostEventWorkflows(template.postEventWorkflows || [])
                   setDirty(false)
                 }}
                 className="text-sm text-gray-500 hover:text-gray-700"
