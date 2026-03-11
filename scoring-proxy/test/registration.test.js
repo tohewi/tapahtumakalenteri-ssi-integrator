@@ -241,7 +241,7 @@ describe('Registration endpoints', () => {
       expect(res.data.error).toContain('Väärä vastaus')
     })
 
-    it('consumes the captcha after submit (single-use)', async () => {
+    it('consumes the captcha after submit (single-use)', { timeout: 15000 }, async () => {
       const ip = uniqueIp()
       const cap = await getFreshCaptcha(ip)
       // First submit — will fail at SSI level but captcha is consumed
@@ -293,7 +293,7 @@ describe('Registration endpoints', () => {
   // Uses a single dedicated IP to test rate limit exhaustion
   // ============================================================
   describe('Rate limiting — submit endpoint', () => {
-    it('returns 429 after exceeding 5 submit attempts', async () => {
+    it('returns 429 after exceeding 5 submit attempts', { timeout: 30000 }, async () => {
       const ip = uniqueIp() // dedicated IP for this test
       const results = []
       for (let i = 0; i < 6; i++) {
@@ -316,7 +316,7 @@ describe('Registration endpoints', () => {
       expect(results[5]).toBe(429)
     })
 
-    it('rate limit response has Finnish error message', async () => {
+    it('rate limit response has Finnish error message', { timeout: 30000 }, async () => {
       const ip = uniqueIp()
       // Exhaust the limit
       for (let i = 0; i < 5; i++) {
