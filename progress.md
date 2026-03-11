@@ -1,12 +1,17 @@
 # Progress
 
-Last updated: 2026-03-11 (morning) by Cascade
-Branch: `release/r80-match-manager-base` at `7ec6346`
-Tests: 804 backend (36 files) + 221 frontend (10 files) = 1025, all passing
+Last updated: 2026-03-11 (evening) by Cascade
+Branch: `release/r80-match-manager-base` at `8a737d1`
+Tests: 831 backend (37 files) + 221 frontend (10 files) = 1052, all passing
 
 ---
 
 ## Current Session Work
+
+### Completed — 2026-03-11 (evening): CAL-6 Calendar Data Integrity
+
+20. **CAL-6: Calendar Data Integrity** (`8a737d1`) — Cross-reference validation between SSI events and WordPress calendar events. Replaces `Test-EventIntegrity.ps1` (449 lines). Two-tier checks: DB consistency (missing refs, orphaned refs, duplicate SSI events, missing Cup URLs) + optional live WP verification (post exists, status match, content has SSI link, title match). New file: `lib/services/calendar-integrity-service.js` (checkDbConsistency, checkLiveWp, checkIntegrity). API: POST `/events/integrity-check` with `{ liveCheck }`, RBAC owner/tenant_admin, audit logged. UI: "Integrity Check" button in SchedulePage status bar + inline color-coded results panel. 27 new tests.
+    - **R8.3 status:** 7/9 ✅ (CAL-1–CAL-7). Remaining: MP3 gap analysis, MP8 localization, MP9 branding.
 
 ### Completed — 2026-03-11 (morning): BLD-4 CI Pipeline Fixes
 
