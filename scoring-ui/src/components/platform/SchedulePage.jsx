@@ -10,7 +10,7 @@
 // ============================================================
 
 import { useState, useEffect, useMemo } from 'react'
-import { listTemplates, listEvents, createEventsApi, deleteEventApi, cancelEventApi, executeEventApi, publishCalendarApi, updateCalendarStatsApi, completeSsiEventApi, integrityCheckApi, getUpcomingStaffingApi } from '../../platform-api.js'
+import { listTemplates, listEvents, createEventsApi, deleteEventApi, cancelEventApi, executeEventApi, publishCalendarApi, updateCalendarStatsApi, completeSsiEventApi, integrityCheckApi, runPostEventApi, getUpcomingStaffingApi } from '../../platform-api.js'
 import ImportSsiEventsModal from './ImportSsiEventsModal.jsx'
 import EventCalendar from './EventCalendar.jsx'
 import StatusBadge, { STATUS_COLORS, STATUS_LABELS, CANCELLABLE_STATUSES, formatEventDate } from './schedule/StatusBadge.jsx'
@@ -220,6 +220,28 @@ export default function SchedulePage({ tenantId, onBack }) {
       setStatus({ type: 'error', message: `Integrity check failed: ${err.message}` })
     } finally {
       setIntegrityRunning(false)
+    }
+  }
+
+  // Run post-event workflows (PEW-1..4)
+  async function handleRunPostEvent(eventId) {
+    setExecutingId(eventId)
+    setStatus(null)
+    try {
+      const result = await runPostEventApi(tenantId, eventId)
+      const { summary } = result
+      if (summary.totalSteps === 0) {
+        setStatus({ type: 'warning', message: 'No post-event workflows configured for this template' })
+      } else if (summary.failed === 0) {
+        setStatus({ type: 'success', message: `Post-event workflows: ${summary.succeeded} succeeded, ${summary.skipped} skipped` })
+      } else {
+        setStatus({ type: 'warning', message: `Post-event workflows: ${summary.succeeded} succeeded, ${summary.failed} failed, ${summary.skipped} skipped` })
+      }
+      await refreshEvents()
+    } catch (err) {
+      setStatus({ type: 'error', message: `Post-event workflows failed: ${err.message}` })
+    } finally {
+      setExecutingId(null)
     }
   }
 
@@ -581,6 +603,16 @@ export default function SchedulePage({ tenantId, onBack }) {
                             className="text-xs text-purple-600 hover:text-purple-800 font-medium disabled:opacity-50"
                           >
                             {isBusy ? 'Completing...' : 'Complete SSI'}
+                          </button>
+                        )}
+                        {/* Post-event workflows (PEW-1..4) */}
+                        {(evt.status === 'calendar_published' || evt.status === 'completed') && evt.templateId && (
+                          <button
+                            onClick={() => handleRunPostEvent(evt.id)}
+                            disabled={isBusy}
+                            className="text-xs text-emerald-600 hover:text-emerald-800 font-medium disabled:opacity-50"
+                          >
+                            {isBusy ? 'Running...' : 'Run Workflows'}
                           </button>
                         )}
                         {/* Cancel: soft cancel for active events (MP7) */}

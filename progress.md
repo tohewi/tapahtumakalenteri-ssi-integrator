@@ -84,15 +84,16 @@ Tests: 831 backend (37 files) + 221 frontend (10 files) = 1052, all passing
 - **R8.1 (PA1–PA21)**: Platform auth & tenancy — 21/21 ✅ (accounts, tenants, RBAC, MFA, invitations, templates)
 - **R8.2**: Authorization & workflows — 5/5 ✅ (RBAC matrix, password reset, event execution/status/cancel)
 - **R8.2.1**: Architecture tech debt — 23/23 ✅ (modularity splits, tests, ESLint boundaries)
-- **R8.3**: Calendar integration — 5/9 ✅ (CAL-1 WP auth, CAL-2 Gmail OTP, CAL-3 WP adapter, CAL-4 publish flow + UI, CAL-5 statistics update via GraphQL). UAT passed on PR-138 preview (7 bug fixes).
+- **R8.3**: Calendar integration — 7/9 ✅ (CAL-1–CAL-7). Remaining: MP3 gap analysis, MP8 localization, MP9 branding. UAT passed on PR-138 preview (7 bug fixes).
 - **R9.0**: Event staffing — all implemented (needs, signups, leaderboard, notifications)
 - **R9.1**: API security hardening — 4/5 ✅ (rate limits, cross-tenant validation, audit log)
 - **R9.2**: SSI discipline registry — 4/4 ✅ (built-in + GraphQL auto-discovery)
 
 ## What's Next (unprioritized — pick from PRD)
 
-- **R8.3 CAL-6**: Calendar Data Integrity — cross-reference validation SSI ↔ WP
+- **R8.3 remaining**: MP3 gap analysis (staffing vs original MP3 scope), MP8 localization, MP9 branding — design/analysis tasks
+- **PEW-1..4**: Post-event workflows — automate email, calendar stats, score publishing after event completion
 - **R7.6**: Consolidation & completion (deferred items from R7.0/R7.5)
 - **R7.9**: GraphQL cup management (GQL1–GQL7) — migrate from web scraping
 - **Regulatory**: GDPR, ToS, accessibility (21 design-phase requirements)
-- **Backlog**: Admin dashboard (BL-1), tenant context/URL strategy (TEN-1), page-load perf (PRF-1), post-event workflows (PEW-1..4), multi-system integration architecture (INT-1)
+- **Backlog**: Admin dashboard (BL-1), tenant context/URL strategy (TEN-1), page-load perf (PRF-1), multi-system integration architecture (INT-1)

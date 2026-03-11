@@ -374,6 +374,13 @@ export async function initPostgres() {
         log.warn('[postgres] M12 migration (ssi_discovered_disciplines):', err.message)
       }
 
+      // M13: Add post_event_workflows column to match_templates (PEW-1)
+      try {
+        await client.query('ALTER TABLE match_templates ADD COLUMN IF NOT EXISTS post_event_workflows JSONB DEFAULT \'[]\'')
+      } catch (err) {
+        log.warn('[postgres] M13 migration (post_event_workflows):', err.message)
+      }
+
       // Optional unique constraints — may fail on existing data with duplicates.
       // App-level checks in createTenant/createAccountWithTenant still prevent new duplicates.
       try {

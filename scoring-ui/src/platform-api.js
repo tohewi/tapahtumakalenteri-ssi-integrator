@@ -475,6 +475,18 @@ export async function integrityCheckApi(tenantId, options = {}) {
   })
 }
 
+/**
+ * Run post-event workflows for an event (PEW-1..4).
+ * @param {string} tenantId
+ * @param {string} eventId
+ */
+export async function runPostEventApi(tenantId, eventId) {
+  return platformFetch(`/tenants/${tenantId}/events/${eventId}/run-post-event`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
 // ---- SSI Event Search & Import ----
 
 /**

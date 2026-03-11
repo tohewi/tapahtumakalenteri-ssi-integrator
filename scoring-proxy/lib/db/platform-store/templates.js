@@ -19,6 +19,7 @@ function rowToTemplate(row) {
     overrides: row.overrides || {},
     calendarTemplate: row.calendar_template || {},
     staffingRules: row.staffing_rules || {},
+    postEventWorkflows: row.post_event_workflows || [],
     createdAt: new Date(row.created_at).getTime(),
     updatedAt: new Date(row.updated_at).getTime(),
   }
@@ -32,10 +33,11 @@ const TEMPLATE_UPDATE_FIELDS = {
   overrides: 'overrides',
   calendarTemplate: 'calendar_template',
   staffingRules: 'staffing_rules',
+  postEventWorkflows: 'post_event_workflows',
 }
 
 // Fields that must be JSON-stringified before storage
-const TEMPLATE_JSON_FIELDS = new Set(['ssiSeedSnapshot', 'overrides', 'calendarTemplate', 'staffingRules'])
+const TEMPLATE_JSON_FIELDS = new Set(['ssiSeedSnapshot', 'overrides', 'calendarTemplate', 'staffingRules', 'postEventWorkflows'])
 
 // ---- Match Template CRUD ----
 
@@ -43,11 +45,11 @@ const TEMPLATE_JSON_FIELDS = new Set(['ssiSeedSnapshot', 'overrides', 'calendarT
  * Create a new match template.
  * @param {object} params - { tenantId, disciplineId, name, ssiSeedEventId?, overrides?, calendarTemplate?, staffingRules? }
  */
-export async function createMatchTemplate({ tenantId, disciplineId, name, ssiSeedEventId, ssiSeedSnapshot, overrides, calendarTemplate, staffingRules }) {
+export async function createMatchTemplate({ tenantId, disciplineId, name, ssiSeedEventId, ssiSeedSnapshot, overrides, calendarTemplate, staffingRules, postEventWorkflows }) {
   const templateId = generateId('tpl')
   const { rows } = await query(
-    `INSERT INTO match_templates (id, tenant_id, discipline_id, name, ssi_seed_event_id, ssi_seed_snapshot, overrides, calendar_template, staffing_rules)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `INSERT INTO match_templates (id, tenant_id, discipline_id, name, ssi_seed_event_id, ssi_seed_snapshot, overrides, calendar_template, staffing_rules, post_event_workflows)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING *`,
     [
       templateId, tenantId, disciplineId, name.trim(),
@@ -56,6 +58,7 @@ export async function createMatchTemplate({ tenantId, disciplineId, name, ssiSee
       JSON.stringify(overrides || {}),
       JSON.stringify(calendarTemplate || {}),
       JSON.stringify(staffingRules || {}),
+      JSON.stringify(postEventWorkflows || []),
     ]
   )
   return { templateId, template: rowToTemplate(rows[0]) }

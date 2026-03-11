@@ -11,6 +11,9 @@ import { publishCalendarEvent, validateCalendarConfig } from '../../lib/services
 import { updateCalendarStats } from '../../lib/services/calendar-stats-service.js'
 import { completeEvent } from '../../lib/services/event-complete-service.js'
 import { checkIntegrity } from '../../lib/services/calendar-integrity-service.js'
+import { runPostEventWorkflows, validateWorkflows, WORKFLOW_TYPES } from '../../lib/services/post-event-workflow-service.js'
+import { ssiGetEventStats } from '../../lib/ssi-core/stats-graphql.js'
+import { sendEmail } from '../../lib/email.js'
 import {
   createScheduledEvent,
   createScheduledEventBatch,
@@ -687,6 +690,117 @@ export function mountEventRoutes(router, { requirePlatformAuth, requireTenantRol
     } catch (err) {
       log.error(`[integrity] Integrity check failed:`, err.message)
       return next(new AppError('Integrity check failed', 500, 'INTERNAL_ERROR'))
+    }
+  })
+
+  // ============================================================
+  // Post-Event Workflows (PEW-1..4)
+  // ============================================================
+
+  // GET /api/v1/platform/workflow-types
+  // Returns the available workflow types for template configuration.
+  router.get('/workflow-types', requirePlatformAuth(), (req, res) => {
+    res.json({ workflowTypes: WORKFLOW_TYPES })
+  })
+
+  // POST /api/v1/platform/tenants/:tenantId/events/:id/run-post-event
+  // Run configured post-event workflows for an event.
+  // Requires: owner or tenant_admin
+  router.post('/tenants/:tenantId/events/:id/run-post-event', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin'), async (req, res, next) => {
+    try {
+      const tenantId = req.params.tenantId
+      const eventId = req.params.id
+
+      // Load event
+      const event = await getScheduledEvent(eventId)
+      if (!event || event.tenantId !== tenantId) {
+        return res.status(404).json({ error: 'Event not found' })
+      }
+
+      // Load template (if event has one)
+      let template = null
+      if (event.templateId) {
+        template = await getMatchTemplate(event.templateId)
+      }
+
+      const workflows = template?.postEventWorkflows || []
+      const enabledCount = workflows.filter(wf => wf.enabled !== false).length
+
+      if (enabledCount === 0) {
+        return res.json({
+          summary: { totalSteps: 0, succeeded: 0, failed: 0, skipped: 0 },
+          steps: [],
+          executedAt: new Date().toISOString(),
+          message: 'No post-event workflows configured for this template',
+        })
+      }
+
+      // Load tenant for SSI credentials and calendar config
+      const tenant = await getTenantWithCredentials(tenantId)
+      const ssiCredentials = tenant?.ssiCredentials ? {
+        email: tenant.ssiCredentials.email,
+        password: tenant.ssiCredentials.password,
+      } : null
+      const calendarConfig = tenant?.calendarConfig || null
+
+      // Run workflows with injected service functions
+      const result = await runPostEventWorkflows({
+        event,
+        template,
+        ssiCredentials,
+        calendarConfig,
+        services: {
+          completeEventFn: completeEvent,
+          updateCalendarStatsFn: updateCalendarStats,
+          ssiGetEventStatsFn: ssiGetEventStats,
+          sendEmailFn: sendEmail,
+        },
+      })
+
+      // Audit log the workflow execution
+      await createAuditLog({
+        tenantId,
+        accountId: req.account.id,
+        action: 'run_post_event_workflows',
+        resourceType: 'scheduled_event',
+        resourceId: eventId,
+        details: {
+          totalSteps: result.summary.totalSteps,
+          succeeded: result.summary.succeeded,
+          failed: result.summary.failed,
+          skipped: result.summary.skipped,
+        },
+      })
+
+      // If complete_ssi succeeded, refresh event to get updated status
+      const completeSsiStep = result.steps.find(s => s.type === 'complete_ssi' && s.success && !s.skipped)
+      if (completeSsiStep) {
+        try {
+          await updateScheduledEvent(eventId, {
+            status: 'completed',
+            ssiReferences: { ...event.ssiReferences, completion: { completedAt: new Date().toISOString(), via: 'post_event_workflow' } },
+          })
+        } catch (err) {
+          log.warn(`[pew] Failed to update event status after SSI completion: ${err.message}`)
+        }
+      }
+
+      // If calendar stats succeeded, store stats on event
+      const statsStep = result.steps.find(s => s.type === 'update_calendar_stats' && s.success && !s.skipped)
+      if (statsStep?.details?.stats) {
+        try {
+          await updateScheduledEvent(eventId, {
+            calendarReference: { ...event.calendarReference, stats: statsStep.details.stats, statsUpdatedAt: new Date().toISOString() },
+          })
+        } catch (err) {
+          log.warn(`[pew] Failed to update calendar stats on event: ${err.message}`)
+        }
+      }
+
+      res.json(result)
+    } catch (err) {
+      log.error(`[pew] Post-event workflow failed:`, err.message)
+      return next(new AppError('Post-event workflow failed', 500, 'INTERNAL_ERROR'))
     }
   })
 
