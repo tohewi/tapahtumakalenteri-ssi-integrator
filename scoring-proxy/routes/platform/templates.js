@@ -80,7 +80,7 @@ export function mountTemplateRoutes(router, { requirePlatformAuth, requireTenant
       return res.status(404).json({ error: 'Template not found' })
     }
 
-    const allowedFields = ['name', 'ssiSeedEventId', 'ssiSeedSnapshot', 'overrides', 'calendarTemplate', 'staffingRules']
+    const allowedFields = ['name', 'ssiSeedEventId', 'ssiSeedSnapshot', 'overrides', 'calendarTemplate', 'staffingRules', 'postEventWorkflows']
     const updates = {}
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) updates[field] = req.body[field]

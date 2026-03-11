@@ -209,11 +209,23 @@ async function executeEmailShooterCount(config, context) {
     const eventName = event.eventName || 'Unknown event'
     const eventDate = event.eventDate
 
-    // Build and send email
-    const subject = `Shooter Count: ${eventName} (${eventDate})`
+    // Build subject from configurable template with placeholder substitution
+    const defaultSubjectTemplate = 'Shooter Count: {eventName} ({eventDate})'
+    const subjectTemplate = config?.subjectTemplate || defaultSubjectTemplate
+    const subject = subjectTemplate
+      .replace(/\{eventName\}/g, eventName)
+      .replace(/\{eventDate\}/g, eventDate)
+      .replace(/\{shooterCount\}/g, String(shooterCount))
+
+    // Build HTML email with optional custom note
+    const customNote = config?.customNote
+    const customNoteHtml = customNote
+      ? `<p style="color:#333;margin-bottom:16px;">${customNote.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`
+      : ''
     const html = `
       <div style="font-family:Arial,Helvetica,sans-serif;color:#333;max-width:600px;margin:0 auto;padding:20px;">
         <h2 style="color:#1a73e8;">Shooter Count Report</h2>
+        ${customNoteHtml}
         <table style="border-collapse:collapse;width:100%;margin-top:12px;">
           <tr><td style="padding:6px 12px;font-weight:bold;">Event</td><td style="padding:6px 12px;">${eventName}</td></tr>
           <tr style="background:#f8f9fa;"><td style="padding:6px 12px;font-weight:bold;">Date</td><td style="padding:6px 12px;">${eventDate}</td></tr>
