@@ -7,7 +7,7 @@
 // ============================================================
 
 import express from 'express'
-import log from '../../lib/logger.js'
+import { log } from '../../lib/logger.js'
 import { AppError } from '../../lib/errors/AppError.js'
 import { asyncHandler } from '../../middleware/errorHandler.js'
 import {
