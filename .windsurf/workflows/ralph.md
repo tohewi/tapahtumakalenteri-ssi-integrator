@@ -27,22 +27,27 @@ Structured workflow for picking up tasks, implementing them, and tracking progre
 
 ## At Session End
 
-10. **Update AGENTS.md** if the session revealed new patterns, gotchas, or hidden dependencies.
+10. **Clean up leftover processes.** Test runs and dev servers often leave orphan node processes. Kill them:
+    ```powershell
+    Get-Process node -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $PID } | Stop-Process -Force -ErrorAction SilentlyContinue
+    ```
+    This is safe — it only kills node processes, not the IDE or other tools.
+11. **Update AGENTS.md** if the session revealed new patterns, gotchas, or hidden dependencies.
     This is how the codebase compounds knowledge rather than rotting. Examples:
     - Discovered that SSI GraphQL ignores multi-value fields → must use web form POST
     - Found that Render PUT /env-vars is destructive (replaces all, not merges)
     - Learned that `NODE_TLS_REJECT_UNAUTHORIZED=0` is set globally in scoring-proxy
     Only add genuinely useful learnings, not noise. Keep both `AGENTS.md` and `.github/copilot-instructions.md` in sync.
-11. Update `progress.md`:
+12. Update `progress.md`:
     - Update the "Last updated" line with today's date.
     - Update the branch/commit reference.
     - Update the test count if changed.
     - Move completed work from "Current Session Work" to a dated entry.
     - Update "What's Next" if priorities shifted.
-12. Commit `progress.md` (and AGENTS.md if changed): `git add progress.md AGENTS.md .github/copilot-instructions.md && git commit -m "progress: update session notes"`
+13. Commit `progress.md` (and AGENTS.md if changed): `git add progress.md AGENTS.md .github/copilot-instructions.md && git commit -m "progress: update session notes"`
 // turbo
-13. Push: `git push origin <branch-name>`
-14. Provide a token usage summary table (per AGENTS.md).
+14. Push: `git push origin <branch-name>`
+15. Provide a token usage summary table (per AGENTS.md).
 
 ## Task Sizing
 
