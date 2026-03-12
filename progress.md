@@ -1,22 +1,34 @@
 # Progress
 
-Last updated: 2026-03-12 (evening) by Cascade
-Branch: `release/r80-match-manager-base` at `f684bf9`
+Last updated: 2026-03-12 (late evening) by Cascade
+Branch: `release/r80-match-manager-base` at `b815eef`
 Tests: 870 backend (39 files) + 221 frontend (10 files) = 1091, all passing
 
 ---
 
 ## Current Session Work
 
-### Completed — 2026-03-12 (evening): MP8 Platform Localization (Phase A)
+### Completed — 2026-03-12 (late evening): MP9 Tenant Branding
 
-25. **MP8: Platform i18n system** — Created `platform-i18n.js` with React Context provider + `usePlatformT()` hook. Finnish/English dictionaries with ~300+ keys. Language selector in TopBar with localStorage persistence. Migrated all 16 platform components:
+27. **MP9: Tenant branding** (`b815eef`) — Logo upload/preview/serve/remove for tenant organizations.
+    - DB: M15 migration — `tenant_logos` table (bytea storage) + `has_logo` flag on tenants
+    - Store: `uploadTenantLogo`, `getTenantLogo`, `deleteTenantLogo` in `logos.js`
+    - Routes: POST/GET/DELETE `/tenants/:id/logo` — GET is public with ETag + Cache-Control headers
+    - Per-route 4MB JSON body limit for base64 upload (bypasses global 10kb RSEC4 limit)
+    - UI: `TenantBrandingTab` — drag-drop/click upload, preview, change, remove with client-side validation
+    - Logo displayed in TopBar (single-tenant mode) and legacy tenant header (replaces initials)
+    - 15 Finnish + English i18n keys for branding UI
+
+### Completed — 2026-03-12 (evening): MP8 Phase B + Localization
+
+26. **MP8 Phase B: Tenant regional settings** (`ade1007`) — Added city, country, timezone, locale columns to tenants (M14 migration). `TenantRegionalTab` UI with 2×2 grid form. PATCH API accepts the 4 new fields. 11 i18n keys.
+
+25. **MP8: Platform i18n system** — Created `platform-i18n.js` with React Context provider + `usePlatformT()` hook. Finnish/English dictionaries with ~330+ keys. Language selector in TopBar with localStorage persistence. Migrated all 16 platform components:
     - Auth pages: WelcomePage, SignInPage, ForgotPasswordPage, ResetPasswordPage, MfaChallengePage, JoinInvitePage, TenantCreatePage
     - Main views: DashboardView, RosterView
     - Settings/admin: AccountSettingsPage, MembersPage
     - Schedule: SchedulePage, EventCalendar, StatusBadge, CreateEventsPanel, CancelEventModal
     - Templates: TemplateEditorPage, ImportSsiEventsModal
-    - Phase B (tenant regional settings) deferred.
 
 ### Completed — 2026-03-12 (morning): PEW-2 Email Workflow Config
 
@@ -108,14 +120,14 @@ Tests: 870 backend (39 files) + 221 frontend (10 files) = 1091, all passing
 - **R8.1 (PA1–PA21)**: Platform auth & tenancy — 21/21 ✅ (accounts, tenants, RBAC, MFA, invitations, templates)
 - **R8.2**: Authorization & workflows — 5/5 ✅ (RBAC matrix, password reset, event execution/status/cancel)
 - **R8.2.1**: Architecture tech debt — 23/23 ✅ (modularity splits, tests, ESLint boundaries)
-- **R8.3**: Calendar integration — 8/9 ✅ (CAL-1–CAL-7, MP8). Remaining: MP3 gap analysis, MP9 branding. UAT passed on PR-138 preview (7 bug fixes).
+- **R8.3**: Calendar integration — 8/9 ✅ (CAL-1–CAL-7, MP8, MP9). Remaining: MP3 gap analysis only. UAT passed on PR-138 preview (7 bug fixes).
 - **R9.0**: Event staffing — all implemented (needs, signups, leaderboard, notifications)
 - **R9.1**: API security hardening — 4/5 ✅ (rate limits, cross-tenant validation, audit log)
 - **R9.2**: SSI discipline registry — 4/4 ✅ (built-in + GraphQL auto-discovery)
 
 ## What's Next (unprioritized — pick from PRD)
 
-- **R8.3 remaining**: MP3 gap analysis (staffing vs original MP3 scope), MP8 localization, MP9 branding — design/analysis tasks
+- **R8.3 remaining**: MP3 gap analysis (staffing vs original MP3 scope) — design/analysis task
 - **BL-3**: Admin session monitoring (extend BL-1 with per-user session view)
 - **R7.6**: Consolidation & completion (deferred items from R7.0/R7.5)
 - **R7.9**: GraphQL cup management (GQL1–GQL7) — migrate from web scraping
