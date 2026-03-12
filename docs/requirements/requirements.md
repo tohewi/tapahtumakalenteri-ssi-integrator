@@ -442,19 +442,19 @@ Establish architectural patterns and foundations for future scalability while ma
 - **Service Extraction**: Pure business logic functions without Express dependencies. Enables unit testing without HTTP mocking
 - **Import Rules**: Enforced via ESLint to prevent re-coupling. Domain modules in ssi-core/ may only import http-helpers; routes must import specific domain modules, not barrel exports
 
-## Release 7.9 — GraphQL Cup Management
+## Release 7.9 — GraphQL Cup Management (❌ Obsolete)
 
-Migrate Cup creation and maintenance from web scraping to SSI GraphQL API. The legacy `New-KupittaaCup.ps1` script uses web scraping (CSRF tokens, form POSTs, HTML parsing) which is fragile and breaks when SSI updates their UI. The GraphQL `create_event` mutation is now confirmed working (Feb 2026) and should be the primary method.
+> **Obsolete (2026-03-12):** R7.9 targeted migrating PowerShell cup creation scripts from web scraping to GraphQL. This is now fully superseded by the Node.js Match Management Platform (R8.x): `event-creation-service.js` + `nordic-cup-graphql-builder.js` handle cup/match/squad creation via hybrid web POST + GraphQL. The PowerShell scripts in `archive/scripts-legacy/` are retained for reference only.
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| GQL1 | **Update SSI-GraphQL.psm1**: Fix `New-SSIResulCup` and `New-SSIResulMatch` to use correct `form_input` fields (`count` not `match_count`, `reg_start_date`/`reg_start_time`, `has_accepted_event_data_ass_agreement`, `weapon_groups`/`categories`/`competence_classes` arrays). Update `New-SSIEvent` to pass array fields correctly in JSON | ⬚ Pending |
-| GQL2 | **Update GraphQL Tests**: Fix `SSI-GraphQL.Tests.ps1` Event Creation tests to use correct form fields and valid enum values. All tests must pass including cup creation, match creation, cup-match linking, and squad creation | ⬚ Pending |
-| GQL3 | **GraphQL Cup Creation Script**: Create `New-KupittaaCup-GraphQL.ps1` that replaces web scraping with GraphQL for Cup creation, Match creation, and Cup-Match linking. Squads may still require web scraping if GraphQL squad creation is not available. Load settings from `config/kupittaa-cup-config.yml` | ⬚ Pending |
-| GQL4 | **GraphQL Batch Creation**: Create `New-KupittaaCupBatch-GraphQL.ps1` for batch Cup creation from date list file, replacing the web scraping batch script | ⬚ Pending |
-| GQL5 | **Form Field Discovery Automation**: Create a PowerShell function `Get-SSIFormFields` that logs in via web scraping, fetches a create-event form, and returns all field names, required status, and valid enum values. Use this to detect SSI form changes proactively | ⬚ Pending |
-| GQL6 | **Deprecate Web Scraping Scripts**: Mark `archive/scripts-legacy/New-KupittaaCup.ps1` and `New-KupittaaCupBatch.ps1` as deprecated once GraphQL equivalents are validated. Keep in archive for reference | ⬚ Pending |
-| GQL7 | **GraphQL Event Creation Viability Test (JS)**: The current `event-creation-service.js` uses web scraping (CSRF tokens, form POSTs) because SSI GraphQL was too broken at the time of `New-KupittaaCup.ps1`. SSI has reportedly made GraphQL fixes since then. **Test scope**: (1) Authenticate via GraphQL `token_auth` mutation, (2) Test `create_event` mutation for Cup (CT 136) with full `form_input` JSON — verify all required fields and correct response, (3) Test `create_event` for Match (CT 91) with discipline-specific fields, (4) Test Cup↔Match linking via `add_component_event` or equivalent mutation, (5) Test squad creation via GraphQL (may not exist — verify), (6) Test event read-back via `event(content_type, id)` query to confirm structure. **Deliverables**: A JS test script (`test-harness/test-graphql-event-creation.mjs`) that runs each operation against a real SSI test account and reports pass/fail per operation. Based on results, decide migration path: (a) full GraphQL migration if all operations work, (b) hybrid (GraphQL for cups/matches, web scraping for squads/linking), or (c) keep web scraping if GraphQL is still unreliable. **Context**: Web scraping is fragile — SSI UI changes break it. GraphQL would be more stable and maintainable. The `form_input` JSON scalar is opaque (fields not in schema), so the test must discover required fields empirically. | ⬚ Pending |
+| GQL1 | **Update SSI-GraphQL.psm1** | ❌ Obsolete — superseded by `lib/ssi-core/` Node.js modules |
+| GQL2 | **Update GraphQL Tests** | ❌ Obsolete — superseded by `test/` Node.js test suite (870 tests) |
+| GQL3 | **GraphQL Cup Creation Script** | ❌ Obsolete — superseded by `event-creation-service.js` + `nordic-cup-graphql-builder.js` |
+| GQL4 | **GraphQL Batch Creation** | ❌ Obsolete — superseded by platform SchedulePage batch event creation |
+| GQL5 | **Form Field Discovery Automation** | ❌ Obsolete — form field discovery built into `fetchFormPage()` in event builders |
+| GQL6 | **Deprecate Web Scraping Scripts** | ❌ Obsolete — legacy scripts already in `archive/scripts-legacy/` |
+| GQL7 | **GraphQL Event Creation Viability Test (JS)** | ❌ Obsolete — viability confirmed; hybrid web POST + GraphQL implemented in `nordic-cup-graphql-builder.js` |
 
 ### Design Decisions (GQL1–GQL7)
 
@@ -762,7 +762,7 @@ These requirements are planned for a future release, likely before billing integ
 - **Release 7.4.1** (Authentication UX Hardening): 5 requirements — 5 ✅ (AUTH-UX1–AUTH-UX5)
 - **Release 7.5** (Architecture V2 Foundation): 5 requirements — 3 ✅, 2 📋 ➜ R7.6 (ARCH3, ARCH4)
 - **Release 7.6** (Consolidation & Completion): 18 requirements from R6.0/R7.0/R7.2/R7.5 — see `release-7.6.md`
-- **Release 7.9** (GraphQL Cup Management): 7 requirements — 0 ✅, 7 pending (GQL1–GQL7)
+- **Release 7.9** (GraphQL Cup Management): ❌ **Obsolete** — 7 requirements superseded by Node.js platform (R8.x event creation service)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
 - **Release 8.0** (Platform Auth & Tenancy): 21 requirements — 21 ✅ (PA1–PA21)
 - **Release 8.1** (Match Management Platform): 8 requirements — 5 ✅ (MP1, MP2, MP4, MP10, MP12), 3 moved to R8.3 (MP3, MP8, MP9). **MP12 — SSI Event Import**: Search existing SSI events via GraphQL (name, sport, date range, region filters) and import selected events as local scheduled_events with `ssi_created` status. Backend: `ssiSearchEvents` in seed-import.js, `importSsiEvent` in platform-store.js, `/ssi-search` + `/ssi-import` API routes. Frontend: `ImportSsiEventsModal` component in SchedulePage with search form, results table with checkboxes, and batch import action. Schema: `template_id` made nullable, `event_name` column added to `scheduled_events` for imported events without templates

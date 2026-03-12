@@ -407,6 +407,35 @@ export async function initPostgres() {
         log.warn('[postgres] M15 migration (tenant_logos):', err.message)
       }
 
+      // M16: Add slug column to tenants (TEN-1 Tenant URL Strategy)
+      try {
+        await client.query('ALTER TABLE tenants ADD COLUMN IF NOT EXISTS slug TEXT')
+        await client.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_slug ON tenants (slug)')
+        // Backfill slugs for existing tenants that don't have one
+        const { rows: noSlug } = await client.query('SELECT id, name FROM tenants WHERE slug IS NULL')
+        for (const row of noSlug) {
+          const base = row.name
+            .toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/-{2,}/g, '-')
+            .replace(/^-|-$/g, '')
+            .substring(0, 48)
+          let slug = base
+          let suffix = 2
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            const { rows: dup } = await client.query('SELECT id FROM tenants WHERE slug = $1 AND id != $2', [slug, row.id])
+            if (dup.length === 0) break
+            slug = `${base}-${suffix}`
+            suffix++
+          }
+          await client.query('UPDATE tenants SET slug = $1 WHERE id = $2', [slug, row.id])
+        }
+      } catch (err) {
+        log.warn('[postgres] M16 migration (tenant slugs):', err.message)
+      }
+
       // Optional unique constraints — may fail on existing data with duplicates.
       // App-level checks in createTenant/createAccountWithTenant still prevent new duplicates.
       try {

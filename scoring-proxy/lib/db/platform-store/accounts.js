@@ -8,6 +8,7 @@ import { query, withTransaction } from '../postgres.js'
 import { getRedisClient } from '../../session/redis.js'
 import { NotFoundError } from '../../errors/AppError.js'
 import { generateId, platformSessionKey, encrypt, decrypt, BCRYPT_ROUNDS } from './utils.js'
+import { generateSlug } from './tenants.js'
 
 // ---- Row mappers ----
 
@@ -296,12 +297,24 @@ export async function createAccountWithTenant({ email, password, name, organizat
       throw new Error('A tenant with this name already exists.')
     }
 
+    // Generate a unique slug from the organization name
+    const baseSlug = generateSlug(organizationName.trim())
+    let slug = baseSlug
+    let slugSuffix = 2
+    while (true) {
+      const { rows: slugDup } = await client.query('SELECT id FROM tenants WHERE slug = $1', [slug])
+      if (slugDup.length === 0) break
+      slug = `${baseSlug}-${slugSuffix}`
+      slugSuffix++
+      if (slugSuffix > 100) throw new Error('Could not generate unique slug')
+    }
+
     // Insert first tenant
     const { rows: tenantRows } = await client.query(
-      `INSERT INTO tenants (id, account_id, name, subscription, disciplines)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO tenants (id, account_id, name, slug, subscription, disciplines)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [tenantId, accountId, organizationName.trim(), JSON.stringify(subscription), JSON.stringify([])]
+      [tenantId, accountId, organizationName.trim(), slug, JSON.stringify(subscription), JSON.stringify([])]
     )
 
     // Append tenant ID to the account's tenants array

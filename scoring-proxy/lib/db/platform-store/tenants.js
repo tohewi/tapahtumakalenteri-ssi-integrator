@@ -6,6 +6,39 @@ import { query, withTransaction } from '../postgres.js'
 import { NotFoundError } from '../../errors/AppError.js'
 import { generateId, encryptCredentials, decryptCredentials } from './utils.js'
 
+// ---- Slug helpers ----
+
+/**
+ * Generate a URL-friendly slug from a tenant name.
+ * Lowercase, replace non-alphanumeric with hyphens, collapse, trim, max 48 chars.
+ */
+export function generateSlug(name) {
+  return name
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip diacritics (å→a, ä→a, ö→o)
+    .replace(/[^a-z0-9]+/g, '-')   // non-alphanumeric → hyphen
+    .replace(/-{2,}/g, '-')         // collapse consecutive hyphens
+    .replace(/^-|-$/g, '')          // trim leading/trailing hyphens
+    .substring(0, 48)
+}
+
+/**
+ * Generate a unique slug, appending -2, -3, etc. if needed.
+ * @param {Function} queryFn — query(sql, params) or client.query(sql, params)
+ */
+async function generateUniqueSlug(name, queryFn) {
+  const base = generateSlug(name)
+  let candidate = base
+  let suffix = 2
+  while (true) {
+    const { rows } = await queryFn('SELECT id FROM tenants WHERE slug = $1', [candidate])
+    if (rows.length === 0) return candidate
+    candidate = `${base}-${suffix}`
+    suffix++
+    if (suffix > 100) throw new Error('Could not generate unique slug')
+  }
+}
+
 // ---- Row mapper ----
 
 function rowToTenant(row, { includeCredentials = false } = {}) {
@@ -76,6 +109,7 @@ function rowToTenant(row, { includeCredentials = false } = {}) {
     id: row.id,
     accountId: row.account_id,
     name: row.name,
+    slug: row.slug || null,
     city: row.city || null,
     country: row.country || null,
     timezone: row.timezone || null,
@@ -134,12 +168,15 @@ export async function createTenant({ accountId, name }) {
       throw new Error('A tenant with this name already exists.')
     }
 
+    // Generate a unique slug from the tenant name
+    const slug = await generateUniqueSlug(name.trim(), (sql, params) => client.query(sql, params))
+
     // Insert the new tenant
     const { rows } = await client.query(
-      `INSERT INTO tenants (id, account_id, name, subscription, disciplines)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO tenants (id, account_id, name, slug, subscription, disciplines)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [tenantId, accountId, name.trim(), JSON.stringify(subscription), JSON.stringify([])]
+      [tenantId, accountId, name.trim(), slug, JSON.stringify(subscription), JSON.stringify([])]
     )
 
     // Append tenant ID to the locked account's tenants array
@@ -171,6 +208,18 @@ export async function getTenant(tenantId) {
   const { rows } = await query(
     'SELECT * FROM tenants WHERE id = $1',
     [tenantId]
+  )
+  if (rows.length === 0) return null
+  return rowToTenant(rows[0])
+}
+
+/**
+ * Get tenant by slug.
+ */
+export async function getTenantBySlug(slug) {
+  const { rows } = await query(
+    'SELECT * FROM tenants WHERE slug = $1',
+    [slug]
   )
   if (rows.length === 0) return null
   return rowToTenant(rows[0])
@@ -233,6 +282,7 @@ export async function listAllTenants() {
 export async function updateTenant(tenantId, updates) {
   const allowedFields = {
     name: 'name',
+    slug: 'slug',
     city: 'city',
     country: 'country',
     timezone: 'timezone',

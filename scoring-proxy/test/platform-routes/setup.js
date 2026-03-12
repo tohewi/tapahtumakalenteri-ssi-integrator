@@ -163,13 +163,22 @@ class TestPgPool {
       const now = new Date()
       const row = {
         id: params[0], account_id: params[1], name: params[2],
-        subscription: JSON.parse(params[3]),
+        slug: params[3],
+        subscription: JSON.parse(params[4]),
         ssi_credentials: null, calendar_config: null,
-        disciplines: JSON.parse(params[4]),
+        disciplines: JSON.parse(params[5]),
         created_at: now, updated_at: now,
       }
       this.tenants.set(row.id, row)
       return { rows: [row] }
+    }
+
+    if (sql.startsWith('SELECT id FROM tenants WHERE slug')) {
+      const slug = params[0]
+      for (const row of this.tenants.values()) {
+        if (row.slug === slug) return { rows: [{ id: row.id }] }
+      }
+      return { rows: [] }
     }
 
     if (sql.startsWith('SELECT id FROM tenants WHERE LOWER(name)')) {

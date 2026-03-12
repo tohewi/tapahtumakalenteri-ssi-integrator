@@ -87,6 +87,30 @@ const AUTH = {
   RESET_PASSWORD: 'reset_password', // from email link
 }
 
+// ---- URL route parser (TEN-1) ----
+// #/platform                          → { } (root — tenant picker or auth)
+// #/platform/invite/:token            → { authRoute: 'invite', token }
+// #/platform/reset-password/:token    → { authRoute: 'reset-password', token }
+// #/platform/forgot-password          → { authRoute: 'forgot-password' }
+// #/platform/:slug                    → { tenantSlug, view: 'dashboard' }
+// #/platform/:slug/:view              → { tenantSlug, view }
+// #/platform/:slug/:view/:subId       → { tenantSlug, view, subId }
+function parseRoute(route) {
+  const path = (route || '').replace(/^#\/platform\/?/, '')
+  const parts = path.split('/').filter(Boolean)
+  if (!parts.length) return {}
+  // Auth routes (no tenant context)
+  if (parts[0] === 'invite') return { authRoute: 'invite', token: parts[1] }
+  if (parts[0] === 'reset-password') return { authRoute: 'reset-password', token: parts[1] }
+  if (parts[0] === 'forgot-password') return { authRoute: 'forgot-password' }
+  // Tenant-scoped routes
+  return {
+    tenantSlug: parts[0],
+    view: parts[1] || 'dashboard',
+    subId: parts[2] || null,
+  }
+}
+
 // ---- Placeholder views for unimplemented sections ----
 function PlaceholderView({ title, description }) {
   const { t } = usePlatformT()
@@ -232,34 +256,29 @@ function PlatformAppInner({ route }) {
   const [account, setAccount] = useState(null)
   const [tenants, setTenants] = useState([])
   const [error, setError] = useState(null)
-  const [selectedTenantId, setSelectedTenantId] = useState(null)
-  const [activeView, setActiveView] = useState('dashboard')
-  const [selectedTemplateId, setSelectedTemplateId] = useState(null)
-  const [inviteToken, setInviteToken] = useState(null)
-  const [resetToken, setResetToken] = useState(null)
+
+  // TEN-1: Derive tenant context and view from URL (not React state)
+  const parsed = parseRoute(route)
+  const activeTenant = tenants.find(t => t.slug === parsed.tenantSlug) || null
+  const selectedTenantId = activeTenant?.id || null
+  const activeView = parsed.view || 'dashboard'
+  const selectedTemplateId = (parsed.view === 'templates' && parsed.subId) ? parsed.subId : null
 
   // Check session and route on mount
   useEffect(() => {
-    // Check if this is an invite link: #/platform/invite/:token
-    if (route && route.startsWith('#/platform/invite/')) {
-      const token = route.split('/').pop()
-      if (token) {
-        setInviteToken(token)
-        setAuthState(AUTH.JOIN_INVITE)
-        return // skip session check for invite flow (it handles its own auth state)
-      }
+    // Auth routes detected from URL (TEN-1)
+    if (parsed.authRoute === 'invite' && parsed.token) {
+      setAuthState(AUTH.JOIN_INVITE)
+      return
     }
-
-    // Check if this is a password reset link: #/platform/reset-password/:token
-    if (route && route.startsWith('#/platform/reset-password/')) {
-      const token = route.split('/').pop()
-      if (token) {
-        setResetToken(token)
-        setAuthState(AUTH.RESET_PASSWORD)
-        return
-      }
+    if (parsed.authRoute === 'reset-password' && parsed.token) {
+      setAuthState(AUTH.RESET_PASSWORD)
+      return
     }
-
+    if (parsed.authRoute === 'forgot-password') {
+      setAuthState(AUTH.FORGOT_PASSWORD)
+      return
+    }
     checkSession()
   }, [route])
 
@@ -268,12 +287,13 @@ function PlatformAppInner({ route }) {
       const data = await platformStatus()
       if (data.authenticated) {
         setAccount(data.account)
-        setTenants(data.tenants || [])
-        // Auto-select first tenant
-        if (data.tenants?.length > 0) {
-          setSelectedTenantId(data.tenants[0].id)
-        }
+        const t = data.tenants || []
+        setTenants(t)
         setAuthState(AUTH.APP)
+        // TEN-1: auto-redirect to first tenant if at bare #/platform
+        if (t.length > 0 && !parsed.tenantSlug) {
+          window.location.hash = `#/platform/${t[0].slug}/dashboard`
+        }
       } else {
         setAuthState(AUTH.WELCOME)
       }
@@ -289,9 +309,10 @@ function PlatformAppInner({ route }) {
     try {
       const data = await platformRegister(formData)
       setAccount(data.account)
-      setTenants(data.tenant ? [data.tenant] : [])
-      if (data.tenant) setSelectedTenantId(data.tenant.id)
+      const newTenants = data.tenant ? [data.tenant] : []
+      setTenants(newTenants)
       setAuthState(AUTH.APP)
+      if (data.tenant?.slug) window.location.hash = `#/platform/${data.tenant.slug}/dashboard`
     } catch (err) {
       setError(err.details ? err.details.join('. ') : err.message)
       throw err
@@ -308,21 +329,25 @@ function PlatformAppInner({ route }) {
         return
       }
       setAccount(data.account)
-      setTenants(data.tenants || [])
-      if (data.tenants?.length > 0) setSelectedTenantId(data.tenants[0].id)
+      const loginTenants = data.tenants || []
+      setTenants(loginTenants)
       setAuthState(AUTH.APP)
+      // TEN-1: redirect to tenant slug URL (preserve if already on one)
+      if (!parsed.tenantSlug && loginTenants.length > 0) {
+        window.location.hash = `#/platform/${loginTenants[0].slug}/dashboard`
+      }
     } catch (err) {
       setError(err.message)
       throw err
     }
-  }, [])
+  }, [parsed.tenantSlug])
 
   const handleLogout = useCallback(async () => {
     try { await platformLogout() } catch { /* ignore */ }
     setAccount(null)
     setTenants([])
-    setSelectedTenantId(null)
     setAuthState(AUTH.WELCOME)
+    window.location.hash = '#/platform'
   }, [])
 
   const handleCreateTenant = useCallback(async ({ name }) => {
@@ -330,8 +355,8 @@ function PlatformAppInner({ route }) {
     try {
       const data = await createTenant({ name })
       setTenants(prev => [...prev, data.tenant])
-      setSelectedTenantId(data.tenant.id)
       setAuthState(AUTH.APP)
+      if (data.tenant?.slug) window.location.hash = `#/platform/${data.tenant.slug}/dashboard`
     } catch (err) {
       setError(err.message)
       throw err
@@ -342,12 +367,18 @@ function PlatformAppInner({ route }) {
     setAccount(updatedAccount)
   }, [])
 
-  // ---- Navigate within sidebar ----
+  // ---- Navigate within sidebar (TEN-1: via hash URL) ----
   const [focusEventId, setFocusEventId] = useState(null)
   function navigate(viewId, extra) {
-    setActiveView(viewId)
-    if (extra?.templateId) setSelectedTemplateId(extra.templateId)
-    setFocusEventId(extra?.focusEventId || null)
+    const slug = activeTenant?.slug || tenants[0]?.slug
+    if (!slug) return
+    if (extra?.templateId) {
+      window.location.hash = `#/platform/${slug}/templates/${extra.templateId}`
+    } else {
+      window.location.hash = `#/platform/${slug}/${viewId}`
+    }
+    if (extra?.focusEventId) setFocusEventId(extra.focusEventId)
+    else setFocusEventId(null)
   }
 
   // ---- Render: Auth flow (full page, no sidebar) ----
@@ -382,15 +413,13 @@ function PlatformAppInner({ route }) {
   if (authState === AUTH.RESET_PASSWORD) {
     return (
       <ResetPasswordPage
-        token={resetToken}
+        token={parsed.token}
         onComplete={() => {
           window.location.hash = '#/platform'
-          setResetToken(null)
           setAuthState(AUTH.SIGN_IN)
         }}
         onCancel={() => {
           window.location.hash = '#/platform'
-          setResetToken(null)
           setAuthState(AUTH.SIGN_IN)
         }}
       />
@@ -404,11 +433,14 @@ function PlatformAppInner({ route }) {
   if (authState === AUTH.MFA_CHALLENGE) {
     return (
       <MfaChallengePage
-        onComplete={({ account, tenants }) => {
+        onComplete={({ account, tenants: mfaTenants }) => {
           setAccount(account)
-          setTenants(tenants || [])
-          if (tenants?.length > 0) setSelectedTenantId(tenants[0].id)
+          const t = mfaTenants || []
+          setTenants(t)
           setAuthState(AUTH.APP)
+          if (t.length > 0 && !parsed.tenantSlug) {
+            window.location.hash = `#/platform/${t[0].slug}/dashboard`
+          }
         }}
         onCancel={() => {
           handleLogout()
@@ -420,13 +452,14 @@ function PlatformAppInner({ route }) {
   if (authState === AUTH.JOIN_INVITE) {
     return (
       <JoinInvitePage
-        token={inviteToken}
-        onComplete={({ account, tenants, selectedTenantId }) => {
+        token={parsed.token}
+        onComplete={({ account, tenants: joinTenants, selectedTenantId: joinTenantId }) => {
           setAccount(account)
-          setTenants(tenants)
-          setSelectedTenantId(selectedTenantId)
+          setTenants(joinTenants)
           setAuthState(AUTH.APP)
-          window.location.hash = '#/platform' // clear the invite token from URL
+          // Navigate to the joined tenant's slug URL
+          const joined = joinTenants.find(t => t.id === joinTenantId)
+          window.location.hash = joined?.slug ? `#/platform/${joined.slug}/dashboard` : '#/platform'
         }}
         onCancel={() => {
           window.location.hash = '#/platform'
@@ -454,7 +487,7 @@ function PlatformAppInner({ route }) {
             <TemplateEditorPage
               tenantId={selectedTenantId}
               templateId={selectedTemplateId}
-              onBack={() => { setSelectedTemplateId(null) }}
+              onBack={() => navigate('templates')}
             />
           )
         }
@@ -463,16 +496,16 @@ function PlatformAppInner({ route }) {
           <TenantDetailPage
             tenantId={selectedTenantId}
             account={account}
-            onBack={() => setActiveView('dashboard')}
+            onBack={() => navigate('dashboard')}
             onLogout={handleLogout}
-            onEditTemplate={(templateId) => { setSelectedTemplateId(templateId) }}
-            onSchedule={() => setActiveView('schedule')}
+            onEditTemplate={(templateId) => navigate('templates', { templateId })}
+            onSchedule={() => navigate('schedule')}
             sectionsFilter="templates"
           />
         )
 
       case 'schedule':
-        return <SchedulePage tenantId={selectedTenantId} onBack={() => setActiveView('dashboard')} />
+        return <SchedulePage tenantId={selectedTenantId} onBack={() => navigate('dashboard')} />
 
       case 'roster':
         return <RosterView tenantId={selectedTenantId} account={account} focusEventId={focusEventId} onFocusHandled={() => setFocusEventId(null)} />
@@ -485,7 +518,7 @@ function PlatformAppInner({ route }) {
           <AccountSettingsPage
             account={account}
             onAccountUpdated={handleAccountUpdated}
-            onBack={() => setActiveView('dashboard')}
+            onBack={() => navigate('dashboard')}
             onLogout={handleLogout}
           />
         )
@@ -495,10 +528,10 @@ function PlatformAppInner({ route }) {
           <TenantDetailPage
             tenantId={selectedTenantId}
             account={account}
-            onBack={() => setActiveView('dashboard')}
+            onBack={() => navigate('dashboard')}
             onLogout={handleLogout}
-            onEditTemplate={(templateId) => { setSelectedTemplateId(templateId); setActiveView('templates') }}
-            onSchedule={() => setActiveView('schedule')}
+            onEditTemplate={(templateId) => navigate('templates', { templateId })}
+            onSchedule={() => navigate('schedule')}
             sectionsFilter="tenant-info"
           />
         )
@@ -516,10 +549,10 @@ function PlatformAppInner({ route }) {
           <TenantDetailPage
             tenantId={selectedTenantId}
             account={account}
-            onBack={() => setActiveView('dashboard')}
+            onBack={() => navigate('dashboard')}
             onLogout={handleLogout}
-            onEditTemplate={(templateId) => { setSelectedTemplateId(templateId); setActiveView('templates') }}
-            onSchedule={() => setActiveView('schedule')}
+            onEditTemplate={(templateId) => navigate('templates', { templateId })}
+            onSchedule={() => navigate('schedule')}
             sectionsFilter="settings"
           />
         )
@@ -535,16 +568,19 @@ function PlatformAppInner({ route }) {
         account={account}
         tenants={tenants}
         selectedTenantId={selectedTenantId}
-        onChangeTenant={(id) => { setSelectedTenantId(id); setActiveView('dashboard') }}
+        onChangeTenant={(id) => {
+          const t = tenants.find(tn => tn.id === id)
+          if (t?.slug) window.location.hash = `#/platform/${t.slug}/dashboard`
+        }}
         onLogout={handleLogout}
       />
       <div className="max-w-7xl mx-auto flex min-h-[calc(100vh-3.5rem)]">
-        <Sidebar activeView={activeView} onNavigate={(id) => { setSelectedTemplateId(null); setActiveView(id) }} />
+        <Sidebar activeView={activeView} onNavigate={(id) => navigate(id)} />
         <main className="flex-1 p-6 overflow-auto pb-20 md:pb-6">
           {renderContent()}
         </main>
       </div>
-      <MobileNav activeView={activeView} onNavigate={(id) => { setSelectedTemplateId(null); setActiveView(id) }} />
+      <MobileNav activeView={activeView} onNavigate={(id) => navigate(id)} />
     </div>
   )
 }
