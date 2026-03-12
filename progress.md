@@ -1,12 +1,21 @@
 # Progress
 
 Last updated: 2026-03-12 (night) by Cascade
-Branch: `release/r80-match-manager-base`
+Branch: `release/r80-match-manager-base` at `bab7217`
 Tests: 870 backend (39 files) + 221 frontend (10 files) = 1091, all passing
 
 ---
 
 ## Current Session Work
+
+### Completed — 2026-03-12 (night): Build fixes
+
+29. **Build fix** (`bab7217`) — Fixed production build failures (Vite/Rollup).
+    - Renamed `platform-i18n.js` → `.jsx` (file contains JSX, Rollup requires .jsx extension)
+    - Updated all 21 component imports
+    - Removed duplicate `nameColumn` i18n keys in fi + en dictionaries
+    - Added missing `getAccountProfile` export, renamed `mfaConfirm` → `mfaConfirmEnable`
+    - Fixed `AccountSettingsPage` + `MembersPage` import/export mismatches
 
 ### Completed — 2026-03-12 (night): MP3 Gap Analysis
 
