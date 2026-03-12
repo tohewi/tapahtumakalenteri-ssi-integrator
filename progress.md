@@ -1,16 +1,31 @@
 # Progress
 
 Last updated: 2026-03-12 (night) by Cascade
-Branch: `release/r80-match-manager-base` at `bab7217`
+Branch: `release/r80-match-manager-base` at `094e468`
 Tests: 870 backend (39 files) + 221 frontend (10 files) = 1091, all passing
 
 ---
 
 ## Current Session Work
 
+### Completed — 2026-03-12 (night): TEN-1 Tenant URL Strategy
+
+31. **TEN-1: Tenant URL strategy** (`094e468`) — Slug-based URL routing with bookmarkable URLs.
+    - Design: `docs/design/ten1-tenant-url-strategy.md` — evaluated 3 options, chose Option B (tenant-scoped hash URLs)
+    - DB: M16 migration — `slug` column on tenants with unique index + backfill from name
+    - Store: `generateSlug()`, `generateUniqueSlug()`, `getTenantBySlug()` in tenants.js
+    - `createTenant` + `createAccountWithTenant` auto-generate slugs
+    - Frontend: PlatformApp refactored — `parseRoute()` extracts slug/view from URL
+    - URLs: `#/platform/:slug/:view` (e.g. `#/platform/turres/schedule`)
+    - Navigation via `window.location.hash` — bookmarkable, back/forward works, shareable
+    - Auto-redirect to first tenant after login/register/MFA
+    - 9 test mock files updated for slug query support
+
+30. **R7.9 marked obsolete** — All 7 GQL requirements superseded by Node.js platform event creation
+
 ### Completed — 2026-03-12 (night): Build fixes
 
-29. **Build fix** (`bab7217`) — Fixed production build failures (Vite/Rollup).
+29. **Build fix** (`bab7217`, `db006af`) — Fixed production build failures (Vite/Rollup) + server startup (logger import).
     - Renamed `platform-i18n.js` → `.jsx` (file contains JSX, Rollup requires .jsx extension)
     - Updated all 21 component imports
     - Removed duplicate `nameColumn` i18n keys in fi + en dictionaries
