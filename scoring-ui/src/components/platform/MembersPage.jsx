@@ -11,14 +11,14 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import {
-  listTenantMembers,
+  listMembers as listTenantMembers,
   updateMemberRoles,
-  removeTenantMember,
-  listTenantInvitations,
-  inviteTenantMember,
+  removeMember as removeTenantMember,
+  listInvitations as listTenantInvitations,
+  createInvitation as inviteTenantMember,
   revokeInvitation,
 } from '../../platform-api.js'
-import { usePlatformT } from '../../platform-i18n.js'
+import { usePlatformT } from '../../platform-i18n.jsx'
 
 // Available roles with descriptions (for invite modal)
 // Role option keys — labels resolved via i18n at render time

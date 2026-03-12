@@ -8,7 +8,7 @@
 
 import { useState, useEffect } from 'react'
 import { getInvitationByToken, acceptInvitation, platformStatus } from '../../platform-api.js'
-import { usePlatformT } from '../../platform-i18n.js'
+import { usePlatformT } from '../../platform-i18n.jsx'
 
 export default function JoinInvitePage({ token, onComplete, onCancel }) {
   const { t } = usePlatformT()

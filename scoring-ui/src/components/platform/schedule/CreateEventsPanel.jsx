@@ -3,7 +3,7 @@
 // ============================================================
 
 import { formatEventDate } from './StatusBadge'
-import { usePlatformT } from '../../../platform-i18n.js'
+import { usePlatformT } from '../../../platform-i18n.jsx'
 
 export default function CreateEventsPanel({
   templates,

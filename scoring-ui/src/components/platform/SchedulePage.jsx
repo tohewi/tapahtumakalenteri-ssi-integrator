@@ -11,7 +11,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { listTemplates, listEvents, createEventsApi, deleteEventApi, cancelEventApi, executeEventApi, publishCalendarApi, updateCalendarStatsApi, completeSsiEventApi, integrityCheckApi, runPostEventApi, getUpcomingStaffingApi } from '../../platform-api.js'
-import { usePlatformT } from '../../platform-i18n.js'
+import { usePlatformT } from '../../platform-i18n.jsx'
 import ImportSsiEventsModal from './ImportSsiEventsModal.jsx'
 import EventCalendar from './EventCalendar.jsx'
 import StatusBadge, { STATUS_COLORS, STATUS_LABEL_KEYS, CANCELLABLE_STATUSES, formatEventDate } from './schedule/StatusBadge.jsx'

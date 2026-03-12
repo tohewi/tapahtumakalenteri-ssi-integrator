@@ -21,7 +21,7 @@ import {
   createTenant,
   getTenantLogoUrl,
 } from '../../platform-api.js'
-import { PlatformI18nProvider, usePlatformT } from '../../platform-i18n.js'
+import { PlatformI18nProvider, usePlatformT } from '../../platform-i18n.jsx'
 
 import DashboardView from './DashboardView.jsx'
 import RosterView from './RosterView.jsx'

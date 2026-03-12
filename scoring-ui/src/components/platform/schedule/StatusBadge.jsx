@@ -2,7 +2,7 @@
 // StatusBadge — status chip + shared constants for SchedulePage
 // ============================================================
 
-import { usePlatformT } from '../../../platform-i18n.js'
+import { usePlatformT } from '../../../platform-i18n.jsx'
 
 export const STATUS_COLORS = {
   planned: 'bg-gray-100 text-gray-600',

@@ -14,7 +14,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { getTemplateApi, updateTemplateApi, importTemplateSeed, getTenantDetails } from '../../platform-api.js'
-import { usePlatformT } from '../../platform-i18n.js'
+import { usePlatformT } from '../../platform-i18n.jsx'
 
 // ---- Helpers ----
 

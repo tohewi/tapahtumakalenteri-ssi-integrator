@@ -7,7 +7,7 @@
 
 import { useState } from 'react'
 import { mfaVerify } from '../../platform-api.js'
-import { usePlatformT } from '../../platform-i18n.js'
+import { usePlatformT } from '../../platform-i18n.jsx'
 
 export default function MfaChallengePage({ onComplete, onCancel }) {
   const { t } = usePlatformT()

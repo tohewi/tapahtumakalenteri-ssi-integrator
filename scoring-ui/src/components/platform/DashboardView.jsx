@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { listEvents, getUpcomingStaffingApi, getStaffingLeaderboardApi } from '../../platform-api.js'
-import { usePlatformT } from '../../platform-i18n.js'
+import { usePlatformT } from '../../platform-i18n.jsx'
 
 function getStatusBadge(status, t) {
   const labels = {

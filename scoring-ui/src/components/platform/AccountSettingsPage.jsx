@@ -12,12 +12,12 @@ import { useState, useEffect } from 'react'
 import {
   getAccountProfile,
   updateAccountProfile,
-  changePassword as changePasswordApi,
+  changeAccountPassword as changePasswordApi,
   mfaSetup,
   mfaConfirmEnable,
   mfaDisable,
 } from '../../platform-api.js'
-import { usePlatformT } from '../../platform-i18n.js'
+import { usePlatformT } from '../../platform-i18n.jsx'
 
 // ---- Sub-components ----
 

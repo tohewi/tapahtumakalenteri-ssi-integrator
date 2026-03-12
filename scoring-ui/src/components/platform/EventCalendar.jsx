@@ -11,7 +11,7 @@
 // ============================================================
 
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { usePlatformT } from '../../platform-i18n.js'
+import { usePlatformT } from '../../platform-i18n.jsx'
 
 // ---- Status badge colors (shared with SchedulePage) ----
 const STATUS_COLORS = {

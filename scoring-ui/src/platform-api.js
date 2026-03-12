@@ -147,6 +147,13 @@ export function getTenantLogoUrl(tenantId) {
 // ---- Account ----
 
 /**
+ * Get current account profile.
+ */
+export async function getAccountProfile() {
+  return platformFetch('/account')
+}
+
+/**
  * Update account profile (name, email).
  * @param {{ name?, email? }} updates
  */
@@ -192,7 +199,7 @@ export async function mfaSetup() {
  * Confirm MFA setup with a TOTP code from the authenticator app.
  * @param {{ code }} params
  */
-export async function mfaConfirm({ code }) {
+export async function mfaConfirmEnable({ code }) {
   return platformFetch('/account/mfa/confirm', {
     method: 'POST',
     body: JSON.stringify({ code }),

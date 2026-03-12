@@ -3,7 +3,7 @@
 // ============================================================
 
 import { useState } from 'react'
-import { usePlatformT } from '../../platform-i18n.js'
+import { usePlatformT } from '../../platform-i18n.jsx'
 
 export default function SignInPage({ error, onLogin, onSwitchToSignUp, onForgotPassword }) {
   const { t } = usePlatformT()

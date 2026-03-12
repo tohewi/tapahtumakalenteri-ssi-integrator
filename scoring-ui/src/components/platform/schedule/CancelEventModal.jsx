@@ -4,7 +4,7 @@
 
 import { useState } from 'react'
 import { formatEventDate } from './StatusBadge'
-import { usePlatformT } from '../../../platform-i18n.js'
+import { usePlatformT } from '../../../platform-i18n.jsx'
 
 export default function CancelEventModal({ event, staffingStatus, tplMap, onConfirm, onClose }) {
   const { t } = usePlatformT()

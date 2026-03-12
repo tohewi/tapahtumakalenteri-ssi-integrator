@@ -6,7 +6,7 @@
 // ============================================================
 
 import { useState } from 'react'
-import { usePlatformT } from '../../platform-i18n.js'
+import { usePlatformT } from '../../platform-i18n.jsx'
 
 export default function TenantCreatePage({ error, onCreateTenant, onCancel }) {
   const { t } = usePlatformT()

@@ -8,7 +8,7 @@
 
 import { useState, useRef, useCallback } from 'react'
 import { SectionCard, StatusMessage } from './shared.jsx'
-import { usePlatformT } from '../../../platform-i18n.js'
+import { usePlatformT } from '../../../platform-i18n.jsx'
 import { uploadTenantLogo, deleteTenantLogo, getTenantLogoUrl } from '../../../platform-api.js'
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']

@@ -7,7 +7,7 @@
 
 import { useState } from 'react'
 import { SectionCard, StatusMessage } from './shared.jsx'
-import { usePlatformT } from '../../../platform-i18n.js'
+import { usePlatformT } from '../../../platform-i18n.jsx'
 
 export function TenantRegionalTab({ tenant, onSave }) {
   const { t } = usePlatformT()

@@ -7,7 +7,7 @@
 
 import { useState } from 'react'
 import { resetPassword } from '../../platform-api.js'
-import { usePlatformT } from '../../platform-i18n.js'
+import { usePlatformT } from '../../platform-i18n.jsx'
 
 export default function ResetPasswordPage({ token, onComplete, onCancel }) {
   const { t } = usePlatformT()

@@ -3,7 +3,7 @@
 // ============================================================
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getUpcomingStaffingApi, getMyStaffingAssignmentsApi, signupForEventStaffingApi, withdrawFromEventStaffingApi, backfillStaffingNeedsApi, updateEventStaffingNeedsApi, listTemplates } from '../../platform-api'
-import { usePlatformT } from '../../platform-i18n.js'
+import { usePlatformT } from '../../platform-i18n.jsx'
 
 // Filter tab definitions (labels resolved via i18n at render time)
 const FILTER_KEYS = ['all', 'needStaff', 'staffed', 'myEvents']

@@ -7,7 +7,7 @@
 
 import { useState } from 'react'
 import { forgotPassword } from '../../platform-api.js'
-import { usePlatformT } from '../../platform-i18n.js'
+import { usePlatformT } from '../../platform-i18n.jsx'
 
 export default function ForgotPasswordPage({ onBack }) {
   const { t } = usePlatformT()

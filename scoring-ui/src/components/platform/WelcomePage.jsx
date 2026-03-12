@@ -4,7 +4,7 @@
 // ============================================================
 
 import { useState } from 'react'
-import { usePlatformT } from '../../platform-i18n.js'
+import { usePlatformT } from '../../platform-i18n.jsx'
 
 export default function WelcomePage({ error, onRegister, onSwitchToSignIn }) {
   const { t } = usePlatformT()

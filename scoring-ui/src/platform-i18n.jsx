@@ -2,7 +2,7 @@
 // Platform i18n — Finnish/English translations for Match Management Platform
 //
 // Usage:
-//   import { PlatformI18nProvider, usePlatformT } from '../platform-i18n.js'
+//   import { PlatformI18nProvider, usePlatformT } from '../platform-i18n.jsx'
 //
 //   // In PlatformApp root:
 //   <PlatformI18nProvider>...</PlatformI18nProvider>
@@ -495,7 +495,6 @@ const fi = {
   searchResults: (n) => `${n} tulos${n !== 1 ? 'ta' : ''}`,
   searchFailed: 'Haku epäonnistui',
   importFailed: 'Tuonti epäonnistui',
-  nameColumn: 'Nimi',
   dateColumn: 'Päivämäärä',
   sportColumn: 'Laji',
   regionColumn: 'Alue',
@@ -1048,7 +1047,6 @@ const en = {
   searchResults: (n) => `${n} result${n !== 1 ? 's' : ''}`,
   searchFailed: 'Search failed',
   importFailed: 'Import failed',
-  nameColumn: 'Name',
   dateColumn: 'Date',
   sportColumn: 'Sport',
   regionColumn: 'Region',

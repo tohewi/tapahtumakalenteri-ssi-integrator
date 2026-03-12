@@ -9,7 +9,7 @@
 
 import { useState, useEffect } from 'react'
 import { ssiSearchEventsApi, ssiImportEventsApi, listDisciplines } from '../../platform-api.js'
-import { usePlatformT } from '../../platform-i18n.js'
+import { usePlatformT } from '../../platform-i18n.jsx'
 
 // Known SSI sport/rule codes for the filter dropdown
 const SPORT_OPTIONS = [
