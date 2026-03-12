@@ -93,17 +93,15 @@ function NumberInput({ label, hint, value, onChange, min, max, placeholder }) {
  * @param {string} type — workflow type key (e.g. 'complete_ssi')
  * @param {string} label — display label
  * @param {string} description — short explanation
- * @param {boolean} always — if true, shown as always-enabled (no toggle, just info)
  * @param {Array} workflows — current postEventWorkflows array
  * @param {Function} onChange — called with updated array
  * @param {ReactNode} children — optional config fields shown when workflow is enabled
  */
-function WorkflowToggle({ type, label, description, always, workflows, onChange, children }) {
+function WorkflowToggle({ type, label, description, workflows, onChange, children }) {
   const existing = workflows.find(w => w.type === type)
-  const enabled = always || existing?.enabled
+  const enabled = existing?.enabled
 
   function handleToggle() {
-    if (always) return // always-enabled workflows can't be toggled
     if (existing) {
       // Toggle existing entry
       onChange(workflows.map(w => w.type === type ? { ...w, enabled: !w.enabled } : w))
@@ -116,26 +114,17 @@ function WorkflowToggle({ type, label, description, always, workflows, onChange,
   return (
     <div className="p-3 rounded-lg border border-gray-100 bg-gray-50 space-y-3">
       <div className="flex items-start gap-3">
-        {always ? (
-          <div className="mt-0.5 w-9 h-5 rounded-full bg-emerald-500 flex items-center justify-end px-0.5 shrink-0" title="Always enabled">
-            <div className="w-4 h-4 rounded-full bg-white shadow" />
-          </div>
-        ) : (
-          <button
-            onClick={handleToggle}
-            className={`mt-0.5 w-9 h-5 rounded-full flex items-center px-0.5 shrink-0 transition-colors ${
-              enabled ? 'bg-emerald-500 justify-end' : 'bg-gray-300 justify-start'
-            }`}
-            title={enabled ? 'Disable' : 'Enable'}
-          >
-            <div className="w-4 h-4 rounded-full bg-white shadow" />
-          </button>
-        )}
+        <button
+          onClick={handleToggle}
+          className={`mt-0.5 w-9 h-5 rounded-full flex items-center px-0.5 shrink-0 transition-colors ${
+            enabled ? 'bg-emerald-500 justify-end' : 'bg-gray-300 justify-start'
+          }`}
+          title={enabled ? 'Disable' : 'Enable'}
+        >
+          <div className="w-4 h-4 rounded-full bg-white shadow" />
+        </button>
         <div className="min-w-0">
-          <div className="text-sm font-medium text-gray-800">
-            {label}
-            {always && <span className="ml-2 text-xs text-emerald-600 font-normal">(always enabled)</span>}
-          </div>
+          <div className="text-sm font-medium text-gray-800">{label}</div>
           <div className="text-xs text-gray-500 mt-0.5">{description}</div>
         </div>
       </div>
@@ -150,8 +139,8 @@ function WorkflowToggle({ type, label, description, always, workflows, onChange,
 
 /**
  * Email configuration sub-form for email_shooter_count workflow.
- * Fields: to (required), cc (optional), subject template, custom note.
- * Placeholders: {eventName}, {eventDate}, {shooterCount}
+ * Fields: to (required), cc (optional), subject template, body template.
+ * Placeholders: {eventName}, {eventDate}, {shooterCount}, {venue}
  */
 function WorkflowEmailConfig({ workflows, onChange }) {
   const existing = workflows.find(w => w.type === 'email_shooter_count')
@@ -198,7 +187,7 @@ function WorkflowEmailConfig({ workflows, onChange }) {
         />
       </div>
       <div>
-        <FieldLabel label="Subject Template" hint="use {eventName}, {eventDate}, {shooterCount}" />
+        <FieldLabel label="Subject Template" hint="use {eventName}, {eventDate}, {shooterCount}, {venue}" />
         <input
           type="text"
           value={config.subjectTemplate || ''}
@@ -208,12 +197,12 @@ function WorkflowEmailConfig({ workflows, onChange }) {
         />
       </div>
       <div>
-        <FieldLabel label="Custom Note" hint="optional text prepended to the report — plain text" />
+        <FieldLabel label="Body Template" hint="use {eventName}, {eventDate}, {shooterCount}, {venue} — plain text, each line becomes a paragraph" />
         <textarea
-          value={config.customNote || ''}
-          onChange={e => updateConfig('customNote', e.target.value)}
-          placeholder="E.g. 'Please update the club records with the final count.'"
-          rows={2}
+          value={config.bodyTemplate || ''}
+          onChange={e => updateConfig('bodyTemplate', e.target.value)}
+          placeholder={`Event: {eventName}\nDate: {eventDate}\nVenue: {venue}\nApproved shooters: {shooterCount}`}
+          rows={4}
           className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
         />
       </div>
@@ -397,16 +386,8 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
     setSaving(true)
     setStatus(null)
     try {
-      // Ensure email_shooter_count is always present and enabled
-      let finalWorkflows = [...postEventWorkflows]
-      const hasEmail = finalWorkflows.some(w => w.type === 'email_shooter_count')
-      if (!hasEmail) {
-        finalWorkflows = [{ type: 'email_shooter_count', enabled: true }, ...finalWorkflows]
-      } else {
-        finalWorkflows = finalWorkflows.map(w =>
-          w.type === 'email_shooter_count' ? { ...w, enabled: true } : w
-        )
-      }
+      // Save postEventWorkflows as-is (user controls which are enabled)
+      const finalWorkflows = [...postEventWorkflows]
       const data = await updateTemplateApi(tenantId, templateId, {
         overrides,
         calendarTemplate,
@@ -730,12 +711,11 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
 
         {/* Section 5: Post-Event Workflows */}
         <SectionCard title="Post-Event Workflows" description="Actions to run after an event completes. Toggle workflows based on your tenant integrations.">
-          {/* Email shooter count — always enabled, with config fields */}
+          {/* Email shooter count — always available (no integration dependency) */}
           <WorkflowToggle
             type="email_shooter_count"
             label="Email Shooter Count Report"
-            description="Send event name, date, and final shooter count via email after every event."
-            always
+            description="Send event name, date, and final shooter count via email. Does not require SSI or calendar integration."
             workflows={postEventWorkflows}
             onChange={wfs => { setPostEventWorkflows(wfs); setDirty(true) }}
           >

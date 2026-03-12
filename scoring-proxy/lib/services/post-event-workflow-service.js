@@ -171,9 +171,12 @@ async function executeUpdateCalendarStats(context) {
 /**
  * PEW-2: Email shooter count report.
  * Requires SSI credentials to query stats, and Resend for email.
+ * Supports configurable subject/body templates with placeholders:
+ *   {eventName}, {eventDate}, {shooterCount}, {venue}
+ * Venue is resolved from template calendarTemplate.location.
  */
 async function executeEmailShooterCount(config, context) {
-  const { event, ssiCredentials, ssiGetEventStatsFn, sendEmailFn } = context
+  const { event, template, ssiCredentials, ssiGetEventStatsFn, sendEmailFn } = context
 
   const to = config?.to
   if (!to || !Array.isArray(to) || to.length === 0) {
@@ -208,39 +211,61 @@ async function executeEmailShooterCount(config, context) {
     const shooterCount = stats.approvedCount
     const eventName = event.eventName || 'Unknown event'
     const eventDate = event.eventDate
+    const venue = template?.calendarTemplate?.location || ''
 
-    // Build subject from configurable template with placeholder substitution
+    // Substitute placeholders in a template string
+    function applyPlaceholders(tpl) {
+      return tpl
+        .replace(/\{eventName\}/g, eventName)
+        .replace(/\{eventDate\}/g, eventDate)
+        .replace(/\{shooterCount\}/g, String(shooterCount))
+        .replace(/\{venue\}/g, venue)
+    }
+
+    // Build subject from configurable template
     const defaultSubjectTemplate = 'Shooter Count: {eventName} ({eventDate})'
-    const subjectTemplate = config?.subjectTemplate || defaultSubjectTemplate
-    const subject = subjectTemplate
-      .replace(/\{eventName\}/g, eventName)
-      .replace(/\{eventDate\}/g, eventDate)
-      .replace(/\{shooterCount\}/g, String(shooterCount))
+    const subject = applyPlaceholders(config?.subjectTemplate || defaultSubjectTemplate)
 
-    // Build HTML email with optional custom note
-    const customNote = config?.customNote
-    const customNoteHtml = customNote
-      ? `<p style="color:#333;margin-bottom:16px;">${customNote.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`
-      : ''
-    const html = `
+    // Build HTML body from configurable body template or default table layout
+    let bodyHtml
+    if (config?.bodyTemplate) {
+      // User-provided body template: each line becomes a paragraph, placeholders substituted
+      const escaped = config.bodyTemplate.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      const paragraphs = applyPlaceholders(escaped)
+        .split('\n')
+        .filter(line => line.trim())
+        .map(line => `<p style="margin:4px 0;">${line}</p>`)
+        .join('\n        ')
+      bodyHtml = `
       <div style="font-family:Arial,Helvetica,sans-serif;color:#333;max-width:600px;margin:0 auto;padding:20px;">
         <h2 style="color:#1a73e8;">Shooter Count Report</h2>
-        ${customNoteHtml}
+        ${paragraphs}
+        <p style="color:#666;font-size:12px;margin-top:20px;">This report was generated automatically after event completion.</p>
+      </div>`
+    } else {
+      // Default table layout
+      const venueRow = venue
+        ? `<tr style="background:#f8f9fa;"><td style="padding:6px 12px;font-weight:bold;">Venue</td><td style="padding:6px 12px;">${venue}</td></tr>`
+        : ''
+      bodyHtml = `
+      <div style="font-family:Arial,Helvetica,sans-serif;color:#333;max-width:600px;margin:0 auto;padding:20px;">
+        <h2 style="color:#1a73e8;">Shooter Count Report</h2>
         <table style="border-collapse:collapse;width:100%;margin-top:12px;">
           <tr><td style="padding:6px 12px;font-weight:bold;">Event</td><td style="padding:6px 12px;">${eventName}</td></tr>
           <tr style="background:#f8f9fa;"><td style="padding:6px 12px;font-weight:bold;">Date</td><td style="padding:6px 12px;">${eventDate}</td></tr>
+          ${venueRow}
           <tr><td style="padding:6px 12px;font-weight:bold;">Approved Shooters</td><td style="padding:6px 12px;font-size:1.2em;font-weight:bold;">${shooterCount}</td></tr>
         </table>
         <p style="color:#666;font-size:12px;margin-top:20px;">This report was generated automatically after event completion.</p>
-      </div>
-    `
+      </div>`
+    }
 
     const cc = config?.cc || []
     const emailResult = await sendEmailFn({
       to: Array.isArray(to) ? to : [to],
       cc: Array.isArray(cc) ? cc : [cc],
       subject,
-      html,
+      html: bodyHtml,
     })
 
     if (emailResult.success) {
