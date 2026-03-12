@@ -7,8 +7,10 @@
 
 import { useState } from 'react'
 import { mfaVerify } from '../../platform-api.js'
+import { usePlatformT } from '../../platform-i18n.js'
 
 export default function MfaChallengePage({ onComplete, onCancel }) {
+  const { t } = usePlatformT()
   const [code, setCode] = useState('')
   const [useRecovery, setUseRecovery] = useState(false)
   const [recoveryCode, setRecoveryCode] = useState('')
@@ -45,11 +47,9 @@ export default function MfaChallengePage({ onComplete, onCancel }) {
       <div className="max-w-sm w-full bg-white p-8 rounded-2xl shadow-sm border space-y-6">
         <div className="text-center space-y-2">
           <div className="text-4xl">🔐</div>
-          <h1 className="text-2xl font-bold text-gray-900">Two-Factor Authentication</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('mfaTitle')}</h1>
           <p className="text-sm text-gray-500">
-            {useRecovery
-              ? 'Enter one of your recovery codes.'
-              : 'Enter the 6-digit code from your authenticator app.'}
+            {useRecovery ? t('mfaRecoveryPrompt') : t('mfaCodePrompt')}
           </p>
         </div>
 
@@ -62,7 +62,7 @@ export default function MfaChallengePage({ onComplete, onCancel }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           {useRecovery ? (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Recovery Code</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('mfaRecoveryCode')}</label>
               <input
                 type="text"
                 value={recoveryCode}
@@ -76,7 +76,7 @@ export default function MfaChallengePage({ onComplete, onCancel }) {
             </div>
           ) : (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Verification Code</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('mfaVerificationCode')}</label>
               <input
                 type="text"
                 inputMode="numeric"
@@ -98,7 +98,7 @@ export default function MfaChallengePage({ onComplete, onCancel }) {
             disabled={verifying || (useRecovery ? !recoveryCode.trim() : code.length !== 6)}
             className="w-full bg-sky-600 text-white py-2.5 rounded-lg font-medium hover:bg-sky-700 disabled:opacity-50 transition-colors"
           >
-            {verifying ? 'Verifying...' : 'Verify'}
+            {verifying ? t('mfaVerifying') : t('mfaVerify')}
           </button>
         </form>
 
@@ -107,13 +107,13 @@ export default function MfaChallengePage({ onComplete, onCancel }) {
             onClick={() => { setUseRecovery(!useRecovery); setError(null) }}
             className="text-sky-600 hover:text-sky-800"
           >
-            {useRecovery ? 'Use authenticator code' : 'Use recovery code'}
+            {useRecovery ? t('mfaUseAuthenticator') : t('mfaUseRecovery')}
           </button>
           <button
             onClick={onCancel}
             className="text-gray-400 hover:text-gray-600"
           >
-            Cancel
+            {t('cancel')}
           </button>
         </div>
       </div>

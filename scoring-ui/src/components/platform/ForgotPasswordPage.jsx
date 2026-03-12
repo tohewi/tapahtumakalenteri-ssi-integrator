@@ -7,8 +7,10 @@
 
 import { useState } from 'react'
 import { forgotPassword } from '../../platform-api.js'
+import { usePlatformT } from '../../platform-i18n.js'
 
 export default function ForgotPasswordPage({ onBack }) {
+  const { t } = usePlatformT()
   const [email, setEmail] = useState('')
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
@@ -32,44 +34,43 @@ export default function ForgotPasswordPage({ onBack }) {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b shadow-sm">
         <div className="max-w-5xl mx-auto flex items-center justify-between px-4 h-14">
-          <div className="text-lg font-bold text-sky-700">Match Management</div>
+          <div className="text-lg font-bold text-sky-700">{t('appName')}</div>
           <button onClick={onBack} className="text-sm text-sky-600 hover:text-sky-700 font-medium">
-            Back to Sign in
+            {t('forgotPasswordBackToSignIn')}
           </button>
         </div>
       </header>
 
       <div className="max-w-sm mx-auto px-4 py-16">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Reset Password</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('forgotPasswordTitle')}</h1>
           <p className="text-gray-500 text-sm">
-            Enter your email address and we'll send you a link to reset your password.
+            {t('forgotPasswordSubtitle')}
           </p>
         </div>
 
         {sent ? (
           <div className="bg-white rounded-lg border p-6 text-center space-y-4">
             <div className="text-4xl">📧</div>
-            <h2 className="text-lg font-semibold text-gray-900">Check your email</h2>
+            <h2 className="text-lg font-semibold text-gray-900">{t('forgotPasswordCheckEmail')}</h2>
             <p className="text-sm text-gray-600">
-              If an account with <strong>{email}</strong> exists, we've sent a password reset link.
-              The link expires in 1 hour.
+              {t('forgotPasswordSentMessage', email)}
             </p>
             <p className="text-xs text-gray-400">
-              Didn't receive an email? Check your spam folder, or try again.
+              {t('forgotPasswordSpamNote')}
             </p>
             <div className="flex flex-col gap-2 pt-2">
               <button
                 onClick={() => { setSent(false); setEmail('') }}
                 className="text-sm text-sky-600 hover:text-sky-800"
               >
-                Try a different email
+                {t('forgotPasswordTryDifferent')}
               </button>
               <button
                 onClick={onBack}
                 className="text-sm text-gray-400 hover:text-gray-600"
               >
-                Back to Sign in
+                {t('forgotPasswordBackToSignIn')}
               </button>
             </div>
           </div>
@@ -84,7 +85,7 @@ export default function ForgotPasswordPage({ onBack }) {
             <form onSubmit={handleSubmit} className="bg-white rounded-lg border p-6 space-y-4">
               <div>
                 <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
-                  Email Address
+                  {t('forgotPasswordEmailLabel')}
                 </label>
                 <input
                   type="email"
@@ -102,14 +103,14 @@ export default function ForgotPasswordPage({ onBack }) {
                 disabled={sending || !email.trim()}
                 className="w-full bg-sky-600 text-white py-2.5 rounded-md font-semibold hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {sending ? 'Sending...' : 'Send Reset Link'}
+                {sending ? t('forgotPasswordSending') : t('forgotPasswordSendLink')}
               </button>
             </form>
 
             <p className="text-xs text-gray-400 text-center mt-6">
-              Remember your password?{' '}
+              {t('forgotPasswordRemember')}{' '}
               <button onClick={onBack} className="text-sky-600 hover:underline">
-                Sign in
+                {t('signInTitle')}
               </button>
             </p>
           </>

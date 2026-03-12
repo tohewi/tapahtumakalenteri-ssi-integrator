@@ -20,6 +20,7 @@ import {
   platformStatus,
   createTenant,
 } from '../../platform-api.js'
+import { PlatformI18nProvider, usePlatformT } from '../../platform-i18n.js'
 
 import DashboardView from './DashboardView.jsx'
 import RosterView from './RosterView.jsx'
@@ -39,34 +40,35 @@ import TemplateEditorPage from './TemplateEditorPage.jsx'
 import SchedulePage from './SchedulePage.jsx'
 
 // ---- Navigation sections matching the mockup ----
+// Labels use i18n keys, resolved at render time
 const NAV_SECTIONS = [
   {
     // Dashboard is standalone at the top — always visible, no section header
     items: [
-      { id: 'dashboard', icon: '🏠', label: 'Dashboard' },
+      { id: 'dashboard', icon: '🏠', labelKey: 'navDashboard' },
     ],
   },
   {
-    label: 'Event Management',
+    labelKey: 'sectionEventManagement',
     items: [
-      { id: 'templates', icon: '📋', label: 'Templates' },
-      { id: 'schedule', icon: '📅', label: 'Schedule' },
+      { id: 'templates', icon: '📋', labelKey: 'navTemplates' },
+      { id: 'schedule', icon: '📅', labelKey: 'navSchedule' },
     ],
   },
   {
-    label: 'Instructor Roster',
+    labelKey: 'sectionInstructorRoster',
     items: [
-      { id: 'roster', icon: '👥', label: 'Roster' },
-      { id: 'join', icon: '🙋', label: 'Join' },
-      { id: 'my-profile', icon: '👤', label: 'My Profile' },
+      { id: 'roster', icon: '👥', labelKey: 'navRoster' },
+      { id: 'join', icon: '🙋', labelKey: 'navJoin' },
+      { id: 'my-profile', icon: '👤', labelKey: 'navMyProfile' },
     ],
   },
   {
-    label: 'Admin',
+    labelKey: 'sectionAdmin',
     items: [
-      { id: 'my-tenants', icon: '📊', label: 'Tenant' },
-      { id: 'members', icon: '🤝', label: 'Members' },
-      { id: 'settings', icon: '⚙', label: 'Settings' },
+      { id: 'my-tenants', icon: '📊', labelKey: 'navTenant' },
+      { id: 'members', icon: '🤝', labelKey: 'navMembers' },
+      { id: 'settings', icon: '⚙', labelKey: 'navSettings' },
     ],
   },
 ]
@@ -86,12 +88,13 @@ const AUTH = {
 
 // ---- Placeholder views for unimplemented sections ----
 function PlaceholderView({ title, description }) {
+  const { t } = usePlatformT()
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-2">{title}</h1>
       <p className="text-sm text-gray-400 mb-6">{description}</p>
       <div className="bg-amber-50 border border-dashed border-amber-300 rounded-lg p-6 text-center text-amber-700 text-sm">
-        This view is coming soon. The structure is defined in the UI prototype.
+        {t('comingSoon')}
       </div>
     </div>
   )
@@ -99,13 +102,14 @@ function PlaceholderView({ title, description }) {
 
 // ---- Sidebar component ----
 function Sidebar({ activeView, onNavigate }) {
+  const { t } = usePlatformT()
   return (
     <nav className="w-56 bg-white border-r p-3 flex-shrink-0 hidden md:block">
       {NAV_SECTIONS.map((section, idx) => (
-        <div key={section.label || `section-${idx}`}>
-          {section.label && (
+        <div key={section.labelKey || `section-${idx}`}>
+          {section.labelKey && (
             <div className="text-xs uppercase tracking-wider text-gray-400 font-semibold mb-2 px-3 mt-4 first:mt-0">
-              {section.label}
+              {t(section.labelKey)}
             </div>
           )}
           <div className="space-y-0.5">
@@ -119,7 +123,7 @@ function Sidebar({ activeView, onNavigate }) {
                     : 'text-gray-700 hover:bg-sky-50'
                 }`}
               >
-                {item.icon} {item.label}
+                {item.icon} {t(item.labelKey)}
               </div>
             ))}
           </div>
@@ -131,15 +135,24 @@ function Sidebar({ activeView, onNavigate }) {
 
 // ---- Top bar component ----
 function TopBar({ account, tenants, selectedTenantId, onChangeTenant, onLogout }) {
+  const { t, lang, setLanguage } = usePlatformT()
   const initials = account?.name?.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase() || '??'
 
   return (
     <header className="bg-white border-b shadow-sm sticky top-0 z-50">
       <div className="max-w-7xl mx-auto flex items-center justify-between px-4 h-14">
         <div className="flex items-center gap-3">
-          <div className="text-lg font-bold text-sky-700">Match Management</div>
+          <div className="text-lg font-bold text-sky-700">{t('appName')}</div>
         </div>
         <div className="flex items-center gap-4">
+          {/* Language selector */}
+          <button
+            onClick={() => setLanguage(lang === 'fi' ? 'en' : 'fi')}
+            className="text-xs text-gray-400 hover:text-gray-600 font-medium px-1.5 py-0.5 border rounded"
+            title={t('language')}
+          >
+            {lang === 'fi' ? 'EN' : 'FI'}
+          </button>
           {/* Tenant selector */}
           {tenants.length > 1 && (
             <select
@@ -147,8 +160,8 @@ function TopBar({ account, tenants, selectedTenantId, onChangeTenant, onLogout }
               onChange={e => onChangeTenant(e.target.value)}
               className="text-sm border rounded-md px-3 py-1.5"
             >
-              {tenants.map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
+              {tenants.map(tn => (
+                <option key={tn.id} value={tn.id}>{tn.name}</option>
               ))}
             </select>
           )}
@@ -161,7 +174,7 @@ function TopBar({ account, tenants, selectedTenantId, onChangeTenant, onLogout }
               {initials}
             </div>
             <span className="text-sm text-gray-600 hidden sm:inline">{account?.email}</span>
-            <button onClick={onLogout} className="text-xs text-gray-400 hover:text-gray-600 ml-2">Sign out</button>
+            <button onClick={onLogout} className="text-xs text-gray-400 hover:text-gray-600 ml-2">{t('signOut')}</button>
           </div>
         </div>
       </div>
@@ -171,12 +184,13 @@ function TopBar({ account, tenants, selectedTenantId, onChangeTenant, onLogout }
 
 // ---- Mobile nav (bottom bar for small screens) ----
 function MobileNav({ activeView, onNavigate }) {
+  const { t } = usePlatformT()
   const mainItems = [
-    { id: 'dashboard', icon: '🏠', label: 'Home' },
-    { id: 'templates', icon: '📋', label: 'Templates' },
-    { id: 'schedule', icon: '📅', label: 'Schedule' },
-    { id: 'roster', icon: '👥', label: 'Roster' },
-    { id: 'settings', icon: '⚙', label: 'More' },
+    { id: 'dashboard', icon: '🏠', labelKey: 'navHome' },
+    { id: 'templates', icon: '📋', labelKey: 'navTemplates' },
+    { id: 'schedule', icon: '📅', labelKey: 'navSchedule' },
+    { id: 'roster', icon: '👥', labelKey: 'navRoster' },
+    { id: 'settings', icon: '⚙', labelKey: 'navMore' },
   ]
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around py-2 z-50">
@@ -189,7 +203,7 @@ function MobileNav({ activeView, onNavigate }) {
           }`}
         >
           <span className="text-lg">{item.icon}</span>
-          {item.label}
+          {t(item.labelKey)}
         </button>
       ))}
     </nav>
@@ -199,6 +213,15 @@ function MobileNav({ activeView, onNavigate }) {
 // ---- Main App ----
 
 export default function PlatformApp({ route }) {
+  return (
+    <PlatformI18nProvider>
+      <PlatformAppInner route={route} />
+    </PlatformI18nProvider>
+  )
+}
+
+function PlatformAppInner({ route }) {
+  const { t } = usePlatformT()
   const [authState, setAuthState] = useState(AUTH.LOADING)
   const [account, setAccount] = useState(null)
   const [tenants, setTenants] = useState([])
@@ -326,7 +349,7 @@ export default function PlatformApp({ route }) {
   if (authState === AUTH.LOADING) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-400 text-sm">Loading...</div>
+        <div className="text-gray-400 text-sm">{t('loading')}</div>
       </div>
     )
   }
@@ -412,7 +435,7 @@ export default function PlatformApp({ route }) {
   // Render the active content view
   function renderContent() {
     if (!selectedTenantId) {
-      return <PlaceholderView title="No Tenant Selected" description="Create or select a tenant to get started." />
+      return <PlaceholderView title={t('noTenantSelected')} description={t('noTenantSelectedDesc')} />
     }
 
     switch (activeView) {
@@ -496,7 +519,7 @@ export default function PlatformApp({ route }) {
         )
 
       default:
-        return <PlaceholderView title="Not Found" description={`View "${activeView}" does not exist.`} />
+        return <PlaceholderView title="Not Found" description={t('viewNotFound', activeView)} />
     }
   }
 

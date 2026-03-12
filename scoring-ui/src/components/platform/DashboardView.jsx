@@ -1,20 +1,22 @@
 import { useState, useEffect } from 'react'
 import { listEvents, getUpcomingStaffingApi, getStaffingLeaderboardApi } from '../../platform-api.js'
+import { usePlatformT } from '../../platform-i18n.js'
 
-function getStatusBadge(status) {
-  switch (status) {
-    case 'ssi_created':
-      return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Ready</span>
-    case 'planned':
-      return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Planned</span>
-    case 'failed':
-      return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Failed</span>
-    default:
-      return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">{status}</span>
+function getStatusBadge(status, t) {
+  const labels = {
+    ssi_created: { label: t('statusReady'), cls: 'bg-green-100 text-green-700' },
+    planned: { label: t('statusPlanned'), cls: 'bg-gray-100 text-gray-500' },
+    failed: { label: t('statusFailed'), cls: 'bg-red-100 text-red-700' },
+    calendar_published: { label: t('statusCalendarPublished'), cls: 'bg-green-100 text-green-700' },
+    completed: { label: t('statusCompleted'), cls: 'bg-blue-100 text-blue-700' },
+    cancelled: { label: t('statusCancelled'), cls: 'bg-gray-100 text-gray-500' },
   }
+  const entry = labels[status] || { label: status, cls: 'bg-gray-100 text-gray-500' }
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${entry.cls}`}>{entry.label}</span>
 }
 
 export default function DashboardView({ tenantId, onNavigate }) {
+  const { t } = usePlatformT()
   const [events, setEvents] = useState([])
   const [staffingData, setStaffingData] = useState([]) // full understaffed event list
   const [leaderboard, setLeaderboard] = useState([])
@@ -61,28 +63,28 @@ export default function DashboardView({ tenantId, onNavigate }) {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">{t('dashboard')}</h1>
       
       {/* Staffing Gaps Summary */}
       <div className="bg-white rounded-lg border shadow-sm mb-8 overflow-hidden">
         <div className="px-4 py-3 border-b flex items-center justify-between bg-gray-50/50">
           <div className="flex items-center gap-2">
-            <h2 className="font-semibold text-gray-800">Staffing Gaps</h2>
+            <h2 className="font-semibold text-gray-800">{t('staffingGaps')}</h2>
             {!loading && staffingData.length > 0 && (
               <span className="bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-0.5 rounded-full">
                 {staffingData.length} event{staffingData.length !== 1 ? 's' : ''}
               </span>
             )}
           </div>
-          <button onClick={() => onNavigate('roster')} className="text-sm text-sky-600 hover:text-sky-800">Go to Roster</button>
+          <button onClick={() => onNavigate('roster')} className="text-sm text-sky-600 hover:text-sky-800">{t('goToRoster')}</button>
         </div>
 
         {loading ? (
-          <div className="p-6 text-center text-sm text-gray-400">Loading staffing data...</div>
+          <div className="p-6 text-center text-sm text-gray-400">{t('loadingStaffingData')}</div>
         ) : staffingData.length === 0 ? (
           <div className="p-6 text-center">
-            <p className="text-sm text-green-600 font-medium">All events are fully staffed</p>
-            <p className="text-xs text-gray-400 mt-1">No open roles for upcoming events.</p>
+            <p className="text-sm text-green-600 font-medium">{t('allEventsStaffed')}</p>
+            <p className="text-xs text-gray-400 mt-1">{t('noOpenRoles')}</p>
           </div>
         ) : (
           <div className="divide-y">
@@ -108,7 +110,7 @@ export default function DashboardView({ tenantId, onNavigate }) {
                 >
                   <div className="min-w-0">
                     <div className="font-medium text-sm text-gray-900 truncate">
-                      {event.eventName || 'Unnamed Event'}
+                      {event.eventName || t('unnamedEvent')}
                     </div>
                     <div className="text-xs text-gray-400 mt-0.5">{dateStr}</div>
                   </div>
@@ -132,16 +134,16 @@ export default function DashboardView({ tenantId, onNavigate }) {
       {/* Upcoming Events List */}
       <div className="bg-white rounded-lg border mb-6 shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b flex items-center justify-between bg-gray-50/50">
-          <h2 className="font-semibold text-gray-800">Upcoming Events</h2>
-          <button onClick={() => onNavigate('schedule')} className="text-sm text-sky-600 hover:text-sky-800">View all</button>
+          <h2 className="font-semibold text-gray-800">{t('upcomingEvents')}</h2>
+          <button onClick={() => onNavigate('schedule')} className="text-sm text-sky-600 hover:text-sky-800">{t('viewAll')}</button>
         </div>
         
         {loading ? (
-          <div className="p-8 text-center text-sm text-gray-500">Loading events...</div>
+          <div className="p-8 text-center text-sm text-gray-500">{t('loadingEvents')}</div>
         ) : upcomingEvents.length === 0 ? (
           <div className="p-8 text-center">
-            <p className="text-sm text-gray-500 mb-2">No upcoming events scheduled in the next 30 days.</p>
-            <button onClick={() => onNavigate('schedule')} className="text-sm text-sky-600 font-medium hover:underline">Go to Schedule to create some</button>
+            <p className="text-sm text-gray-500 mb-2">{t('noUpcomingEventsInDays')}</p>
+            <button onClick={() => onNavigate('schedule')} className="text-sm text-sky-600 font-medium hover:underline">{t('goToScheduleToCreate')}</button>
           </div>
         ) : (
           <div className="divide-y">
@@ -165,14 +167,14 @@ export default function DashboardView({ tenantId, onNavigate }) {
                     <div className="text-xs text-gray-400 capitalize">{weekday}</div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-gray-900 truncate">{evt.eventName || evt.ssiReferences?.name || 'Unnamed Event'}</div>
+                    <div className="font-medium text-gray-900 truncate">{evt.eventName || evt.ssiReferences?.name || t('unnamedEvent')}</div>
                     <div className="text-sm text-gray-500 mt-0.5 flex items-center gap-2">
                       <span>{matchCount} match{matchCount > 1 ? 'es' : ''}</span>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    {getStatusBadge(evt.status)}
-                    <span className="text-xs text-gray-400 font-mono">{evt.ssiReferences?.cupId ? `#${evt.ssiReferences.cupId}` : evt.ssiReferences?.ssiEventId ? `#${evt.ssiReferences.ssiEventId}` : 'No SSI ID'}</span>
+                    {getStatusBadge(evt.status, t)}
+                    <span className="text-xs text-gray-400 font-mono">{evt.ssiReferences?.cupId ? `#${evt.ssiReferences.cupId}` : evt.ssiReferences?.ssiEventId ? `#${evt.ssiReferences.ssiEventId}` : t('noSsiId')}</span>
                   </div>
                 </div>
               )
@@ -184,25 +186,25 @@ export default function DashboardView({ tenantId, onNavigate }) {
       {/* Volunteer Activity Leaderboard */}
       <div className="bg-white rounded-lg border mb-6 shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b flex items-center justify-between bg-gray-50/50">
-          <h2 className="font-semibold text-gray-800">Volunteer Activity</h2>
+          <h2 className="font-semibold text-gray-800">{t('volunteerActivity')}</h2>
           <select
             value={leaderboardPeriod}
             onChange={e => setLeaderboardPeriod(e.target.value)}
             className="text-sm border rounded px-2 py-1 text-gray-600 bg-white"
           >
-            <option value="all">All time</option>
-            <option value="12m">Last 12 months</option>
-            <option value="6m">Last 6 months</option>
-            <option value="3m">Last 3 months</option>
+            <option value="all">{t('allTime')}</option>
+            <option value="12m">{t('last12Months')}</option>
+            <option value="6m">{t('last6Months')}</option>
+            <option value="3m">{t('last3Months')}</option>
           </select>
         </div>
 
         {loading ? (
-          <div className="p-8 text-center text-sm text-gray-500">Loading...</div>
+          <div className="p-8 text-center text-sm text-gray-500">{t('loading')}</div>
         ) : leaderboard.length === 0 ? (
           <div className="p-8 text-center">
-            <p className="text-sm text-gray-500">No staffing activity yet.</p>
-            <p className="text-xs text-gray-400 mt-1">Activity will appear here as members sign up for event roles.</p>
+            <p className="text-sm text-gray-500">{t('noStaffingActivity')}</p>
+            <p className="text-xs text-gray-400 mt-1">{t('activityAppears')}</p>
           </div>
         ) : (
           <div className="divide-y">
@@ -232,7 +234,7 @@ export default function DashboardView({ tenantId, onNavigate }) {
                   </div>
                   <div className="text-right flex-shrink-0 w-16">
                     <div className="text-sm font-bold text-gray-800">{entry.eventsStaffed}</div>
-                    <div className="text-xs text-gray-400">events</div>
+                    <div className="text-xs text-gray-400">{t('events')}</div>
                   </div>
                 </div>
               )

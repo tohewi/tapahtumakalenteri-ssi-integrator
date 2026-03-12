@@ -8,8 +8,10 @@
 
 import { useState, useEffect } from 'react'
 import { getInvitationByToken, acceptInvitation, platformStatus } from '../../platform-api.js'
+import { usePlatformT } from '../../platform-i18n.js'
 
 export default function JoinInvitePage({ token, onComplete, onCancel }) {
+  const { t } = usePlatformT()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [invitation, setInvitation] = useState(null)
@@ -71,7 +73,7 @@ export default function JoinInvitePage({ token, onComplete, onCancel }) {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="text-gray-500">Loading invitation...</div>
+        <div className="text-gray-500">{t('loading')}</div>
       </div>
     )
   }
@@ -81,13 +83,13 @@ export default function JoinInvitePage({ token, onComplete, onCancel }) {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-sm border text-center space-y-4">
           <div className="text-4xl">❌</div>
-          <h1 className="text-xl font-bold text-gray-900">Invalid Invitation</h1>
+          <h1 className="text-xl font-bold text-gray-900">{t('joinInviteInvalid')}</h1>
           <p className="text-sm text-gray-600">{error}</p>
           <button
             onClick={onCancel}
             className="w-full bg-gray-100 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-200 transition-colors mt-4"
           >
-            Go to Platform
+            {t('joinInviteGoToPlatform')}
           </button>
         </div>
       </div>
@@ -99,9 +101,9 @@ export default function JoinInvitePage({ token, onComplete, onCancel }) {
       <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-sm border space-y-6">
         
         <div className="text-center space-y-2">
-          <h1 className="text-2xl font-bold text-gray-900">Join {invitation.tenantName}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t('joinInviteJoin', invitation.tenantName)}</h1>
           <p className="text-sm text-gray-500">
-            You have been invited by {invitation.invitedByName} to join their organization.
+            {t('joinInviteInvitedBy', invitation.invitedByName)}
           </p>
         </div>
 
@@ -119,32 +121,32 @@ export default function JoinInvitePage({ token, onComplete, onCancel }) {
         {hasSession ? (
           <div className="space-y-4">
             <p className="text-sm text-gray-700 text-center">
-              You are currently logged in. Do you want to accept this invitation?
+              {t('joinInviteLoggedIn')}
             </p>
             <div className="flex gap-3">
               <button
                 onClick={onCancel}
                 className="flex-1 bg-white border text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50 transition-colors"
               >
-                Cancel
+                {t('cancel')}
               </button>
               <button
                 onClick={() => handleSubmit()}
                 disabled={submitting}
                 className="flex-1 bg-sky-600 text-white py-2.5 rounded-lg font-medium hover:bg-sky-700 disabled:opacity-50 transition-colors"
               >
-                {submitting ? 'Accepting...' : 'Accept Invite'}
+                {submitting ? t('joinInviteAccepting') : t('joinInviteAccept')}
               </button>
             </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <p className="text-sm text-gray-700 text-center mb-4">
-              Please enter your name and create a password to set up your account.
+              {t('joinInviteSetupAccount')}
             </p>
             
             <div className="space-y-1">
-              <label htmlFor="invite-name" className="block text-sm font-medium text-gray-700">Full Name</label>
+              <label htmlFor="invite-name" className="block text-sm font-medium text-gray-700">{t('joinInviteFullName')}</label>
               <input
                 id="invite-name"
                 type="text"
@@ -157,7 +159,7 @@ export default function JoinInvitePage({ token, onComplete, onCancel }) {
             </div>
             
             <div className="space-y-1">
-              <label htmlFor="invite-password" className="block text-sm font-medium text-gray-700">Create Password</label>
+              <label htmlFor="invite-password" className="block text-sm font-medium text-gray-700">{t('joinInviteCreatePassword')}</label>
               <input
                 id="invite-password"
                 type="password"
@@ -176,14 +178,14 @@ export default function JoinInvitePage({ token, onComplete, onCancel }) {
                 onClick={onCancel}
                 className="flex-1 bg-white border text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-50 transition-colors"
               >
-                Cancel
+                {t('cancel')}
               </button>
               <button
                 type="submit"
                 disabled={submitting}
                 className="flex-1 bg-sky-600 text-white py-2.5 rounded-lg font-medium hover:bg-sky-700 disabled:opacity-50 transition-colors"
               >
-                {submitting ? 'Creating...' : 'Create Account & Join'}
+                {submitting ? t('welcomeCreating') : t('joinInviteCreateAndJoin')}
               </button>
             </div>
           </form>

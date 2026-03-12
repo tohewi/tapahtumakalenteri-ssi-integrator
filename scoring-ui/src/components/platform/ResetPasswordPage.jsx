@@ -7,8 +7,10 @@
 
 import { useState } from 'react'
 import { resetPassword } from '../../platform-api.js'
+import { usePlatformT } from '../../platform-i18n.js'
 
 export default function ResetPasswordPage({ token, onComplete, onCancel }) {
+  const { t } = usePlatformT()
   const [form, setForm] = useState({ newPassword: '', confirmPassword: '' })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -38,23 +40,23 @@ export default function ResetPasswordPage({ token, onComplete, onCancel }) {
         {success ? (
           <div className="bg-white rounded-2xl shadow-sm border p-8 text-center space-y-4">
             <div className="text-4xl">&#x2705;</div>
-            <h1 className="text-xl font-bold text-gray-900">Password Reset Complete</h1>
+            <h1 className="text-xl font-bold text-gray-900">{t('resetPasswordTitle')}</h1>
             <p className="text-sm text-gray-600">
-              Your password has been updated. You can now sign in with your new password.
+              {t('passwordChanged')}
             </p>
             <button
               onClick={onComplete}
               className="w-full bg-sky-600 text-white py-2.5 rounded-lg font-medium hover:bg-sky-700 transition-colors mt-4"
             >
-              Go to Sign In
+              {t('signInTitle')}
             </button>
           </div>
         ) : (
           <>
             <div className="text-center mb-8">
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Set New Password</h1>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('resetPasswordTitle')}</h1>
               <p className="text-gray-500 text-sm">
-                Enter your new password below.
+                {t('resetPasswordNewPassword')}
               </p>
             </div>
 
@@ -67,7 +69,7 @@ export default function ResetPasswordPage({ token, onComplete, onCancel }) {
             <form onSubmit={handleSubmit} className="bg-white rounded-lg border p-6 space-y-4">
               <div>
                 <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
-                  New Password
+                  {t('resetPasswordNewPassword')}
                 </label>
                 <input
                   type="password"
@@ -80,12 +82,12 @@ export default function ResetPasswordPage({ token, onComplete, onCancel }) {
                   className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
                 />
                 {form.newPassword.length > 0 && form.newPassword.length < 8 && (
-                  <p className="text-xs text-amber-600 mt-1">Minimum 8 characters</p>
+                  <p className="text-xs text-amber-600 mt-1">{t('resetPasswordMinChars')}</p>
                 )}
               </div>
               <div>
                 <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
-                  Confirm Password
+                  {t('resetPasswordConfirm')}
                 </label>
                 <input
                   type="password"
@@ -96,7 +98,7 @@ export default function ResetPasswordPage({ token, onComplete, onCancel }) {
                   className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
                 />
                 {form.confirmPassword.length > 0 && !passwordsMatch && (
-                  <p className="text-xs text-red-500 mt-1">Passwords do not match</p>
+                  <p className="text-xs text-red-500 mt-1">{t('resetPasswordNoMatch')}</p>
                 )}
               </div>
               <button
@@ -104,13 +106,13 @@ export default function ResetPasswordPage({ token, onComplete, onCancel }) {
                 disabled={submitting || !canSubmit}
                 className="w-full bg-sky-600 text-white py-2.5 rounded-md font-semibold hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {submitting ? 'Resetting...' : 'Reset Password'}
+                {submitting ? t('resetPasswordSubmitting') : t('resetPasswordSubmit')}
               </button>
             </form>
 
             <p className="text-xs text-gray-400 text-center mt-6">
               <button onClick={onCancel} className="text-sky-600 hover:underline">
-                Back to Sign in
+                {t('forgotPasswordBackToSignIn')}
               </button>
             </p>
           </>

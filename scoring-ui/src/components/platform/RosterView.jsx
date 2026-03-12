@@ -3,16 +3,19 @@
 // ============================================================
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getUpcomingStaffingApi, getMyStaffingAssignmentsApi, signupForEventStaffingApi, withdrawFromEventStaffingApi, backfillStaffingNeedsApi, updateEventStaffingNeedsApi, listTemplates } from '../../platform-api'
+import { usePlatformT } from '../../platform-i18n.js'
 
-// Filter tab definitions
-const FILTERS = [
-  { key: 'all',       label: 'All' },
-  { key: 'needStaff', label: 'Need Staff' },
-  { key: 'staffed',   label: 'Staffed' },
-  { key: 'myEvents',  label: 'My Events' },
-]
+// Filter tab definitions (labels resolved via i18n at render time)
+const FILTER_KEYS = ['all', 'needStaff', 'staffed', 'myEvents']
+const FILTER_LABEL_KEYS = {
+  all: 'filterAll',
+  needStaff: 'filterNeedStaff',
+  staffed: 'filterStaffed',
+  myEvents: 'filterMyEvents',
+}
 
 export default function RosterView({ tenantId, account, focusEventId, onFocusHandled }) {
+  const { t } = usePlatformT()
   const [upcoming, setUpcoming] = useState([])
   const [myAssignments, setMyAssignments] = useState([])
   const [loading, setLoading] = useState(true)
@@ -62,7 +65,7 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
       setUpcoming(upcomingData)
       setMyAssignments(assignmentsData)
     } catch (err) {
-      setError(err.message || 'Failed to load staffing data')
+      setError(err.message || t('loadingStaffing'))
     } finally {
       setLoading(false)
     }
@@ -74,21 +77,21 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
       await signupForEventStaffingApi(tenantId, eventId, needId)
       await loadData() // Refresh everything
     } catch (err) {
-      alert(`Signup failed: ${err.message}`)
+      alert(`${t('signupFailed')}: ${err.message}`)
     } finally {
       setActionLoading(null)
     }
   }
 
   async function handleWithdraw(eventId, signupId) {
-    if (!window.confirm('Are you sure you want to withdraw from this event?')) return
+    if (!window.confirm(t('withdrawConfirm'))) return
     
     try {
       setActionLoading(signupId)
       await withdrawFromEventStaffingApi(tenantId, eventId, signupId)
       await loadData() // Refresh everything
     } catch (err) {
-      alert(`Withdrawal failed: ${err.message}`)
+      alert(`${t('withdrawalFailed')}: ${err.message}`)
     } finally {
       setActionLoading(null)
     }
@@ -103,7 +106,7 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
 
   // Backfill staffing needs from templates (admin action)
   async function handleBackfill(defaultTemplateId) {
-    if (!defaultTemplateId && !window.confirm('Populate staffing needs for all upcoming events from their templates? This only affects events that don\'t already have staffing needs.')) return
+    if (!defaultTemplateId && !window.confirm(t('populateFromTemplatesTitle') + '?')) return
     try {
       setActionLoading('backfill')
       setTemplatePicker(null)
@@ -123,9 +126,9 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
       await loadData() // Refresh
     } catch (err) {
       if (err.message?.includes('403') || err.message?.includes('Forbidden')) {
-        alert('Only owners and tenant admins can run backfill.')
+        alert(t('backfillPermissionDenied'))
       } else {
-        alert(`Backfill failed: ${err.message}`)
+        alert(`${t('backfillFailed')}: ${err.message}`)
       }
     } finally {
       setActionLoading(null)
@@ -155,7 +158,7 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
   }
 
   if (loading) {
-    return <div className="text-gray-500 p-8 text-center animate-pulse">Loading staffing data...</div>
+    return <div className="text-gray-500 p-8 text-center animate-pulse">{t('loadingStaffing')}</div>
   }
 
   // Total filled / total needed across all roles
@@ -174,18 +177,18 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
       {/* Header + Backfill action */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">Event Staffing</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">{t('eventStaffing')}</h1>
           <p className="text-sm text-gray-500">
-            Sign up to staff upcoming events. Members with the instructor role are encouraged to volunteer.
+            {t('eventStaffingDesc')}
           </p>
         </div>
         <button
           onClick={() => handleBackfill()}
           disabled={actionLoading === 'backfill'}
           className="flex-shrink-0 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded font-medium disabled:opacity-50 transition-colors"
-          title="Populate staffing needs for events from their templates"
+          title={t('populateFromTemplatesTitle')}
         >
-          {actionLoading === 'backfill' ? 'Running...' : 'Populate from Templates'}
+          {actionLoading === 'backfill' ? t('running') : t('populateFromTemplates')}
         </button>
       </div>
 
@@ -198,20 +201,20 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
       {/* Filter tabs */}
       {eventsWithNeeds.length > 0 && (
         <div className="flex gap-1 border-b border-gray-200">
-          {FILTERS.map(f => {
-            const count = filterCounts[f.key]
-            const active = filter === f.key
+          {FILTER_KEYS.map(fKey => {
+            const count = filterCounts[fKey]
+            const active = filter === fKey
             return (
               <button
-                key={f.key}
-                onClick={() => setFilter(f.key)}
+                key={fKey}
+                onClick={() => setFilter(fKey)}
                 className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                   active
                     ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                {f.label}
+                {t(FILTER_LABEL_KEYS[fKey])}
                 {count > 0 && (
                   <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${
                     active ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
@@ -232,14 +235,14 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
           <div className="mb-4 p-3 bg-blue-50 text-blue-800 rounded-md text-sm space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-medium">
-                Backfill complete: {backfillResult.backfilledCount} populated{backfillResult.skippedCount > 0 ? `, ${backfillResult.skippedCount} skipped` : ''}
+                {t('backfillComplete')}: {backfillResult.backfilledCount} {t('populated').toLowerCase()}{backfillResult.skippedCount > 0 ? `, ${backfillResult.skippedCount} ${t('skipped').toLowerCase()}` : ''}
                 {backfillResult.errors?.length > 0 && <span className="text-red-600 ml-2">({backfillResult.errors.length} errors)</span>}
               </span>
-              <button onClick={() => { setBackfillResult(null); setTemplatePicker(null) }} className="text-blue-600 underline text-xs">Dismiss</button>
+              <button onClick={() => { setBackfillResult(null); setTemplatePicker(null) }} className="text-blue-600 underline text-xs">{t('dismiss')}</button>
             </div>
             {backfillResult.populated?.length > 0 && (
               <div className="text-xs">
-                <span className="font-medium text-green-700">Populated:</span>
+                <span className="font-medium text-green-700">{t('populated')}:</span>
                 {backfillResult.populated.map((e, i) => (
                   <span key={i} className="ml-1 inline-block bg-green-100 text-green-800 px-1.5 py-0.5 rounded mr-1 mb-0.5">
                     {e.name} ({e.date}) — {e.roles} roles via {e.template}
@@ -249,7 +252,7 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
             )}
             {backfillResult.skipped?.length > 0 && (
               <div className="text-xs">
-                <span className="font-medium text-amber-700">Skipped:</span>
+                <span className="font-medium text-amber-700">{t('skipped')}:</span>
                 {backfillResult.skipped.map((e, i) => (
                   <span key={i} className="ml-1 inline-block bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded mr-1 mb-0.5">
                     {e.name} ({e.date}) — {e.reason}
@@ -264,7 +267,7 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
         {templatePicker && (
           <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-md">
             <p className="text-sm font-medium text-amber-800 mb-2">
-              {templatePicker.skippedCount} event(s) couldn't be matched to a template. Select a template to assign:
+              {t('unmatchedEventsPrompt', templatePicker.skippedCount)}
             </p>
             <div className="flex flex-wrap gap-2">
               {templatePicker.templates.map(tpl => (
@@ -278,18 +281,18 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
                 </button>
               ))}
             </div>
-            <button onClick={() => setTemplatePicker(null)} className="mt-2 text-xs text-amber-600 underline">Dismiss</button>
+            <button onClick={() => setTemplatePicker(null)} className="mt-2 text-xs text-amber-600 underline">{t('dismiss')}</button>
           </div>
         )}
         
         {eventsWithNeeds.length === 0 ? (
           <div className="bg-white rounded-lg border shadow-sm p-8 text-center">
-            <p className="text-sm text-gray-500">No upcoming events have staffing needs configured.</p>
-            <p className="text-xs text-gray-400 mt-2">Click "Populate from Templates" above to add staffing needs to existing events, or create new events from templates with staffing rules.</p>
+            <p className="text-sm text-gray-500">{t('noStaffingNeeds')}</p>
+            <p className="text-xs text-gray-400 mt-2">{t('noStaffingNeedsHint')}</p>
           </div>
         ) : filteredEvents.length === 0 ? (
           <div className="bg-white rounded-lg border shadow-sm p-8 text-center">
-            <p className="text-sm text-gray-500">No events match the current filter.</p>
+            <p className="text-sm text-gray-500">{t('noEventsMatchFilter')}</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -329,7 +332,7 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
                           {event.matchCount && (
                             <>
                               <span className="text-gray-300">·</span>
-                              <span>{event.matchCount} {event.matchCount === 1 ? 'match' : 'matches'}</span>
+                              <span>{event.matchCount} {event.matchCount === 1 ? t('match') : t('matches')}</span>
                             </>
                           )}
                         </div>
@@ -340,20 +343,20 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
                       <div className="text-right flex-shrink-0 ml-4">
                         {isUnderstaffed ? (
                           <span className="inline-flex items-center bg-orange-50 text-orange-600 text-xs font-medium px-2 py-0.5 rounded border border-orange-200">
-                            Needs staff
+                            {t('needsStaff')}
                           </span>
                         ) : (
                           <span className="inline-flex items-center bg-green-50 text-green-700 text-xs font-medium px-2 py-0.5 rounded border border-green-200">
-                            Staffed
+                            {t('staffed')}
                           </span>
                         )}
                         <div className="text-xs text-gray-400 mt-1">
-                          Staff: {summary.filled}/{summary.min}
+                          {t('staff')}: {summary.filled}/{summary.min}
                         </div>
                       </div>
                     </div>
                     {event.createdBy && (
-                      <div className="text-[11px] text-gray-400 mt-1">Scheduled by {event.createdBy}</div>
+                      <div className="text-[11px] text-gray-400 mt-1">{t('scheduledBy')} {event.createdBy}</div>
                     )}
                   </div>
 
@@ -371,7 +374,7 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
                             <div className="flex items-center gap-2">
                               <span className="font-medium text-sm text-gray-800">{need.roleLabel}</span>
                               {isAssigned && (
-                                <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">You</span>
+                                <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">{t('you').replace(/[()]/g, '')}</span>
                               )}
                             </div>
                             <div className="flex items-center gap-2 mt-1">
@@ -387,7 +390,7 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
                               </span>
                               {needsMore && (
                                 <span className="text-xs text-orange-500 font-medium">
-                                  ({need.minCount - assignedCount} needed)
+                                  ({need.minCount - assignedCount} {t('needed')})
                                 </span>
                               )}
                             </div>
@@ -401,10 +404,10 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
 
                           <div className="flex-shrink-0 ml-3">
                             {isAssigned && (
-                              <span className="text-xs text-green-600 font-medium">Signed up</span>
+                              <span className="text-xs text-green-600 font-medium">{t('signedUp')}</span>
                             )}
                             {!isAssigned && isFull && (
-                              <span className="text-xs text-gray-400 italic">Full</span>
+                              <span className="text-xs text-gray-400 italic">{t('full')}</span>
                             )}
                           </div>
                         </div>
@@ -415,7 +418,7 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
                   {/* Sign Up / Withdraw footer */}
                   <div className="bg-gray-50 px-5 py-3 flex items-center justify-between border-t">
                     <div className="text-xs text-gray-400">
-                      {daysUntil <= 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `In ${daysUntil} days`}
+                      {daysUntil <= 0 ? t('today') : daysUntil === 1 ? t('tomorrow') : t('inDays', daysUntil)}
                     </div>
                     <div className="flex items-center gap-3">
                       {mySignupIds.length > 0 && (() => {
@@ -427,10 +430,10 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
                             disabled={actionLoading === mySignup.signup.id}
                             className="text-red-600 hover:text-red-800 text-sm font-medium disabled:opacity-50"
                           >
-                            {actionLoading === mySignup.signup.id ? 'Withdrawing...' : 'Withdraw'}
+                            {actionLoading === mySignup.signup.id ? t('withdrawing') : t('withdraw')}
                           </button>
                         ) : (
-                          <span className="text-xs text-green-600 font-medium">Signed up</span>
+                          <span className="text-xs text-green-600 font-medium">{t('signedUp')}</span>
                         )
                       })()}
                       {availableRoles.length > 0 ? (
@@ -438,10 +441,10 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
                           onClick={() => setSignupModal({ eventId: event.id, eventName: event.eventName, roles: availableRoles })}
                           className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-md hover:bg-blue-700 shadow-sm transition-colors"
                         >
-                          Sign Up
+                          {t('signUp')}
                         </button>
                       ) : mySignupIds.length === 0 ? (
-                        <span className="text-xs text-gray-400 italic">All roles filled</span>
+                        <span className="text-xs text-gray-400 italic">{t('allRolesFilled')}</span>
                       ) : null}
                     </div>
                   </div>
@@ -455,7 +458,7 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
       {/* My role summary (shown in 'My Events' filter when user has assignments) */}
       {filter === 'myEvents' && myAssignments.length > 0 && (
         <div className="text-xs text-gray-400 text-center pt-2">
-          You are signed up for {myAssignments.length} event{myAssignments.length !== 1 ? 's' : ''}
+          {t('signedUpForEvents', myAssignments.length)}
         </div>
       )}
 
@@ -464,7 +467,7 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSignupModal(null)}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
             <div className="p-5 border-b">
-              <h3 className="text-lg font-bold text-gray-900">Choose a role</h3>
+              <h3 className="text-lg font-bold text-gray-900">{t('chooseRole')}</h3>
               <p className="text-sm text-gray-500 mt-0.5">{signupModal.eventName}</p>
             </div>
             <div className="divide-y">
@@ -479,9 +482,9 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
                   >
                     <div>
                       <div className="font-medium text-gray-900">{role.roleLabel}</div>
-                      <div className="text-xs text-gray-500 mt-0.5">{filled}/{role.maxCount} positions filled</div>
+                      <div className="text-xs text-gray-500 mt-0.5">{filled}/{role.maxCount} {t('positionsFilled')}</div>
                     </div>
-                    <div className="text-blue-600 text-sm font-medium">Select</div>
+                    <div className="text-blue-600 text-sm font-medium">{t('select')}</div>
                   </button>
                 )
               })}
@@ -491,7 +494,7 @@ export default function RosterView({ tenantId, account, focusEventId, onFocusHan
                 onClick={() => setSignupModal(null)}
                 className="w-full text-center text-sm text-gray-500 hover:text-gray-700 py-2"
               >
-                Cancel
+                {t('cancel')}
               </button>
             </div>
           </div>

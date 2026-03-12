@@ -8,12 +8,21 @@
 // All saves go through platform-api.js client methods.
 // ============================================================
 
-import { useState } from 'react'
-import { updateAccountProfile, changeAccountPassword, mfaSetup, mfaConfirm, mfaDisable } from '../../platform-api.js'
+import { useState, useEffect } from 'react'
+import {
+  getAccountProfile,
+  updateAccountProfile,
+  changePassword as changePasswordApi,
+  mfaSetup,
+  mfaConfirmEnable,
+  mfaDisable,
+} from '../../platform-api.js'
+import { usePlatformT } from '../../platform-i18n.js'
 
 // ---- Sub-components ----
 
 function SectionCard({ title, description, children }) {
+  const { t } = usePlatformT()
   return (
     <div className="bg-white rounded-lg border p-6 mb-6">
       <h2 className="text-lg font-semibold text-gray-900 mb-1">{title}</h2>
@@ -39,6 +48,7 @@ function StatusMessage({ type, message }) {
 // ---- Profile Section ----
 
 function ProfileSection({ account, onAccountUpdated }) {
+  const { t } = usePlatformT()
   const [name, setName] = useState(account.name || '')
   const [email, setEmail] = useState(account.email || '')
   const [saving, setSaving] = useState(false)
@@ -57,7 +67,7 @@ function ProfileSection({ account, onAccountUpdated }) {
 
       const data = await updateAccountProfile(updates)
       onAccountUpdated(data.account)
-      setStatus({ type: 'success', message: 'Profile updated' })
+      setStatus({ type: 'success', message: t('profileUpdated') })
     } catch (err) {
       setStatus({ type: 'error', message: err.message })
     } finally {
@@ -66,12 +76,12 @@ function ProfileSection({ account, onAccountUpdated }) {
   }
 
   return (
-    <SectionCard title="Profile" description="Your account name and email address.">
+    <SectionCard title={t('profileTitle')} description={t('profileDesc')}>
       <StatusMessage {...(status || {})} />
       <form onSubmit={handleSave} className="space-y-4">
         <div>
           <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
-            Name
+            {t('profileName')}
           </label>
           <input
             type="text"
@@ -85,7 +95,7 @@ function ProfileSection({ account, onAccountUpdated }) {
         </div>
         <div>
           <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
-            Email
+            {t('profileEmail')}
           </label>
           <input
             type="email"
@@ -95,7 +105,7 @@ function ProfileSection({ account, onAccountUpdated }) {
             className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
           />
           <p className="text-xs text-gray-400 mt-1">
-            This is your login email. Changing it will require you to use the new email to sign in.
+            {t('profileEmailNote')}
           </p>
         </div>
 
@@ -105,7 +115,7 @@ function ProfileSection({ account, onAccountUpdated }) {
             disabled={saving || !hasChanges || name.trim().length < 2}
             className="bg-sky-600 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {saving ? 'Saving...' : 'Save Profile'}
+            {saving ? t('saving') : t('saveProfile')}
           </button>
         </div>
       </form>
@@ -116,6 +126,7 @@ function ProfileSection({ account, onAccountUpdated }) {
 // ---- Password Section ----
 
 function PasswordSection() {
+  const { t } = usePlatformT()
   const [form, setForm] = useState({
     currentPassword: '',
     newPassword: '',
@@ -140,12 +151,12 @@ function PasswordSection() {
     setSaving(true)
     setStatus(null)
     try {
-      await changeAccountPassword({
+      await changePasswordApi({
         currentPassword: form.currentPassword,
         newPassword: form.newPassword,
       })
       setForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
-      setStatus({ type: 'success', message: 'Password changed successfully' })
+      setStatus({ type: 'success', message: t('passwordChanged') })
     } catch (err) {
       setStatus({ type: 'error', message: err.message })
     } finally {
@@ -154,12 +165,12 @@ function PasswordSection() {
   }
 
   return (
-    <SectionCard title="Change Password" description="Update your account password. You must enter your current password to confirm.">
+    <SectionCard title={t('changePasswordTitle')} description={t('changePasswordDesc')}>
       <StatusMessage {...(status || {})} />
       <form onSubmit={handleSave} className="space-y-4">
         <div>
           <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
-            Current Password
+            {t('currentPassword')}
           </label>
           <input
             type="password"
@@ -173,7 +184,7 @@ function PasswordSection() {
         </div>
         <div>
           <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
-            New Password
+            {t('newPassword')}
           </label>
           <input
             type="password"
@@ -186,12 +197,14 @@ function PasswordSection() {
             className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
           />
           {form.newPassword.length > 0 && form.newPassword.length < 8 && (
-            <p className="text-xs text-amber-600 mt-1">Minimum 8 characters</p>
+            <p className="text-xs text-amber-600 mt-1">
+              {t('minChars')}
+            </p>
           )}
         </div>
         <div>
           <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
-            Confirm New Password
+            {t('confirmNewPassword')}
           </label>
           <input
             type="password"
@@ -203,7 +216,9 @@ function PasswordSection() {
             className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
           />
           {form.confirmPassword.length > 0 && !passwordsMatch && (
-            <p className="text-xs text-red-500 mt-1">Passwords do not match</p>
+            <p className="text-xs text-red-500 mt-1">
+              {t('passwordsNoMatch')}
+            </p>
           )}
         </div>
 
@@ -213,7 +228,7 @@ function PasswordSection() {
             disabled={saving || !canSubmit}
             className="bg-sky-600 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {saving ? 'Changing...' : 'Change Password'}
+            {saving ? t('changingPassword') : t('changePassword')}
           </button>
         </div>
       </form>
@@ -224,6 +239,7 @@ function PasswordSection() {
 // ---- MFA Section ----
 
 function MfaSection({ account, onAccountUpdated }) {
+  const { t } = usePlatformT()
   const [step, setStep] = useState('idle') // idle, setup, confirm, disable
   const [qrCode, setQrCode] = useState(null)
   const [recoveryCodes, setRecoveryCodes] = useState([])
@@ -256,11 +272,11 @@ function MfaSection({ account, onAccountUpdated }) {
     setLoading(true)
     setStatus(null)
     try {
-      await mfaConfirm({ code: confirmCode })
+      await mfaConfirmEnable({ code: confirmCode })
       setStep('idle')
       setConfirmCode('')
       setQrCode(null)
-      setStatus({ type: 'success', message: 'MFA enabled successfully!' })
+      setStatus({ type: 'success', message: t('mfaEnabledSuccess') })
       // Update account state
       onAccountUpdated({ ...account, mfaEnabled: true })
     } catch (err) {
@@ -278,7 +294,7 @@ function MfaSection({ account, onAccountUpdated }) {
       await mfaDisable({ password: disablePassword })
       setStep('idle')
       setDisablePassword('')
-      setStatus({ type: 'success', message: 'MFA has been disabled.' })
+      setStatus({ type: 'success', message: t('mfaDisabledSuccess') })
       onAccountUpdated({ ...account, mfaEnabled: false })
     } catch (err) {
       setStatus({ type: 'error', message: err.message })
@@ -298,8 +314,8 @@ function MfaSection({ account, onAccountUpdated }) {
 
   return (
     <SectionCard
-      title="Two-Factor Authentication (MFA)"
-      description="Add an extra layer of security to your account using an authenticator app."
+      title={t('mfaSettingsTitle')}
+      description={t('mfaSettingsDesc')}
     >
       <StatusMessage {...(status || {})} />
 
@@ -308,7 +324,7 @@ function MfaSection({ account, onAccountUpdated }) {
         mfaEnabled ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-500'
       }`}>
         <span className={`w-2 h-2 rounded-full ${mfaEnabled ? 'bg-green-500' : 'bg-gray-400'}`} />
-        {mfaEnabled ? 'MFA is enabled' : 'MFA is not enabled'}
+        {mfaEnabled ? t('mfaEnabled') : t('mfaNotEnabled')}
       </div>
 
       {/* Idle state — show enable or disable button */}
@@ -318,7 +334,7 @@ function MfaSection({ account, onAccountUpdated }) {
           disabled={loading}
           className="bg-sky-600 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-sky-700 disabled:opacity-50 transition-colors"
         >
-          {loading ? 'Setting up...' : 'Enable MFA'}
+          {loading ? t('mfaSettingUp') : t('mfaEnableBtn')}
         </button>
       )}
 
@@ -327,7 +343,7 @@ function MfaSection({ account, onAccountUpdated }) {
           onClick={() => setStep('disable')}
           className="text-sm text-red-500 hover:text-red-700 font-medium"
         >
-          Disable MFA
+          {t('mfaDisableBtn')}
         </button>
       )}
 
@@ -336,7 +352,7 @@ function MfaSection({ account, onAccountUpdated }) {
         <div className="space-y-4">
           <div className="bg-gray-50 rounded-lg p-4 border">
             <div className="text-sm font-semibold text-gray-700 mb-3">
-              Step 1: Scan the QR code with your authenticator app
+              {t('mfaStep1')}
             </div>
             {qrCode && (
               <div className="flex justify-center mb-3">
@@ -344,24 +360,24 @@ function MfaSection({ account, onAccountUpdated }) {
               </div>
             )}
             <p className="text-xs text-gray-500 text-center">
-              Use Google Authenticator, Authy, or any TOTP-compatible app.
+              {t('mfaStep1Hint')}
             </p>
           </div>
 
           <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
             <div className="flex items-center justify-between mb-2">
               <div className="text-sm font-semibold text-amber-800">
-                Step 2: Save your recovery codes
+                {t('mfaStep2')}
               </div>
               <button
                 onClick={() => setShowCodes(!showCodes)}
                 className="text-xs text-amber-600 hover:text-amber-800"
               >
-                {showCodes ? 'Hide' : 'Show'}
+                {showCodes ? t('hide') : t('show')}
               </button>
             </div>
             <p className="text-xs text-amber-700 mb-3">
-              These codes can be used if you lose access to your authenticator app. Each code can only be used once. Save them securely!
+              {t('mfaStep2Hint')}
             </p>
             {showCodes && (
               <div className="grid grid-cols-2 gap-1 bg-white rounded-md p-3 border font-mono text-sm">
@@ -374,18 +390,18 @@ function MfaSection({ account, onAccountUpdated }) {
               onClick={() => {
                 const text = recoveryCodes.join('\n')
                 navigator.clipboard?.writeText(text)
-                  .then(() => setStatus({ type: 'success', message: 'Recovery codes copied to clipboard' }))
+                  .then(() => setStatus({ type: 'success', message: t('mfaCodesCopied') }))
                   .catch(() => {})
               }}
               className="text-xs text-sky-600 hover:text-sky-800 mt-2"
             >
-              Copy to clipboard
+              {t('mfaCopyToClipboard')}
             </button>
           </div>
 
           <form onSubmit={handleConfirm} className="bg-gray-50 rounded-lg p-4 border">
             <div className="text-sm font-semibold text-gray-700 mb-2">
-              Step 3: Enter the code from your authenticator app
+              {t('mfaStep3')}
             </div>
             <div className="flex items-end gap-3">
               <input
@@ -405,14 +421,14 @@ function MfaSection({ account, onAccountUpdated }) {
                 disabled={loading || confirmCode.length !== 6}
                 className="bg-sky-600 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-sky-700 disabled:opacity-50 transition-colors"
               >
-                {loading ? 'Verifying...' : 'Verify & Enable'}
+                {loading ? t('mfaVerifying') : t('mfaVerifyAndEnable')}
               </button>
               <button
                 type="button"
                 onClick={handleCancel}
                 className="text-sm text-gray-500 hover:text-gray-700"
               >
-                Cancel
+                {t('cancel')}
               </button>
             </div>
           </form>
@@ -423,17 +439,17 @@ function MfaSection({ account, onAccountUpdated }) {
       {step === 'disable' && (
         <form onSubmit={handleDisable} className="bg-red-50 rounded-lg p-4 border border-red-200 space-y-3">
           <div className="text-sm font-semibold text-red-800">
-            Disable MFA
+            {t('mfaDisableConfirm')}
           </div>
           <p className="text-xs text-red-700">
-            Enter your password to confirm. Your account will no longer require a second factor to sign in.
+            {t('mfaDisableConfirm')}
           </p>
           <div className="flex items-end gap-3">
             <input
               type="password"
               value={disablePassword}
               onChange={e => setDisablePassword(e.target.value)}
-              placeholder="Current password"
+              placeholder={t('mfaCurrentPasswordPlaceholder')}
               required
               autoFocus
               className="border rounded-md px-3 py-2 text-sm w-64 focus:ring-2 focus:ring-red-200 focus:outline-none"
@@ -441,16 +457,16 @@ function MfaSection({ account, onAccountUpdated }) {
             <button
               type="submit"
               disabled={loading || !disablePassword}
-              className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors"
+              className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
             >
-              {loading ? 'Disabling...' : 'Disable MFA'}
+              {loading ? t('mfaDisabling') : t('mfaDisableBtn')}
             </button>
             <button
               type="button"
               onClick={handleCancel}
               className="text-sm text-gray-500 hover:text-gray-700"
             >
-              Cancel
+              {t('cancel')}
             </button>
           </div>
         </form>
@@ -462,6 +478,7 @@ function MfaSection({ account, onAccountUpdated }) {
 // ---- Main Page ----
 
 export default function AccountSettingsPage({ account, onAccountUpdated, onBack, onLogout }) {
+  const { t } = usePlatformT()
   const initials = account?.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '?'
 
   return (
@@ -472,8 +489,12 @@ export default function AccountSettingsPage({ account, onAccountUpdated, onBack,
           {initials}
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Account Settings</h1>
-          <p className="text-sm text-gray-500">Manage your profile and security</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">
+            {t('accountSettings')}
+          </h1>
+          <p className="text-sm text-gray-500">
+            {t('accountSettingsDesc')}
+          </p>
         </div>
       </div>
 

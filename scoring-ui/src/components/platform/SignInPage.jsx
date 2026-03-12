@@ -3,8 +3,10 @@
 // ============================================================
 
 import { useState } from 'react'
+import { usePlatformT } from '../../platform-i18n.js'
 
 export default function SignInPage({ error, onLogin, onSwitchToSignUp, onForgotPassword }) {
+  const { t } = usePlatformT()
   const [form, setForm] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [localError, setLocalError] = useState(null)
@@ -33,21 +35,21 @@ export default function SignInPage({ error, onLogin, onSwitchToSignUp, onForgotP
       {/* Header */}
       <header className="bg-white border-b shadow-sm">
         <div className="max-w-5xl mx-auto flex items-center justify-between px-4 h-14">
-          <div className="text-lg font-bold text-sky-700">Match Management</div>
+          <div className="text-lg font-bold text-sky-700">{t('appName')}</div>
           <button
             onClick={onSwitchToSignUp}
             className="text-sm text-sky-600 hover:text-sky-700 font-medium"
           >
-            Create account
+            {t('signInCreateAccount')}
           </button>
         </div>
       </header>
 
       <div className="max-w-sm mx-auto px-4 py-16">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Sign in</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('signInTitle')}</h1>
           <p className="text-gray-500 text-sm">
-            Sign in to your Match Management account
+            {t('signInSubtitle')}
           </p>
         </div>
 
@@ -60,7 +62,7 @@ export default function SignInPage({ error, onLogin, onSwitchToSignUp, onForgotP
         <form onSubmit={handleSubmit} className="bg-white rounded-lg border p-6 space-y-4">
           <div>
             <label htmlFor="signin-email" className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
-              Email
+              {t('signInEmail')}
             </label>
             <input
               id="signin-email"
@@ -76,7 +78,7 @@ export default function SignInPage({ error, onLogin, onSwitchToSignUp, onForgotP
           </div>
           <div>
             <label htmlFor="signin-password" className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
-              Password
+              {t('signInPassword')}
             </label>
             <input
               id="signin-password"
@@ -91,7 +93,7 @@ export default function SignInPage({ error, onLogin, onSwitchToSignUp, onForgotP
             {onForgotPassword && (
               <div className="text-right mt-1">
                 <button type="button" onClick={onForgotPassword} className="text-xs text-sky-600 hover:underline">
-                  Forgot password?
+                  {t('signInForgotPassword')}
                 </button>
               </div>
             )}
@@ -101,14 +103,14 @@ export default function SignInPage({ error, onLogin, onSwitchToSignUp, onForgotP
             disabled={loading}
             className="w-full bg-sky-600 text-white py-2.5 rounded-md font-semibold hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {loading ? 'Signing in...' : 'Sign in'}
+            {loading ? t('signInSubmitting') : t('signInSubmit')}
           </button>
         </form>
 
         <p className="text-xs text-gray-400 text-center mt-6">
-          Don&apos;t have an account?{' '}
+          {t('signInNoAccount')}{' '}
           <button onClick={onSwitchToSignUp} className="text-sky-600 hover:underline">
-            Create one
+            {t('signInCreateOne')}
           </button>
         </p>
       </div>
