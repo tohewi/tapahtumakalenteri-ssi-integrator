@@ -14,6 +14,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { getTemplateApi, updateTemplateApi, importTemplateSeed, getTenantDetails } from '../../platform-api.js'
+import { usePlatformT } from '../../platform-i18n.js'
 
 // ---- Helpers ----
 
@@ -98,6 +99,7 @@ function NumberInput({ label, hint, value, onChange, min, max, placeholder }) {
  * @param {ReactNode} children — optional config fields shown when workflow is enabled
  */
 function WorkflowToggle({ type, label, description, workflows, onChange, children }) {
+  const { t } = usePlatformT()
   const existing = workflows.find(w => w.type === type)
   const enabled = existing?.enabled
 
@@ -119,7 +121,7 @@ function WorkflowToggle({ type, label, description, workflows, onChange, childre
           className={`mt-0.5 w-9 h-5 rounded-full flex items-center px-0.5 shrink-0 transition-colors ${
             enabled ? 'bg-emerald-500 justify-end' : 'bg-gray-300 justify-start'
           }`}
-          title={enabled ? 'Disable' : 'Enable'}
+          title={enabled ? t('disable') : t('enable')}
         >
           <div className="w-4 h-4 rounded-full bg-white shadow" />
         </button>
@@ -143,6 +145,7 @@ function WorkflowToggle({ type, label, description, workflows, onChange, childre
  * Placeholders: {eventName}, {eventDate}, {shooterCount}, {venue}
  */
 function WorkflowEmailConfig({ workflows, onChange }) {
+  const { t } = usePlatformT()
   const existing = workflows.find(w => w.type === 'email_shooter_count')
   const config = existing?.config || {}
 
@@ -165,7 +168,7 @@ function WorkflowEmailConfig({ workflows, onChange }) {
   return (
     <>
       <div>
-        <FieldLabel label="To" hint="required — comma-separated email addresses" />
+        <FieldLabel label={t('emailTo')} hint={t('emailToHint')} />
         <input
           type="text"
           value={toStr(config.to)}
@@ -177,7 +180,7 @@ function WorkflowEmailConfig({ workflows, onChange }) {
         />
       </div>
       <div>
-        <FieldLabel label="CC" hint="optional — comma-separated" />
+        <FieldLabel label={t('emailCc')} hint={t('emailCcHint')} />
         <input
           type="text"
           value={toStr(config.cc)}
@@ -187,7 +190,7 @@ function WorkflowEmailConfig({ workflows, onChange }) {
         />
       </div>
       <div>
-        <FieldLabel label="Subject Template" hint="use {eventName}, {eventDate}, {shooterCount}, {venue}" />
+        <FieldLabel label={t('emailSubjectTemplate')} hint={t('emailSubjectTemplateHint')} />
         <input
           type="text"
           value={config.subjectTemplate || ''}
@@ -197,7 +200,7 @@ function WorkflowEmailConfig({ workflows, onChange }) {
         />
       </div>
       <div>
-        <FieldLabel label="Body Template" hint="use {eventName}, {eventDate}, {shooterCount}, {venue} — plain text, each line becomes a paragraph" />
+        <FieldLabel label={t('emailBodyTemplate')} hint={t('emailBodyTemplateHint')} />
         <textarea
           value={config.bodyTemplate || ''}
           onChange={e => updateConfig('bodyTemplate', e.target.value)}
@@ -207,7 +210,7 @@ function WorkflowEmailConfig({ workflows, onChange }) {
         />
       </div>
       {!config.to?.length && (
-        <p className="text-xs text-amber-600">⚠ At least one recipient email address is required for the report to be sent.</p>
+        <p className="text-xs text-amber-600">{t('emailRecipientRequired')}</p>
       )}
     </>
   )
@@ -216,17 +219,18 @@ function WorkflowEmailConfig({ workflows, onChange }) {
 // ---- Seed Structure Display (read-only) ----
 
 function SeedStructure({ snapshot, onReimport, importing }) {
+  const { t } = usePlatformT()
   if (!snapshot) {
     return (
       <div className="bg-amber-50 rounded-md border border-amber-200 p-4 flex items-center justify-between">
         <div className="text-amber-700 text-sm">
-          Seed event structure not yet imported from SSI.
+          {t('seedNotImported')}
         </div>
         <button
           onClick={onReimport} disabled={importing}
           className="bg-sky-600 text-white px-4 py-1.5 rounded-md text-sm font-semibold hover:bg-sky-700 disabled:opacity-50 transition-colors"
         >
-          {importing ? 'Importing...' : 'Import from SSI'}
+          {importing ? t('importing') : t('importFromSsiBtn')}
         </button>
       </div>
     )
@@ -238,7 +242,7 @@ function SeedStructure({ snapshot, onReimport, importing }) {
         <div>
           <div className="font-semibold text-gray-900">{snapshot.name}</div>
           <div className="text-xs text-gray-400">
-            {snapshot.isCup ? `Cup • ${snapshot.matchCount} component matches` : 'Single match'}
+            {snapshot.isCup ? t('cupWithMatches', snapshot.matchCount) : t('singleMatch')}
             {snapshot.venue && ` • ${snapshot.venue}`}
           </div>
         </div>
@@ -246,7 +250,7 @@ function SeedStructure({ snapshot, onReimport, importing }) {
           onClick={onReimport} disabled={importing}
           className="text-xs text-sky-500 hover:underline disabled:opacity-50"
         >
-          {importing ? 'Re-importing...' : 'Re-import'}
+          {importing ? t('reimporting') : t('reimport')}
         </button>
       </div>
 
@@ -257,12 +261,12 @@ function SeedStructure({ snapshot, onReimport, importing }) {
       {/* Component matches */}
       {snapshot.matches && snapshot.matches.length > 0 && (
         <div className="space-y-2">
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Component Matches</div>
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('componentMatches')}</div>
           {snapshot.matches.map((m, i) => (
             <div key={i} className="bg-gray-50 rounded-md p-3 border-l-3 border-sky-300">
               <div className="font-medium text-sm text-gray-800">{m.name}</div>
               <div className="text-xs text-gray-400 mt-0.5">
-                {m.rule && <span className="mr-3">Rule: {m.rule}</span>}
+                {m.rule && <span className="mr-3">{t('rule')}: {m.rule}</span>}
                 {m.squads && m.squads.length > 0 && (
                   <span>
                     {m.squads.length} squads: {m.squads.map(s => `${s.name} (max ${s.maxCompetitors})`).join(', ')}
@@ -277,7 +281,7 @@ function SeedStructure({ snapshot, onReimport, importing }) {
       {/* Cup-level squads (non-cup events) */}
       {snapshot.squads && snapshot.squads.length > 0 && !snapshot.isCup && (
         <div className="space-y-1">
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Squads</div>
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{t('squads')}</div>
           {snapshot.squads.map((s, i) => (
             <div key={i} className="text-sm text-gray-600">{s.name} — max {s.maxCompetitors}</div>
           ))}
@@ -285,7 +289,7 @@ function SeedStructure({ snapshot, onReimport, importing }) {
       )}
 
       <div className="text-[10px] text-gray-400">
-        Imported: {new Date(snapshot.importedAt).toLocaleString('fi-FI')} • Source: {snapshot.sourceUrl}
+        {t('importedAt')}: {new Date(snapshot.importedAt).toLocaleString('fi-FI')} • {t('source')}: {snapshot.sourceUrl}
       </div>
     </div>
   )
@@ -294,6 +298,7 @@ function SeedStructure({ snapshot, onReimport, importing }) {
 // ---- Main Component ----
 
 export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
+  const { t } = usePlatformT()
   const [template, setTemplate] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -380,7 +385,7 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
   async function handleSave() {
     const validationErrors = getStaffingValidationErrors()
     if (validationErrors.length > 0) {
-      setStatus({ type: 'error', message: 'Staffing roles must have both Key and Label filled in.' })
+      setStatus({ type: 'error', message: t('staffingValidationError') })
       return
     }
     setSaving(true)
@@ -396,7 +401,7 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
       })
       setTemplate(data.template)
       setDirty(false)
-      setStatus({ type: 'success', message: 'Template saved successfully' })
+      setStatus({ type: 'success', message: t('templateSaved') })
     } catch (err) {
       setStatus({ type: 'error', message: err.message })
     } finally {
@@ -426,7 +431,7 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="text-gray-400 text-sm">Loading template...</div>
+        <div className="text-gray-400 text-sm">{t('loadingTemplate')}</div>
       </div>
     )
   }
@@ -434,7 +439,7 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
   if (!template) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="text-red-500 text-sm">Template not found</div>
+        <div className="text-red-500 text-sm">{t('templateNotFound')}</div>
       </div>
     )
   }
@@ -450,13 +455,13 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
               <button onClick={onBack} className="text-gray-400 hover:text-gray-600 text-sm">←</button>
               <h1 className="text-xl font-bold text-gray-900">{template.name}</h1>
             </div>
-            <p className="text-sm text-gray-400">Template Editor</p>
+            <p className="text-sm text-gray-400">{t('templateEditor')}</p>
           </div>
           <button
             onClick={handleSave} disabled={saving || !dirty}
             className="bg-sky-600 text-white px-5 py-2 rounded-md text-sm font-semibold hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {saving ? 'Saving...' : 'Save Changes'}
+            {saving ? t('saving') : t('saveChanges')}
           </button>
         </div>
 
@@ -471,27 +476,27 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
         )}
 
         {/* Section 1: Seed Structure (read-only) */}
-        <SectionCard title="Imported Event Structure" description="Read-only snapshot from SSI — the blueprint for new events">
+        <SectionCard title={t('seedStructure')} description={t('seedStructureDesc')}>
           <SeedStructure snapshot={snapshot} onReimport={handleReimport} importing={importing} />
         </SectionCard>
 
         {/* Section 2: Event Overrides */}
-        <SectionCard title="Event Overrides" description="These values override the seed when creating new events. Use {date} for date substitution.">
+        <SectionCard title={t('eventOverrides')} description={t('eventOverridesDesc')}>
           <TextInput
-            label="Name Template" hint="Use {date} for the event date"
+            label={t('nameTemplate')} hint={t('nameTemplateHint')}
             value={overrides.nameTemplate}
             onChange={v => updateOverride('nameTemplate', v)}
             placeholder={snapshot?.name ? `${snapshot.name} {date}` : 'e.g. TurRes Kupittaa CUP {date}'}
           />
           <div className="grid grid-cols-2 gap-4">
             <TextInput
-              label="Start Time" hint="Finnish format hh.mm"
+              label={t('startTime')} hint={t('startTimeHint')}
               value={overrides.startTime}
               onChange={v => updateOverride('startTime', v)}
               placeholder="09.00"
             />
             <TextInput
-              label="End Time"
+              label={t('endTime')}
               value={overrides.endTime}
               onChange={v => updateOverride('endTime', v)}
               placeholder="12.00"
@@ -499,47 +504,47 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <NumberInput
-              label="Registration Opens" hint="days before event"
+              label={t('registrationOpens')} hint={t('registrationOpensHint')}
               value={overrides.registrationDaysBeforeEvent}
               onChange={v => updateOverride('registrationDaysBeforeEvent', v)}
               min={1} max={90} placeholder="7"
             />
             <TextInput
-              label="Registration Start Time"
+              label={t('registrationStartTime')}
               value={overrides.registrationStartTime}
               onChange={v => updateOverride('registrationStartTime', v)}
               placeholder="00.00"
             />
           </div>
           <TextArea
-            label="Description" hint="Max 300 chars — shown in event listings"
+            label={t('description')} hint={t('descriptionHint')}
             value={overrides.description}
             onChange={v => updateOverride('description', v)}
             placeholder={snapshot?.description || 'Short event description...'}
             rows={3}
           />
           <TextArea
-            label="Information" hint="Max 800 chars — detailed info on event page"
+            label={t('information')} hint={t('informationHint')}
             value={overrides.information}
             onChange={v => updateOverride('information', v)}
             placeholder={snapshot?.information || 'Detailed event information...'}
             rows={6}
           />
           <TextInput
-            label="Venue"
+            label={t('venue')}
             value={overrides.venue}
             onChange={v => updateOverride('venue', v)}
             placeholder={snapshot?.venue || 'Event venue address'}
           />
           <div className="grid grid-cols-2 gap-4">
             <TextInput
-              label="URL"
+              label={t('urlLabel')}
               value={overrides.url}
               onChange={v => updateOverride('url', v)}
               placeholder={snapshot?.url || 'https://...'}
             />
             <TextInput
-              label="URL Display Text"
+              label={t('urlDisplayText')}
               value={overrides.urlDisplay}
               onChange={v => updateOverride('urlDisplay', v)}
               placeholder={snapshot?.urlDisplay || 'Lisätietoa'}
@@ -548,48 +553,48 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
         </SectionCard>
 
         {/* Section 3: Calendar Template */}
-        <SectionCard title="Calendar Template" description="WordPress / Tapahtumakalenteri publishing settings. Use {date} and {ssiCupLink} placeholders.">
+        <SectionCard title={t('calendarTemplate')} description={t('calendarTemplateDesc')}>
           <TextInput
-            label="Calendar Title Template" hint="Use {date} for date"
+            label={t('calendarTitleTemplate')} hint={t('calendarTitleTemplateHint')}
             value={calendarTemplate.titleTemplate}
             onChange={v => updateCalendar('titleTemplate', v)}
             placeholder="e.g. Kupittaan ampumavuoro {date}"
           />
           <TextInput
-            label="Location"
+            label={t('location')}
             value={calendarTemplate.location}
             onChange={v => updateCalendar('location', v)}
             placeholder="e.g. Kupittaan urheiluhallin ampumarata"
           />
           <TextInput
-            label="Map Link"
+            label={t('mapLink')}
             value={calendarTemplate.mapLink}
             onChange={v => updateCalendar('mapLink', v)}
             placeholder="https://maps.app.goo.gl/..."
           />
           <TextArea
-            label="Short Description" hint="Ingressi, ~300 chars"
+            label={t('shortDescription')} hint={t('shortDescriptionHint')}
             value={calendarTemplate.shortDescription}
             onChange={v => updateCalendar('shortDescription', v)}
             placeholder="Brief calendar listing description..."
             rows={2}
           />
           <TextArea
-            label="Calendar Content" hint="HTML — use {ssiCupLink} for SSI registration link"
+            label={t('calendarContent')} hint={t('calendarContentHint')}
             value={calendarTemplate.content}
             onChange={v => updateCalendar('content', v)}
             placeholder="<strong>Event details...</strong>"
             rows={12}
           />
           <TextInput
-            label="Shots Per Participant" hint="Used for statistics: total shots = participants × this value (default: 100)"
+            label={t('shotsPerParticipant')} hint={t('shotsPerParticipantHint')}
             value={calendarTemplate.shotsPerParticipant ?? ''}
             onChange={v => updateCalendar('shotsPerParticipant', v === '' ? undefined : parseInt(v, 10) || 0)}
             placeholder="100"
             type="number"
           />
           <TextInput
-            label="Event Format Taxonomy IDs" hint="Comma-separated WordPress taxonomy IDs"
+            label={t('taxonomyIds')} hint={t('taxonomyIdsHint')}
             value={(calendarTemplate.taxonomyIds || []).join(', ')}
             onChange={v => updateCalendar('taxonomyIds', v.split(',').map(s => s.trim()).filter(Boolean))}
             placeholder="50, 52"
@@ -597,25 +602,25 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
         </SectionCard>
 
         {/* Section 4: Staffing Rules — roles array */}
-        <SectionCard title="Staffing Rules" description="Roles and counts auto-populated to every event created from this template.">
+        <SectionCard title={t('staffingRulesTitle')} description={t('staffingRulesDesc')}>
           <div className="mb-4 bg-white border border-gray-200 rounded-md p-4 space-y-3">
-            <h4 className="text-sm font-semibold text-gray-800">SSI Sync Settings</h4>
+            <h4 className="text-sm font-semibold text-gray-800">{t('ssiSyncSettings')}</h4>
             <div className="grid grid-cols-2 gap-4">
               <TextInput
-                label="Trainer Squad Name" hint="e.g. Squad 5"
+                label={t('staffSquadName')} hint={t('staffSquadNameHint')}
                 value={staffingRules.staffSquadName}
                 onChange={v => updateStaffing('staffSquadName', v)}
                 placeholder="Squad 5"
               />
             </div>
             <p className="text-xs text-gray-500">
-              When a user signs up for any role below, they will be automatically moved to this squad in SSI (if left empty, squad sync is skipped).
+              {t('staffSquadExplanation')}
             </p>
           </div>
 
           {(staffingRules.roles || []).length === 0 ? (
             <div className="text-sm text-gray-500 text-center py-4">
-              No staffing roles defined. Add roles so events know how many volunteers they need.
+              {t('noStaffingRoles')}
             </div>
           ) : (
             <div className="space-y-3">
@@ -623,7 +628,7 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
                 <div key={idx} className="bg-gray-50 rounded-md p-3 border border-gray-200">
                   <div className="grid grid-cols-12 gap-2 items-end">
                     <div className="col-span-3">
-                      <FieldLabel label="Key" hint="internal ID" />
+                      <FieldLabel label={t('keyLabel')} hint={t('keyHint')} />
                       <input type="text" value={role.key || ''} onChange={e => {
                         const updated = [...staffingRules.roles]
                         updated[idx] = { ...updated[idx], key: e.target.value }
@@ -631,7 +636,7 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
                       }} placeholder="ro" className={`w-full border rounded-md px-2 py-1 text-sm ${!role.key?.trim() ? 'border-red-400 bg-red-50' : ''}`} />
                     </div>
                     <div className="col-span-4">
-                      <FieldLabel label="Label" hint="display name" />
+                      <FieldLabel label={t('labelField')} hint={t('labelHint')} />
                       <input type="text" value={role.label || ''} onChange={e => {
                         const updated = [...staffingRules.roles]
                         updated[idx] = { ...updated[idx], label: e.target.value }
@@ -639,7 +644,7 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
                       }} placeholder="Range Officer" className={`w-full border rounded-md px-2 py-1 text-sm ${!role.label?.trim() ? 'border-red-400 bg-red-50' : ''}`} />
                     </div>
                     <div className="col-span-2">
-                      <FieldLabel label="Min" />
+                      <FieldLabel label={t('minLabel')} />
                       <input type="number" value={role.min ?? ''} min={0} max={20} onChange={e => {
                         const updated = [...staffingRules.roles]
                         updated[idx] = { ...updated[idx], min: parseInt(e.target.value) || 0 }
@@ -647,7 +652,7 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
                       }} className="w-full border rounded-md px-2 py-1 text-sm" />
                     </div>
                     <div className="col-span-2">
-                      <FieldLabel label="Max" />
+                      <FieldLabel label={t('maxLabel')} />
                       <input type="number" value={role.max ?? ''} min={0} max={50} onChange={e => {
                         const updated = [...staffingRules.roles]
                         updated[idx] = { ...updated[idx], max: parseInt(e.target.value) || 1 }
@@ -663,7 +668,7 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
                   </div>
                   <div className="grid grid-cols-12 gap-2 mt-2 pt-2 border-t border-gray-100">
                     <div className="col-span-4">
-                      <FieldLabel label="SSI Official Code" hint="e.g. MD, QM, RM, RO" />
+                      <FieldLabel label={t('ssiOfficialCode')} hint={t('ssiOfficialCodeHint')} />
                       <input type="text" value={role.ssiOfficialCode || ''} onChange={e => {
                         const updated = [...staffingRules.roles]
                         updated[idx] = { ...updated[idx], ssiOfficialCode: e.target.value }
@@ -671,15 +676,15 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
                       }} placeholder="Leave empty for none" className="w-full border rounded-md px-2 py-1 text-sm" />
                     </div>
                     <div className="col-span-4">
-                      <FieldLabel label="SSI Mgmt Role" hint="1=Admin, 2=Staff" />
+                      <FieldLabel label={t('ssiMgmtRole')} hint={t('ssiMgmtRoleHint')} />
                       <select value={role.ssiMgmtRole || ''} onChange={e => {
                         const updated = [...staffingRules.roles]
                         updated[idx] = { ...updated[idx], ssiMgmtRole: e.target.value }
                         updateStaffing('roles', updated)
                       }} className="w-full border rounded-md px-2 py-1 text-sm">
-                        <option value="">No Management Access</option>
-                        <option value="1">Match Admin (1)</option>
-                        <option value="2">Staff (2)</option>
+                        <option value="">{t('noMgmtAccess')}</option>
+                        <option value="1">{t('matchAdmin')}</option>
+                        <option value="2">{t('staffRole')}</option>
                       </select>
                     </div>
                   </div>
@@ -691,7 +696,7 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
             const roles = [...(staffingRules.roles || []), { key: '', label: '', min: 1, max: 1, ssiOfficialCode: '', ssiMgmtRole: '' }]
             updateStaffing('roles', roles)
           }} className="mt-2 text-sm text-sky-600 hover:text-sky-800 font-medium">
-            + Add Role
+            {t('addRole')}
           </button>
 
           {/* Quick-add SRA defaults */}
@@ -704,18 +709,18 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
                 { key: 'scorer', label: 'Scorer', min: 1, max: 2, ssiOfficialCode: '', ssiMgmtRole: '1' },
               ])
             }} className="ml-4 text-sm text-gray-400 hover:text-gray-600">
-              or load SRA defaults
+              {t('loadSraDefaults')}
             </button>
           )}
         </SectionCard>
 
         {/* Section 5: Post-Event Workflows */}
-        <SectionCard title="Post-Event Workflows" description="Actions to run after an event completes. Toggle workflows based on your tenant integrations.">
+        <SectionCard title={t('postEventWorkflows')} description={t('postEventWorkflowsDesc')}>
           {/* Email shooter count — always available (no integration dependency) */}
           <WorkflowToggle
             type="email_shooter_count"
-            label="Email Shooter Count Report"
-            description="Send event name, date, and final shooter count via email. Does not require SSI or calendar integration."
+            label={t('emailShooterCount')}
+            description={t('emailShooterCountDesc')}
             workflows={postEventWorkflows}
             onChange={wfs => { setPostEventWorkflows(wfs); setDirty(true) }}
           >
@@ -728,8 +733,8 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
           {hasSsi && (
             <WorkflowToggle
               type="complete_ssi"
-              label="Mark Event Completed in SSI"
-              description="Publishes final scores and marks the SSI event as completed."
+              label={t('completeSsiWorkflow')}
+              description={t('completeSsiWorkflowDesc')}
               workflows={postEventWorkflows}
               onChange={wfs => { setPostEventWorkflows(wfs); setDirty(true) }}
             />
@@ -738,28 +743,28 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
           {hasCalendar && (
             <WorkflowToggle
               type="update_calendar_stats"
-              label="Update Tapahtumakalenteri Statistics"
-              description="Reports shooter count and shots fired to the WordPress calendar event."
+              label={t('updateCalendarStats')}
+              description={t('updateCalendarStatsDesc')}
               workflows={postEventWorkflows}
               onChange={wfs => { setPostEventWorkflows(wfs); setDirty(true) }}
             />
           )}
           {!hasSsi && !hasCalendar && (
-            <p className="text-xs text-gray-400">Configure SSI credentials or calendar settings in tenant settings to enable additional workflows.</p>
+            <p className="text-xs text-gray-400">{t('noIntegrationsHint')}</p>
           )}
         </SectionCard>
 
         {/* Section 6: Pre-Event Workflows (placeholder) */}
-        <SectionCard title="Pre-Event Workflows" description="Actions to run before an event starts." defaultOpen={false}>
+        <SectionCard title={t('preEventWorkflows')} description={t('preEventWorkflowsDesc')} defaultOpen={false}>
           <div className="text-sm text-gray-400 text-center py-4">
-            Pre-event workflows are not yet available. This section will support automated actions like sending reminders or syncing registrations before the event date.
+            {t('preEventNotAvailable')}
           </div>
         </SectionCard>
 
         {/* Sticky save bar */}
         {dirty && (
           <div className="sticky bottom-4 bg-white rounded-xl shadow-lg border border-sky-200 px-6 py-3 flex items-center justify-between">
-            <span className="text-sm text-gray-600">You have unsaved changes</span>
+            <span className="text-sm text-gray-600">{t('unsavedChanges')}</span>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
@@ -771,13 +776,13 @@ export default function TemplateEditorPage({ tenantId, templateId, onBack }) {
                 }}
                 className="text-sm text-gray-500 hover:text-gray-700"
               >
-                Discard
+                {t('discardChanges')}
               </button>
               <button
                 onClick={handleSave} disabled={saving}
                 className="bg-sky-600 text-white px-5 py-1.5 rounded-md text-sm font-semibold hover:bg-sky-700 disabled:opacity-50 transition-colors"
               >
-                {saving ? 'Saving...' : 'Save Changes'}
+                {saving ? t('saving') : t('saveChanges')}
               </button>
             </div>
           </div>

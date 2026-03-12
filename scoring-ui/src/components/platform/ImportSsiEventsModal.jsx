@@ -9,6 +9,7 @@
 
 import { useState, useEffect } from 'react'
 import { ssiSearchEventsApi, ssiImportEventsApi, listDisciplines } from '../../platform-api.js'
+import { usePlatformT } from '../../platform-i18n.js'
 
 // Known SSI sport/rule codes for the filter dropdown
 const SPORT_OPTIONS = [
@@ -43,6 +44,7 @@ function sportLabel(rule) {
 }
 
 export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) {
+  const { t } = usePlatformT()
   // Disciplines for the tenant (loaded on mount)
   const [disciplines, setDisciplines] = useState([])
   const [selectedDisciplineId, setSelectedDisciplineId] = useState('')
@@ -160,8 +162,8 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Import from SSI</h2>
-            <p className="text-xs text-gray-500">Search existing events on ShootNScoreIt and import them into your schedule.</p>
+            <h2 className="text-lg font-bold text-gray-900">{t('importSsiTitle')}</h2>
+            <p className="text-xs text-gray-500">{t('importSsiDesc')}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
         </div>
@@ -171,12 +173,12 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {/* Name search */}
             <div className="sm:col-span-2 lg:col-span-1">
-              <label className="block text-xs font-medium text-gray-600 mb-1">Name</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{t('searchLabel')}</label>
               <input
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Event name..."
+                placeholder={t('searchPlaceholder')}
                 required
                 minLength={2}
                 className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
@@ -185,7 +187,7 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
 
             {/* Sport filter */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Sport</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{t('sportLabel')}</label>
               <select
                 value={sport}
                 onChange={e => setSport(e.target.value)}
@@ -199,7 +201,7 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
 
             {/* Region filter */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Region</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{t('regionLabel')}</label>
               <select
                 value={region}
                 onChange={e => setRegion(e.target.value)}
@@ -213,7 +215,7 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
 
             {/* Starts after */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Starts after</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{t('startsAfter')}</label>
               <input
                 type="date"
                 value={startsAfter}
@@ -224,7 +226,7 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
 
             {/* Starts before */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Starts before</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{t('startsBefore')}</label>
               <input
                 type="date"
                 value={startsBefore}
@@ -240,10 +242,10 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
               disabled={searching || search.trim().length < 2}
               className="bg-sky-600 text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-sky-700 disabled:opacity-50 transition-colors"
             >
-              {searching ? 'Searching...' : 'Search'}
+              {searching ? t('searching') : t('searchBtn')}
             </button>
             {results !== null && (
-              <span className="text-xs text-gray-500">{results.length} result{results.length !== 1 ? 's' : ''}</span>
+              <span className="text-xs text-gray-500">{t('searchResults', results.length)}</span>
             )}
           </div>
         </form>
@@ -251,14 +253,14 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
         {/* Search Error */}
         {searchError && (
           <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
-            Search failed: {searchError}
+            {t('searchFailed')}: {searchError}
           </div>
         )}
 
         {/* Import Error */}
         {importError && (
           <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
-            Import failed: {importError}
+            {t('importFailed')}: {importError}
           </div>
         )}
 
@@ -278,12 +280,12 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
                         className="rounded text-sky-600"
                       />
                     </th>
-                    <th className="px-3 py-2.5 font-medium text-gray-600">Name</th>
-                    <th className="px-3 py-2.5 font-medium text-gray-600">Date</th>
-                    <th className="px-3 py-2.5 font-medium text-gray-600">Sport</th>
-                    <th className="px-3 py-2.5 font-medium text-gray-600">Region</th>
-                    <th className="px-3 py-2.5 font-medium text-gray-600">Status</th>
-                    <th className="px-3 py-2.5 font-medium text-gray-600">SSI</th>
+                    <th className="px-3 py-2.5 font-medium text-gray-600">{t('nameColumn')}</th>
+                    <th className="px-3 py-2.5 font-medium text-gray-600">{t('dateColumn')}</th>
+                    <th className="px-3 py-2.5 font-medium text-gray-600">{t('sportColumn')}</th>
+                    <th className="px-3 py-2.5 font-medium text-gray-600">{t('regionColumn')}</th>
+                    <th className="px-3 py-2.5 font-medium text-gray-600">{t('statusColumn')}</th>
+                    <th className="px-3 py-2.5 font-medium text-gray-600">{t('ssiColumn')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -305,7 +307,7 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
                       </td>
                       <td className="px-3 py-2.5 font-medium text-gray-900">
                         {evt.name}
-                        {evt.alreadyImported && <span className="ml-2 text-xs text-green-600 font-normal">Imported</span>}
+                        {evt.alreadyImported && <span className="ml-2 text-xs text-green-600 font-normal">{t('alreadyImported')}</span>}
                       </td>
                       <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{formatDate(evt.starts)}</td>
                       <td className="px-3 py-2.5 text-gray-600">{sportLabel(evt.rule)}</td>
@@ -314,7 +316,7 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                           evt.status === 'on' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
                         }`}>
-                          {evt.status === 'on' ? 'Active' : evt.status || '—'}
+                          {evt.status === 'on' ? t('active') : evt.status || '—'}
                         </span>
                       </td>
                       <td className="px-3 py-2.5">
@@ -326,7 +328,7 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
                             onClick={e => e.stopPropagation()}
                             className="text-sky-500 hover:text-sky-700 text-xs"
                           >
-                            Open
+                            {t('open')}
                           </a>
                         )}
                       </td>
@@ -339,17 +341,17 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
             {/* Import Action */}
             <div className="flex items-center justify-between mt-4 gap-3">
               <span className="text-sm text-gray-500 flex-shrink-0">
-                {selected.size} event{selected.size !== 1 ? 's' : ''} selected
+                {t('eventsSelected', selected.size)}
               </span>
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-gray-500 whitespace-nowrap">Discipline:</label>
+                  <label className="text-xs text-gray-500 whitespace-nowrap">{t('disciplineLabel')}</label>
                   <select
                     value={selectedDisciplineId}
                     onChange={e => setSelectedDisciplineId(e.target.value)}
                     className="border rounded-md px-2 py-1.5 text-sm focus:ring-sky-500 focus:border-sky-500 min-w-[140px]"
                   >
-                    <option value="">Select discipline...</option>
+                    <option value="">{t('selectDiscipline')}</option>
                     {disciplines.map(d => (
                       <option key={d.id} value={d.id}>{d.labelFi || d.name}</option>
                     ))}
@@ -360,7 +362,7 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
                   disabled={selected.size === 0 || importing || !selectedDisciplineId}
                   className="bg-sky-600 text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-sky-700 disabled:opacity-50 transition-colors whitespace-nowrap"
                 >
-                  {importing ? 'Importing...' : `Import ${selected.size} Event${selected.size !== 1 ? 's' : ''}`}
+                  {importing ? t('importing') : t('importNEvents', selected.size)}
                 </button>
               </div>
             </div>
@@ -370,7 +372,7 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
         {/* Empty results */}
         {results !== null && results.length === 0 && !searching && (
           <div className="px-6 py-8 text-center text-sm text-gray-400">
-            No events found matching your search criteria.
+            {t('noEventsFound')}
           </div>
         )}
 
@@ -378,7 +380,7 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
         {importResults && (
           <div className="px-6 py-4 border-t">
             <div className="text-sm font-medium text-gray-700 mb-2">
-              Import Results: {importResults.imported}/{importResults.total} imported
+              {t('importResultsTitle', importResults.imported, importResults.total)}
             </div>
             <div className="space-y-1 max-h-40 overflow-y-auto">
               {importResults.results.map((r, i) => (
@@ -400,7 +402,7 @@ export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) 
             onClick={onClose}
             className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-md border transition-colors"
           >
-            {importResults ? 'Done' : 'Cancel'}
+            {importResults ? t('done') : t('cancel')}
           </button>
         </div>
       </div>
