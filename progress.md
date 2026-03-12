@@ -1,12 +1,18 @@
 # Progress
 
-Last updated: 2026-03-11 (night) by Cascade
-Branch: `release/r80-match-manager-base` at `8234024`
+Last updated: 2026-03-12 (morning) by Cascade
+Branch: `release/r80-match-manager-base` at `c10f97c`
 Tests: 870 backend (39 files) + 221 frontend (10 files) = 1091, all passing
 
 ---
 
 ## Current Session Work
+
+### Completed — 2026-03-12 (morning): PEW-2 Email Workflow Config
+
+23. **PEW-2: Email workflow config UI** (`c29ffd8`) — Added `WorkflowEmailConfig` component to TemplateEditorPage with To (required), CC (optional), Subject Template, and Custom Note fields. `WorkflowToggle` now supports children (config shown when enabled). Backend: configurable `subjectTemplate` with `{eventName}`, `{eventDate}`, `{shooterCount}` placeholder substitution. Fixed `postEventWorkflows` missing from PATCH allowedFields whitelist in `routes/platform/templates.js`.
+
+24. **PEW-2: Fix email toggle semantics + body template** (`c10f97c`) — Email workflow is always *visible* (no integration dependency) but user-toggleable — removed incorrect `always` prop and forced-enable save logic. Replaced Custom Note with Body Template textarea supporting `{eventName}`, `{eventDate}`, `{shooterCount}`, `{venue}` placeholders. Backend: `{venue}` resolved from `template.calendarTemplate.location`. Custom body → paragraphs; default → table with venue row. XSS protection via HTML escaping.
 
 ### Completed — 2026-03-11 (night): BL-1 Admin Dashboard
 
