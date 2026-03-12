@@ -2,6 +2,8 @@
 // StatusBadge — status chip + shared constants for SchedulePage
 // ============================================================
 
+import { usePlatformT } from '../../../platform-i18n.js'
+
 export const STATUS_COLORS = {
   planned: 'bg-gray-100 text-gray-600',
   ssi_created: 'bg-blue-100 text-blue-700',
@@ -13,6 +15,19 @@ export const STATUS_COLORS = {
   failed: 'bg-red-100 text-red-700',
 }
 
+// Status label i18n key map
+export const STATUS_LABEL_KEYS = {
+  planned: 'statusLabelPlanned',
+  ssi_created: 'statusLabelSsiCreated',
+  calendar_published: 'statusLabelCalendarPublished',
+  staffed: 'statusLabelStaffed',
+  ready: 'statusLabelReady',
+  completed: 'statusLabelCompleted',
+  cancelled: 'statusLabelCancelled',
+  failed: 'statusLabelFailed',
+}
+
+// Keep static labels for non-React contexts (backward compat)
 export const STATUS_LABELS = {
   planned: 'Planned',
   ssi_created: 'SSI Created',
@@ -41,9 +56,11 @@ export function formatEventDate(dateStr) {
 }
 
 export default function StatusBadge({ status }) {
+  const { t } = usePlatformT()
+  const labelKey = STATUS_LABEL_KEYS[status]
   return (
     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS[status] || 'bg-gray-100 text-gray-500'}`}>
-      {STATUS_LABELS[status] || status}
+      {labelKey ? t(labelKey) : status}
     </span>
   )
 }

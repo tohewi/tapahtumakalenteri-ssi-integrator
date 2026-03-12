@@ -11,13 +11,15 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { listTemplates, listEvents, createEventsApi, deleteEventApi, cancelEventApi, executeEventApi, publishCalendarApi, updateCalendarStatsApi, completeSsiEventApi, integrityCheckApi, runPostEventApi, getUpcomingStaffingApi } from '../../platform-api.js'
+import { usePlatformT } from '../../platform-i18n.js'
 import ImportSsiEventsModal from './ImportSsiEventsModal.jsx'
 import EventCalendar from './EventCalendar.jsx'
-import StatusBadge, { STATUS_COLORS, STATUS_LABELS, CANCELLABLE_STATUSES, formatEventDate } from './schedule/StatusBadge.jsx'
+import StatusBadge, { STATUS_COLORS, STATUS_LABEL_KEYS, CANCELLABLE_STATUSES, formatEventDate } from './schedule/StatusBadge.jsx'
 import CancelEventModal from './schedule/CancelEventModal.jsx'
 import CreateEventsPanel from './schedule/CreateEventsPanel.jsx'
 
 export default function SchedulePage({ tenantId, onBack }) {
+  const { t } = usePlatformT()
   const [templates, setTemplates] = useState([])
   const [events, setEvents] = useState([])
   const [staffingStatus, setStaffingStatus] = useState({}) // { eventId: { isUnderstaffed: boolean } }
@@ -113,12 +115,12 @@ export default function SchedulePage({ tenantId, onBack }) {
         const successCount = data.results.filter(r => r.success).length
         setStatus({
           type: successCount === dates.length ? 'success' : 'warning',
-          message: `${successCount}/${dates.length} events created successfully`,
+          message: t('eventsCreatedSuccess', successCount, dates.length),
         })
       } else if (data.event) {
         // Single event
         setBatchResults([{ success: true, date: dates[0], event: data.event }])
-        setStatus({ type: 'success', message: 'Event created successfully' })
+        setStatus({ type: 'success', message: t('eventCreatedSuccess') })
       }
 
       setDates([])
@@ -132,16 +134,16 @@ export default function SchedulePage({ tenantId, onBack }) {
 
   // Execute a planned event — create in SSI
   async function handleExecute(eventId) {
-    if (!confirm('Create this event in SSI? This will create a real cup, matches, and squads on ShootNScoreIt.')) return
+    if (!confirm(t('createInSsi') + '?')) return
     setExecutingId(eventId)
     setStatus(null)
     try {
       const data = await executeEventApi(tenantId, eventId)
-      const parts = [`SSI event created: ${data.ssiReferences?.cupName || 'Cup'} — ${data.ssiReferences?.matches?.length || 0} matches`]
+      const parts = [`SSI: ${data.ssiReferences?.cupName || 'Cup'} — ${data.ssiReferences?.matches?.length || 0} ${t('matches')}`]
       if (data.calendarResult?.success) {
-        parts.push('Calendar event published')
+        parts.push(t('publishCalendar') + ' ✓')
       } else if (data.calendarResult && !data.calendarResult.success) {
-        parts.push(`Calendar publishing failed (can retry): ${data.calendarResult.error}`)
+        parts.push(`${t('publishingFailed')}: ${data.calendarResult.error}`)
       }
       setStatus({ type: data.calendarResult && !data.calendarResult.success ? 'warning' : 'success', message: parts.join(' · ') })
       await refreshEvents()
@@ -159,10 +161,10 @@ export default function SchedulePage({ tenantId, onBack }) {
     setStatus(null)
     try {
       const data = await publishCalendarApi(tenantId, eventId, { force })
-      setStatus({ type: 'success', message: `Calendar event published successfully` })
+      setStatus({ type: 'success', message: t('publishCalendar') + ' ✓' })
       await refreshEvents()
     } catch (err) {
-      setStatus({ type: 'error', message: `Calendar publish failed: ${err.message}` })
+      setStatus({ type: 'error', message: `${t('publishingFailed')}: ${err.message}` })
       await refreshEvents()
     } finally {
       setExecutingId(null)
@@ -176,10 +178,10 @@ export default function SchedulePage({ tenantId, onBack }) {
     try {
       const data = await updateCalendarStatsApi(tenantId, eventId)
       const stats = data.stats || {}
-      setStatus({ type: 'success', message: `Statistics updated: ${stats.approvedCount} participants, ${stats.shotsFired} shots` })
+      setStatus({ type: 'success', message: `${t('updateStats')}: ${stats.approvedCount} ${t('participants')}, ${stats.shotsFired} ${t('shots')}` })
       await refreshEvents()
     } catch (err) {
-      setStatus({ type: 'error', message: `Statistics update failed: ${err.message}` })
+      setStatus({ type: 'error', message: `${t('updateStats')}: ${err.message}` })
       await refreshEvents()
     } finally {
       setExecutingId(null)
@@ -193,10 +195,10 @@ export default function SchedulePage({ tenantId, onBack }) {
     try {
       const data = await completeSsiEventApi(tenantId, eventId)
       const matchCount = data.completion?.matchResults?.length || 0
-      setStatus({ type: 'success', message: `SSI event completed${matchCount > 0 ? ` (${matchCount} matches)` : ''}` })
+      setStatus({ type: 'success', message: `${t('completeSsi')} ✓${matchCount > 0 ? ` (${matchCount} ${t('matches')})` : ''}` })
       await refreshEvents()
     } catch (err) {
-      setStatus({ type: 'error', message: `SSI complete failed: ${err.message}` })
+      setStatus({ type: 'error', message: `${t('completeSsi')}: ${err.message}` })
       await refreshEvents()
     } finally {
       setExecutingId(null)
@@ -212,12 +214,12 @@ export default function SchedulePage({ tenantId, onBack }) {
       const result = await integrityCheckApi(tenantId, { liveCheck })
       setIntegrityResult(result)
       if (result.summary?.passed) {
-        setStatus({ type: 'success', message: `Integrity check passed (${result.summary.totalEvents} events checked)` })
+        setStatus({ type: 'success', message: `${t('integrityPassed')} (${result.summary.totalEvents} ${t('eventsChecked')})` })
       } else {
-        setStatus({ type: 'warning', message: `Integrity check: ${result.summary?.errorCount || 0} errors, ${result.summary?.warningCount || 0} warnings` })
+        setStatus({ type: 'warning', message: `${t('integrityCheck')}: ${result.summary?.errorCount || 0} ${t('errors')}, ${result.summary?.warningCount || 0} warnings` })
       }
     } catch (err) {
-      setStatus({ type: 'error', message: `Integrity check failed: ${err.message}` })
+      setStatus({ type: 'error', message: `${t('integrityCheck')}: ${err.message}` })
     } finally {
       setIntegrityRunning(false)
     }
@@ -231,15 +233,15 @@ export default function SchedulePage({ tenantId, onBack }) {
       const result = await runPostEventApi(tenantId, eventId)
       const { summary } = result
       if (summary.totalSteps === 0) {
-        setStatus({ type: 'warning', message: 'No post-event workflows configured for this template' })
+        setStatus({ type: 'warning', message: `${t('runWorkflows')}: 0` })
       } else if (summary.failed === 0) {
-        setStatus({ type: 'success', message: `Post-event workflows: ${summary.succeeded} succeeded, ${summary.skipped} skipped` })
+        setStatus({ type: 'success', message: `${t('runWorkflows')}: ${summary.succeeded} ✓, ${summary.skipped} ${t('skipped').toLowerCase()}` })
       } else {
-        setStatus({ type: 'warning', message: `Post-event workflows: ${summary.succeeded} succeeded, ${summary.failed} failed, ${summary.skipped} skipped` })
+        setStatus({ type: 'warning', message: `${t('runWorkflows')}: ${summary.succeeded} ✓, ${summary.failed} ✗, ${summary.skipped} ${t('skipped').toLowerCase()}` })
       }
       await refreshEvents()
     } catch (err) {
-      setStatus({ type: 'error', message: `Post-event workflows failed: ${err.message}` })
+      setStatus({ type: 'error', message: `${t('runWorkflows')}: ${err.message}` })
     } finally {
       setExecutingId(null)
     }
@@ -251,9 +253,9 @@ export default function SchedulePage({ tenantId, onBack }) {
       setExecutingId(evt.id)
       const result = await cancelEventApi(tenantId, evt.id, { removeFromSsi })
       setCancelTarget(null)
-      const parts = [`Event cancelled`]
-      if (result.impact?.removedFromSsi) parts.push('removed from SSI')
-      if (result.impact?.staffingSignups > 0) parts.push(`${result.impact.staffingSignups} signup(s) affected`)
+      const parts = [t('eventCancelled')]
+      if (result.impact?.removedFromSsi) parts.push('SSI ✓')
+      if (result.impact?.staffingSignups > 0) parts.push(`${result.impact.staffingSignups} signup(s)`)
       setStatus({ type: 'success', message: parts.join(' · ') })
       await refreshEvents()
     } catch (err) {
@@ -265,13 +267,13 @@ export default function SchedulePage({ tenantId, onBack }) {
 
   // Delete an event (hard delete — removes from DB)
   async function handleDelete(evt) {
-    let confirmMsg = 'Delete this event?'
+    let confirmMsg = t('deleteConfirm')
     
     if (evt.status === 'ssi_created') {
       const matchCount = evt.ssiReferences?.matches?.length || 0
-      confirmMsg = `This will delete the event from SSI (Cup + ${matchCount} matches) and remove it locally. Are you sure?`
+      confirmMsg = t('deleteConfirmSsi', matchCount)
     } else if (evt.status === 'calendar_published') {
-      confirmMsg = 'This will delete the event from SSI and Tapahtumakalenteri, and remove it locally. Are you sure?'
+      confirmMsg = t('deleteConfirmCalendar')
     }
 
     if (!confirm(confirmMsg)) return
@@ -319,7 +321,7 @@ export default function SchedulePage({ tenantId, onBack }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="text-gray-400 text-sm">Loading schedule...</div>
+        <div className="text-gray-400 text-sm">{t('loadingSchedule')}</div>
       </div>
     )
   }
@@ -329,14 +331,14 @@ export default function SchedulePage({ tenantId, onBack }) {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Event Schedule</h1>
-            <p className="text-sm text-gray-400">Create and manage scheduled events</p>
+            <h1 className="text-2xl font-bold text-gray-900">{t('eventSchedule')}</h1>
+            <p className="text-sm text-gray-400">{t('eventScheduleDesc')}</p>
           </div>
           <button
             onClick={() => setShowImportModal(true)}
             className="bg-white border border-sky-300 text-sky-700 px-4 py-2 rounded-md text-sm font-medium hover:bg-sky-50 transition-colors whitespace-nowrap"
           >
-            Import from SSI
+            {t('importFromSsi')}
           </button>
         </div>
 
@@ -371,7 +373,7 @@ export default function SchedulePage({ tenantId, onBack }) {
           <div className="flex flex-wrap items-center gap-2">
             {Object.entries(statusCounts).map(([st, count]) => (
               <span key={st} className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full ${STATUS_COLORS[st] || 'bg-gray-100 text-gray-500'}`}>
-                {STATUS_LABELS[st] || st}
+                {STATUS_LABEL_KEYS[st] ? t(STATUS_LABEL_KEYS[st]) : st}
                 <span className="opacity-70">{count}</span>
               </span>
             ))}
@@ -381,7 +383,7 @@ export default function SchedulePage({ tenantId, onBack }) {
               disabled={integrityRunning}
               className="text-[11px] text-teal-600 hover:text-teal-800 font-medium disabled:opacity-50"
             >
-              {integrityRunning ? 'Checking...' : 'Integrity Check'}
+              {integrityRunning ? t('integrityChecking') : t('integrityCheck')}
             </button>
           </div>
         )}
@@ -395,17 +397,17 @@ export default function SchedulePage({ tenantId, onBack }) {
           }`}>
             <div className="flex items-center justify-between mb-2">
               <span className="font-semibold text-gray-800">
-                {integrityResult.summary?.passed ? '✅ Integrity Check Passed' : '⚠️ Integrity Issues Found'}
+                {integrityResult.summary?.passed ? `✅ ${t('integrityPassed')}` : `⚠️ ${t('integrityIssuesFound')}`}
               </span>
               <button
                 onClick={() => setIntegrityResult(null)}
                 className="text-xs text-gray-400 hover:text-gray-600"
               >
-                Dismiss
+                {t('dismiss')}
               </button>
             </div>
             <div className="text-xs text-gray-600 mb-2">
-              {integrityResult.summary?.totalEvents} events checked
+              {integrityResult.summary?.totalEvents} {t('eventsChecked')}
               {integrityResult.summary?.liveCheckPerformed && ' (incl. live WP verification)'}
               {integrityResult.wpAuthError && (
                 <span className="text-amber-600"> · WP auth skipped: {integrityResult.wpAuthError}</span>
@@ -430,13 +432,13 @@ export default function SchedulePage({ tenantId, onBack }) {
         {/* View toggle + Event heading */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <h2 className="text-base font-semibold text-gray-900">
-            Scheduled Events
+            {t('scheduledEvents')}
             <span className="text-sm font-normal text-gray-400 ml-2">({filteredEvents.length})</span>
           </h2>
           <div className="flex items-center gap-2">
             {/* MP6: Time filter */}
             <div className="flex items-center bg-gray-100 rounded-md p-0.5 text-xs">
-              {[['upcoming','Upcoming'],['next7','Next 7d'],['next30','Next 30d'],['past','Past'],['all','All']].map(([val, label]) => (
+              {[['upcoming', t('timeUpcoming')],['next7', t('timeNext7')],['next30', t('timeNext30')],['past', t('timePast')],['all', t('timeAll')]].map(([val, label]) => (
                 <button
                   key={val}
                   onClick={() => setTimeFilter(val)}
@@ -456,7 +458,7 @@ export default function SchedulePage({ tenantId, onBack }) {
                   viewMode === 'calendar' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Calendar
+                {t('calendarView')}
               </button>
               <button
                 onClick={() => setViewMode('list')}
@@ -464,7 +466,7 @@ export default function SchedulePage({ tenantId, onBack }) {
                   viewMode === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                List
+                {t('listView')}
               </button>
             </div>
           </div>
@@ -490,8 +492,8 @@ export default function SchedulePage({ tenantId, onBack }) {
             {filteredEvents.length === 0 ? (
               <div className="text-sm text-gray-400 text-center py-8">
                 {timeFilter === 'upcoming'
-                  ? 'No upcoming events. Change the filter or schedule new events above.'
-                  : 'No events match the current filter.'}
+                  ? t('noUpcomingScheduled')
+                  : t('noEventsMatchFilter')}
               </div>
             ) : (
               <div className="space-y-2">
@@ -520,7 +522,7 @@ export default function SchedulePage({ tenantId, onBack }) {
                           )}
                         </div>
                         <div className="text-xs text-gray-400 mt-0.5">
-                          {evt.eventName || tpl?.name || evt.templateId || 'Imported'}
+                          {evt.eventName || tpl?.name || evt.templateId || t('imported')}
                           {(evt.ssiReferences?.cupUrl || evt.ssiReferences?.url) && (
                             <span> • <a href={evt.ssiReferences.cupUrl || evt.ssiReferences.url} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline">SSI</a></span>
                           )}
@@ -532,11 +534,11 @@ export default function SchedulePage({ tenantId, onBack }) {
                           <div className="text-xs text-red-500 mt-1">{evt.errorDetails}</div>
                         )}
                         {evt.calendarReference?.status === 'error' && (
-                          <div className="text-xs text-amber-600 mt-1">Calendar: {evt.calendarReference.error || 'Publishing failed'}</div>
+                          <div className="text-xs text-amber-600 mt-1">Calendar: {evt.calendarReference.error || t('publishingFailed')}</div>
                         )}
                         {evt.calendarReference?.stats && (
                           <div className="text-xs text-gray-500 mt-1">
-                            📊 {evt.calendarReference.stats.approvedCount} participants · {evt.calendarReference.stats.shotsFired} shots
+                            📊 {evt.calendarReference.stats.approvedCount} {t('participants')} · {evt.calendarReference.stats.shotsFired} {t('shots')}
                           </div>
                         )}
                       </div>
@@ -547,7 +549,7 @@ export default function SchedulePage({ tenantId, onBack }) {
                             disabled={isBusy}
                             className="text-xs text-sky-600 hover:text-sky-800 font-medium disabled:opacity-50"
                           >
-                            {isBusy ? 'Creating...' : 'Create in SSI'}
+                            {isBusy ? t('creatingSsi') : t('createInSsi')}
                           </button>
                         )}
                         {evt.status === 'failed' && (
@@ -556,7 +558,7 @@ export default function SchedulePage({ tenantId, onBack }) {
                             disabled={isBusy}
                             className="text-xs text-sky-600 hover:text-sky-800 font-medium disabled:opacity-50"
                           >
-                            {isBusy ? 'Retrying...' : 'Retry'}
+                            {isBusy ? t('retrying') : t('retry')}
                           </button>
                         )}
                         {/* Calendar publish/retry/re-publish */}
@@ -566,7 +568,7 @@ export default function SchedulePage({ tenantId, onBack }) {
                             disabled={isBusy}
                             className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-50"
                           >
-                            {isBusy ? 'Publishing...' : 'Publish Calendar'}
+                            {isBusy ? t('publishing') : t('publishCalendar')}
                           </button>
                         )}
                         {evt.status === 'ssi_created' && evt.calendarReference?.status === 'error' && (
@@ -575,7 +577,7 @@ export default function SchedulePage({ tenantId, onBack }) {
                             disabled={isBusy}
                             className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-50"
                           >
-                            {isBusy ? 'Publishing...' : 'Retry Calendar'}
+                            {isBusy ? t('publishing') : t('retryCalendar')}
                           </button>
                         )}
                         {evt.status === 'calendar_published' && (
@@ -584,7 +586,7 @@ export default function SchedulePage({ tenantId, onBack }) {
                             disabled={isBusy}
                             className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-50"
                           >
-                            {isBusy ? 'Publishing...' : 'Re-publish Calendar'}
+                            {isBusy ? t('publishing') : t('republishCalendar')}
                           </button>
                         )}
                         {evt.status === 'calendar_published' && (
@@ -593,7 +595,7 @@ export default function SchedulePage({ tenantId, onBack }) {
                             disabled={isBusy}
                             className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50"
                           >
-                            {isBusy ? 'Updating...' : 'Update Stats'}
+                            {isBusy ? t('updating') : t('updateStats')}
                           </button>
                         )}
                         {(evt.status === 'ssi_created' || evt.status === 'calendar_published') && (
@@ -602,7 +604,7 @@ export default function SchedulePage({ tenantId, onBack }) {
                             disabled={isBusy}
                             className="text-xs text-purple-600 hover:text-purple-800 font-medium disabled:opacity-50"
                           >
-                            {isBusy ? 'Completing...' : 'Complete SSI'}
+                            {isBusy ? t('completing') : t('completeSsi')}
                           </button>
                         )}
                         {/* Post-event workflows (PEW-1..4) */}
@@ -612,7 +614,7 @@ export default function SchedulePage({ tenantId, onBack }) {
                             disabled={isBusy}
                             className="text-xs text-emerald-600 hover:text-emerald-800 font-medium disabled:opacity-50"
                           >
-                            {isBusy ? 'Running...' : 'Run Workflows'}
+                            {isBusy ? t('running') : t('runWorkflows')}
                           </button>
                         )}
                         {/* Cancel: soft cancel for active events (MP7) */}
@@ -622,7 +624,7 @@ export default function SchedulePage({ tenantId, onBack }) {
                             disabled={isBusy}
                             className="text-xs text-orange-500 hover:text-orange-700 font-medium disabled:opacity-50"
                           >
-                            Cancel
+                            {t('cancelEvent')}
                           </button>
                         )}
                         {/* Delete: hard delete — always available as escape hatch */}
@@ -631,7 +633,7 @@ export default function SchedulePage({ tenantId, onBack }) {
                           disabled={isBusy}
                           className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
                         >
-                          {isBusy ? '...' : 'Delete'}
+                          {isBusy ? '...' : t('delete')}
                         </button>
                       </div>
                     </div>

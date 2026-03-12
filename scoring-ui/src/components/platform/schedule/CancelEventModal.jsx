@@ -4,8 +4,10 @@
 
 import { useState } from 'react'
 import { formatEventDate } from './StatusBadge'
+import { usePlatformT } from '../../../platform-i18n.js'
 
 export default function CancelEventModal({ event, staffingStatus, tplMap, onConfirm, onClose }) {
+  const { t } = usePlatformT()
   const [removeFromSsi, setRemoveFromSsi] = useState(event?.status === 'ssi_created')
   const [loading, setLoading] = useState(false)
 
@@ -13,7 +15,7 @@ export default function CancelEventModal({ event, staffingStatus, tplMap, onConf
 
   const staffing = staffingStatus?.[event.id]
   const matchCount = event.ssiReferences?.matches?.length || 0
-  const eventLabel = event.eventName || tplMap?.[event.templateId]?.name || 'Event'
+  const eventLabel = event.eventName || tplMap?.[event.templateId]?.name || t('event')
 
   async function handleConfirm() {
     setLoading(true)
@@ -27,7 +29,7 @@ export default function CancelEventModal({ event, staffingStatus, tplMap, onConf
       <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
         <div className="flex items-start justify-between">
           <div>
-            <h3 className="text-base font-semibold text-gray-900">Cancel Event?</h3>
+            <h3 className="text-base font-semibold text-gray-900">{t('cancelEventConfirm')}</h3>
             <p className="text-sm text-gray-500 mt-0.5">
               {eventLabel} &mdash; {formatEventDate(event.eventDate)}
             </p>
@@ -43,8 +45,8 @@ export default function CancelEventModal({ event, staffingStatus, tplMap, onConf
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
               </svg>
               <span>
-                This event exists in SSI ({matchCount > 0 ? `Cup + ${matchCount} match${matchCount !== 1 ? 'es' : ''}` : 'event'}).
-                {' '}Cancelling will keep the platform record but the SSI event will remain unless you check the option below.
+                {t('ssiEventExists', matchCount > 0 ? `Cup + ${matchCount} ${matchCount !== 1 ? t('matches') : t('match')}` : t('event'))}
+                {' '}{t('ssiCancelNote')}
               </span>
             </div>
           )}
@@ -53,7 +55,7 @@ export default function CancelEventModal({ event, staffingStatus, tplMap, onConf
               <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              <span>This event has staff members signed up. They will not be automatically notified.</span>
+              <span>{t('staffSignedUpNote')}</span>
             </div>
           )}
         </div>
@@ -67,7 +69,7 @@ export default function CancelEventModal({ event, staffingStatus, tplMap, onConf
               onChange={e => setRemoveFromSsi(e.target.checked)}
               className="rounded border-gray-300 text-sky-600 focus:ring-sky-200"
             />
-            <span className="text-sm text-gray-700">Also remove this event from SSI</span>
+            <span className="text-sm text-gray-700">{t('alsoRemoveFromSsi')}</span>
           </label>
         )}
 
@@ -77,14 +79,14 @@ export default function CancelEventModal({ event, staffingStatus, tplMap, onConf
             disabled={loading}
             className="px-4 py-2 text-sm rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
           >
-            Keep Event
+            {t('keepEvent')}
           </button>
           <button
             onClick={handleConfirm}
             disabled={loading}
             className="px-4 py-2 text-sm rounded-md bg-orange-600 text-white font-medium hover:bg-orange-700 disabled:opacity-50"
           >
-            {loading ? 'Cancelling...' : 'Cancel Event'}
+            {loading ? t('cancelling') : t('cancelEvent')}
           </button>
         </div>
       </div>

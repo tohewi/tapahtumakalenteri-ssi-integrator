@@ -11,6 +11,7 @@
 // ============================================================
 
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { usePlatformT } from '../../platform-i18n.js'
 
 // ---- Status badge colors (shared with SchedulePage) ----
 const STATUS_COLORS = {
@@ -24,28 +25,22 @@ const STATUS_COLORS = {
   failed: 'bg-red-100 text-red-700',
 }
 
-const STATUS_LABELS = {
-  planned: 'Planned',
-  ssi_created: 'SSI Created',
-  calendar_published: 'Published',
-  staffed: 'Staffed',
-  ready: 'Ready',
-  completed: 'Completed',
-  cancelled: 'Cancelled',
-  failed: 'Failed',
+// Status label i18n key map
+const STATUS_LABEL_KEYS = {
+  planned: 'statusLabelPlanned',
+  ssi_created: 'statusLabelSsiCreated',
+  calendar_published: 'statusLabelCalendarPublished',
+  staffed: 'statusLabelStaffed',
+  ready: 'statusLabelReady',
+  completed: 'statusLabelCompleted',
+  cancelled: 'statusLabelCancelled',
+  failed: 'statusLabelFailed',
 }
 
 // Which statuses allow cancellation
 const CANCELLABLE_STATUSES = new Set(['planned', 'ssi_created', 'calendar_published', 'staffed', 'ready'])
 
-// Day names for header (Monday-first, Finnish convention)
-const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-
-// Month names for navigation
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
-]
+// Day names and month names are now resolved via i18n at render time
 
 /**
  * Format a local Date object as 'YYYY-MM-DD' using local (not UTC) components.
@@ -114,6 +109,7 @@ function getCalendarDays(year, month) {
 }
 
 export default function EventCalendar({ events, staffingStatus, tplMap, onExecute, onDelete, onCancel, onPublishCalendar, onUpdateCalendarStats, onCompleteSsiEvent, executingId }) {
+  const { t } = usePlatformT()
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
@@ -216,7 +212,7 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
           </button>
           <h3 className="text-lg font-semibold text-gray-900 min-w-[180px] text-center">
-            {MONTH_NAMES[viewMonth]} {viewYear}
+            {t('monthNames')[viewMonth]} {viewYear}
           </h3>
           <button
             onClick={goToNextMonth}
@@ -230,7 +226,7 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
           onClick={goToToday}
           className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-md font-medium transition-colors"
         >
-          Today
+          {t('today')}
         </button>
       </div>
 
@@ -238,7 +234,7 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
       <div className="bg-white rounded-lg border border-gray-200">
         {/* Day headers */}
         <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50 rounded-t-lg overflow-hidden">
-          {DAY_NAMES.map(day => (
+          {t('dayNamesShort').map(day => (
             <div key={day} className="px-2 py-2 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
               {day}
             </div>
@@ -295,13 +291,13 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                         <div key={evt.id} className="flex items-center gap-1 truncate">
                           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
                           <span className="text-[10px] text-gray-600 truncate leading-tight">
-                            {tplMap?.[evt.templateId]?.name || evt.eventName || 'Event'}
+                            {tplMap?.[evt.templateId]?.name || evt.eventName || t('event')}
                           </span>
                         </div>
                       )
                     })}
                     {dayEvents.length > 3 && (
-                      <div className="text-[10px] text-gray-400">+{dayEvents.length - 3} more</div>
+                      <div className="text-[10px] text-gray-400">{t('moreEvents', dayEvents.length - 3)}</div>
                     )}
                   </div>
                 )}
@@ -345,7 +341,7 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                 </div>
 
                 {selectedEvents.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-2">No events on this day.</p>
+                  <p className="text-sm text-gray-400 text-center py-2">{t('noEventsOnDay')}</p>
                 ) : (
                   <div className="space-y-2 max-h-[280px] overflow-y-auto">
                     {selectedEvents.map(evt => {
@@ -356,18 +352,18 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                         <div key={evt.id} className="bg-gray-50 rounded-lg px-3 py-2.5">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-medium text-sm text-gray-900">
-                              {evt.eventName || tpl?.name || 'Event'}
+                              {evt.eventName || tpl?.name || t('event')}
                             </span>
                             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${STATUS_COLORS[evt.status] || 'bg-gray-100 text-gray-500'}`}>
-                              {STATUS_LABELS[evt.status] || evt.status}
+                              {STATUS_LABEL_KEYS[evt.status] ? t(STATUS_LABEL_KEYS[evt.status]) : evt.status}
                             </span>
                             {staffing?.hasNeeds && (
                               <span className={`w-2 h-2 rounded-full shrink-0 ${staffing.isUnderstaffed ? 'bg-orange-500' : 'bg-green-500'}`}
-                                title={staffing.isUnderstaffed ? 'Needs more staff' : 'Fully staffed'} />
+                                title={staffing.isUnderstaffed ? t('needsMoreStaff') : t('fullyStaffed')} />
                             )}
                           </div>
                           <div className="text-xs text-gray-400 mt-0.5">
-                            {tpl?.name || evt.templateId || 'Imported'}
+                            {tpl?.name || evt.templateId || t('imported')}
                             {(evt.ssiReferences?.cupUrl || evt.ssiReferences?.url) && (
                               <span> • <a href={evt.ssiReferences.cupUrl || evt.ssiReferences.url} target="_blank" rel="noopener noreferrer" className="text-sky-500 hover:underline" onClick={e => e.stopPropagation()}>SSI</a></span>
                             )}
@@ -377,14 +373,14 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                           </div>
                           {evt.calendarReference?.stats && (
                             <div className="text-xs text-gray-500 mt-1">
-                              📊 {evt.calendarReference.stats.approvedCount} participants · {evt.calendarReference.stats.shotsFired} shots
+                              📊 {evt.calendarReference.stats.approvedCount} {t('participants')} · {evt.calendarReference.stats.shotsFired} {t('shots')}
                             </div>
                           )}
                           {evt.status === 'failed' && evt.errorDetails && (
                             <div className="text-xs text-red-500 mt-1">{evt.errorDetails}</div>
                           )}
                           {evt.calendarReference?.status === 'error' && (
-                            <div className="text-xs text-amber-600 mt-1">Calendar: {evt.calendarReference.error || 'Publishing failed'}</div>
+                            <div className="text-xs text-amber-600 mt-1">Calendar: {evt.calendarReference.error || t('publishingFailed')}</div>
                           )}
                           {/* Actions */}
                           <div className="flex items-center gap-3 mt-2">
@@ -394,7 +390,7 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                                 disabled={executingId === evt.id}
                                 className="text-xs text-sky-600 hover:text-sky-800 font-medium disabled:opacity-50"
                               >
-                                {executingId === evt.id ? 'Creating...' : 'Create in SSI'}
+                                {executingId === evt.id ? t('creatingSsi') : t('createInSsi')}
                               </button>
                             )}
                             {evt.status === 'failed' && (
@@ -403,7 +399,7 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                                 disabled={executingId === evt.id}
                                 className="text-xs text-sky-600 hover:text-sky-800 font-medium disabled:opacity-50"
                               >
-                                {executingId === evt.id ? 'Retrying...' : 'Retry'}
+                                {executingId === evt.id ? t('retrying') : t('retry')}
                               </button>
                             )}
                             {evt.status === 'ssi_created' && !evt.calendarReference && onPublishCalendar && (
@@ -412,7 +408,7 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                                 disabled={executingId === evt.id}
                                 className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-50"
                               >
-                                {executingId === evt.id ? 'Publishing...' : 'Publish Calendar'}
+                                {executingId === evt.id ? t('publishing') : t('publishCalendar')}
                               </button>
                             )}
                             {evt.status === 'ssi_created' && evt.calendarReference?.status === 'error' && onPublishCalendar && (
@@ -421,7 +417,7 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                                 disabled={executingId === evt.id}
                                 className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-50"
                               >
-                                {executingId === evt.id ? 'Publishing...' : 'Retry Calendar'}
+                                {executingId === evt.id ? t('publishing') : t('retryCalendar')}
                               </button>
                             )}
                             {evt.status === 'calendar_published' && onPublishCalendar && (
@@ -430,7 +426,7 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                                 disabled={executingId === evt.id}
                                 className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-50"
                               >
-                                {executingId === evt.id ? 'Publishing...' : 'Re-publish Calendar'}
+                                {executingId === evt.id ? t('publishing') : t('republishCalendar')}
                               </button>
                             )}
                             {evt.status === 'calendar_published' && onUpdateCalendarStats && (
@@ -439,7 +435,7 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                                 disabled={executingId === evt.id}
                                 className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50"
                               >
-                                {executingId === evt.id ? 'Updating...' : 'Update Stats'}
+                                {executingId === evt.id ? t('updating') : t('updateStats')}
                               </button>
                             )}
                             {(evt.status === 'ssi_created' || evt.status === 'calendar_published') && onCompleteSsiEvent && (
@@ -448,7 +444,7 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                                 disabled={executingId === evt.id}
                                 className="text-xs text-purple-600 hover:text-purple-800 font-medium disabled:opacity-50"
                               >
-                                {executingId === evt.id ? 'Completing...' : 'Complete SSI'}
+                                {executingId === evt.id ? t('completing') : t('completeSsi')}
                               </button>
                             )}
                             {CANCELLABLE_STATUSES.has(evt.status) && onCancel && (
@@ -457,7 +453,7 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                                 disabled={executingId === evt.id}
                                 className="text-xs text-orange-500 hover:text-orange-700 font-medium disabled:opacity-50"
                               >
-                                Cancel
+                                {t('cancelEvent')}
                               </button>
                             )}
                             <button
@@ -465,7 +461,7 @@ export default function EventCalendar({ events, staffingStatus, tplMap, onExecut
                               disabled={executingId === evt.id}
                               className="text-xs text-red-400 hover:text-red-600 disabled:opacity-50"
                             >
-                              {executingId === evt.id ? '...' : 'Delete'}
+                              {executingId === evt.id ? '...' : t('delete')}
                             </button>
                           </div>
                         </div>
