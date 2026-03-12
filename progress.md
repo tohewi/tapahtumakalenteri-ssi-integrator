@@ -1,12 +1,16 @@
 # Progress
 
-Last updated: 2026-03-12 (late evening) by Cascade
-Branch: `release/r80-match-manager-base` at `b815eef`
+Last updated: 2026-03-12 (night) by Cascade
+Branch: `release/r80-match-manager-base`
 Tests: 870 backend (39 files) + 221 frontend (10 files) = 1091, all passing
 
 ---
 
 ## Current Session Work
+
+### Completed — 2026-03-12 (night): MP3 Gap Analysis
+
+28. **MP3: Match Personnel Management — Gap Analysis** — Wrote `docs/design/mp3-gap-analysis.md`. Compared R9.0 implementation against MP3's original scope across 5 dimensions. Result: 4/5 fully covered (staffing CRUD, flexible per-template roles, assignment visibility across 4 views, email notifications + SSI sync). Only gap: personnel availability management (deferred as optional STAFF-1). **R8.3 is now 9/9 ✅ — all implemented.**
 
 ### Completed — 2026-03-12 (late evening): MP9 Tenant Branding
 
@@ -120,14 +124,13 @@ Tests: 870 backend (39 files) + 221 frontend (10 files) = 1091, all passing
 - **R8.1 (PA1–PA21)**: Platform auth & tenancy — 21/21 ✅ (accounts, tenants, RBAC, MFA, invitations, templates)
 - **R8.2**: Authorization & workflows — 5/5 ✅ (RBAC matrix, password reset, event execution/status/cancel)
 - **R8.2.1**: Architecture tech debt — 23/23 ✅ (modularity splits, tests, ESLint boundaries)
-- **R8.3**: Calendar integration — 8/9 ✅ (CAL-1–CAL-7, MP8, MP9). Remaining: MP3 gap analysis only. UAT passed on PR-138 preview (7 bug fixes).
+- **R8.3**: Calendar integration — **9/9 ✅ All implemented** (CAL-1–CAL-7, MP3, MP8, MP9). UAT passed on PR-138 preview (7 bug fixes).
 - **R9.0**: Event staffing — all implemented (needs, signups, leaderboard, notifications)
 - **R9.1**: API security hardening — 4/5 ✅ (rate limits, cross-tenant validation, audit log)
 - **R9.2**: SSI discipline registry — 4/4 ✅ (built-in + GraphQL auto-discovery)
 
 ## What's Next (unprioritized — pick from PRD)
 
-- **R8.3 remaining**: MP3 gap analysis (staffing vs original MP3 scope) — design/analysis task
 - **BL-3**: Admin session monitoring (extend BL-1 with per-user session view)
 - **R7.6**: Consolidation & completion (deferred items from R7.0/R7.5)
 - **R7.9**: GraphQL cup management (GQL1–GQL7) — migrate from web scraping
