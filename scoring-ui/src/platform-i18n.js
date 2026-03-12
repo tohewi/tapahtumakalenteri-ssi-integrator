@@ -518,6 +518,19 @@ const fi = {
   noTenantSelectedDesc: 'Luo tai valitse organisaatio aloittaaksesi.',
   viewNotFound: (view) => `Näkymää "${view}" ei ole olemassa.`,
 
+  // Regional settings
+  regionalSettings: 'Alueelliset asetukset',
+  regionalSettingsDesc: 'Sijainti ja aika-asetukset, jotka vaikuttavat tapahtumien luontiin ja kalenterijulkaisuun.',
+  cityLabel: 'Kaupunki',
+  cityHint: 'esim. Turku',
+  countryLabel: 'Maa',
+  countryHint: 'esim. Suomi',
+  timezoneLabel: 'Aikavyöhyke',
+  timezoneHint: 'esim. Europe/Helsinki',
+  localeLabel: 'Maa-asetus',
+  localeHint: 'esim. fi-FI',
+  regionalSaved: 'Alueelliset asetukset tallennettu',
+
   // Language selector
   language: 'Kieli',
   languageFi: 'Suomi',
@@ -1035,6 +1048,19 @@ const en = {
   importResultsTitle: (ok, total) => `Import Results: ${ok}/${total} imported`,
   done: 'Done',
   alreadyImported: 'Imported',
+
+  // Regional settings
+  regionalSettings: 'Regional Settings',
+  regionalSettingsDesc: 'Location and time settings that affect event creation and calendar publishing.',
+  cityLabel: 'City',
+  cityHint: 'e.g. Turku',
+  countryLabel: 'Country',
+  countryHint: 'e.g. Finland',
+  timezoneLabel: 'Timezone',
+  timezoneHint: 'e.g. Europe/Helsinki',
+  localeLabel: 'Locale',
+  localeHint: 'e.g. fi-FI',
+  regionalSaved: 'Regional settings saved',
 
   // Language selector
   language: 'Language',

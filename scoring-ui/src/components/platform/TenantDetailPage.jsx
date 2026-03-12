@@ -19,6 +19,7 @@ import {
   TenantDisciplinesTab,
   TenantTemplatesTab,
   TenantCalendarTab,
+  TenantRegionalTab,
 } from './tenant/index.js'
 
 // ---- Main Page ----
@@ -97,6 +98,7 @@ export default function TenantDetailPage({ tenantId, account, onBack, onLogout, 
           <>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Settings</h1>
             <p className="text-sm text-gray-400 mb-6">Integration credentials and configuration.</p>
+            <TenantRegionalTab tenant={tenant} onSave={handleSave} />
             <TenantSsiTab tenant={tenant} onSave={handleSave} />
             <TenantCalendarTab tenant={tenant} onSave={handleSave} />
           </>
@@ -163,6 +165,7 @@ export default function TenantDetailPage({ tenantId, account, onBack, onLogout, 
 
         {/* Settings sections */}
         <TenantGeneralTab tenant={tenant} onSave={handleSave} />
+        <TenantRegionalTab tenant={tenant} onSave={handleSave} />
         <TenantSsiTab tenant={tenant} onSave={handleSave} />
         <TenantDisciplinesTab tenantId={tenantId} />
         <TenantTemplatesTab tenantId={tenantId} onEditTemplate={onEditTemplate} />

@@ -76,6 +76,10 @@ function rowToTenant(row, { includeCredentials = false } = {}) {
     id: row.id,
     accountId: row.account_id,
     name: row.name,
+    city: row.city || null,
+    country: row.country || null,
+    timezone: row.timezone || null,
+    locale: row.locale || null,
     subscription: row.subscription || {},
     ssiCredentials,
     calendarConfig,
@@ -228,6 +232,10 @@ export async function listAllTenants() {
 export async function updateTenant(tenantId, updates) {
   const allowedFields = {
     name: 'name',
+    city: 'city',
+    country: 'country',
+    timezone: 'timezone',
+    locale: 'locale',
     ssiCredentials: 'ssi_credentials',
     calendarConfig: 'calendar_config',
     disciplines: 'disciplines',

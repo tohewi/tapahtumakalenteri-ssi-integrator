@@ -381,6 +381,16 @@ export async function initPostgres() {
         log.warn('[postgres] M13 migration (post_event_workflows):', err.message)
       }
 
+      // M14: Add regional settings columns to tenants (MP8 Phase B)
+      try {
+        await client.query('ALTER TABLE tenants ADD COLUMN IF NOT EXISTS city TEXT')
+        await client.query('ALTER TABLE tenants ADD COLUMN IF NOT EXISTS country TEXT')
+        await client.query('ALTER TABLE tenants ADD COLUMN IF NOT EXISTS timezone TEXT')
+        await client.query('ALTER TABLE tenants ADD COLUMN IF NOT EXISTS locale TEXT')
+      } catch (err) {
+        log.warn('[postgres] M14 migration (tenant regional settings):', err.message)
+      }
+
       // Optional unique constraints — may fail on existing data with duplicates.
       // App-level checks in createTenant/createAccountWithTenant still prevent new duplicates.
       try {

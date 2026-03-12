@@ -1,12 +1,22 @@
 # Progress
 
-Last updated: 2026-03-12 (morning) by Cascade
-Branch: `release/r80-match-manager-base` at `c10f97c`
+Last updated: 2026-03-12 (evening) by Cascade
+Branch: `release/r80-match-manager-base` at `f684bf9`
 Tests: 870 backend (39 files) + 221 frontend (10 files) = 1091, all passing
 
 ---
 
 ## Current Session Work
+
+### Completed — 2026-03-12 (evening): MP8 Platform Localization (Phase A)
+
+25. **MP8: Platform i18n system** — Created `platform-i18n.js` with React Context provider + `usePlatformT()` hook. Finnish/English dictionaries with ~300+ keys. Language selector in TopBar with localStorage persistence. Migrated all 16 platform components:
+    - Auth pages: WelcomePage, SignInPage, ForgotPasswordPage, ResetPasswordPage, MfaChallengePage, JoinInvitePage, TenantCreatePage
+    - Main views: DashboardView, RosterView
+    - Settings/admin: AccountSettingsPage, MembersPage
+    - Schedule: SchedulePage, EventCalendar, StatusBadge, CreateEventsPanel, CancelEventModal
+    - Templates: TemplateEditorPage, ImportSsiEventsModal
+    - Phase B (tenant regional settings) deferred.
 
 ### Completed — 2026-03-12 (morning): PEW-2 Email Workflow Config
 
@@ -98,7 +108,7 @@ Tests: 870 backend (39 files) + 221 frontend (10 files) = 1091, all passing
 - **R8.1 (PA1–PA21)**: Platform auth & tenancy — 21/21 ✅ (accounts, tenants, RBAC, MFA, invitations, templates)
 - **R8.2**: Authorization & workflows — 5/5 ✅ (RBAC matrix, password reset, event execution/status/cancel)
 - **R8.2.1**: Architecture tech debt — 23/23 ✅ (modularity splits, tests, ESLint boundaries)
-- **R8.3**: Calendar integration — 7/9 ✅ (CAL-1–CAL-7). Remaining: MP3 gap analysis, MP8 localization, MP9 branding. UAT passed on PR-138 preview (7 bug fixes).
+- **R8.3**: Calendar integration — 8/9 ✅ (CAL-1–CAL-7, MP8). Remaining: MP3 gap analysis, MP9 branding. UAT passed on PR-138 preview (7 bug fixes).
 - **R9.0**: Event staffing — all implemented (needs, signups, leaderboard, notifications)
 - **R9.1**: API security hardening — 4/5 ✅ (rate limits, cross-tenant validation, audit log)
 - **R9.2**: SSI discipline registry — 4/4 ✅ (built-in + GraphQL auto-discovery)

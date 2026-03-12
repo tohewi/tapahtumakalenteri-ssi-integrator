@@ -91,7 +91,7 @@ export function mountTenantRoutes(router, { requirePlatformAuth, requireTenantRo
     }
 
     // Only allow updating safe fields
-    const allowedFields = ['name', 'ssiCredentials', 'calendarConfig', 'disciplines']
+    const allowedFields = ['name', 'city', 'country', 'timezone', 'locale', 'ssiCredentials', 'calendarConfig', 'disciplines']
     const updates = {}
     for (const field of allowedFields) {
       if (req.body[field] !== undefined) {
