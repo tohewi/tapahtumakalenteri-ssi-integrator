@@ -391,6 +391,22 @@ export async function initPostgres() {
         log.warn('[postgres] M14 migration (tenant regional settings):', err.message)
       }
 
+      // M15: Create tenant_logos table + has_logo flag on tenants (MP9 Branding)
+      try {
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS tenant_logos (
+            tenant_id    TEXT PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+            content_type TEXT NOT NULL,
+            image_data   BYTEA NOT NULL,
+            file_size    INTEGER NOT NULL,
+            uploaded_at  TIMESTAMPTZ DEFAULT NOW()
+          )
+        `)
+        await client.query('ALTER TABLE tenants ADD COLUMN IF NOT EXISTS has_logo BOOLEAN DEFAULT FALSE')
+      } catch (err) {
+        log.warn('[postgres] M15 migration (tenant_logos):', err.message)
+      }
+
       // Optional unique constraints — may fail on existing data with duplicates.
       // App-level checks in createTenant/createAccountWithTenant still prevent new duplicates.
       try {

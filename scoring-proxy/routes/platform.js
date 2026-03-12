@@ -22,6 +22,7 @@ import { mountEventRoutes } from './platform/events.js'
 import { mountMemberRoutes } from './platform/members.js'
 import { mountInvitationRoutes } from './platform/invitations.js'
 import { mountStaffingRoutes } from './platform/staffing.js'
+import { mountLogoRoutes } from './platform/logos.js'
 
 // ---- Router factory ----
 
@@ -55,6 +56,7 @@ export function createPlatformRouter({
   mountMemberRoutes(router, deps)
   mountInvitationRoutes(router, deps)
   mountStaffingRoutes(router, deps)
+  mountLogoRoutes(router, deps)
 
   return router
 }

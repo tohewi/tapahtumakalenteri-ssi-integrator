@@ -114,6 +114,36 @@ export async function updateTenant(tenantId, updates) {
   })
 }
 
+// ---- Tenant Logo (MP9 Branding) ----
+
+/**
+ * Upload tenant logo (base64 data URL).
+ * @param {string} tenantId
+ * @param {string} dataUrl - data:image/png;base64,... or raw base64
+ * @param {string} [contentType] - required if dataUrl is raw base64
+ */
+export async function uploadTenantLogo(tenantId, dataUrl, contentType) {
+  const body = contentType ? { image: dataUrl, contentType } : { image: dataUrl }
+  return platformFetch(`/tenants/${tenantId}/logo`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/**
+ * Delete tenant logo.
+ */
+export async function deleteTenantLogo(tenantId) {
+  return platformFetch(`/tenants/${tenantId}/logo`, { method: 'DELETE' })
+}
+
+/**
+ * Get the public logo URL for a tenant.
+ */
+export function getTenantLogoUrl(tenantId) {
+  return `/api/v1/platform/tenants/${tenantId}/logo`
+}
+
 // ---- Account ----
 
 /**

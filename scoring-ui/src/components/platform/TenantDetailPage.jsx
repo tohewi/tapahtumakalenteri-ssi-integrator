@@ -7,12 +7,13 @@
 //   TenantDisciplinesTab — competition types
 //   TenantTemplatesTab  — event blueprints
 //   TenantCalendarTab   — WordPress calendar config (placeholder)
+//   TenantBrandingTab   — Logo upload/preview/remove (MP9)
 //
 // All saves go through PATCH /api/v1/platform/tenants/:id.
 // ============================================================
 
 import { useState, useEffect, useCallback } from 'react'
-import { getTenantDetails, updateTenant } from '../../platform-api.js'
+import { getTenantDetails, updateTenant, getTenantLogoUrl } from '../../platform-api.js'
 import {
   TenantGeneralTab,
   TenantSsiTab,
@@ -20,6 +21,7 @@ import {
   TenantTemplatesTab,
   TenantCalendarTab,
   TenantRegionalTab,
+  TenantBrandingTab,
 } from './tenant/index.js'
 
 // ---- Main Page ----
@@ -50,6 +52,14 @@ export default function TenantDetailPage({ tenantId, account, onBack, onLogout, 
   const handleSave = useCallback(async (updates) => {
     const data = await updateTenant(tenantId, updates)
     setTenant(data.tenant)
+  }, [tenantId])
+
+  // Reload tenant data (used after logo upload/remove to refresh hasLogo)
+  const reloadTenant = useCallback(async () => {
+    try {
+      const data = await getTenantDetails(tenantId)
+      setTenant(data.tenant)
+    } catch { /* ignore — non-critical refresh */ }
   }, [tenantId])
 
   if (loading) {
@@ -98,6 +108,7 @@ export default function TenantDetailPage({ tenantId, account, onBack, onLogout, 
           <>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Settings</h1>
             <p className="text-sm text-gray-400 mb-6">Integration credentials and configuration.</p>
+            <TenantBrandingTab tenantId={tenantId} tenant={tenant} onTenantUpdated={reloadTenant} />
             <TenantRegionalTab tenant={tenant} onSave={handleSave} />
             <TenantSsiTab tenant={tenant} onSave={handleSave} />
             <TenantCalendarTab tenant={tenant} onSave={handleSave} />
@@ -146,8 +157,11 @@ export default function TenantDetailPage({ tenantId, account, onBack, onLogout, 
       <div className="max-w-3xl mx-auto px-4 py-8">
         {/* Tenant header */}
         <div className="flex items-center gap-4 mb-8">
-          <div className="w-14 h-14 bg-sky-100 rounded-lg flex items-center justify-center text-sky-700 text-xl font-bold">
-            {tenant.name?.slice(0, 2).toUpperCase() || '??'}
+          <div className="w-14 h-14 bg-sky-100 rounded-lg flex items-center justify-center text-sky-700 text-xl font-bold overflow-hidden">
+            {tenant.hasLogo
+              ? <img src={getTenantLogoUrl(tenantId)} alt="" className="w-full h-full object-contain" />
+              : (tenant.name?.slice(0, 2).toUpperCase() || '??')
+            }
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{tenant.name}</h1>
@@ -165,6 +179,7 @@ export default function TenantDetailPage({ tenantId, account, onBack, onLogout, 
 
         {/* Settings sections */}
         <TenantGeneralTab tenant={tenant} onSave={handleSave} />
+        <TenantBrandingTab tenantId={tenantId} tenant={tenant} onTenantUpdated={reloadTenant} />
         <TenantRegionalTab tenant={tenant} onSave={handleSave} />
         <TenantSsiTab tenant={tenant} onSave={handleSave} />
         <TenantDisciplinesTab tenantId={tenantId} />

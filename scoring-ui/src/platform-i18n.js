@@ -531,6 +531,22 @@ const fi = {
   localeHint: 'esim. fi-FI',
   regionalSaved: 'Alueelliset asetukset tallennettu',
 
+  // Branding (MP9)
+  branding: 'Brändäys',
+  brandingDesc: 'Organisaation logo näkyy hallintapaneelissa ja kalenteritapahtumissa.',
+  tenantLogo: 'Organisaation logo',
+  uploadLogo: 'Lataa logo',
+  changeLogo: 'Vaihda logo',
+  removeLogo: 'Poista logo',
+  dragDropLogo: 'Vedä ja pudota kuva tai klikkaa valitaksesi',
+  logoFormats: 'JPG, PNG tai WebP, max 2 MB',
+  logoUploading: 'Ladataan...',
+  logoUploaded: 'Logo ladattu',
+  logoRemoved: 'Logo poistettu',
+  logoTooLarge: 'Kuva on liian suuri. Maksimi: 2 MB',
+  logoInvalidType: 'Virheellinen tiedostomuoto. Hyväksytyt: JPG, PNG, WebP',
+  removeLogoConfirm: 'Haluatko varmasti poistaa logon?',
+
   // Language selector
   language: 'Kieli',
   languageFi: 'Suomi',
@@ -1061,6 +1077,22 @@ const en = {
   localeLabel: 'Locale',
   localeHint: 'e.g. fi-FI',
   regionalSaved: 'Regional settings saved',
+
+  // Branding (MP9)
+  branding: 'Branding',
+  brandingDesc: 'Organization logo displayed in the management dashboard and calendar events.',
+  tenantLogo: 'Organization Logo',
+  uploadLogo: 'Upload Logo',
+  changeLogo: 'Change Logo',
+  removeLogo: 'Remove Logo',
+  dragDropLogo: 'Drag and drop an image or click to select',
+  logoFormats: 'JPG, PNG or WebP, max 2 MB',
+  logoUploading: 'Uploading...',
+  logoUploaded: 'Logo uploaded',
+  logoRemoved: 'Logo removed',
+  logoTooLarge: 'Image is too large. Maximum: 2 MB',
+  logoInvalidType: 'Invalid file type. Accepted: JPG, PNG, WebP',
+  removeLogoConfirm: 'Are you sure you want to remove the logo?',
 
   // Language selector
   language: 'Language',

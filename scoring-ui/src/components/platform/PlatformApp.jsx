@@ -19,6 +19,7 @@ import {
   platformLogout,
   platformStatus,
   createTenant,
+  getTenantLogoUrl,
 } from '../../platform-api.js'
 import { PlatformI18nProvider, usePlatformT } from '../../platform-i18n.js'
 
@@ -166,7 +167,12 @@ function TopBar({ account, tenants, selectedTenantId, onChangeTenant, onLogout }
             </select>
           )}
           {tenants.length === 1 && (
-            <span className="text-sm text-gray-600">{tenants[0].name}</span>
+            <span className="text-sm text-gray-600 flex items-center gap-2">
+              {tenants[0].hasLogo && (
+                <img src={getTenantLogoUrl(tenants[0].id)} alt="" className="w-6 h-6 rounded object-contain" />
+              )}
+              {tenants[0].name}
+            </span>
           )}
           {/* User avatar */}
           <div className="flex items-center gap-2">

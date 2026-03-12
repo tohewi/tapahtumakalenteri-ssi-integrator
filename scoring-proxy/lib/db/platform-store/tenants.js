@@ -80,6 +80,7 @@ function rowToTenant(row, { includeCredentials = false } = {}) {
     country: row.country || null,
     timezone: row.timezone || null,
     locale: row.locale || null,
+    hasLogo: !!row.has_logo,
     subscription: row.subscription || {},
     ssiCredentials,
     calendarConfig,
