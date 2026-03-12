@@ -40,7 +40,7 @@ const fi = {
   actions: 'Toiminnot',
 
   // Navigation — sidebar & mobile
-  navDashboard: 'Etusivu',
+  navDashboard: 'Pikanäkymä',
   navTemplates: 'Mallipohjat',
   navSchedule: 'Aikataulu',
   navRoster: 'Vetäjälista',
@@ -150,10 +150,10 @@ const fi = {
 
   // Dashboard
   dashboard: 'Etusivu',
-  staffingGaps: 'Miehitysaukot',
+  staffingGaps: 'Henkilöstötilanne',
   goToRoster: 'Siirry vetäjälistaan',
   loadingStaffingData: 'Ladataan miehitystietoja...',
-  allEventsStaffed: 'Kaikki tapahtumat ovat miehitettyjä',
+  allEventsStaffed: 'Tapahtumissa on tarvittava henkilöstö.',
   noOpenRoles: 'Ei avoimia rooleja tuleville tapahtumille.',
   upcomingEvents: 'Tulevat tapahtumat',
   viewAll: 'Näytä kaikki',
@@ -167,7 +167,7 @@ const fi = {
   last12Months: 'Viimeiset 12 kk',
   last6Months: 'Viimeiset 6 kk',
   last3Months: 'Viimeiset 3 kk',
-  noStaffingActivity: 'Ei miehitystoimintaa vielä.',
+  noStaffingActivity: 'Ei henkilöstöhistoriaa.',
   activityAppears: 'Toiminta näkyy täällä kun jäsenet ilmoittautuvat tapahtumiin.',
   events: 'tapahtumaa',
 
@@ -270,18 +270,18 @@ const fi = {
   roleInstructorDesc: 'Voi toimia ottelun henkilökuntana/RO',
 
   // Roster / Event Staffing
-  eventStaffing: 'Tapahtumien miehitys',
+  eventStaffing: 'Tapahtumien henkilöstö',
   eventStaffingDesc: 'Ilmoittaudu vetäjäksi tuleviin tapahtumiin. Vetäjäroolin omaavia jäseniä kannustetaan ilmoittautumaan.',
   populateFromTemplates: 'Täytä mallipohjista',
   populateFromTemplatesTitle: 'Täytä miehitystarpeet mallipohjista',
   running: 'Suoritetaan...',
   loadingStaffing: 'Ladataan miehitystietoja...',
   filterAll: 'Kaikki',
-  filterNeedStaff: 'Tarvitsee vetäjiä',
-  filterStaffed: 'Miehitetty',
+  filterNeedStaff: 'Henkilöstöä tarvitaan',
+  filterStaffed: 'Henkilöstö tarve täytetty',
   filterMyEvents: 'Omat tapahtumat',
-  needsStaff: 'Tarvitsee vetäjiä',
-  staffed: 'Miehitetty',
+  needsStaff: 'Henkilöstöä tarvitaan',
+  staffed: 'Henkilöstö tarve täytetty',
   staff: 'Vetäjät',
   noStaffingNeeds: 'Tulevilla tapahtumilla ei ole miehitystarpeita.',
   noStaffingNeedsHint: 'Klikkaa "Täytä mallipohjista" lisätäksesi miehitystarpeet olemassa oleville tapahtumille, tai luo uusia tapahtumia mallipohjista joissa on miehityssäännöt.',
