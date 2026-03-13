@@ -8,7 +8,7 @@
 
 import { Router } from 'express'
 import { log } from '../lib/logger.js'
-import { listAllTenants, listAllAccounts } from '../lib/db/platform-store.js'
+import { listAllTenants, listAllAccounts, deleteTenant, deleteAccount } from '../lib/db/platform-store.js'
 import { getActiveSessionCount, getUserSessions } from '../lib/session/index.js'
 
 /**
@@ -85,6 +85,32 @@ export function createAdminRouter() {
     } catch (err) {
       log.error('[admin] Failed to get session count:', err.message)
       res.status(500).json({ error: 'Failed to get session stats' })
+    }
+  })
+
+  // DELETE /api/v1/admin/tenants/:id — delete a tenant and all associated data
+  router.delete('/tenants/:id', async (req, res) => {
+    try {
+      const result = await deleteTenant(req.params.id)
+      if (!result) return res.status(404).json({ error: 'Tenant not found' })
+      log.info(`[admin] Deleted tenant ${result.name} (${result.tenantId}) by admin from ${req.ip}`)
+      res.json(result)
+    } catch (err) {
+      log.error('[admin] Failed to delete tenant:', err.message)
+      res.status(500).json({ error: 'Failed to delete tenant' })
+    }
+  })
+
+  // DELETE /api/v1/admin/accounts/:id — delete an account and all owned tenants
+  router.delete('/accounts/:id', async (req, res) => {
+    try {
+      const result = await deleteAccount(req.params.id)
+      if (!result) return res.status(404).json({ error: 'Account not found' })
+      log.info(`[admin] Deleted account ${result.email} (${result.accountId}) by admin from ${req.ip}`)
+      res.json(result)
+    } catch (err) {
+      log.error('[admin] Failed to delete account:', err.message)
+      res.status(500).json({ error: 'Failed to delete account' })
     }
   })
 

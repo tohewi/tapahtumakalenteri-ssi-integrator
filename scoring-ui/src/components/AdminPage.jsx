@@ -21,6 +21,18 @@ async function adminFetch(path, apiKey) {
   return res.json()
 }
 
+async function adminDelete(path, apiKey) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${apiKey}` },
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
 export default function AdminPage() {
   const [apiKey, setApiKey] = useState(sessionStorage.getItem('admin_api_key') || '')
   const [authenticated, setAuthenticated] = useState(false)
@@ -72,6 +84,26 @@ export default function AdminPage() {
     setData(null)
     setApiKey('')
     sessionStorage.removeItem('admin_api_key')
+  }
+
+  async function handleDeleteTenant(tenant) {
+    if (!confirm(`Delete tenant "${tenant.name}" (${tenant.id})?\n\nThis will permanently delete all events, templates, disciplines, members, and staffing data.`)) return
+    try {
+      await adminDelete(`/tenants/${tenant.id}`, apiKey.trim())
+      await handleRefresh()
+    } catch (err) {
+      setError(`Failed to delete tenant: ${err.message}`)
+    }
+  }
+
+  async function handleDeleteAccount(account) {
+    if (!confirm(`Delete account "${account.email}" (${account.id})?\n\nThis will permanently delete all tenants owned by this account and all associated data.`)) return
+    try {
+      await adminDelete(`/accounts/${account.id}`, apiKey.trim())
+      await handleRefresh()
+    } catch (err) {
+      setError(`Failed to delete account: ${err.message}`)
+    }
   }
 
   function formatDate(ts) {
@@ -193,6 +225,7 @@ export default function AdminPage() {
                     <th className="text-left px-4 py-3 font-medium text-gray-500">SSI</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-500">Calendar</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-500">Created</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-500"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -230,10 +263,18 @@ export default function AdminPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(t.createdAt)}</td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => handleDeleteTenant(t)}
+                          className="text-xs text-red-500 hover:text-red-700 hover:underline"
+                        >
+                          Delete
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {tenants.length === 0 && (
-                    <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-400">No tenants found</td></tr>
+                    <tr><td colSpan="7" className="px-4 py-8 text-center text-gray-400">No tenants found</td></tr>
                   )}
                 </tbody>
               </table>
@@ -253,6 +294,7 @@ export default function AdminPage() {
                     <th className="text-left px-4 py-3 font-medium text-gray-500">Tenants</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-500">MFA</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-500">Created</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-500"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -276,10 +318,18 @@ export default function AdminPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(a.createdAt)}</td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => handleDeleteAccount(a)}
+                          className="text-xs text-red-500 hover:text-red-700 hover:underline"
+                        >
+                          Delete
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {accounts.length === 0 && (
-                    <tr><td colSpan="5" className="px-4 py-8 text-center text-gray-400">No accounts found</td></tr>
+                    <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-400">No accounts found</td></tr>
                   )}
                 </tbody>
               </table>

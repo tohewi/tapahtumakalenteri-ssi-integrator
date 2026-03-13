@@ -373,3 +373,31 @@ export async function updateTenant(tenantId, updates) {
   if (rows.length === 0) return null
   return rowToTenant(rows[0])
 }
+
+/**
+ * Delete a tenant and all associated data (admin only).
+ * ON DELETE CASCADE handles: disciplines, templates, events, staffing, members,
+ * invitations, audit_log, tenant_logos.
+ * Also removes the tenant ID from the owner account's tenants JSON array.
+ */
+export async function deleteTenant(tenantId) {
+  return withTransaction(async (client) => {
+    // Get tenant to find owner
+    const { rows: tenantRows } = await client.query('SELECT * FROM tenants WHERE id = $1', [tenantId])
+    if (tenantRows.length === 0) return null
+
+    const accountId = tenantRows[0].account_id
+
+    // Remove tenant ID from owner account's tenants array
+    const { rows: accountRows } = await client.query('SELECT tenants FROM accounts WHERE id = $1', [accountId])
+    if (accountRows.length > 0) {
+      const currentTenants = accountRows[0].tenants || []
+      const updated = currentTenants.filter(id => id !== tenantId)
+      await client.query('UPDATE accounts SET tenants = $1, updated_at = NOW() WHERE id = $2', [JSON.stringify(updated), accountId])
+    }
+
+    // Delete tenant (CASCADE handles all child tables)
+    await client.query('DELETE FROM tenants WHERE id = $1', [tenantId])
+    return { deleted: true, tenantId, name: tenantRows[0].name }
+  })
+}

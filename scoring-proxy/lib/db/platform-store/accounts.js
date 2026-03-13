@@ -518,6 +518,25 @@ export async function getPlatformSession(sessionId) {
 }
 
 /**
+ * Delete an account and all associated data (admin only).
+ * First deletes all tenants owned by this account (cascading their children),
+ * then deletes the account itself (CASCADE handles tenant_members, audit_log, staff_signups).
+ */
+export async function deleteAccount(accountId) {
+  return withTransaction(async (client) => {
+    const { rows: accountRows } = await client.query('SELECT * FROM accounts WHERE id = $1', [accountId])
+    if (accountRows.length === 0) return null
+
+    // Delete all tenants owned by this account (CASCADE cleans child tables)
+    await client.query('DELETE FROM tenants WHERE account_id = $1', [accountId])
+
+    // Delete the account (CASCADE handles tenant_members, audit_log)
+    await client.query('DELETE FROM accounts WHERE id = $1', [accountId])
+    return { deleted: true, accountId, email: accountRows[0].email }
+  })
+}
+
+/**
  * Delete a platform session (logout).
  */
 export async function deletePlatformSession(sessionId) {
