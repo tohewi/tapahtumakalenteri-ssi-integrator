@@ -60,7 +60,11 @@ const ALLOWED_ORIGINS = IS_PROD
   : true
 app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }))
 
-app.use(express.json({ limit: '10kb' })) // global body size limit (RSEC4)
+// Global body size limit (RSEC4) — skip for logo upload which has its own 4MB parser
+app.use((req, res, next) => {
+  if (req.method === 'POST' && req.path.match(/\/tenants\/[^/]+\/logo$/)) return next()
+  express.json({ limit: '10kb' })(req, res, next)
+})
 app.use(cookieParser())
 
 // ============================================================
