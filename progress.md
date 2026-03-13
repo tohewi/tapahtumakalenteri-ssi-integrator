@@ -1,12 +1,22 @@
 # Progress
 
-Last updated: 2026-03-12 (night) by Cascade
-Branch: `release/r80-match-manager-base` at `094e468`
+Last updated: 2026-03-13 by Cascade
+Branch: `release/r80-match-manager-base` at `6fd2e77`
 Tests: 870 backend (39 files) + 221 frontend (10 files) = 1091, all passing
 
 ---
 
 ## Current Session Work
+
+### Completed — 2026-03-13: BL-1 Admin Delete + i18n Fixes
+
+33. **BL-1: Admin delete tenant/account** (`6fd2e77`) — DELETE endpoints for tenants and accounts with cascade cleanup.
+    - `deleteTenant()` removes tenant ID from owner account's tenants array, then CASCADE deletes all child data
+    - `deleteAccount()` deletes all owned tenants first, then account
+    - Admin dashboard: red "Delete" buttons on tenant and account rows with confirmation dialog
+    - `test-harness/check-test-data.mjs` utility for inspecting deployed data
+
+32. **i18n: Finnish translation fixes** (`ba6430d`) — Replaced military "miehitys" terminology with neutral "henkilöstö" throughout dashboard and roster views (7 translations). Changed sidebar "Etusivu" → "Pikanäkymä".
 
 ### Completed — 2026-03-12 (night): TEN-1 Tenant URL Strategy
 
