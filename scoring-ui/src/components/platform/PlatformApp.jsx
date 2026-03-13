@@ -259,7 +259,10 @@ function PlatformAppInner({ route }) {
 
   // TEN-1: Derive tenant context and view from URL (not React state)
   const parsed = parseRoute(route)
-  const activeTenant = tenants.find(t => t.slug === parsed.tenantSlug) || null
+  // Resolve by slug first, then by ID (fallback for tenants without slugs yet)
+  const activeTenant = tenants.find(t => t.slug && t.slug === parsed.tenantSlug)
+    || tenants.find(t => t.id === parsed.tenantSlug)
+    || null
   const selectedTenantId = activeTenant?.id || null
   const activeView = parsed.view || 'dashboard'
   const selectedTemplateId = (parsed.view === 'templates' && parsed.subId) ? parsed.subId : null
@@ -292,7 +295,7 @@ function PlatformAppInner({ route }) {
         setAuthState(AUTH.APP)
         // TEN-1: auto-redirect to first tenant if at bare #/platform
         if (t.length > 0 && !parsed.tenantSlug) {
-          window.location.hash = `#/platform/${t[0].slug}/dashboard`
+          window.location.hash = `#/platform/${t[0].slug || t[0].id}/dashboard`
         }
       } else {
         setAuthState(AUTH.WELCOME)
@@ -312,7 +315,8 @@ function PlatformAppInner({ route }) {
       const newTenants = data.tenant ? [data.tenant] : []
       setTenants(newTenants)
       setAuthState(AUTH.APP)
-      if (data.tenant?.slug) window.location.hash = `#/platform/${data.tenant.slug}/dashboard`
+      const regSlug = data.tenant?.slug || data.tenant?.id
+      if (regSlug) window.location.hash = `#/platform/${regSlug}/dashboard`
     } catch (err) {
       setError(err.details ? err.details.join('. ') : err.message)
       throw err
@@ -334,7 +338,7 @@ function PlatformAppInner({ route }) {
       setAuthState(AUTH.APP)
       // TEN-1: redirect to tenant slug URL (preserve if already on one)
       if (!parsed.tenantSlug && loginTenants.length > 0) {
-        window.location.hash = `#/platform/${loginTenants[0].slug}/dashboard`
+        window.location.hash = `#/platform/${loginTenants[0].slug || loginTenants[0].id}/dashboard`
       }
     } catch (err) {
       setError(err.message)
@@ -356,7 +360,8 @@ function PlatformAppInner({ route }) {
       const data = await createTenant({ name })
       setTenants(prev => [...prev, data.tenant])
       setAuthState(AUTH.APP)
-      if (data.tenant?.slug) window.location.hash = `#/platform/${data.tenant.slug}/dashboard`
+      const newSlug = data.tenant?.slug || data.tenant?.id
+      if (newSlug) window.location.hash = `#/platform/${newSlug}/dashboard`
     } catch (err) {
       setError(err.message)
       throw err
@@ -370,7 +375,7 @@ function PlatformAppInner({ route }) {
   // ---- Navigate within sidebar (TEN-1: via hash URL) ----
   const [focusEventId, setFocusEventId] = useState(null)
   function navigate(viewId, extra) {
-    const slug = activeTenant?.slug || tenants[0]?.slug
+    const slug = activeTenant?.slug || activeTenant?.id || tenants[0]?.slug || tenants[0]?.id
     if (!slug) return
     if (extra?.templateId) {
       window.location.hash = `#/platform/${slug}/templates/${extra.templateId}`
@@ -439,7 +444,7 @@ function PlatformAppInner({ route }) {
           setTenants(t)
           setAuthState(AUTH.APP)
           if (t.length > 0 && !parsed.tenantSlug) {
-            window.location.hash = `#/platform/${t[0].slug}/dashboard`
+            window.location.hash = `#/platform/${t[0].slug || t[0].id}/dashboard`
           }
         }}
         onCancel={() => {
@@ -459,7 +464,8 @@ function PlatformAppInner({ route }) {
           setAuthState(AUTH.APP)
           // Navigate to the joined tenant's slug URL
           const joined = joinTenants.find(t => t.id === joinTenantId)
-          window.location.hash = joined?.slug ? `#/platform/${joined.slug}/dashboard` : '#/platform'
+          const joinSlug = joined?.slug || joined?.id
+          window.location.hash = joinSlug ? `#/platform/${joinSlug}/dashboard` : '#/platform'
         }}
         onCancel={() => {
           window.location.hash = '#/platform'
@@ -570,7 +576,8 @@ function PlatformAppInner({ route }) {
         selectedTenantId={selectedTenantId}
         onChangeTenant={(id) => {
           const t = tenants.find(tn => tn.id === id)
-          if (t?.slug) window.location.hash = `#/platform/${t.slug}/dashboard`
+          const switchSlug = t?.slug || t?.id
+          if (switchSlug) window.location.hash = `#/platform/${switchSlug}/dashboard`
         }}
         onLogout={handleLogout}
       />
