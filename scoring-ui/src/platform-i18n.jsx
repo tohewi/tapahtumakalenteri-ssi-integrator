@@ -120,6 +120,23 @@ const fi = {
   mfaUseRecovery: 'Käytä palautuskoodia',
   mfaUseAuthenticator: 'Käytä tunnistautumiskoodia',
 
+  // Tenant detail page
+  tenantPageTitle: 'Organisaatio',
+  tenantPageDesc: 'Organisaation tiedot ja tilaus.',
+  tenantSettingsSubtitle: 'Organisaation asetukset ja integraatiot',
+  tenantGeneralTitle: 'Yleistiedot',
+  tenantGeneralDesc: 'Organisaation perustiedot ja tilauksen tila.',
+  tenantOrgNameLabel: 'Organisaation nimi',
+  tenantSubscriptionLabel: 'Tilaus',
+  tenantCreatedLabel: 'Luotu',
+  tenantFreeTrial: 'Ilmainen kokeilu',
+  tenantDaysLeft: (n) => `(${n} päivä${n !== 1 ? 'ä' : ''} jäljellä)`,
+  tenantNameUpdated: 'Nimi päivitetty',
+  tenantTemplatesTitle: 'Tapahtumamallipohjat',
+  tenantTemplatesDesc: 'Mallipohjat otteluiden luomiseen SSI:ssä.',
+  tenantSettingsTitle: 'Asetukset',
+  tenantSettingsDesc: 'Integraatiotunnukset ja asetukset.',
+
   // Tenant create page
   tenantCreateTitle: 'Luo organisaatio',
   tenantCreateDesc: 'Organisaatio edustaa seuraasi tai klubiasi. Jokaisella organisaatiolla on omat mallipohjat, tapahtumat ja vetäjälista.',
@@ -665,6 +682,23 @@ const en = {
   mfaVerify: 'Verify',
   mfaUseRecovery: 'Use recovery code',
   mfaUseAuthenticator: 'Use authenticator code',
+
+  // Tenant detail page
+  tenantPageTitle: 'Tenant',
+  tenantPageDesc: 'Organization details and subscription.',
+  tenantSettingsSubtitle: 'Tenant settings and integrations',
+  tenantGeneralTitle: 'General',
+  tenantGeneralDesc: 'Basic tenant information and subscription status.',
+  tenantOrgNameLabel: 'Organization Name',
+  tenantSubscriptionLabel: 'Subscription',
+  tenantCreatedLabel: 'Created',
+  tenantFreeTrial: 'Free Trial',
+  tenantDaysLeft: (n) => `(${n} day${n !== 1 ? 's' : ''} left)`,
+  tenantNameUpdated: 'Name updated',
+  tenantTemplatesTitle: 'Event Templates',
+  tenantTemplatesDesc: 'Blueprints for creating matches in SSI.',
+  tenantSettingsTitle: 'Settings',
+  tenantSettingsDesc: 'Integration credentials and configuration.',
 
   // Tenant create page
   tenantCreateTitle: 'Create Organization',

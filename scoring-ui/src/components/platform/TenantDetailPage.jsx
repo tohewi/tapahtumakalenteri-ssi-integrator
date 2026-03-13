@@ -14,6 +14,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { getTenantDetails, updateTenant, getTenantLogoUrl } from '../../platform-api.js'
+import { usePlatformT } from '../../platform-i18n.jsx'
 import {
   TenantGeneralTab,
   TenantSsiTab,
@@ -27,6 +28,7 @@ import {
 // ---- Main Page ----
 
 export default function TenantDetailPage({ tenantId, account, onBack, onLogout, onEditTemplate, onSchedule, sectionsFilter }) {
+  const { t } = usePlatformT()
   const [tenant, setTenant] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
@@ -91,23 +93,23 @@ export default function TenantDetailPage({ tenantId, account, onBack, onLogout, 
       <div className="space-y-0">
         {sectionsFilter === 'tenant-info' && (
           <>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Tenant</h1>
-            <p className="text-sm text-gray-400 mb-6">Organization details and subscription.</p>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('tenantPageTitle')}</h1>
+            <p className="text-sm text-gray-400 mb-6">{t('tenantPageDesc')}</p>
             <TenantGeneralTab tenant={tenant} onSave={handleSave} />
           </>
         )}
         {sectionsFilter === 'templates' && (
           <>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Event Templates</h1>
-            <p className="text-sm text-gray-400 mb-6">Blueprints for creating matches in SSI.</p>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('tenantTemplatesTitle')}</h1>
+            <p className="text-sm text-gray-400 mb-6">{t('tenantTemplatesDesc')}</p>
             <TenantDisciplinesTab tenantId={tenantId} />
             <TenantTemplatesTab tenantId={tenantId} onEditTemplate={onEditTemplate} />
           </>
         )}
         {sectionsFilter === 'settings' && (
           <>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Settings</h1>
-            <p className="text-sm text-gray-400 mb-6">Integration credentials and configuration.</p>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">{t('tenantSettingsTitle')}</h1>
+            <p className="text-sm text-gray-400 mb-6">{t('tenantSettingsDesc')}</p>
             <TenantBrandingTab tenantId={tenantId} tenant={tenant} onTenantUpdated={reloadTenant} />
             <TenantRegionalTab tenant={tenant} onSave={handleSave} />
             <TenantSsiTab tenant={tenant} onSave={handleSave} />
@@ -165,7 +167,7 @@ export default function TenantDetailPage({ tenantId, account, onBack, onLogout, 
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{tenant.name}</h1>
-            <p className="text-sm text-gray-500">Tenant settings and integrations</p>
+            <p className="text-sm text-gray-500">{t('tenantSettingsSubtitle')}</p>
           </div>
           {onSchedule && (
             <button
