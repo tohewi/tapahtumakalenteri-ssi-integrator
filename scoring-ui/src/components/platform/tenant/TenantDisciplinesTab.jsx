@@ -5,8 +5,10 @@
 import { useState, useEffect } from 'react'
 import { listDisciplines, createDisciplineApi, updateDisciplineApi, deleteDisciplineApi, getSsiDisciplineRegistry } from '../../../platform-api.js'
 import { SectionCard, StatusMessage } from './shared.jsx'
+import { usePlatformT } from '../../../platform-i18n.jsx'
 
 export function TenantDisciplinesTab({ tenantId }) {
+  const { t } = usePlatformT()
   const [disciplines, setDisciplines] = useState([])
   const [registry, setRegistry] = useState([])
   const [loading, setLoading] = useState(true)
@@ -83,7 +85,7 @@ export function TenantDisciplinesTab({ tenantId }) {
   }
 
   async function handleDelete(disId) {
-    if (!confirm('Delete this discipline? This cannot be undone.')) return
+    if (!confirm(t('discDeleteConfirm'))) return
     try {
       await deleteDisciplineApi(tenantId, disId)
       setDisciplines(prev => prev.filter(d => d.id !== disId))
@@ -94,16 +96,16 @@ export function TenantDisciplinesTab({ tenantId }) {
 
   return (
     <SectionCard
-      title="Disciplines"
-      description="Competition types this organization runs. Each discipline can have templates and scheduled events."
+      title={t('discTitle')}
+      description={t('discDesc')}
     >
       {loading ? (
-        <div className="text-sm text-gray-400">Loading disciplines...</div>
+        <div className="text-sm text-gray-400">{t('discLoading')}</div>
       ) : (
         <>
           {/* Discipline list */}
           {disciplines.length === 0 && !showForm && (
-            <div className="text-sm text-gray-400 mb-4">No disciplines defined yet.</div>
+            <div className="text-sm text-gray-400 mb-4">{t('discNone')}</div>
           )}
           {disciplines.length > 0 && (
             <div className="space-y-2 mb-4">
@@ -128,13 +130,13 @@ export function TenantDisciplinesTab({ tenantId }) {
                         onClick={() => startEdit(dis)}
                         className="text-xs text-sky-600 hover:text-sky-800"
                       >
-                        Edit
+                        {t('edit')}
                       </button>
                       <button
                         onClick={() => handleDelete(dis.id)}
                         className="text-xs text-red-400 hover:text-red-600"
                       >
-                        Delete
+                        {t('delete')}
                       </button>
                     </div>
                   </div>
@@ -144,34 +146,34 @@ export function TenantDisciplinesTab({ tenantId }) {
                     <div className="mt-2 border rounded-lg p-4 bg-white shadow-sm">
                       <form onSubmit={handleSave} className="space-y-3">
                         <StatusMessage {...(status || {})} />
-                        <div className="text-sm font-semibold text-gray-700 mb-2">Edit Discipline</div>
+                        <div className="text-sm font-semibold text-gray-700 mb-2">{t('discEdit')}</div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">Internal Name</label>
+                            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">{t('discInternalName')}</label>
                             <input
                               type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                              required minLength={2} placeholder="e.g. kupittaa_cup"
+                              required minLength={2} placeholder="kupittaa_cup"
                               className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">Label (Finnish)</label>
+                            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">{t('discLabelFi')}</label>
                             <input
                               type="text" value={form.labelFi} onChange={e => setForm(f => ({ ...f, labelFi: e.target.value }))}
-                              placeholder="e.g. Kupittaa Cup"
+                              placeholder="Kupittaa Cup"
                               className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">Label (English)</label>
+                            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">{t('discLabelEn')}</label>
                             <input
                               type="text" value={form.labelEn} onChange={e => setForm(f => ({ ...f, labelEn: e.target.value }))}
-                              placeholder="e.g. Kupittaa Cup"
+                              placeholder="Kupittaa Cup"
                               className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">SSI Group ID</label>
+                            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">{t('discSsiGroupId')}</label>
                             <input
                               type="text" value={form.ssiGroupId} onChange={e => setForm(f => ({ ...f, ssiGroupId: e.target.value }))}
                               placeholder="Optional"
@@ -180,7 +182,7 @@ export function TenantDisciplinesTab({ tenantId }) {
                           </div>
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">SSI Organizer ID</label>
+                          <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">{t('discSsiOrganizerId')}</label>
                           <input
                             type="text" value={form.ssiOrganizerId} onChange={e => setForm(f => ({ ...f, ssiOrganizerId: e.target.value }))}
                             placeholder="Optional"
@@ -202,28 +204,28 @@ export function TenantDisciplinesTab({ tenantId }) {
                               }}
                               className="rounded text-sky-600 focus:ring-sky-500"
                             />
-                            SSI-linked discipline
+                            {t('discSsiLinked')}
                           </label>
                         </div>
 
                         {form.ssiLinked ? (
                           <div>
-                            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1 mt-2">SSI Discipline Type</label>
+                            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1 mt-2">{t('discSsiType')}</label>
                             <select
                               value={registry.some(r => r.ssiCreateUrl === form.ssiCreateUrl) ? form.ssiCreateUrl : ''}
                               onChange={e => setForm(f => ({ ...f, ssiCreateUrl: e.target.value }))}
                               className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none bg-white"
                             >
-                              <option value="">Select type...</option>
+                              <option value="">{t('discSelectType')}</option>
                               {registry.filter(r => !r.lastSeenAt).length > 0 && (
-                                <optgroup label="Built-in">
+                                <optgroup label={t('discBuiltIn')}>
                                   {registry.filter(r => !r.lastSeenAt).map(r => (
                                     <option key={r.id} value={r.ssiCreateUrl}>{r.displayName} {r.isCup ? '(Cup)' : '(Match)'}</option>
                                   ))}
                                 </optgroup>
                               )}
                               {registry.filter(r => r.lastSeenAt).length > 0 && (
-                                <optgroup label="Auto-discovered from SSI">
+                                <optgroup label={t('discAutoDiscovered')}>
                                   {registry.filter(r => r.lastSeenAt).map(r => (
                                     <option key={r.id} value={r.ssiCreateUrl}>{r.displayName} {r.isCup ? '(Cup)' : '(Match)'}</option>
                                   ))}
@@ -233,22 +235,22 @@ export function TenantDisciplinesTab({ tenantId }) {
                           </div>
                         ) : (
                           <div>
-                            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1 mt-2">SSI Create URL (Manual)</label>
+                            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1 mt-2">{t('discSsiCreateUrlManual')}</label>
                             <input
                               type="text" value={form.ssiCreateUrl} onChange={e => setForm(f => ({ ...f, ssiCreateUrl: e.target.value }))}
                               placeholder="e.g. /sra/create-match/"
                               className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
                             />
-                            <p className="text-xs text-gray-400 mt-0.5">SSI form URL for creating events in this discipline</p>
+                            <p className="text-xs text-gray-400 mt-0.5">{t('discSsiCreateUrlHint')}</p>
                           </div>
                         )}
                         <div className="flex items-center justify-end gap-2 pt-2">
-                          <button type="button" onClick={resetForm} className="text-sm text-gray-500 hover:text-gray-700">Cancel</button>
+                          <button type="button" onClick={resetForm} className="text-sm text-gray-500 hover:text-gray-700">{t('cancel')}</button>
                           <button
                             type="submit" disabled={saving || form.name.trim().length < 2}
                             className="bg-sky-600 text-white px-4 py-1.5 rounded-md text-sm font-semibold hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                           >
-                            {saving ? 'Saving...' : 'Update'}
+                            {saving ? t('saving') : t('discUpdate')}
                           </button>
                         </div>
                       </form>
@@ -263,34 +265,34 @@ export function TenantDisciplinesTab({ tenantId }) {
           {showForm && !editingId ? (
             <form onSubmit={handleSave} className="border rounded-lg p-4 space-y-3 bg-gray-50">
               <StatusMessage {...(status || {})} />
-              <div className="text-sm font-semibold text-gray-700 mb-2">New Discipline</div>
+              <div className="text-sm font-semibold text-gray-700 mb-2">{t('discNew')}</div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">Internal Name</label>
+                  <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">{t('discInternalName')}</label>
                   <input
                     type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                    required minLength={2} placeholder="e.g. kupittaa_cup"
+                    required minLength={2} placeholder="kupittaa_cup"
                     className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">Label (Finnish)</label>
+                  <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">{t('discLabelFi')}</label>
                   <input
                     type="text" value={form.labelFi} onChange={e => setForm(f => ({ ...f, labelFi: e.target.value }))}
-                    placeholder="e.g. Kupittaa Cup"
+                    placeholder="Kupittaa Cup"
                     className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">Label (English)</label>
+                  <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">{t('discLabelEn')}</label>
                   <input
                     type="text" value={form.labelEn} onChange={e => setForm(f => ({ ...f, labelEn: e.target.value }))}
-                    placeholder="e.g. Kupittaa Cup"
+                    placeholder="Kupittaa Cup"
                     className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">SSI Group ID</label>
+                  <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">{t('discSsiGroupId')}</label>
                   <input
                     type="text" value={form.ssiGroupId} onChange={e => setForm(f => ({ ...f, ssiGroupId: e.target.value }))}
                     placeholder="Optional"
@@ -299,7 +301,7 @@ export function TenantDisciplinesTab({ tenantId }) {
                 </div>
               </div>
               <div>
-                <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">SSI Organizer ID</label>
+                <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">{t('discSsiOrganizerId')}</label>
                 <input
                   type="text" value={form.ssiOrganizerId} onChange={e => setForm(f => ({ ...f, ssiOrganizerId: e.target.value }))}
                   placeholder="Optional"
@@ -358,18 +360,18 @@ export function TenantDisciplinesTab({ tenantId }) {
                     placeholder="e.g. /sra/create-match/"
                     className="w-full border rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
                   />
-                  <p className="text-xs text-gray-400 mt-0.5">SSI form URL for creating events in this discipline</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{t('discSsiCreateUrlHint')}</p>
                 </div>
               )}
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button type="button" onClick={resetForm} className="text-sm text-gray-500 hover:text-gray-700">
-                  Cancel
+                  {t('cancel')}
                 </button>
                 <button
                   type="submit" disabled={saving || form.name.trim().length < 2}
                   className="bg-sky-600 text-white px-4 py-1.5 rounded-md text-sm font-semibold hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  {saving ? 'Saving...' : 'Create'}
+                  {saving ? t('saving') : t('discCreate')}
                 </button>
               </div>
             </form>
@@ -378,7 +380,7 @@ export function TenantDisciplinesTab({ tenantId }) {
               onClick={() => { resetForm(); setShowForm(true) }}
               className="text-sm text-sky-600 hover:text-sky-800 font-medium"
             >
-              + Add Discipline
+              {t('discAddDiscipline')}
             </button>
           )}
         </>
