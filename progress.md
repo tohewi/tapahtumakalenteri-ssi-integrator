@@ -1,12 +1,19 @@
 # Progress
 
-Last updated: 2026-03-13 by Cascade
-Branch: `release/r80-match-manager-base` at `6fd2e77`
+Last updated: 2026-03-14 by Cascade
+Branch: `release/r80-match-manager-base` at `11b6bad`
 Tests: 870 backend (39 files) + 221 frontend (10 files) = 1091, all passing
 
 ---
 
 ## Current Session Work
+
+### Completed — 2026-03-13: Bug fixes + i18n expansion
+
+37. **fix: Logo upload 413** (`11b6bad`) — Global 10kb body parser rejected logo uploads (928KB → ~1.2MB base64). Conditional middleware now skips global parser for `POST /tenants/:id/logo`.
+36. **i18n: Disciplines + Templates tabs** (`a9bd104`) — ~60 i18n keys added (fi + en) for TenantDisciplinesTab and TenantTemplatesTab.
+35. **i18n: TenantDetailPage + TenantGeneralTab** (`1a0667a`) — 16 i18n keys: page titles, form labels, subscription status.
+34. **fix: Slug redirect fallback** (`f58b2e2`) — All slug redirects use `slug || id` fallback. Tenant resolution matches by slug OR by ID.
 
 ### Completed — 2026-03-13: BL-1 Admin Delete + i18n Fixes
 
@@ -167,6 +174,6 @@ Tests: 870 backend (39 files) + 221 frontend (10 files) = 1091, all passing
 
 - **BL-3**: Admin session monitoring (extend BL-1 with per-user session view)
 - **R7.6**: Consolidation & completion (deferred items from R7.0/R7.5)
-- **R7.9**: GraphQL cup management (GQL1–GQL7) — migrate from web scraping
 - **Regulatory**: GDPR, ToS, accessibility (21 design-phase requirements)
-- **Backlog**: Tenant context/URL strategy (TEN-1), page-load perf (PRF-1), multi-system integration architecture (INT-1)
+- **Backlog**: page-load perf (PRF-1), multi-system integration architecture (INT-1), code-splitting (BLD-1), UAT coverage (BLD-3)
+- **i18n remaining**: SSI tab, Calendar tab, Regional tab, Branding tab still have some hardcoded English strings
