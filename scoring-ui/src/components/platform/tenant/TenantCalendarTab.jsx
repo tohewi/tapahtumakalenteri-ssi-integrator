@@ -11,8 +11,10 @@
 
 import { useState, useEffect } from 'react'
 import { SectionCard, StatusMessage } from './shared.jsx'
+import { usePlatformT } from '../../../platform-i18n.jsx'
 
 export function TenantCalendarTab({ tenant, onSave }) {
+  const { t } = usePlatformT()
   const cfg = tenant.calendarConfig || {}
 
   // Form state — passwords are always empty (write-only)
@@ -58,7 +60,7 @@ export function TenantCalendarTab({ tenant, onSave }) {
   async function handleSave(e) {
     e.preventDefault()
     if (!form.wpBaseUrl.trim() || !form.wpUsername.trim()) {
-      setStatus({ type: 'error', message: 'WordPress URL and username are required' })
+      setStatus({ type: 'error', message: t('calWpUrlRequired') })
       return
     }
     setSaving(true)
@@ -78,7 +80,7 @@ export function TenantCalendarTab({ tenant, onSave }) {
 
       await onSave({ calendarConfig: value })
       setForm(prev => ({ ...prev, wpPassword: '', gmailAppPassword: '' }))
-      setStatus({ type: 'success', message: 'Calendar configuration saved' })
+      setStatus({ type: 'success', message: t('calSaved') })
     } catch (err) {
       setStatus({ type: 'error', message: err.message })
     } finally {
@@ -96,7 +98,7 @@ export function TenantCalendarTab({ tenant, onSave }) {
         gmailAddress: '', gmailAppPassword: '',
         gmailSenderFilter: '', gmailSubjectFilter: '',
       })
-      setStatus({ type: 'success', message: 'Calendar configuration cleared' })
+      setStatus({ type: 'success', message: t('calCleared') })
     } catch (err) {
       setStatus({ type: 'error', message: err.message })
     } finally {
@@ -107,8 +109,8 @@ export function TenantCalendarTab({ tenant, onSave }) {
   return (
     <div className="space-y-0">
       <SectionCard
-        title="Calendar Integration"
-        description="WordPress / Tapahtumakalenteri settings for automatic event publishing to your club calendar."
+        title={t('calTitle')}
+        description={t('calDesc')}
       >
         <StatusMessage {...(status || {})} />
 
@@ -117,17 +119,17 @@ export function TenantCalendarTab({ tenant, onSave }) {
           isConfigured ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-500'
         }`}>
           <span className={`w-2 h-2 rounded-full ${isConfigured ? 'bg-green-500' : 'bg-gray-400'}`} />
-          {isConfigured ? 'WordPress configured' : 'Not configured'}
+          {isConfigured ? t('calConfigured') : t('calNotConfigured')}
           {isConfigured && cfg.gmailAddress && <span className="text-green-600 text-xs ml-1">(+ Gmail OTP)</span>}
         </div>
 
         <form onSubmit={handleSave} className="space-y-6">
           {/* WordPress credentials section */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 border-b pb-1">WordPress Admin</h3>
+            <h3 className="text-sm font-semibold text-gray-700 border-b pb-1">{t('calWpAdmin')}</h3>
             <div>
               <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
-                WordPress URL
+                {t('calWpUrl')}
               </label>
               <input
                 type="url" name="wpBaseUrl" value={form.wpBaseUrl} onChange={handleChange}
@@ -135,11 +137,11 @@ export function TenantCalendarTab({ tenant, onSave }) {
                 autoComplete="off"
                 className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
               />
-              <p className="text-xs text-gray-400 mt-1">Base URL of your WordPress site (no trailing slash)</p>
+              <p className="text-xs text-gray-400 mt-1">{t('calWpUrlHint')}</p>
             </div>
             <div>
               <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
-                WordPress Username
+                {t('calWpUsername')}
               </label>
               <input
                 type="text" name="wpUsername" value={form.wpUsername} onChange={handleChange}
@@ -150,11 +152,11 @@ export function TenantCalendarTab({ tenant, onSave }) {
             </div>
             <div>
               <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
-                WordPress Password {cfg.hasWpPassword && <span className="normal-case text-green-600 font-normal">(saved)</span>}
+                {t('calWpPassword')} {cfg.hasWpPassword && <span className="normal-case text-green-600 font-normal">{t('ssiPasswordSaved')}</span>}
               </label>
               <input
                 type="password" name="wpPassword" value={form.wpPassword} onChange={handleChange}
-                placeholder={cfg.hasWpPassword ? 'Leave blank to keep current password' : 'WordPress admin password'}
+                placeholder={cfg.hasWpPassword ? t('calWpPasswordKeep') : t('calWpPasswordNew')}
                 autoComplete="new-password"
                 className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
               />
@@ -164,16 +166,16 @@ export function TenantCalendarTab({ tenant, onSave }) {
           {/* Gmail OTP section */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-700 border-b pb-1">
-              Gmail OTP Automation
-              <span className="font-normal text-gray-400 text-xs ml-2">— for WordPress email-based 2FA</span>
+              {t('calGmailTitle')}
+              <span className="font-normal text-gray-400 text-xs ml-2">{t('calGmailSubtitle')}</span>
             </h3>
             <p className="text-xs text-gray-500">
-              If your WordPress uses Two-Factor email verification, configure Gmail access here so the system can automatically fetch the OTP code. Requires a Gmail App Password (not your Google account password).
+              {t('calGmailDesc')}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
-                  Gmail Address
+                  {t('calGmailAddress')}
                 </label>
                 <input
                   type="email" name="gmailAddress" value={form.gmailAddress} onChange={handleChange}
@@ -184,11 +186,11 @@ export function TenantCalendarTab({ tenant, onSave }) {
               </div>
               <div>
                 <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
-                  Gmail App Password {cfg.hasGmailAppPassword && <span className="normal-case text-green-600 font-normal">(saved)</span>}
+                  {t('calGmailAppPassword')} {cfg.hasGmailAppPassword && <span className="normal-case text-green-600 font-normal">{t('ssiPasswordSaved')}</span>}
                 </label>
                 <input
                   type="password" name="gmailAppPassword" value={form.gmailAppPassword} onChange={handleChange}
-                  placeholder={cfg.hasGmailAppPassword ? 'Leave blank to keep current' : 'xxxx xxxx xxxx xxxx'}
+                  placeholder={cfg.hasGmailAppPassword ? t('calGmailAppPasswordKeep') : 'xxxx xxxx xxxx xxxx'}
                   autoComplete="new-password"
                   className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
                 />
@@ -197,25 +199,25 @@ export function TenantCalendarTab({ tenant, onSave }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
-                  Sender Filter
+                  {t('calSenderFilter')}
                 </label>
                 <input
                   type="text" name="gmailSenderFilter" value={form.gmailSenderFilter} onChange={handleChange}
                   placeholder="wordpress@your-site.fi"
                   className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
                 />
-                <p className="text-xs text-gray-400 mt-1">Email "From" to look for in Gmail</p>
+                <p className="text-xs text-gray-400 mt-1">{t('calSenderFilterHint')}</p>
               </div>
               <div>
                 <label className="block text-xs text-gray-500 uppercase tracking-wider mb-1">
-                  Subject Filter
+                  {t('calSubjectFilter')}
                 </label>
                 <input
                   type="text" name="gmailSubjectFilter" value={form.gmailSubjectFilter} onChange={handleChange}
                   placeholder="Login Confirmation"
                   className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
                 />
-                <p className="text-xs text-gray-400 mt-1">Email subject to look for</p>
+                <p className="text-xs text-gray-400 mt-1">{t('calSubjectFilterHint')}</p>
               </div>
             </div>
           </div>
@@ -227,7 +229,7 @@ export function TenantCalendarTab({ tenant, onSave }) {
                 type="button" onClick={handleClear} disabled={saving}
                 className="text-sm text-red-500 hover:text-red-700 disabled:opacity-50"
               >
-                Clear configuration
+                {t('calClearConfig')}
               </button>
             )}
             <div className={isConfigured ? '' : 'ml-auto'}>
@@ -236,7 +238,7 @@ export function TenantCalendarTab({ tenant, onSave }) {
                 disabled={saving || !hasChanges}
                 className="bg-sky-600 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {saving ? 'Saving...' : 'Save Configuration'}
+                {saving ? t('saving') : t('calSaveConfig')}
               </button>
             </div>
           </div>
