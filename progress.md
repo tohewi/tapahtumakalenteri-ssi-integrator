@@ -1,8 +1,8 @@
 # Progress
 
 Last updated: 2026-03-15 by Cascade
-Branch: `release/r80-match-manager-base` at `ae594dd`
-Tests: 904 backend (40 files) + 221 frontend (10 files) = 1125, all passing
+Branch: `release/r80-match-manager-base` at `bd26972`
+Tests: 908 backend (40 files) + 221 frontend (10 files) = 1129, all passing
 
 ---
 
@@ -10,6 +10,7 @@ Tests: 904 backend (40 files) + 221 frontend (10 files) = 1125, all passing
 
 ### Completed — 2026-03-15: Code Review + INT-1 + i18n
 
+45. **INT-1 Phase 3: Adapter resolution + integrations column** (`bd26972`) — M17 migration adds `integrations` JSONB to tenants. Registry resolves from `tenant.integrations.eventSystem`/`.calendarSystem` (new model) with fallback to legacy `ssiCredentials`/`calendarConfig`. 4 new tests. INT-1 Phases 1–3 complete — adapter pattern fully operational.
 44. **INT-1 Phase 2: WP calendar adapter** (`ae594dd`) — `lib/integrations/wp-calendar-adapter.js` (WpCalendarSystemAdapter wrapping WpCalendarAdapter + WP auth orchestration). Registry resolves WordPress from tenant calendarConfig. 7 new tests.
 43. **INT-1 Phase 1: SSI adapter facade** (`3e0b406`) — `lib/integrations/ssi-adapter.js` (SsiEventAdapter wrapping 9 ssi-core functions), `null-adapters.js` (NullEventAdapter + NullCalendarAdapter), `registry.js` (getEventAdapter/getCalendarAdapter factory). 27 new tests. Pure facade — no behavior changes.
 42. **Copilot review: low-priority fixes** (`f04b9b2`) — 10 items: postgres.js comments, WelcomePage aria-labels, dynamic E2E test dates, Node >=22, e2e URLs→localhost, e2e-staffing.yml trigger on release/**, uat-test-setup.md variable names, SSL risk comment, ssi-graphql-data-model.md contradictions fixed, platform-data-model.md stale phase labels removed.
