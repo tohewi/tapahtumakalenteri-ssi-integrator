@@ -1,16 +1,19 @@
-import { StrictMode, Component, useState, useEffect } from 'react'
+import { StrictMode, Component, Suspense, lazy, useState, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import HomePage from './components/HomePage.jsx'
-import App from './App.jsx'
-import TabletApp from './TabletApp.jsx'
-import RegisterPage from './components/RegisterPage.jsx'
-import ManagePage from './components/ManagePage.jsx'
-import ReportPage from './components/ReportPage.jsx'
-import SummaryReportPage from './components/SummaryReportPage.jsx'
-import StaffingPage from './components/StaffingPage.jsx'
-import { PlatformApp } from './components/platform/index.js'
-import AdminPage from './components/AdminPage.jsx'
+
+// Route-level code splitting — each route loads its own chunk on first navigation
+const HomePage = lazy(() => import('./components/HomePage.jsx'))
+const App = lazy(() => import('./App.jsx'))
+const TabletApp = lazy(() => import('./TabletApp.jsx'))
+const RegisterPage = lazy(() => import('./components/RegisterPage.jsx'))
+const ManagePage = lazy(() => import('./components/ManagePage.jsx'))
+const ReportPage = lazy(() => import('./components/ReportPage.jsx'))
+const SummaryReportPage = lazy(() => import('./components/SummaryReportPage.jsx'))
+const StaffingPage = lazy(() => import('./components/StaffingPage.jsx'))
+const AdminPage = lazy(() => import('./components/AdminPage.jsx'))
+// PlatformApp is the largest — lazy-load it and its 20+ sub-components
+const PlatformApp = lazy(() => import('./components/platform/PlatformApp.jsx'))
 
 // Error boundary to catch runtime crashes and display a useful error instead of a blank page
 class ErrorBoundary extends Component {
@@ -51,34 +54,37 @@ function Router() {
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
+  // Suspense fallback shown while lazy chunks load
+  const fallback = (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: '#9ca3af', fontFamily: 'system-ui, sans-serif' }}>
+      Loading...
+    </div>
+  )
+
+  let content
   if (route === '#/scoring') {
-    return <App />
+    content = <App />
+  } else if (route === '#/scoring-tablet') {
+    content = <TabletApp />
+  } else if (route === '#/register') {
+    content = <RegisterPage />
+  } else if (route === '#/manage') {
+    content = <ManagePage />
+  } else if (route === '#/report') {
+    content = <ReportPage />
+  } else if (route === '#/summary') {
+    content = <SummaryReportPage />
+  } else if (route === '#/staffing') {
+    content = <StaffingPage />
+  } else if (route === '#/platform' || route.startsWith('#/platform/')) {
+    content = <PlatformApp route={route} />
+  } else if (route === '#/admin') {
+    content = <AdminPage />
+  } else {
+    content = <HomePage />
   }
-  if (route === '#/scoring-tablet') {
-    return <TabletApp />
-  }
-  if (route === '#/register') {
-    return <RegisterPage />
-  }
-  if (route === '#/manage') {
-    return <ManagePage />
-  }
-  if (route === '#/report') {
-    return <ReportPage />
-  }
-  if (route === '#/summary') {
-    return <SummaryReportPage />
-  }
-  if (route === '#/staffing') {
-    return <StaffingPage />
-  }
-  if (route === '#/platform' || route.startsWith('#/platform/')) {
-    return <PlatformApp route={route} />
-  }
-  if (route === '#/admin') {
-    return <AdminPage />
-  }
-  return <HomePage />
+
+  return <Suspense fallback={fallback}>{content}</Suspense>
 }
 
 createRoot(document.getElementById('root')).render(
