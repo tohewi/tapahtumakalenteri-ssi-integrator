@@ -22,6 +22,7 @@ import {
   getTenantLogoUrl,
 } from '../../platform-api.js'
 import { PlatformI18nProvider, usePlatformT } from '../../platform-i18n.jsx'
+import { prefetchTenantData } from '../../hooks/useTenantDataCache.js'
 
 import DashboardView from './DashboardView.jsx'
 import RosterView from './RosterView.jsx'
@@ -266,6 +267,13 @@ function PlatformAppInner({ route }) {
   const selectedTenantId = activeTenant?.id || null
   const activeView = parsed.view || 'dashboard'
   const selectedTemplateId = (parsed.view === 'templates' && parsed.subId) ? parsed.subId : null
+
+  // PRF-1: Prefetch tenant data when active tenant changes
+  useEffect(() => {
+    if (selectedTenantId && authState === 'app') {
+      prefetchTenantData(selectedTenantId)
+    }
+  }, [selectedTenantId, authState])
 
   // Check session and route on mount
   useEffect(() => {
