@@ -80,7 +80,7 @@ export async function getInvitationByToken(token) {
 
 /**
  * Accept an invitation and add the user to the tenant.
- * Performs atomical check-and-update.
+ * Performs atomic check-and-update.
  */
 export async function acceptTenantInvitation(token, accountId, accountEmail) {
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex')

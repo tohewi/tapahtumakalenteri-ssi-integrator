@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Quick script to check squad config in the TEST SRA template seed snapshot
 
-const BASE_URL = 'https://turres-ssi-tools-pr-138.onrender.com'
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3001'
 const EMAIL = 'tohewi@gmail.com'
 const PASSWORD = 'H3it0tt0r00!'
 const TENANT_ID = 'ten_666e216286d04d8d'

@@ -55,7 +55,7 @@ export async function syncSsiDisciplines(adminEmail, adminPassword) {
         discovered.push({
           id: `${ruleCode}_cup_match`,
           displayName: `${match[1]} Cup Match`,
-          ssiCreateUrl: `/series/${ruleCode}/create-cup/`, // Generic guess
+          ssiCreateUrl: null, // Not reliably guessable — admin sets manually or via seed import
           isCup: true,
           ruleCode: ruleCode,
           description: `Automatically discovered cup match for ${match[1]}`
@@ -81,7 +81,7 @@ export async function syncSsiDisciplines(adminEmail, adminPassword) {
         discovered.push({
           id: `${ruleCode}_match`,
           displayName: `${match[1]} Match`,
-          ssiCreateUrl: `/${ruleCode}/create-match/`, // Generic guess
+          ssiCreateUrl: null, // Not reliably guessable — admin sets manually or via seed import
           isCup: false,
           ruleCode: ruleCode,
           description: `Automatically discovered standalone match for ${match[1]}`

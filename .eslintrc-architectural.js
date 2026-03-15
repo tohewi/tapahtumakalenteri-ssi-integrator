@@ -64,7 +64,7 @@ module.exports = {
         },
       },
       create(context) {
-        const filename = context.getFilename()
+        const filename = context.getFilename().replace(/\\/g, '/')
 
         // Only apply to route and service files, not to client.js itself or shim files
         if (!filename.includes('/routes/') && !filename.includes('/lib/services/')) {

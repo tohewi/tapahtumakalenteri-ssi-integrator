@@ -154,10 +154,10 @@ export default function DashboardView({ tenantId, onNavigate }) {
               const weekday = d.toLocaleString('fi-FI', { weekday: 'short' }).substring(0, 2)
               
               // Match count: from executed events (matches array) or imported metadata
-              const matchCount = evt.ssiReferences?.matches?.length
-                || evt.ssiReferences?.componentMatchCount
-                || (evt.ssiReferences?.matches ? 0 : null)
-                || 1
+              const matches = evt.ssiReferences?.matches
+              const matchCount = Array.isArray(matches)
+                ? matches.length
+                : (evt.ssiReferences?.componentMatchCount ?? 1)
 
               return (
                 <div key={evt.id} className="px-4 py-3 flex items-center gap-4 hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => onNavigate('schedule')}>

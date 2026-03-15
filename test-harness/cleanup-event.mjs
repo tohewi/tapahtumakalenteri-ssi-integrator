@@ -8,7 +8,7 @@ function getArg(name, envName) {
   return process.env[envName] || null
 }
 
-const BASE_URL = getArg('base-url', 'PLATFORM_BASE_URL') || 'https://turres-ssi-tools-pr-138.onrender.com'
+const BASE_URL = getArg('base-url', 'PLATFORM_BASE_URL') || 'http://localhost:3001'
 const EMAIL = getArg('email', 'PLATFORM_EMAIL') || 'tohewi@gmail.com'
 const PASSWORD = getArg('password', 'PLATFORM_PASSWORD') || 'H3it0tt0r00!'
 const TENANT_ID = getArg('tenant-id', 'PLATFORM_TENANT_ID') || 'ten_666e216286d04d8d'

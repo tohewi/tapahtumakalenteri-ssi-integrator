@@ -3,7 +3,7 @@ import qrcode from 'qrcode'
 import crypto from 'crypto'
 import bcrypt from 'bcrypt'
 
-const ISSUER = 'SSI TurRes Tools'
+const ISSUER = process.env.PLATFORM_ISSUER_NAME || 'Match Management'
 
 /**
  * Generate a new MFA secret, provisioning URI, QR code, and recovery codes.
@@ -29,7 +29,7 @@ export async function generateMfaSetup(accountEmail) {
 
   // Generate 10 random 8-character recovery codes (hex)
   const recoveryCodes = Array.from({ length: 10 }, () => 
-    crypto.randomBytes(4).toString('hex')
+    crypto.randomBytes(8).toString('hex')
   )
 
   return {

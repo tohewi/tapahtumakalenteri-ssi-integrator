@@ -310,7 +310,6 @@ const platformSignUpLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many sign-up attempts. Try again later.' },
   handler: rateLimitHandler('platform-signup', 60 * 60 * 1000, { error: 'Too many sign-up attempts. Try again later.' }),
 })
 
@@ -320,7 +319,6 @@ const platformLoginLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many login attempts. Try again in 15 minutes.' },
   handler: rateLimitHandler('platform-login', 15 * 60 * 1000, { error: 'Too many login attempts. Try again in 15 minutes.' }),
 })
 
@@ -330,7 +328,6 @@ const platformPasswordResetLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many password reset attempts. Try again later.' },
   handler: rateLimitHandler('platform-reset', 15 * 60 * 1000, { error: 'Too many password reset attempts. Try again later.' }),
 })
 
@@ -340,7 +337,6 @@ const platformMutationLimiter = rateLimit({
   max: 30,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many requests. Please slow down.' },
   handler: rateLimitHandler('platform-mutation', 60 * 1000, { error: 'Too many requests. Please slow down.' }),
 })
 
@@ -350,7 +346,6 @@ const platformSsiLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many SSI operations. Please slow down.' },
   handler: rateLimitHandler('platform-ssi', 60 * 1000, { error: 'Too many SSI operations. Please slow down.' }),
 })
 

@@ -2,7 +2,7 @@
 // Quick check: list all tenants and accounts via platform API
 // Usage: node check-test-data.mjs [base-url]
 
-const BASE = process.argv[2] || 'https://turres-ssi-tools-pr-138.onrender.com'
+const BASE = process.argv[2] || 'http://localhost:3001'
 
 async function main() {
   console.log(`\n=== Checking test data on ${BASE} ===\n`)
