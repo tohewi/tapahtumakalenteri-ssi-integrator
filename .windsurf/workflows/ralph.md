@@ -25,6 +25,19 @@ Structured workflow for picking up tasks, implementing them, and tracking progre
 8. Mark the task complete in the todo list.
 9. If there's a next task and the user wants to continue, go to step 4.
 
+## Code Review (periodic, at least once per session)
+
+After significant pushes (new features, architecture changes, or before merge):
+1. **Request review**: Use GitHub Copilot code review on the PR, or ask the user to trigger one.
+2. **Fetch results**: Use `read_url_content` on `https://api.github.com/repos/{owner}/{repo}/pulls/{pr}/comments?per_page=100` to get review comments.
+3. **Triage**: Categorize findings into:
+   - **Red (bugs)**: Runtime errors, crashes, wrong imports — fix immediately
+   - **Yellow (quality)**: Dead code, missing guards, stale docs — fix before merge
+   - **Green (already fixed)**: Issues addressed in later commits — note as resolved
+   - **Grey (low priority)**: Style, nice-to-haves — track in backlog
+4. **Fix red items** in the current session. Track yellow items in the todo list.
+5. **Commit fixes** referencing the review (e.g., "fix: Address Copilot review findings").
+
 ## At Session End
 
 10. **Clean up leftover processes.** Test runs and dev servers often leave orphan node processes. Kill them:

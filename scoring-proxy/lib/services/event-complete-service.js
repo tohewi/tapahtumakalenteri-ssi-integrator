@@ -9,7 +9,7 @@
 // Uses SSI web form POST (no GraphQL update_event mutation).
 // ============================================================
 
-import { ssiLogin } from '../ssi-core/graphql.js'
+import { ssiLogin } from '../ssi-core/client.js'
 import { ssiCompleteEvent, SSI_EVENT_STATUSES } from '../ssi-core/event-status.js'
 import { ssiGetEventStats } from '../ssi-core/stats-graphql.js'
 import { log } from '../logger.js'

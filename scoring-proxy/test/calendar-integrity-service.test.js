@@ -11,7 +11,7 @@ function makeEvent(overrides = {}) {
     status: 'calendar_published',
     ssiReferences: {
       cupId: '201',
-      cupContentTypeId: '136',
+      cupTypeId: '136',
       cupUrl: 'https://shootnscoreit.com/event/136/201/',
       matches: [],
     },
@@ -99,7 +99,7 @@ describe('checkDbConsistency', () => {
 
   it('detects missing SSI Cup URL', () => {
     const events = [makeEvent({
-      ssiReferences: { cupId: '201', cupContentTypeId: '136', matches: [] },
+      ssiReferences: { cupId: '201', cupTypeId: '136', matches: [] },
     })]
     const issues = checkDbConsistency(events)
     expect(issues.some(i => i.type === 'missing_ssi_cup_url')).toBe(true)

@@ -12,10 +12,11 @@ const API_BASE = '/api/v1/platform'
  */
 async function platformFetch(path, options = {}) {
   const url = `${API_BASE}${path}`
+  const { headers: optionHeaders, ...restOptions } = options
   const res = await fetch(url, {
     credentials: 'include', // send platform_sid cookie
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options,
+    ...restOptions,
+    headers: { 'Content-Type': 'application/json', ...optionHeaders },
   })
 
   const data = await res.json().catch(() => ({}))

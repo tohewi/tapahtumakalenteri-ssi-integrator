@@ -160,7 +160,7 @@ export async function checkLiveWp(events, adapter, onProgress) {
         const content = wpEvent.acfFields?.content || ''
         // Check for SSI cup URL or Cup ID pattern in content
         const hasSsiLink = content.includes(refs.cupUrl) ||
-          content.includes(`shootnscoreit.com/event/${refs.cupContentTypeId}/${refs.cupId}`)
+          content.includes(`shootnscoreit.com/event/${refs.cupTypeId}/${refs.cupId}`)
         if (!hasSsiLink) {
           issues.push({
             type: 'wp_content_missing_ssi_link',
