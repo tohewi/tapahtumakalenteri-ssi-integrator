@@ -149,6 +149,43 @@ describe('Integration Registry', () => {
     expect(adapter.type).toBe('none')
   })
 
+  // ---- New integrations field resolution ----
+
+  it('getEventAdapter resolves SSI from tenant.integrations.eventSystem', () => {
+    const tenant = {
+      id: 'ten_new',
+      integrations: { eventSystem: { type: 'ssi', credentials: { email: 'new@b.com', password: 'pw' } } },
+      ssiCredentials: { email: 'old@b.com', password: 'oldpw' }, // legacy should be ignored
+    }
+    const adapter = getEventAdapter(tenant)
+    expect(adapter.type).toBe('ssi')
+    expect(adapter.credentials.email).toBe('new@b.com') // new model wins
+  })
+
+  it('getCalendarAdapter resolves WordPress from tenant.integrations.calendarSystem', () => {
+    const tenant = {
+      id: 'ten_new',
+      integrations: { calendarSystem: { type: 'wordpress', credentials: { wpBaseUrl: 'https://new.fi', wpUsername: 'a', wpPassword: 'b' } } },
+      calendarConfig: { wpBaseUrl: 'https://old.fi', wpUsername: 'x', wpPassword: 'y' }, // legacy should be ignored
+    }
+    const adapter = getCalendarAdapter(tenant)
+    expect(adapter.type).toBe('wordpress')
+    expect(adapter.calendarConfig.wpBaseUrl).toBe('https://new.fi') // new model wins
+  })
+
+  it('getEventAdapter falls back to legacy when integrations empty', () => {
+    const tenant = { id: 'ten_legacy', integrations: {}, ssiCredentials: { email: 'a@b.com', password: 'pw' } }
+    const adapter = getEventAdapter(tenant)
+    expect(adapter.type).toBe('ssi')
+    expect(adapter.credentials.email).toBe('a@b.com')
+  })
+
+  it('getCalendarAdapter falls back to legacy when integrations empty', () => {
+    const tenant = { id: 'ten_legacy', integrations: {}, calendarConfig: { wpBaseUrl: 'https://x.fi', wpUsername: 'a', wpPassword: 'b' } }
+    const adapter = getCalendarAdapter(tenant)
+    expect(adapter.type).toBe('wordpress')
+  })
+
   it('listEventSystemTypes includes ssi and none', () => {
     const types = listEventSystemTypes()
     expect(types.some(t => t.type === 'ssi')).toBe(true)

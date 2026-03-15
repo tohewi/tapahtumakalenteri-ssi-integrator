@@ -39,42 +39,55 @@ const CALENDAR_SYSTEM_TYPES = {
 
 /**
  * Resolve the event system adapter for a tenant.
- * Currently uses legacy ssiCredentials field. Phase 3 will
- * switch to tenant.integrations.eventSystem.
+ * Checks tenant.integrations.eventSystem first (new model),
+ * falls back to legacy ssiCredentials field.
  *
- * @param {object} tenant - Tenant object with ssiCredentials
+ * @param {object} tenant - Tenant object
  * @returns {EventSystemAdapter} SSI adapter or NullEventAdapter
  */
 export function getEventAdapter(tenant) {
-  // Phase 3 will check: tenant.integrations?.eventSystem?.type
-  // For now, use legacy ssiCredentials presence as the signal
+  // New model: tenant.integrations.eventSystem
+  const integ = tenant?.integrations?.eventSystem
+  if (integ?.type === 'ssi' && integ?.credentials?.email && integ?.credentials?.password) {
+    log.debug?.(`[registry] Event adapter: ssi (integrations) for tenant ${tenant.id}`)
+    return new SsiEventAdapter(integ.credentials)
+  }
+
+  // Legacy fallback: ssiCredentials
   const creds = tenant?.ssiCredentials
   if (creds?.email && creds?.password) {
-    log.debug?.(`[registry] Event adapter: ssi for tenant ${tenant.id}`)
+    log.debug?.(`[registry] Event adapter: ssi (legacy) for tenant ${tenant.id}`)
     return new SsiEventAdapter(creds)
   }
 
-  log.debug?.(`[registry] Event adapter: null (no SSI credentials) for tenant ${tenant?.id}`)
+  log.debug?.(`[registry] Event adapter: null for tenant ${tenant?.id}`)
   return new NullEventAdapter()
 }
 
 /**
  * Resolve the calendar system adapter for a tenant.
- * Checks calendarConfig for WordPress credentials.
+ * Checks tenant.integrations.calendarSystem first (new model),
+ * falls back to legacy calendarConfig field.
  *
- * @param {object} tenant - Tenant object with calendarConfig
+ * @param {object} tenant - Tenant object
  * @returns {CalendarSystemAdapter} WordPress adapter or NullCalendarAdapter
  */
 export function getCalendarAdapter(tenant) {
-  // Phase 3 will check: tenant.integrations?.calendarSystem?.type
-  // For now, use legacy calendarConfig presence as the signal
+  // New model: tenant.integrations.calendarSystem
+  const integ = tenant?.integrations?.calendarSystem
+  if (integ?.type === 'wordpress' && integ?.credentials?.wpBaseUrl) {
+    log.debug?.(`[registry] Calendar adapter: wordpress (integrations) for tenant ${tenant.id}`)
+    return new WpCalendarSystemAdapter(integ.credentials)
+  }
+
+  // Legacy fallback: calendarConfig
   const cfg = tenant?.calendarConfig
   if (cfg?.wpBaseUrl && cfg?.wpUsername && cfg?.wpPassword) {
-    log.debug?.(`[registry] Calendar adapter: wordpress for tenant ${tenant.id}`)
+    log.debug?.(`[registry] Calendar adapter: wordpress (legacy) for tenant ${tenant.id}`)
     return new WpCalendarSystemAdapter(cfg)
   }
 
-  log.debug?.(`[registry] Calendar adapter: null (no WP config) for tenant ${tenant?.id}`)
+  log.debug?.(`[registry] Calendar adapter: null for tenant ${tenant?.id}`)
   return new NullCalendarAdapter()
 }
 

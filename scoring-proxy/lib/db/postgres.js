@@ -438,6 +438,15 @@ export async function initPostgres() {
         log.warn('[postgres] M16 migration (tenant slugs):', err.message)
       }
 
+      // M17: Add integrations JSONB column to tenants (INT-1 Phase 3)
+      // Stores tenant-level integration configuration: { eventSystem: { type, credentials }, calendarSystem: { type, credentials } }
+      // Legacy ssi_credentials and calendar_config columns remain for backward compat during migration.
+      try {
+        await client.query("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS integrations JSONB DEFAULT '{}'")
+      } catch (err) {
+        log.warn('[postgres] M17 migration (integrations column):', err.message)
+      }
+
       // Optional unique constraints — may fail on existing data with duplicates.
       // App-level checks in createTenant/createAccountWithTenant still prevent new duplicates.
       try {

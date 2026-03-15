@@ -118,6 +118,7 @@ function rowToTenant(row, { includeCredentials = false } = {}) {
     subscription: row.subscription || {},
     ssiCredentials,
     calendarConfig,
+    integrations: row.integrations || {},
     disciplines: row.disciplines || [],
     createdAt: new Date(row.created_at).getTime(),
     updatedAt: new Date(row.updated_at).getTime(),
@@ -283,6 +284,7 @@ export async function updateTenant(tenantId, updates) {
   const allowedFields = {
     name: 'name',
     slug: 'slug',
+    integrations: 'integrations',
     city: 'city',
     country: 'country',
     timezone: 'timezone',
