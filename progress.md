@@ -1,15 +1,18 @@
 # Progress
 
 Last updated: 2026-03-15 by Cascade
-Branch: `release/r80-match-manager-base` at `6e706ac`
+Branch: `release/r80-match-manager-base` at `f04b9b2`
 Tests: 870 backend (39 files) + 221 frontend (10 files) = 1091, all passing
 
 ---
 
 ## Current Session Work
 
-### Completed — 2026-03-15: i18n Completion + INT-1 Design
+### Completed — 2026-03-15: Code Review + INT-1 + i18n
 
+42. **Copilot review: low-priority fixes** (`f04b9b2`) — 10 items: postgres.js comments, WelcomePage aria-labels, dynamic E2E test dates, Node >=22, e2e URLs→localhost, e2e-staffing.yml trigger on release/**, uat-test-setup.md variable names, SSL risk comment, ssi-graphql-data-model.md contradictions fixed, platform-data-model.md stale phase labels removed.
+41. **Copilot review: quality fixes** (`f786bed`) — 9 items: DashboardView matchCount logic, 5 dead rate limiter message fields, ESLint Windows path separators, 5 test script PR-138 URLs→localhost, removed jobs.json+job_log.txt artifacts, MFA recovery code entropy 4→8 bytes + configurable ISSUER, ssi-discipline-sync guessed URLs→null, typo atomical→atomic.
+40. **Copilot review: 4 bug fixes** (`fdf1dc8`) — event-complete-service.js wrong login import (GraphQL→web), email.js sendEmail() null guard, calendar-integrity-service.js cupContentTypeId→cupTypeId, platform-api.js headers spread order.
 39. **INT-1: Multi-system integration architecture** (`6e706ac`) — Design doc: `docs/design/int1-multi-system-integration.md`. Two integration slots per tenant (eventSystem + calendarSystem), adapter pattern, DB-backed admin catalog (`integration_types` table with credential_schema for dynamic tenant forms), NullAdapter for graceful degradation. 5-phase incremental migration (~11h).
 38. **i18n: SSI + Calendar tabs** (`736d1a8`) — ~40 i18n keys for TenantSsiTab and TenantCalendarTab. All 6 tenant settings tabs now fully translated (fi/en).
 
