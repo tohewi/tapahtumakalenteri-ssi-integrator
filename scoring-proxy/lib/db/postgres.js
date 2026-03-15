@@ -438,6 +438,14 @@ export async function initPostgres() {
         log.warn('[postgres] M16 migration (tenant slugs):', err.message)
       }
 
+      // M18: Make ssi_create_url nullable in ssi_discovered_disciplines
+      // Y8 fix changed sync to store null instead of guessed URLs.
+      try {
+        await client.query('ALTER TABLE ssi_discovered_disciplines ALTER COLUMN ssi_create_url DROP NOT NULL')
+      } catch (err) {
+        log.warn('[postgres] M18 migration (ssi_create_url nullable):', err.message)
+      }
+
       // M17: Add integrations JSONB column to tenants (INT-1 Phase 3)
       // Stores tenant-level integration configuration: { eventSystem: { type, credentials }, calendarSystem: { type, credentials } }
       // Legacy ssi_credentials and calendar_config columns remain for backward compat during migration.
