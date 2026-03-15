@@ -209,9 +209,8 @@ export function mountEventRoutes(router, { requirePlatformAuth, requireTenantRol
       }
 
       // Count confirmed staffing signups for impact summary
-      const { pool } = await import('../../lib/db/postgres.js')
-      const db = await pool()
-      const signupRes = await db.query(
+      const { query: dbQuery } = await import('../../lib/db/postgres.js')
+      const signupRes = await dbQuery(
         `SELECT COUNT(*) as count FROM staff_signups s
          JOIN event_staffing_needs n ON s.need_id = n.id
          WHERE n.event_id = $1 AND s.status = 'confirmed'`,
