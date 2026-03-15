@@ -180,8 +180,10 @@ Tests: 870 backend (39 files) + 221 frontend (10 files) = 1091, all passing
 
 ## What's Next (unprioritized — pick from PRD)
 
-- **BL-3**: Admin session monitoring (extend BL-1 with per-user session view)
-- **R7.6**: Consolidation & completion (deferred items from R7.0/R7.5)
+- **INT-1 Phase 1**: SSI adapter facade (~2h) — highest-value next step from INT-1 design
+- **BLD-3**: UAT test coverage audit — most features lack E2E tests
+- **PRF-1**: Page-load performance (SWR/prefetch on tenant select)
+- **BLD-1**: Frontend code-splitting (582 kB chunk)
+- **BL-3**: Admin session monitoring (extend BL-1)
+- **R7.6**: Consolidation & completion (18 deferred items from R7.x)
 - **Regulatory**: GDPR, ToS, accessibility (21 design-phase requirements)
-- **Backlog**: page-load perf (PRF-1), multi-system integration architecture (INT-1), code-splitting (BLD-1), UAT coverage (BLD-3)
-- **i18n remaining**: SSI tab, Calendar tab, Regional tab, Branding tab still have some hardcoded English strings
