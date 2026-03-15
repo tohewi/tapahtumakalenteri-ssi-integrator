@@ -1,7 +1,7 @@
 # Progress
 
 Last updated: 2026-03-15 by Cascade
-Branch: `release/r80-match-manager-base` at `bd26972`
+Branch: `release/r80-match-manager-base` at `67ed91c`
 Tests: 908 backend (40 files) + 221 frontend (10 files) = 1129, all passing
 
 ---
@@ -10,6 +10,8 @@ Tests: 908 backend (40 files) + 221 frontend (10 files) = 1129, all passing
 
 ### Completed — 2026-03-15: Code Review + INT-1 + i18n
 
+47. **INT-1 Phase 5: Admin catalog UI** (`67ed91c`) — Integration Types tab in `#/admin` showing Event Systems and Calendar Systems tables with type, name, credential field badges, and status. Read-only (types are code-deployed). **INT-1 all 5 phases complete.**
+46. **INT-1 Phase 4: Dynamic tenant settings UI** (`4530cdd`) — `GET /integration-types` API endpoint returns types with `credentialSchema` arrays. `TenantIntegrationsTab.jsx` renders type selector + dynamic credential form from schema. `getIntegrationTypesApi()` frontend client.
 45. **INT-1 Phase 3: Adapter resolution + integrations column** (`bd26972`) — M17 migration adds `integrations` JSONB to tenants. Registry resolves from `tenant.integrations.eventSystem`/`.calendarSystem` (new model) with fallback to legacy `ssiCredentials`/`calendarConfig`. 4 new tests. INT-1 Phases 1–3 complete — adapter pattern fully operational.
 44. **INT-1 Phase 2: WP calendar adapter** (`ae594dd`) — `lib/integrations/wp-calendar-adapter.js` (WpCalendarSystemAdapter wrapping WpCalendarAdapter + WP auth orchestration). Registry resolves WordPress from tenant calendarConfig. 7 new tests.
 43. **INT-1 Phase 1: SSI adapter facade** (`3e0b406`) — `lib/integrations/ssi-adapter.js` (SsiEventAdapter wrapping 9 ssi-core functions), `null-adapters.js` (NullEventAdapter + NullCalendarAdapter), `registry.js` (getEventAdapter/getCalendarAdapter factory). 27 new tests. Pure facade — no behavior changes.
