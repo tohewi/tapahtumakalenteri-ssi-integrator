@@ -1,7 +1,7 @@
 # Progress
 
 Last updated: 2026-03-15 by Cascade
-Branch: `release/r80-match-manager-base` at `8c4c026`
+Branch: `release/r80-match-manager-base` at `a10e879`
 Tests: 908 backend (40 files) + 221 frontend (10 files) = 1129, all passing
 
 ---
@@ -10,6 +10,9 @@ Tests: 908 backend (40 files) + 221 frontend (10 files) = 1129, all passing
 
 ### Completed — 2026-03-15: Code Review + INT-1 + i18n
 
+51. **PRF-1: Tenant data prefetch + SWR cache** (`a10e879`) — `hooks/useTenantDataCache.js` with `useCachedFetch()` (SWR pattern, 30s stale threshold), `prefetchTenantData()` (parallel API prefetch on tenant select), `invalidateTenantCache()`. PlatformApp prefetches events, templates, staffing on tenant change.
+50. **BLD-1: Frontend code-splitting** (`0520abb`) — 582 kB monolith split into 19 route-level chunks via `React.lazy()`. Largest chunk 240 kB (PlatformApp). vendor-react separated (11 kB). No chunk exceeds 300 kB. Initial load ~12 kB.
+49. **fix: Cancel event 500** (`33367d9`) — `pool is not a function` bug in cancel route. Used `query()` helper instead. Found by UAT E2E test.
 48. **BLD-3: UAT test scripts** (`8c4c026`) — `test-event-lifecycle.mjs` (full lifecycle: create→execute→complete→workflows→cancel→cleanup, with --skip-ssi dry-run mode) + `test-calendar-integrity.mjs` (integrity check with optional --live-check). Covers high-risk gaps: SSI completion, cancellation, post-event workflows.
 47. **INT-1 Phase 5: Admin catalog UI** (`67ed91c`) — Integration Types tab in `#/admin` showing Event Systems and Calendar Systems tables with type, name, credential field badges, and status. Read-only (types are code-deployed). **INT-1 all 5 phases complete.**
 46. **INT-1 Phase 4: Dynamic tenant settings UI** (`4530cdd`) — `GET /integration-types` API endpoint returns types with `credentialSchema` arrays. `TenantIntegrationsTab.jsx` renders type selector + dynamic credential form from schema. `getIntegrationTypesApi()` frontend client.
