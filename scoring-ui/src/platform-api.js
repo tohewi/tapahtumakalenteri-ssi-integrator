@@ -628,3 +628,14 @@ export async function updateEventStaffingNeedsApi(tenantId, eventId, needs) {
   })
 }
 
+// ---- Integration Types ----
+
+/**
+ * Get available integration types with credential schemas.
+ * @param {string} [category] - 'event_system' or 'calendar_system'
+ */
+export async function getIntegrationTypesApi(category) {
+  const params = category ? `?category=${category}` : ''
+  return platformFetch(`/integration-types${params}`)
+}
+

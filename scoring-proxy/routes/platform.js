@@ -23,6 +23,7 @@ import { mountMemberRoutes } from './platform/members.js'
 import { mountInvitationRoutes } from './platform/invitations.js'
 import { mountStaffingRoutes } from './platform/staffing.js'
 import { mountLogoRoutes } from './platform/logos.js'
+import { getIntegrationTypes } from '../lib/integrations/registry.js'
 
 // ---- Router factory ----
 
@@ -57,6 +58,15 @@ export function createPlatformRouter({
   mountInvitationRoutes(router, deps)
   mountStaffingRoutes(router, deps)
   mountLogoRoutes(router, deps)
+
+  // GET /api/v1/platform/integration-types — list available integration types with credential schemas
+  // Used by frontend to dynamically render integration settings forms.
+  // Auth required — only authenticated users can see available integrations.
+  router.get('/integration-types', requirePlatformAuth(), (req, res) => {
+    const category = req.query.category || null // 'event_system' or 'calendar_system'
+    const types = getIntegrationTypes(category)
+    res.json({ types })
+  })
 
   return router
 }

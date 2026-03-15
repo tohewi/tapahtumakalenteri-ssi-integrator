@@ -21,7 +21,13 @@ import { log } from '../logger.js'
 const EVENT_SYSTEM_TYPES = {
   ssi: {
     name: 'ShootNScoreIt',
+    description: 'Competition management & scoring platform',
     createAdapter: (credentials) => new SsiEventAdapter(credentials),
+    credentialSchema: [
+      { key: 'email', label: 'SSI Email', labelFi: 'SSI-sähköposti', type: 'email', required: true },
+      { key: 'password', label: 'SSI Password', labelFi: 'SSI-salasana', type: 'password', required: true, writeOnly: true },
+      { key: 'apiKey', label: 'API Key', labelFi: 'API-avain', type: 'password', required: false, writeOnly: true, hint: 'Found in SSI under My Account → API Keys' },
+    ],
   },
 }
 
@@ -31,7 +37,17 @@ const EVENT_SYSTEM_TYPES = {
 const CALENDAR_SYSTEM_TYPES = {
   wordpress: {
     name: 'WordPress / Tapahtumakalenteri',
+    description: 'Event calendar publishing via WordPress admin',
     createAdapter: (config) => new WpCalendarSystemAdapter(config),
+    credentialSchema: [
+      { key: 'wpBaseUrl', label: 'WordPress URL', labelFi: 'WordPress-URL', type: 'url', required: true, hint: 'Base URL (no trailing slash)' },
+      { key: 'wpUsername', label: 'Username', labelFi: 'Käyttäjänimi', type: 'text', required: true },
+      { key: 'wpPassword', label: 'Password', labelFi: 'Salasana', type: 'password', required: true, writeOnly: true },
+      { key: 'gmailAddress', label: 'Gmail Address', labelFi: 'Gmail-osoite', type: 'email', required: false, hint: 'For WordPress 2FA OTP' },
+      { key: 'gmailAppPassword', label: 'Gmail App Password', labelFi: 'Gmail-sovellussalasana', type: 'password', required: false, writeOnly: true },
+      { key: 'gmailSenderFilter', label: 'Sender Filter', labelFi: 'Lähettäjäsuodatin', type: 'text', required: false },
+      { key: 'gmailSubjectFilter', label: 'Subject Filter', labelFi: 'Aihesuodatin', type: 'text', required: false },
+    ],
   },
 }
 
@@ -113,4 +129,42 @@ export function listCalendarSystemTypes() {
     ...Object.entries(CALENDAR_SYSTEM_TYPES).map(([type, config]) => ({ type, name: config.name })),
     { type: 'none', name: 'No calendar integration' },
   ]
+}
+
+/**
+ * Get full integration type catalog for API responses.
+ * Returns types with credential schemas for dynamic UI form rendering.
+ * @param {string} [category] - 'event_system' or 'calendar_system' (optional filter)
+ * @returns {Array<{ type, category, name, description, credentialSchema }>}
+ */
+export function getIntegrationTypes(category) {
+  const types = []
+
+  if (!category || category === 'event_system') {
+    for (const [type, config] of Object.entries(EVENT_SYSTEM_TYPES)) {
+      types.push({
+        type,
+        category: 'event_system',
+        name: config.name,
+        description: config.description || '',
+        credentialSchema: config.credentialSchema || [],
+      })
+    }
+    types.push({ type: 'none', category: 'event_system', name: 'No event system', description: '', credentialSchema: [] })
+  }
+
+  if (!category || category === 'calendar_system') {
+    for (const [type, config] of Object.entries(CALENDAR_SYSTEM_TYPES)) {
+      types.push({
+        type,
+        category: 'calendar_system',
+        name: config.name,
+        description: config.description || '',
+        credentialSchema: config.credentialSchema || [],
+      })
+    }
+    types.push({ type: 'none', category: 'calendar_system', name: 'No calendar integration', description: '', credentialSchema: [] })
+  }
+
+  return types
 }
