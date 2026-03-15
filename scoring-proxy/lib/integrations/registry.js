@@ -12,6 +12,7 @@
 // ============================================================
 
 import { SsiEventAdapter } from './ssi-adapter.js'
+import { WpCalendarSystemAdapter } from './wp-calendar-adapter.js'
 import { NullEventAdapter, NullCalendarAdapter } from './null-adapters.js'
 import { log } from '../logger.js'
 
@@ -28,10 +29,10 @@ const EVENT_SYSTEM_TYPES = {
 // Phase 2 will add WpCalendarAdapter here
 
 const CALENDAR_SYSTEM_TYPES = {
-  // wordpress: {
-  //   name: 'WordPress / Tapahtumakalenteri',
-  //   createAdapter: (config) => new WpCalendarSystemAdapter(config),
-  // },
+  wordpress: {
+    name: 'WordPress / Tapahtumakalenteri',
+    createAdapter: (config) => new WpCalendarSystemAdapter(config),
+  },
 }
 
 // ---- Factory Functions ----
@@ -59,16 +60,21 @@ export function getEventAdapter(tenant) {
 
 /**
  * Resolve the calendar system adapter for a tenant.
- * Currently returns NullCalendarAdapter — Phase 2 will add
- * WordPress adapter resolution from calendarConfig.
+ * Checks calendarConfig for WordPress credentials.
  *
  * @param {object} tenant - Tenant object with calendarConfig
- * @returns {CalendarSystemAdapter} Calendar adapter or NullCalendarAdapter
+ * @returns {CalendarSystemAdapter} WordPress adapter or NullCalendarAdapter
  */
 export function getCalendarAdapter(tenant) {
-  // Phase 2 will resolve WpCalendarAdapter from calendarConfig
-  // For now, always return null adapter (calendar operations are
-  // still called directly by routes/platform/events.js)
+  // Phase 3 will check: tenant.integrations?.calendarSystem?.type
+  // For now, use legacy calendarConfig presence as the signal
+  const cfg = tenant?.calendarConfig
+  if (cfg?.wpBaseUrl && cfg?.wpUsername && cfg?.wpPassword) {
+    log.debug?.(`[registry] Calendar adapter: wordpress for tenant ${tenant.id}`)
+    return new WpCalendarSystemAdapter(cfg)
+  }
+
+  log.debug?.(`[registry] Calendar adapter: null (no WP config) for tenant ${tenant?.id}`)
   return new NullCalendarAdapter()
 }
 

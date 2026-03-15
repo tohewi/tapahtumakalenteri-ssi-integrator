@@ -128,8 +128,23 @@ describe('Integration Registry', () => {
     expect(adapter.type).toBe('none')
   })
 
-  it('getCalendarAdapter returns NullCalendarAdapter (Phase 2 pending)', () => {
+  it('getCalendarAdapter returns WpCalendarSystemAdapter when WP config complete', () => {
+    const tenant = {
+      id: 'ten_test',
+      calendarConfig: { wpBaseUrl: 'https://example.com', wpUsername: 'admin', wpPassword: 'secret' },
+    }
+    const adapter = getCalendarAdapter(tenant)
+    expect(adapter.type).toBe('wordpress')
+  })
+
+  it('getCalendarAdapter returns NullCalendarAdapter when WP config incomplete', () => {
     const tenant = { id: 'ten_test', calendarConfig: { wpBaseUrl: 'https://example.com' } }
+    const adapter = getCalendarAdapter(tenant)
+    expect(adapter.type).toBe('none')
+  })
+
+  it('getCalendarAdapter returns NullCalendarAdapter when no config', () => {
+    const tenant = { id: 'ten_test', calendarConfig: null }
     const adapter = getCalendarAdapter(tenant)
     expect(adapter.type).toBe('none')
   })
@@ -140,9 +155,51 @@ describe('Integration Registry', () => {
     expect(types.some(t => t.type === 'none')).toBe(true)
   })
 
-  it('listCalendarSystemTypes includes none', () => {
+  it('listCalendarSystemTypes includes wordpress and none', () => {
     const types = listCalendarSystemTypes()
+    expect(types.some(t => t.type === 'wordpress')).toBe(true)
     expect(types.some(t => t.type === 'none')).toBe(true)
+  })
+})
+
+// ---- WpCalendarSystemAdapter ----
+
+describe('WpCalendarSystemAdapter', () => {
+  let WpCalendarSystemAdapter
+
+  beforeEach(async () => {
+    const mod = await import('../lib/integrations/wp-calendar-adapter.js')
+    WpCalendarSystemAdapter = mod.WpCalendarSystemAdapter
+  })
+
+  it('has type "wordpress"', () => {
+    const adapter = new WpCalendarSystemAdapter({ wpBaseUrl: 'https://example.com', wpUsername: 'admin', wpPassword: 'secret' })
+    expect(adapter.type).toBe('wordpress')
+  })
+
+  it('stores calendarConfig', () => {
+    const cfg = { wpBaseUrl: 'https://example.com', wpUsername: 'admin', wpPassword: 'secret' }
+    const adapter = new WpCalendarSystemAdapter(cfg)
+    expect(adapter.calendarConfig).toBe(cfg)
+  })
+
+  it('validate() returns valid when all required fields present', () => {
+    const adapter = new WpCalendarSystemAdapter({ wpBaseUrl: 'https://example.com', wpUsername: 'admin', wpPassword: 'secret' })
+    const result = adapter.validate()
+    expect(result.valid).toBe(true)
+  })
+
+  it('validate() returns invalid when fields missing', () => {
+    const adapter = new WpCalendarSystemAdapter({ wpBaseUrl: 'https://example.com' })
+    const result = adapter.validate()
+    expect(result.valid).toBe(false)
+    expect(result.missing.length).toBeGreaterThan(0)
+  })
+
+  it('validate() returns invalid for null config', () => {
+    const adapter = new WpCalendarSystemAdapter(null)
+    const result = adapter.validate()
+    expect(result.valid).toBe(false)
   })
 })
 
