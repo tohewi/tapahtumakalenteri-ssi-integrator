@@ -68,10 +68,12 @@ async function main() {
   }
 
   const r = res.data
+  const s = r.summary || {}
   console.log('\n--- Results ---')
-  console.log('Status:', r.passed ? 'PASSED' : 'FAILED')
-  console.log('Issues:', r.issueCount, '(' + r.errorCount + ' errors, ' + r.warningCount + ' warnings)')
-  console.log('Events checked:', r.eventsChecked)
+  console.log('Status:', s.passed ? 'PASSED' : 'FAILED')
+  console.log('Issues:', s.issueCount || 0, '(' + (s.errorCount || 0) + ' errors, ' + (s.warningCount || 0) + ' warnings)')
+  console.log('Events checked:', s.totalEvents || 0)
+  if (r.wpAuthError) console.log('WP auth:', r.wpAuthError)
 
   if (r.issues && r.issues.length > 0) {
     console.log('\nIssues:')
@@ -83,7 +85,7 @@ async function main() {
   }
 
   console.log('')
-  process.exit(r.passed ? 0 : 1)
+  process.exit(s.passed ? 0 : 1)
 }
 
 main().catch(err => { console.error('Script error:', err.message); process.exit(2) })
