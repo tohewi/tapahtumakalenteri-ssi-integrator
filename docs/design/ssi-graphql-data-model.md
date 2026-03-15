@@ -69,9 +69,9 @@ These must be queried via inline fragments: `... on NordicSerieNode { field }`
 |-------|:-:|:-:|:-:|:-:|
 | `scoring_mode` | ✅ | ✅ | ❓ | ❓ |
 | `match_registration_mode` | ✅ | ✅ | ✅ | ✅ |
-| `timezone` | ✅ | ✅ | ✅ | ✅ |
 
 > ❓ = Not yet confirmed in production. May exist but untested.
+> **Note:** `timezone` is NOT available on any Serie type (confirmed by tests — crashes SSI if queried).
 
 ### ComponentMatchInterface (common to all match types in a cup)
 
@@ -182,16 +182,18 @@ The code uses two lookup tables to map `__typename` → fields:
 
 ```javascript
 // Serie-level type-specific fields
+// NOTE: timezone is NOT in SSI schema (crashes if queried)
 SERIE_TYPE_FIELDS = {
-  NordicSerieNode:    'scoring_mode match_registration_mode timezone',
-  PrecisionSerieNode: 'scoring_mode match_registration_mode timezone',
-  IpscSerieNode:      'match_registration_mode timezone',
-  PpcSerieNode:       'match_registration_mode timezone',
+  NordicSerieNode:    'scoring_mode match_registration_mode',
+  PrecisionSerieNode: 'scoring_mode match_registration_mode',
+  IpscSerieNode:      'match_registration_mode',
+  PpcSerieNode:       'match_registration_mode',
 }
 
 // Squad-level type-specific fields
+// NOTE: starts/stops crash SSI for NordicSquadNode — omitted
 SQUAD_TYPE_FIELDS = {
-  NordicSquadNode:    'name starts competitors { id }',
+  NordicSquadNode:    'name competitors { id }',
   PrecisionSquadNode: 'name starts competitors { id }',
   CmpSquadNode:       'name starts',
   GenericSquadNode:   'name starts',

@@ -28,8 +28,8 @@ Tests extract this token and navigate directly to `/#/platform/invite/{token}`. 
 
 | Variable | Where to set | Purpose |
 |----------|-------------|---------|
-| `UAT_PLATFORM_EMAIL` | GitHub repository secret | E-mail of a pre-seeded owner account |
-| `UAT_PLATFORM_PASSWORD` | GitHub repository secret | Password of the owner account |
+| `PLATFORM_TEST_EMAIL` | GitHub repository secret | E-mail of a pre-seeded owner account |
+| `PLATFORM_TEST_PASSWORD` | GitHub repository secret | Password of the owner account |
 
 For local runs you can export these in your shell:
 
@@ -45,13 +45,13 @@ Preview environments start with an empty database. Before UAT can run you need a
 
 **Option A — seed once, reuse across PRs (recommended)**
 
-Use the same `UAT_PLATFORM_EMAIL` / `UAT_PLATFORM_PASSWORD` credentials for every PR. On first deployment of a preview environment, run the seed script:
+Use the same `PLATFORM_TEST_EMAIL` / `PLATFORM_TEST_PASSWORD` credentials for every PR. On first deployment of a preview environment, run the seed script:
 
 ```bash
 node test-harness/seed-uat-account.mjs \
   --base-url https://turres-ssi-tools-pr-42.onrender.com \
-  --email $UAT_PLATFORM_EMAIL \
-  --password $UAT_PLATFORM_PASSWORD \
+  --email $PLATFORM_TEST_EMAIL \
+  --password $PLATFORM_TEST_PASSWORD \
   --org "UAT Test Organisation"
 ```
 

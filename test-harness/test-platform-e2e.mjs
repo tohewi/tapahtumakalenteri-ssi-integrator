@@ -131,8 +131,9 @@ async function testListEvents(cookie) {
 }
 
 async function testCreateEvent(cookie) {
-  // Use a date far in the future to avoid conflicts
-  const testDate = '2026-12-25'
+  // Use a date 1 year from now to avoid conflicts and expiry
+  const future = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+  const testDate = future.toISOString().slice(0, 10)
   const res = await apiCall('POST', `/api/v1/platform/tenants/${TENANT_ID}/events`, {
     cookie,
     body: { templateId: TEMPLATE_ID, dates: [testDate] },

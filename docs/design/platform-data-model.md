@@ -68,7 +68,7 @@ An isolated organization or club. All operational data is scoped to a tenant.
 - SSI credentials are per-tenant — different tenants may use different SSI accounts
 - First tenant is created automatically during account sign-up
 
-### 2.3 Discipline (Future — Phase 1)
+### 2.3 Discipline
 
 A type of competition event within a tenant.
 
@@ -82,7 +82,7 @@ A type of competition event within a tenant.
 | `ssi_group_id` | string | SSI group reference |
 | `ssi_organizer_id` | string | SSI organizer reference |
 
-### 2.4 Event Template (Future — Phase 1)
+### 2.4 Event Template
 
 A reusable blueprint for creating events. Imported from an SSI "seed" event.
 
@@ -98,7 +98,7 @@ A reusable blueprint for creating events. Imported from an SSI "seed" event.
 | `calendar_template` | object | Title template, content HTML, location, taxonomy IDs |
 | `staffing_rules` | object | Min/max instructors, required roles |
 
-### 2.5 Scheduled Event (Future — Phase 1)
+### 2.5 Scheduled Event
 
 An instance of a template for a specific date. Created by the scheduling workflow.
 
@@ -177,7 +177,7 @@ Links an account to a tenant with one or more roles. Created automatically when 
 - **Future scheduling routes**: `owner`, `tenant_admin`, or `match_admin`
 - **Dashboard tenant list**: must query `tenant_members` instead of `tenants.account_id`
 
-### 2.7 Instructor (Future — Phase 2)
+### 2.7 Instructor (implemented as Staffing in R9.0)
 
 A person available for event staffing. Self-registers via the platform.
 
@@ -231,7 +231,7 @@ Every tenant has a subscription. The system enforces access based on subscriptio
 | `past_due` | Read-only (no new events) | 14-day grace period |
 | `cancelled` | No access (data retained) | 90-day retention, then purge |
 
-### 3.2 Scheduled Event Lifecycle (Future — Phase 1)
+### 3.2 Scheduled Event Lifecycle
 
 ```
   ┌─────────┐     ┌──────────────┐     ┌─────────────────────┐
@@ -263,7 +263,7 @@ Every tenant has a subscription. The system enforces access based on subscriptio
 | `completed` | Event has occurred, scores finalized in SSI |
 | `failed` | Creation or publishing failed (retryable) |
 
-### 3.3 Instructor Lifecycle (Future — Phase 2)
+### 3.3 Instructor Lifecycle (implemented as Staffing)
 
 ```
   ┌──────────┐     ┌──────────┐     ┌──────────┐
@@ -323,7 +323,7 @@ Redis is **not** used for any permanent data. If Redis is flushed, the only impa
 
 | File | Purpose |
 |------|---------|
-| `config/kupittaa-cup-config.yml` | Legacy cup config (migrates to templates in Phase 1) |
+| `config/kupittaa-cup-config.yml` | Legacy cup config (superseded by DB-stored templates) |
 | `config/training-staffing-configuration.yml` | Staffing config (roles, allowlist) |
 
 These files will eventually be superseded by database-stored templates but remain functional during the migration period.

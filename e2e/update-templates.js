@@ -1,7 +1,7 @@
 // Update template staffing rules with staffSquadName and SSI role mappings
 import 'dotenv/config'
 
-const BASE = process.env.BASE_URL || 'https://turres-ssi-tools-pr-138.onrender.com'
+const BASE = process.env.BASE_URL || 'http://localhost:3001'
 
 async function main() {
   const loginRes = await fetch(`${BASE}/api/v1/platform/login`, {

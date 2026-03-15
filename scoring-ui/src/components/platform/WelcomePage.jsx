@@ -102,6 +102,7 @@ export default function WelcomePage({ error, onRegister, onSwitchToSignIn }) {
                 id="reg-org"
                 type="text"
                 name="organizationName"
+                aria-label={t('welcomeOrgPlaceholder')}
                 placeholder={t('welcomeOrgPlaceholder')}
                 value={form.organizationName}
                 onChange={handleChange}
@@ -117,6 +118,7 @@ export default function WelcomePage({ error, onRegister, onSwitchToSignIn }) {
                 id="reg-name"
                 type="text"
                 name="name"
+                aria-label={t('welcomeNamePlaceholder')}
                 placeholder={t('welcomeNamePlaceholder')}
                 value={form.name}
                 onChange={handleChange}
@@ -132,6 +134,7 @@ export default function WelcomePage({ error, onRegister, onSwitchToSignIn }) {
                 id="reg-email"
                 type="email"
                 name="email"
+                aria-label={t('welcomeEmailPlaceholder')}
                 placeholder={t('welcomeEmailPlaceholder')}
                 value={form.email}
                 onChange={handleChange}
@@ -146,6 +149,7 @@ export default function WelcomePage({ error, onRegister, onSwitchToSignIn }) {
                 id="reg-password"
                 type="password"
                 name="password"
+                aria-label={t('welcomePasswordPlaceholder')}
                 placeholder={t('welcomePasswordPlaceholder')}
                 value={form.password}
                 onChange={handleChange}

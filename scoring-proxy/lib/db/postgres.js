@@ -2,8 +2,8 @@
 // PostgreSQL Connection Pool & Schema Initialization
 //
 // Manages the connection pool and runs schema migrations on
-// startup. Falls back to null pool for environments without
-// DATABASE_URL (local dev without Postgres uses in-memory).
+// startup. If DATABASE_URL is not set, the pool remains null
+// and Postgres-backed platform features are unavailable.
 //
 // Usage:
 //   import { initPostgres, getPool, query } from './postgres.js'
@@ -202,6 +202,8 @@ export async function initPostgres() {
         max: 10,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 5000,
+        // Render internal Postgres uses self-signed certs — rejectUnauthorized: false
+        // is required. MITM risk accepted on Render's trusted internal network.
         ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
       })
     }

@@ -10,9 +10,9 @@ on:
       base_url:
         description: 'Target deployment URL'
         required: false
-        default: 'https://turres-ssi-tools-pr-138.onrender.com'
+        default: 'https://turres-ssi-tools.onrender.com'
   pull_request:
-    branches: [main]
+    branches: [main, 'release/**']
     paths:
       - 'scoring-proxy/routes/platform.js'
       - 'scoring-proxy/lib/db/platform-store.js'
