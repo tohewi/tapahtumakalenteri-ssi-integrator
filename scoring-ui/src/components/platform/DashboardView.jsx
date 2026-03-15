@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { listEvents, getUpcomingStaffingApi, getStaffingLeaderboardApi } from '../../platform-api.js'
 import { usePlatformT } from '../../platform-i18n.jsx'
+import { useCachedFetch } from '../../hooks/useTenantDataCache.js'
 
 function getStatusBadge(status, t) {
   const labels = {
@@ -17,40 +18,26 @@ function getStatusBadge(status, t) {
 
 export default function DashboardView({ tenantId, onNavigate }) {
   const { t } = usePlatformT()
-  const [events, setEvents] = useState([])
-  const [staffingData, setStaffingData] = useState([]) // full understaffed event list
-  const [leaderboard, setLeaderboard] = useState([])
   const [leaderboardPeriod, setLeaderboardPeriod] = useState('all')
-  const [loading, setLoading] = useState(true)
 
+  // PRF-1: Use cached data (prefetched on tenant select)
+  const { data: eventsData, loading: eventsLoading } = useCachedFetch(
+    'events', tenantId, () => listEvents(tenantId)
+  )
+  const { data: rawStaffing, loading: staffingLoading } = useCachedFetch(
+    'upcomingStaffing', tenantId, () => getUpcomingStaffingApi(tenantId).catch(() => [])
+  )
+  // Leaderboard depends on period — not prefetched, fetched directly
+  const [leaderboard, setLeaderboard] = useState([])
   useEffect(() => {
-    async function loadData() {
-      setLoading(true)
-      try {
-        const [eventsData, rawStaffing, lbData] = await Promise.all([
-          listEvents(tenantId),
-          getUpcomingStaffingApi(tenantId).catch(() => []),
-          getStaffingLeaderboardApi(tenantId, leaderboardPeriod).catch(() => [])
-        ])
-        
-        setEvents(eventsData.events || [])
-        
-        // Store understaffed events with details
-        if (Array.isArray(rawStaffing)) {
-          setStaffingData(rawStaffing.filter(e => e.isUnderstaffed))
-        }
-
-        if (Array.isArray(lbData)) {
-          setLeaderboard(lbData)
-        }
-      } catch (err) {
-        console.error('Failed to load dashboard data:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-    loadData()
+    getStaffingLeaderboardApi(tenantId, leaderboardPeriod).catch(() => []).then(data => {
+      if (Array.isArray(data)) setLeaderboard(data)
+    })
   }, [tenantId, leaderboardPeriod])
+
+  const events = eventsData?.events || []
+  const staffingData = Array.isArray(rawStaffing) ? rawStaffing.filter(e => e.isUnderstaffed) : []
+  const loading = eventsLoading || staffingLoading
 
   // Calculate stats
   const now = new Date()

@@ -12,6 +12,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { listTemplates, listEvents, createEventsApi, deleteEventApi, cancelEventApi, executeEventApi, publishCalendarApi, updateCalendarStatsApi, completeSsiEventApi, integrityCheckApi, runPostEventApi, getUpcomingStaffingApi } from '../../platform-api.js'
 import { usePlatformT } from '../../platform-i18n.jsx'
+import { useCachedFetch, invalidateTenantCache } from '../../hooks/useTenantDataCache.js'
 import ImportSsiEventsModal from './ImportSsiEventsModal.jsx'
 import EventCalendar from './EventCalendar.jsx'
 import StatusBadge, { STATUS_COLORS, STATUS_LABEL_KEYS, CANCELLABLE_STATUSES, formatEventDate } from './schedule/StatusBadge.jsx'
@@ -20,10 +21,31 @@ import CreateEventsPanel from './schedule/CreateEventsPanel.jsx'
 
 export default function SchedulePage({ tenantId, onBack }) {
   const { t } = usePlatformT()
-  const [templates, setTemplates] = useState([])
-  const [events, setEvents] = useState([])
-  const [staffingStatus, setStaffingStatus] = useState({}) // { eventId: { isUnderstaffed: boolean } }
-  const [loading, setLoading] = useState(true)
+  // PRF-1: Use cached data (prefetched on tenant select)
+  const { data: tplData, loading: tplLoading, refresh: refreshTemplates } = useCachedFetch(
+    'templates', tenantId, () => listTemplates(tenantId)
+  )
+  const { data: evtData, loading: evtLoading, refresh: refreshEvents } = useCachedFetch(
+    'events', tenantId, () => listEvents(tenantId)
+  )
+  const { data: staffingRaw, refresh: refreshStaffing } = useCachedFetch(
+    'upcomingStaffing', tenantId, () => getUpcomingStaffingApi(tenantId).catch(() => [])
+  )
+
+  const templates = tplData?.templates || []
+  const events = evtData?.events || []
+  const loading = tplLoading || evtLoading
+
+  // Derive staffing status map from cached staffing data
+  const staffingStatus = useMemo(() => {
+    if (!Array.isArray(staffingRaw)) return {}
+    const statusMap = {}
+    for (const item of staffingRaw) {
+      statusMap[item.event.id] = { isUnderstaffed: item.isUnderstaffed, hasNeeds: item.needs.length > 0 }
+    }
+    return statusMap
+  }, [staffingRaw])
+
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [dateInput, setDateInput] = useState('')
   const [dates, setDates] = useState([])
@@ -38,51 +60,10 @@ export default function SchedulePage({ tenantId, onBack }) {
   const [integrityResult, setIntegrityResult] = useState(null) // CAL-6 integrity check result
   const [integrityRunning, setIntegrityRunning] = useState(false)
 
-  // Load templates, events, and staffing status
-  useEffect(() => {
-    async function load() {
-      try {
-        const [tplData, evtData, staffingData] = await Promise.all([
-          listTemplates(tenantId),
-          listEvents(tenantId),
-          getUpcomingStaffingApi(tenantId).catch(() => []) // fail gracefully
-        ])
-        
-        setTemplates(tplData.templates || [])
-        setEvents(evtData.events || [])
-        
-        // Map staffing status by event ID
-        if (Array.isArray(staffingData)) {
-          const statusMap = {}
-          for (const item of staffingData) {
-            statusMap[item.event.id] = { isUnderstaffed: item.isUnderstaffed, hasNeeds: item.needs.length > 0 }
-          }
-          setStaffingStatus(statusMap)
-        }
-      } catch (err) {
-        setStatus({ type: 'error', message: err.message })
-      }
-      setLoading(false)
-    }
-    load()
-  }, [tenantId])
-
-  // Refresh events after changes
-  async function refreshEvents() {
-    try {
-      const data = await listEvents(tenantId)
-      setEvents(data.events || [])
-      
-      // Also refresh staffing status if an event was created/deleted
-      const staffingData = await getUpcomingStaffingApi(tenantId).catch(() => [])
-      if (Array.isArray(staffingData)) {
-        const statusMap = {}
-        for (const item of staffingData) {
-          statusMap[item.event.id] = { isUnderstaffed: item.isUnderstaffed, hasNeeds: item.needs.length > 0 }
-        }
-        setStaffingStatus(statusMap)
-      }
-    } catch { /* ignore */ }
+  // Refresh all cached data after mutations (create/delete/execute/cancel)
+  async function refreshAll() {
+    invalidateTenantCache(tenantId)
+    await Promise.all([refreshEvents(), refreshTemplates(), refreshStaffing()])
   }
 
   // Add a date to the batch list
@@ -124,7 +105,7 @@ export default function SchedulePage({ tenantId, onBack }) {
       }
 
       setDates([])
-      await refreshEvents()
+      await refreshAll()
     } catch (err) {
       setStatus({ type: 'error', message: err.message })
     } finally {
@@ -146,10 +127,10 @@ export default function SchedulePage({ tenantId, onBack }) {
         parts.push(`${t('publishingFailed')}: ${data.calendarResult.error}`)
       }
       setStatus({ type: data.calendarResult && !data.calendarResult.success ? 'warning' : 'success', message: parts.join(' · ') })
-      await refreshEvents()
+      await refreshAll()
     } catch (err) {
       setStatus({ type: 'error', message: err.message })
-      await refreshEvents() // refresh to show failed status
+      await refreshAll() // refresh to show failed status
     } finally {
       setExecutingId(null)
     }
@@ -162,10 +143,10 @@ export default function SchedulePage({ tenantId, onBack }) {
     try {
       const data = await publishCalendarApi(tenantId, eventId, { force })
       setStatus({ type: 'success', message: t('publishCalendar') + ' ✓' })
-      await refreshEvents()
+      await refreshAll()
     } catch (err) {
       setStatus({ type: 'error', message: `${t('publishingFailed')}: ${err.message}` })
-      await refreshEvents()
+      await refreshAll()
     } finally {
       setExecutingId(null)
     }
@@ -179,10 +160,10 @@ export default function SchedulePage({ tenantId, onBack }) {
       const data = await updateCalendarStatsApi(tenantId, eventId)
       const stats = data.stats || {}
       setStatus({ type: 'success', message: `${t('updateStats')}: ${stats.approvedCount} ${t('participants')}, ${stats.shotsFired} ${t('shots')}` })
-      await refreshEvents()
+      await refreshAll()
     } catch (err) {
       setStatus({ type: 'error', message: `${t('updateStats')}: ${err.message}` })
-      await refreshEvents()
+      await refreshAll()
     } finally {
       setExecutingId(null)
     }
@@ -196,10 +177,10 @@ export default function SchedulePage({ tenantId, onBack }) {
       const data = await completeSsiEventApi(tenantId, eventId)
       const matchCount = data.completion?.matchResults?.length || 0
       setStatus({ type: 'success', message: `${t('completeSsi')} ✓${matchCount > 0 ? ` (${matchCount} ${t('matches')})` : ''}` })
-      await refreshEvents()
+      await refreshAll()
     } catch (err) {
       setStatus({ type: 'error', message: `${t('completeSsi')}: ${err.message}` })
-      await refreshEvents()
+      await refreshAll()
     } finally {
       setExecutingId(null)
     }
@@ -239,7 +220,7 @@ export default function SchedulePage({ tenantId, onBack }) {
       } else {
         setStatus({ type: 'warning', message: `${t('runWorkflows')}: ${summary.succeeded} ✓, ${summary.failed} ✗, ${summary.skipped} ${t('skipped').toLowerCase()}` })
       }
-      await refreshEvents()
+      await refreshAll()
     } catch (err) {
       setStatus({ type: 'error', message: `${t('runWorkflows')}: ${err.message}` })
     } finally {
@@ -257,7 +238,7 @@ export default function SchedulePage({ tenantId, onBack }) {
       if (result.impact?.removedFromSsi) parts.push('SSI ✓')
       if (result.impact?.staffingSignups > 0) parts.push(`${result.impact.staffingSignups} signup(s)`)
       setStatus({ type: 'success', message: parts.join(' · ') })
-      await refreshEvents()
+      await refreshAll()
     } catch (err) {
       setStatus({ type: 'error', message: err.message })
     } finally {
@@ -282,7 +263,7 @@ export default function SchedulePage({ tenantId, onBack }) {
       // Set executing id so we can show loading state during delete
       setExecutingId(evt.id)
       await deleteEventApi(tenantId, evt.id)
-      await refreshEvents()
+      await refreshAll()
     } catch (err) {
       setStatus({ type: 'error', message: err.message })
     } finally {
