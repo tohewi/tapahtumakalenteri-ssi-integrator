@@ -1,12 +1,17 @@
 # Progress
 
-Last updated: 2026-03-14 by Cascade
-Branch: `release/r80-match-manager-base` at `11b6bad`
+Last updated: 2026-03-15 by Cascade
+Branch: `release/r80-match-manager-base` at `6e706ac`
 Tests: 870 backend (39 files) + 221 frontend (10 files) = 1091, all passing
 
 ---
 
 ## Current Session Work
+
+### Completed — 2026-03-15: i18n Completion + INT-1 Design
+
+39. **INT-1: Multi-system integration architecture** (`6e706ac`) — Design doc: `docs/design/int1-multi-system-integration.md`. Two integration slots per tenant (eventSystem + calendarSystem), adapter pattern, DB-backed admin catalog (`integration_types` table with credential_schema for dynamic tenant forms), NullAdapter for graceful degradation. 5-phase incremental migration (~11h).
+38. **i18n: SSI + Calendar tabs** (`736d1a8`) — ~40 i18n keys for TenantSsiTab and TenantCalendarTab. All 6 tenant settings tabs now fully translated (fi/en).
 
 ### Completed — 2026-03-13: Bug fixes + i18n expansion
 
