@@ -197,7 +197,7 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <div className="flex border-b border-gray-200 mb-4">
-          {['tenants', 'accounts'].map(tab => (
+          {['tenants', 'accounts', 'integrations'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -207,7 +207,7 @@ export default function AdminPage() {
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
-              {tab === 'tenants' ? `Tenants (${tenants.length})` : `Accounts (${accounts.length})`}
+              {tab === 'tenants' ? `Tenants (${tenants.length})` : tab === 'accounts' ? `Accounts (${accounts.length})` : 'Integration Types'}
             </button>
           ))}
         </div>
@@ -336,7 +336,145 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+
+        {/* Integration Types catalog */}
+        {activeTab === 'integrations' && (
+          <IntegrationTypesPanel apiKey={apiKey} />
+        )}
       </div>
+    </div>
+  )
+}
+
+// ---- Integration Types Panel (INT-1 Phase 5) ----
+
+function IntegrationTypesPanel({ apiKey }) {
+  const [types, setTypes] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      try {
+        // Fetch integration types from the platform API (uses session cookie, not admin key)
+        const res = await fetch('/api/v1/platform/integration-types', {
+          credentials: 'include',
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setTypes(data.types || [])
+        }
+      } catch { /* ignore */ }
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  if (loading) {
+    return <div className="text-sm text-gray-400 py-8 text-center">Loading integration types...</div>
+  }
+
+  const eventTypes = types.filter(t => t.category === 'event_system')
+  const calendarTypes = types.filter(t => t.category === 'calendar_system')
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+          <h3 className="text-sm font-semibold text-gray-700">Event Systems</h3>
+          <p className="text-xs text-gray-400 mt-0.5">Competition management & scoring platforms</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-left px-4 py-3 font-medium text-gray-500">Type</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-500">Name</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-500">Credential Fields</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-500">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {eventTypes.map(t => (
+                <tr key={t.type} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{t.type}</td>
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-gray-900">{t.name}</div>
+                    {t.description && <div className="text-xs text-gray-400">{t.description}</div>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {t.credentialSchema?.map(f => (
+                        <span key={f.key} className={`text-[10px] px-1.5 py-0.5 rounded ${f.required ? 'bg-sky-100 text-sky-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {f.key}{f.required ? '*' : ''}
+                        </span>
+                      ))}
+                      {(!t.credentialSchema || t.credentialSchema.length === 0) && (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      Enabled
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+          <h3 className="text-sm font-semibold text-gray-700">Calendar Systems</h3>
+          <p className="text-xs text-gray-400 mt-0.5">Event publishing & scheduling platforms</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-left px-4 py-3 font-medium text-gray-500">Type</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-500">Name</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-500">Credential Fields</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-500">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {calendarTypes.map(t => (
+                <tr key={t.type} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{t.type}</td>
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-gray-900">{t.name}</div>
+                    {t.description && <div className="text-xs text-gray-400">{t.description}</div>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {t.credentialSchema?.map(f => (
+                        <span key={f.key} className={`text-[10px] px-1.5 py-0.5 rounded ${f.required ? 'bg-sky-100 text-sky-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {f.key}{f.required ? '*' : ''}
+                        </span>
+                      ))}
+                      {(!t.credentialSchema || t.credentialSchema.length === 0) && (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      Enabled
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <p className="text-xs text-gray-400 text-center">
+        Integration types are code-deployed. Enable/disable and credential schema editing will be available when migrated to DB catalog (Phase 5b).
+      </p>
     </div>
   )
 }
