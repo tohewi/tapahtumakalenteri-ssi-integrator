@@ -608,7 +608,7 @@ const fi = {
   regionalSaved: 'Alueelliset asetukset tallennettu',
 
   // SSI credentials tab
-  ssiTitle: 'SSI-tunnukset',
+  ssiTitle: 'Kisahallintaintegraatio',
   ssiDesc: 'ShootNScoreIt-tili tapahtumien hallintaan. Tunnukset salataan AES-256-GCM:llä ennen tallennusta.',
   ssiConfigured: 'Tunnukset määritelty',
   ssiNotConfigured: 'Ei määritelty',
@@ -627,7 +627,7 @@ const fi = {
   ssiSaved: 'SSI-tunnukset tallennettu (salattu)',
 
   // Calendar integration tab
-  calTitle: 'Kalteri-integraatio',
+  calTitle: 'Tapahtumakalenteri-integraatio',
   calDesc: 'WordPress / Tapahtumakalenteri-asetukset automaattiseen tapahtumien julkaisuun seuran kalenteriin.',
   calConfigured: 'WordPress määritelty',
   calNotConfigured: 'Ei määritelty',
@@ -1278,7 +1278,7 @@ const en = {
   regionalSaved: 'Regional settings saved',
 
   // SSI credentials tab
-  ssiTitle: 'SSI Credentials',
+  ssiTitle: 'Match Management Integration',
   ssiDesc: 'ShootNScoreIt account used for event management. Credentials are encrypted with AES-256-GCM before storage.',
   ssiConfigured: 'Credentials configured',
   ssiNotConfigured: 'Not configured',
@@ -1297,7 +1297,7 @@ const en = {
   ssiSaved: 'SSI credentials saved (encrypted)',
 
   // Calendar integration tab
-  calTitle: 'Calendar Integration',
+  calTitle: 'Event Calendar Integration',
   calDesc: 'WordPress / Tapahtumakalenteri settings for automatic event publishing to your club calendar.',
   calConfigured: 'WordPress configured',
   calNotConfigured: 'Not configured',

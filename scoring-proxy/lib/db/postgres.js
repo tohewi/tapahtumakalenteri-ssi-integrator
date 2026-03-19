@@ -455,6 +455,51 @@ export async function initPostgres() {
         log.warn('[postgres] M17 migration (integrations column):', err.message)
       }
 
+      // M19: Migrate legacy ssiCredentials + calendarConfig into integrations JSONB
+      // Copies existing credential data into the new integrations column so the
+      // TenantIntegrationsTab UI can read/write from the unified model.
+      try {
+        const { rows: tenantsToMigrate } = await client.query(
+          `SELECT id, ssi_credentials, calendar_config, integrations FROM tenants
+           WHERE (integrations IS NULL OR integrations = '{}' OR integrations = 'null')
+             AND (ssi_credentials IS NOT NULL OR calendar_config IS NOT NULL)`
+        )
+        for (const t of tenantsToMigrate) {
+          const integrations = {}
+
+          // Migrate SSI credentials
+          if (t.ssi_credentials) {
+            try {
+              // ssi_credentials is stored encrypted — we store the reference, not re-encrypt
+              // The registry resolves from legacy ssiCredentials as fallback anyway,
+              // but this sets the type flag so the new UI knows which system is active
+              integrations.eventSystem = { type: 'ssi' }
+            } catch { /* ignore parse errors */ }
+          }
+
+          // Migrate calendar config
+          if (t.calendar_config) {
+            try {
+              const cfg = typeof t.calendar_config === 'string' ? JSON.parse(t.calendar_config) : t.calendar_config
+              // Check if it's encrypted (has iv/tag/data) or plain
+              if (cfg && (cfg.wpBaseUrl || (cfg.iv && cfg.tag))) {
+                integrations.calendarSystem = { type: 'wordpress' }
+              }
+            } catch { /* ignore parse errors */ }
+          }
+
+          if (Object.keys(integrations).length > 0) {
+            await client.query(
+              'UPDATE tenants SET integrations = $1 WHERE id = $2',
+              [JSON.stringify(integrations), t.id]
+            )
+            log.info(`[postgres] M19: Migrated integrations for tenant ${t.id}: ${JSON.stringify(integrations)}`)
+          }
+        }
+      } catch (err) {
+        log.warn('[postgres] M19 migration (integrations backfill):', err.message)
+      }
+
       // Optional unique constraints — may fail on existing data with duplicates.
       // App-level checks in createTenant/createAccountWithTenant still prevent new duplicates.
       try {
