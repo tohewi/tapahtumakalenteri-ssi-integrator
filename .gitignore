@@ -1,6 +1,6 @@
 # API keys and secrets
+.env
 scripts-graphql/config/api-key.yml
-scoring-proxy/.env
 test-harness/config/test-users.yml
 
 # Debug files
@@ -22,6 +22,13 @@ scripts-graphql/*.raw.html
 # OS files
 .DS_Store
 Thumbs.db
+
+# Test artifacts
+e2e/playwright-report/
+e2e/test-results/
+
+# Generated ARM/Bicep output
+infra/*.json
 
 # Node
 node_modules/

@@ -50,6 +50,17 @@ export async function logout() {
   await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' })
 }
 
+// QR code device token login (R7.7)
+export async function tokenLogin(token) {
+  const resp = await fetch(`${API_BASE}/auth/token-login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ token }),
+  })
+  return handleResponse(resp)
+}
+
 export async function getAuthStatus() {
   const resp = await fetch(`${API_BASE}/auth/status`, { credentials: 'include' })
   return resp.json()

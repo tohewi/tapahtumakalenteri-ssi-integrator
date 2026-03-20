@@ -10,6 +10,7 @@ import { ssiGraphQL, ssiLogin } from '../lib/ssi-core/graphql.js'
 import { log } from '../lib/logger.js'
 import { isAdminEmail } from '../lib/staffing/config-loader.js'
 import { AppError } from '../lib/errors/AppError.js'
+import { createDeviceToken, validateDeviceToken, listDeviceTokens, revokeDeviceToken } from '../lib/device-tokens.js'
 import {
   createSession,
   getSession,
@@ -210,6 +211,159 @@ export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth,
     } catch (err) {
       log.error('[auth-v7] /me error:', err.message)
       return next(internalError('Failed to fetch user info'))
+    }
+  })
+
+  // ============================================================
+  // Device Token Routes (R7.7 — QR Code Login)
+  // ============================================================
+
+  // POST /api/auth/device-tokens — Create a device token (requires manage scope)
+  router.post('/device-tokens', requireAuth, async (req, res) => {
+    // Only allow manage-scope sessions to create tokens
+    if (req.ssiSession?.scope !== 'manage') {
+      return res.status(403).json({ error: 'Manage session required to create device tokens' })
+    }
+
+    const { ssiEmail, ssiPassword, label, expiresInDays } = req.body
+    if (!ssiEmail || !ssiPassword) {
+      return res.status(400).json({ error: 'ssiEmail and ssiPassword are required' })
+    }
+    if (!label || label.trim().length < 1) {
+      return res.status(400).json({ error: 'Device label is required' })
+    }
+
+    try {
+      const { tokenId, token } = await createDeviceToken({
+        ssiEmail: ssiEmail.trim(),
+        ssiPassword,
+        label: label.trim(),
+        createdBy: req.ssiSession?.userId || 'unknown',
+        expiresInDays: expiresInDays || 5,
+      })
+      res.status(201).json({ success: true, tokenId, token })
+    } catch (err) {
+      log.error('[auth-v7] Failed to create device token:', err.message)
+      res.status(500).json({ error: 'Failed to create device token' })
+    }
+  })
+
+  // GET /api/auth/device-tokens — List device tokens (requires manage scope)
+  router.get('/device-tokens', requireAuth, async (req, res) => {
+    if (req.ssiSession?.scope !== 'manage') {
+      return res.status(403).json({ error: 'Manage session required' })
+    }
+    try {
+      const tokens = await listDeviceTokens()
+      res.json({ tokens })
+    } catch (err) {
+      log.error('[auth-v7] Failed to list device tokens:', err.message)
+      res.status(500).json({ error: 'Failed to list device tokens' })
+    }
+  })
+
+  // DELETE /api/auth/device-tokens/:id — Revoke a device token (requires manage scope)
+  router.delete('/device-tokens/:id', requireAuth, async (req, res) => {
+    if (req.ssiSession?.scope !== 'manage') {
+      return res.status(403).json({ error: 'Manage session required' })
+    }
+    try {
+      const deleted = await revokeDeviceToken(req.params.id)
+      if (!deleted) return res.status(404).json({ error: 'Token not found' })
+      res.json({ success: true })
+    } catch (err) {
+      log.error('[auth-v7] Failed to revoke device token:', err.message)
+      res.status(500).json({ error: 'Failed to revoke device token' })
+    }
+  })
+
+  // POST /api/auth/token-login — Login with a device token (QR code)
+  // No session required — the token IS the credential
+  router.post('/token-login', loginLimiter, async (req, res) => {
+    const { token } = req.body
+    if (!token) {
+      return res.status(400).json({ error: 'Token is required' })
+    }
+
+    try {
+      const validated = await validateDeviceToken(token)
+      if (!validated) {
+        log.warn(`[auth-v7] Invalid/expired device token attempt from ${req.ip}`)
+        return res.status(401).json({ error: 'Invalid or expired device token' })
+      }
+
+      // Authenticate with SSI using decrypted credentials (same as password login)
+      const authResult = await ssiGraphQL(null, AUTH_MUTATION, {
+        email: validated.ssiEmail,
+        password: validated.ssiPassword,
+      })
+
+      if (!authResult.token_auth?.token?.token) {
+        log.error(`[auth-v7] Device token SSI auth failed for ${validated.ssiEmail}`)
+        return res.status(401).json({ error: 'SSI authentication failed — credentials may have changed' })
+      }
+
+      const userJwt = authResult.token_auth.token.token
+      const userRefreshToken = authResult.token_auth.refresh_token.token
+
+      // Get web session cookies
+      const userCookies = await ssiLogin(validated.ssiEmail, validated.ssiPassword)
+
+      // Get admin SSI delegation
+      let adminSSI = null
+      try {
+        const admin = await getAdminSession()
+        adminSSI = {
+          jwt: admin.jwt,
+          refreshToken: admin.refreshToken,
+          cookies: admin.cookies,
+          expiresAt: Date.now() + 4 * 60 * 60 * 1000,
+        }
+      } catch (err) {
+        log.debug('[auth-v7] Admin session not available for token login:', err.message)
+      }
+
+      // Create scoring session
+      const { sessionId } = await createSession({
+        userId: validated.ssiEmail,
+        userSSI: {
+          jwt: userJwt,
+          refreshToken: userRefreshToken,
+          cookies: userCookies,
+          expiresAt: Date.now() + 15 * 60 * 1000,
+        },
+        adminSSI,
+        scope: 'scoring',
+        metadata: {
+          ipAddress: req.ip,
+          userAgent: req.headers['user-agent'] || null,
+          loginMethod: 'device_token',
+          deviceLabel: validated.label,
+        },
+      })
+
+      const ttl = sessionConfig.scopeTTL['scoring'] || sessionConfig.session.ttl
+      res.cookie(SESSION_COOKIE, sessionId, {
+        httpOnly: true,
+        sameSite: sessionConfig.session.sameSite,
+        secure: sessionConfig.session.secure,
+        path: sessionConfig.session.cookiePath,
+        maxAge: ttl,
+      })
+
+      auditLogin(validated.ssiEmail, req.ip, true, `device_token:${validated.label}`)
+      log.info(`[auth-v7] QR login: ${validated.ssiEmail} (${validated.label}) from ${req.ip}`)
+
+      res.json({
+        success: true,
+        scope: 'scoring',
+        label: validated.label,
+      })
+    } catch (err) {
+      log.error('[auth-v7] Token login failed:', err.message)
+      // Distinguish auth failures from internal errors
+      const status = err.message?.includes('credentials') || err.message?.includes('auth') ? 401 : 500
+      res.status(status).json({ error: status === 401 ? 'Token login failed' : 'Internal error during token login' })
     }
   })
 

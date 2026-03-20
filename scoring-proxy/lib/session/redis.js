@@ -47,6 +47,14 @@ class MemoryStore {
     return 1
   }
 
+  async ttl(key) {
+    this._expireIfNeeded(key)
+    if (!this.data.has(key)) return -2 // key does not exist
+    const expiry = this.ttls.get(key)
+    if (!expiry) return -1 // key exists but no TTL
+    return Math.max(0, Math.ceil((expiry - Date.now()) / 1000))
+  }
+
   async keys(pattern) {
     this._expireAll()
     const prefix = pattern.replace('*', '')

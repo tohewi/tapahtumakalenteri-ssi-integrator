@@ -40,6 +40,12 @@ class ErrorBoundary extends Component {
   }
 }
 
+// Extract the path portion of a hash route, ignoring query params.
+// e.g. '#/scoring?token=abc' → '#/scoring'
+function hashPath(hash) {
+  return (hash || '').split('?')[0]
+}
+
 function Router() {
   const [route, setRoute] = useState(window.location.hash)
 
@@ -49,25 +55,27 @@ function Router() {
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
-  if (route === '#/scoring') {
+  const path = hashPath(route)
+
+  if (path === '#/scoring') {
     return <App />
   }
-  if (route === '#/scoring-tablet') {
+  if (path === '#/scoring-tablet') {
     return <TabletApp />
   }
-  if (route === '#/register') {
+  if (path === '#/register') {
     return <RegisterPage />
   }
-  if (route === '#/manage') {
+  if (path === '#/manage') {
     return <ManagePage />
   }
-  if (route === '#/report') {
+  if (path === '#/report') {
     return <ReportPage />
   }
-  if (route === '#/summary') {
+  if (path === '#/summary') {
     return <SummaryReportPage />
   }
-  if (route === '#/staffing') {
+  if (path === '#/staffing') {
     return <StaffingPage />
   }
   return <HomePage />
