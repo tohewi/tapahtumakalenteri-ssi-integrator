@@ -5,6 +5,7 @@ import { useAuthenticatedPage } from '../hooks/useAuthenticatedPage'
 import LoginScreen from './LoginScreen'
 import { AppHeader, ErrorBanner, Spinner, CupList } from './shared'
 import { ActionButton, ShooterActions, SquadPickerSheet, SectionHeader, SquadCard } from './manage'
+import DeviceTokens from './DeviceTokens'
 import fi from '../i18n'
 
 const LS_MANAGE_STATE = 'ssi_manage_state'
@@ -192,6 +193,13 @@ export default function ManagePage() {
 
       <ErrorBanner error={error} />
       {loading && <Spinner />}
+
+      {/* Device Tokens — QR Code Login (R7.7) */}
+      {view === 'cups' && !loading && (
+        <div className="p-3">
+          <DeviceTokens />
+        </div>
+      )}
 
       {/* Cup picker — same as Registration */}
       {view === 'cups' && !loading && (
