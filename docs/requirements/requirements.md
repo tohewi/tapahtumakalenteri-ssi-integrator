@@ -442,6 +442,29 @@ Establish architectural patterns and foundations for future scalability while ma
 - **Service Extraction**: Pure business logic functions without Express dependencies. Enables unit testing without HTTP mocking
 - **Import Rules**: Enforced via ESLint to prevent re-coupling. Domain modules in ssi-core/ may only import http-helpers; routes must import specific domain modules, not barrel exports
 
+## Release 7.7 — QR Code Login for Scoring
+
+Quick-login for scoring devices (tablets/smartphones) at the shooting range. Instead of typing SSI credentials on a touch keyboard, users scan a QR code to authenticate instantly. Targets the **main branch** (v7.x scoring app), separate from the v8.x platform.
+
+**Context:** 3 SSI scoring accounts, each assigned to a device (tablet or phone). QR codes are generated from `#/manage`, printed, and taped to devices or kept on lanyards.
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| QR1 | **Device Token Model**: Server-side device tokens stored in Redis. Fields: `tokenId` (crypto random, 32 bytes hex), `ssiEmail`, `ssiPassword` (encrypted), `scope` (always 'scoring'), `createdAt`, `expiresAt` (5 days default), `createdBy` (admin email), `label` (e.g., "Tablet 1"), `lastUsedAt`, `revoked`. Token is the secret — never stored in plaintext on the client. | ⬚ Planned |
+| QR2 | **Token CRUD API**: `POST /api/auth/device-tokens` — create token (requires manage scope session, body: `{ ssiEmail, ssiPassword, label, expiresInDays? }`). `GET /api/auth/device-tokens` — list tokens (manage scope, returns metadata only, no secrets). `DELETE /api/auth/device-tokens/:id` — revoke token. `POST /api/auth/token-login` — authenticate with device token (no session required, body: `{ token }`). | ⬚ Planned |
+| QR3 | **Token Login Flow**: `POST /api/auth/token-login` validates the device token, decrypts stored SSI credentials, authenticates with SSI GraphQL (same as password login), creates a scoring session, sets session cookie. Returns `{ success, scope: 'scoring' }`. Token `lastUsedAt` updated. Expired/revoked tokens return 401. | ⬚ Planned |
+| QR4 | **QR Code Generation UI** (`#/manage`): "Device Tokens" section in the manage page. Form: SSI email, SSI password, device label. On create, server returns the token and UI renders a QR code (`data:image/png` via `qrcode` library). QR encodes: `https://{host}/#/scoring?token={deviceToken}`. Print button for the QR card. List of active tokens with label, email, created date, last used, expiry, revoke button. | ⬚ Planned |
+| QR5 | **Scoring App Token Detection**: On mount, `#/scoring` checks URL for `?token=` parameter. If present, calls `POST /api/auth/token-login` with the token. On success, clears the token from URL (replace hash without token) and proceeds to scoring. On failure, shows error and falls back to normal login form. Normal email/password login continues to work as before. | ⬚ Planned |
+| QR6 | **Security**: Device tokens encrypted at rest (AES-256-GCM, same key as SSI credentials). Scope-locked to 'scoring' only — cannot be used for manage/admin. 5-day TTL with admin-configurable override. Revocation is immediate (token deleted from Redis). Rate-limited: 5 token-login attempts per minute per IP. Audit log: token creation, usage, revocation. | ⬚ Planned |
+
+### Design Decisions (QR1–QR6)
+
+- **Redis storage (not DB)**: Device tokens are ephemeral (5-day TTL). Redis TTL handles automatic expiry without cleanup jobs. If Redis is flushed, tokens are invalidated — users re-scan a new QR (acceptable for the use case).
+- **SSI credentials stored with token**: The token must authenticate with SSI on each login (SSI JWTs expire in ~15 min). Storing encrypted credentials in the token avoids requiring the user to re-enter them. The encryption key is the same `PLATFORM_CREDENTIALS_KEY` used for tenant SSI credentials.
+- **One token per device**: Each device gets its own token with a label (e.g., "Tablet 1", "Phone RO", "Tablet 3"). This allows selective revocation without affecting other devices.
+- **Print-friendly QR**: The UI should generate a clean QR code card with the device label and a "Scan to Score" instruction, suitable for printing and laminating.
+- **Main branch only**: This feature is for the v7.x scoring app on `main`. It does not depend on or interact with the v8.x platform branch.
+
 ## Release 7.9 — GraphQL Cup Management (❌ Obsolete)
 
 > **Obsolete (2026-03-12):** R7.9 targeted migrating PowerShell cup creation scripts from web scraping to GraphQL. This is now fully superseded by the Node.js Match Management Platform (R8.x): `event-creation-service.js` + `nordic-cup-graphql-builder.js` handle cup/match/squad creation via hybrid web POST + GraphQL. The PowerShell scripts in `archive/scripts-legacy/` are retained for reference only.
@@ -762,6 +785,7 @@ These requirements are planned for a future release, likely before billing integ
 - **Release 7.4.1** (Authentication UX Hardening): 5 requirements — 5 ✅ (AUTH-UX1–AUTH-UX5)
 - **Release 7.5** (Architecture V2 Foundation): 5 requirements — 3 ✅, 2 📋 ➜ R7.6 (ARCH3, ARCH4)
 - **Release 7.6** (Consolidation & Completion): 18 requirements from R6.0/R7.0/R7.2/R7.5 — see `release-7.6.md`
+- **Release 7.7** (QR Code Login for Scoring): 6 requirements — 0 ✅, 6 ⬚ Planned (QR1–QR6). Device token auth for tablets/phones at the range.
 - **Release 7.9** (GraphQL Cup Management): ❌ **Obsolete** — 7 requirements superseded by Node.js platform (R8.x event creation service)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
 - **Release 8.0** (Platform Auth & Tenancy): 21 requirements — 21 ✅ (PA1–PA21)
