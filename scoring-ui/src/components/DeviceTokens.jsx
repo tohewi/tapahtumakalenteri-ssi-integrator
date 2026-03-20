@@ -4,15 +4,14 @@
 // Manage page section for creating, viewing, and revoking
 // device tokens that enable QR code login for scoring devices.
 //
-// Raw token values are persisted in localStorage so QR codes
-// remain visible until the token is revoked or expires.
+// Raw tokens are stored encrypted server-side and returned
+// by the list API, so QR codes work from any device/browser.
 // ============================================================
 
 import { useState, useEffect } from 'react'
 import QRCode from 'qrcode'
 
 const API_BASE = '/api/v1'
-const LS_KEY = 'ssi_device_tokens' // { [tokenId]: rawToken }
 
 async function apiFetch(path, opts = {}) {
   const resp = await fetch(`${API_BASE}${path}`, {
@@ -23,29 +22,6 @@ async function apiFetch(path, opts = {}) {
   const data = await resp.json().catch(() => ({}))
   if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`)
   return data
-}
-
-// --- localStorage helpers for raw token persistence ---
-function getSavedTokens() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY)) || {} } catch { return {} }
-}
-function saveRawToken(tokenId, rawToken) {
-  const saved = getSavedTokens()
-  saved[tokenId] = rawToken
-  localStorage.setItem(LS_KEY, JSON.stringify(saved))
-}
-function removeRawToken(tokenId) {
-  const saved = getSavedTokens()
-  delete saved[tokenId]
-  localStorage.setItem(LS_KEY, JSON.stringify(saved))
-}
-function pruneStaleTokens(activeTokenIds) {
-  const saved = getSavedTokens()
-  let changed = false
-  for (const id of Object.keys(saved)) {
-    if (!activeTokenIds.has(id)) { delete saved[id]; changed = true }
-  }
-  if (changed) localStorage.setItem(LS_KEY, JSON.stringify(saved))
 }
 
 function formatDate(ts) {
@@ -168,17 +144,11 @@ export default function DeviceTokens() {
       const list = data.tokens || []
       setTokens(list)
 
-      // Prune localStorage entries for tokens that no longer exist on server
-      const activeIds = new Set(list.map(t => t.tokenId))
-      pruneStaleTokens(activeIds)
-
-      // Generate QR codes for tokens that have saved raw values
-      const saved = getSavedTokens()
+      // Generate QR codes from server-returned raw tokens
       const newCache = {}
       await Promise.all(list.map(async (t) => {
-        const rawToken = saved[t.tokenId]
-        if (rawToken) {
-          newCache[t.tokenId] = await generateQrCodes(rawToken)
+        if (t.token) {
+          newCache[t.tokenId] = await generateQrCodes(t.token)
         }
       }))
       setQrCache(newCache)
@@ -206,9 +176,6 @@ export default function DeviceTokens() {
         }),
       })
 
-      // Persist raw token in localStorage for QR regeneration
-      saveRawToken(data.tokenId, data.token)
-
       setSuccess(`Token created for "${form.label.trim()}"`)
       setForm({ ssiEmail: '', ssiPassword: '', label: '' })
       setShowForm(false)
@@ -224,7 +191,6 @@ export default function DeviceTokens() {
     if (!confirm(`Peruuta tunniste "${label}"? Laite tarvitsee uuden QR-koodin kirjautuakseen.`)) return
     try {
       await apiFetch(`/auth/device-tokens/${tokenId}`, { method: 'DELETE' })
-      removeRawToken(tokenId)
       setSuccess(`Tunniste "${label}" peruutettu`)
       await loadTokens()
     } catch (err) {

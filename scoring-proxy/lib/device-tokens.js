@@ -67,6 +67,7 @@ export async function createDeviceToken({ ssiEmail, ssiPassword, label, createdB
   const record = {
     tokenId,
     tokenHash,
+    tokenEncrypted: encrypt(token), // raw token encrypted for QR code regeneration
     ssiEmail,
     ssiCredentials: encrypt(JSON.stringify({ email: ssiEmail, password: ssiPassword })),
     scope: 'scoring',
@@ -125,8 +126,9 @@ export async function validateDeviceToken(token) {
 }
 
 /**
- * List all device tokens (metadata only, no secrets).
- * @returns {Promise<Array<{ tokenId, ssiEmail, label, scope, createdBy, createdAt, expiresAt, lastUsedAt }>>}
+ * List all device tokens (includes raw token for QR code generation).
+ * Only call from manage-scoped sessions — the raw token enables login.
+ * @returns {Promise<Array<{ tokenId, token, ssiEmail, label, scope, createdBy, createdAt, expiresAt, lastUsedAt }>>}
  */
 export async function listDeviceTokens() {
   const redis = getRedisClient()
@@ -138,8 +140,14 @@ export async function listDeviceTokens() {
     if (!raw) continue
     try {
       const record = JSON.parse(raw)
+      // Decrypt raw token for QR code regeneration (only exposed to manage sessions)
+      let rawToken = null
+      if (record.tokenEncrypted) {
+        try { rawToken = decrypt(record.tokenEncrypted) } catch { /* legacy token without encrypted raw */ }
+      }
       tokens.push({
         tokenId: record.tokenId,
+        token: rawToken,
         ssiEmail: record.ssiEmail,
         label: record.label,
         scope: record.scope,
