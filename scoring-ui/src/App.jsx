@@ -323,10 +323,10 @@ export function App() {
         const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '')
         const deviceToken = hashParams.get('token')
         if (deviceToken) {
-          // Clear token from URL to prevent re-use on refresh
-          window.location.hash = '#/scoring'
           try {
             const result = await api.tokenLogin(deviceToken)
+            // Clear token from URL only after successful login
+            window.location.hash = '#/scoring'
             if (result?.success) {
               if (isActive) {
                 setSessionExpiredMessage(null)
@@ -335,6 +335,8 @@ export function App() {
               return
             }
           } catch (err) {
+            // Clear token from URL on failure too (prevent token leakage in history)
+            window.location.hash = '#/scoring'
             if (isActive) {
               setSessionExpiredMessage(err.message || 'QR login failed')
               setView('login')
