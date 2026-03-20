@@ -3,12 +3,16 @@
 //
 // Manage page section for creating, viewing, and revoking
 // device tokens that enable QR code login for scoring devices.
+//
+// Raw token values are persisted in localStorage so QR codes
+// remain visible until the token is revoked or expires.
 // ============================================================
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import QRCode from 'qrcode'
 
 const API_BASE = '/api/v1'
+const LS_KEY = 'ssi_device_tokens' // { [tokenId]: rawToken }
 
 async function apiFetch(path, opts = {}) {
   const resp = await fetch(`${API_BASE}${path}`, {
@@ -19,6 +23,29 @@ async function apiFetch(path, opts = {}) {
   const data = await resp.json().catch(() => ({}))
   if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`)
   return data
+}
+
+// --- localStorage helpers for raw token persistence ---
+function getSavedTokens() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY)) || {} } catch { return {} }
+}
+function saveRawToken(tokenId, rawToken) {
+  const saved = getSavedTokens()
+  saved[tokenId] = rawToken
+  localStorage.setItem(LS_KEY, JSON.stringify(saved))
+}
+function removeRawToken(tokenId) {
+  const saved = getSavedTokens()
+  delete saved[tokenId]
+  localStorage.setItem(LS_KEY, JSON.stringify(saved))
+}
+function pruneStaleTokens(activeTokenIds) {
+  const saved = getSavedTokens()
+  let changed = false
+  for (const id of Object.keys(saved)) {
+    if (!activeTokenIds.has(id)) { delete saved[id]; changed = true }
+  }
+  if (changed) localStorage.setItem(LS_KEY, JSON.stringify(saved))
 }
 
 function formatDate(ts) {
@@ -32,6 +59,98 @@ function daysUntil(ts) {
   return Math.max(0, Math.ceil(diff / (24 * 60 * 60 * 1000)))
 }
 
+// --- Generate QR data URLs for a raw token ---
+async function generateQrCodes(rawToken) {
+  const host = window.location.origin
+  const mobileUrl = `${host}/#/scoring?token=${rawToken}`
+  const tabletUrl = `${host}/#/scoring-tablet?token=${rawToken}`
+  const [mobileQr, tabletQr] = await Promise.all([
+    QRCode.toDataURL(mobileUrl, { width: 300, margin: 2 }),
+    QRCode.toDataURL(tabletUrl, { width: 300, margin: 2 }),
+  ])
+  return { mobileQr, tabletQr, mobileUrl, tabletUrl }
+}
+
+// --- Print QR codes for a token ---
+function printQrCodes({ label, mobileQr, tabletQr }) {
+  const win = window.open('', '_blank', 'width=700,height=500')
+  win.document.write(`
+    <html><head><title>QR Login — ${label}</title>
+    <style>body{font-family:Arial,sans-serif;text-align:center;padding:20px}
+    h2{margin:0 0 5px}p{color:#666;margin:5px 0}
+    .codes{display:flex;justify-content:center;gap:40px;margin:20px 0}
+    .code-box{text-align:center}
+    .code-box img{margin:10px 0}
+    .code-label{font-size:14px;font-weight:bold;color:#333}
+    .hint{font-size:12px;color:#999}</style></head><body>
+    <h2>${label}</h2>
+    <p>Skannaa QR-koodi laitteella</p>
+    <div class="codes">
+      <div class="code-box">
+        <div class="code-label">📱 Puhelin</div>
+        <img src="${mobileQr}" width="200" height="200" />
+      </div>
+      <div class="code-box">
+        <div class="code-label">📋 Tabletti</div>
+        <img src="${tabletQr}" width="200" height="200" />
+      </div>
+    </div>
+    <p class="hint">Token expires in 5 days</p>
+    </body></html>
+  `)
+  win.document.close()
+  setTimeout(() => win.print(), 250)
+}
+
+// --- Token card with inline QR codes ---
+function TokenCard({ token, qrData, onRevoke, onPrint }) {
+  const days = daysUntil(token.expiresAt)
+  return (
+    <div className="bg-gray-50 border rounded-lg p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div>
+          <div className="text-sm font-medium text-gray-900">{token.label}</div>
+          <div className="text-xs text-gray-400">
+            {token.ssiEmail} · Luotu {formatDate(token.createdAt)}
+            {token.lastUsedAt && ` · Käytetty ${formatDate(token.lastUsedAt)}`}
+            {days !== null && (
+              <span className={days < 2 ? 'text-amber-600' : ''}> · {days}pv jäljellä</span>
+            )}
+          </div>
+        </div>
+        <button onClick={() => onRevoke(token.tokenId, token.label)}
+          className="text-xs text-red-500 hover:text-red-700 shrink-0">
+          Peruuta
+        </button>
+      </div>
+      {qrData ? (
+        <div className="mt-2">
+          <div className="flex justify-center gap-6">
+            <div className="text-center">
+              <div className="text-xs font-semibold text-gray-600 mb-1">📱 Puhelin</div>
+              <img src={qrData.mobileQr} alt="Mobile QR" style={{ width: 160, height: 160 }} />
+            </div>
+            <div className="text-center">
+              <div className="text-xs font-semibold text-gray-600 mb-1">📋 Tabletti</div>
+              <img src={qrData.tabletQr} alt="Tablet QR" style={{ width: 160, height: 160 }} />
+            </div>
+          </div>
+          <div className="flex justify-center mt-2">
+            <button onClick={() => onPrint({ label: token.label, ...qrData })}
+              className="text-xs bg-blue-600 text-white px-3 py-1 rounded-md hover:bg-blue-700">
+              🖨️ Tulosta
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="text-xs text-gray-400 mt-1 italic">
+          QR-koodit eivät ole saatavilla (luotu toisella laitteella)
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function DeviceTokens() {
   const [tokens, setTokens] = useState([])
   const [loading, setLoading] = useState(true)
@@ -40,12 +159,29 @@ export default function DeviceTokens() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
-  const [newToken, setNewToken] = useState(null) // { tokenId, token, mobileQr, tabletQr, mobileUrl, tabletUrl }
+  // Map of tokenId → { mobileQr, tabletQr, mobileUrl, tabletUrl }
+  const [qrCache, setQrCache] = useState({})
 
   async function loadTokens() {
     try {
       const data = await apiFetch('/auth/device-tokens')
-      setTokens(data.tokens || [])
+      const list = data.tokens || []
+      setTokens(list)
+
+      // Prune localStorage entries for tokens that no longer exist on server
+      const activeIds = new Set(list.map(t => t.tokenId))
+      pruneStaleTokens(activeIds)
+
+      // Generate QR codes for tokens that have saved raw values
+      const saved = getSavedTokens()
+      const newCache = {}
+      await Promise.all(list.map(async (t) => {
+        const rawToken = saved[t.tokenId]
+        if (rawToken) {
+          newCache[t.tokenId] = await generateQrCodes(rawToken)
+        }
+      }))
+      setQrCache(newCache)
     } catch (err) {
       setError(err.message)
     }
@@ -60,7 +196,6 @@ export default function DeviceTokens() {
     setSaving(true)
     setError(null)
     setSuccess(null)
-    setNewToken(null)
     try {
       const data = await apiFetch('/auth/device-tokens', {
         method: 'POST',
@@ -71,16 +206,9 @@ export default function DeviceTokens() {
         }),
       })
 
-      // Generate QR codes for both mobile and tablet scoring
-      const host = window.location.origin
-      const mobileUrl = `${host}/#/scoring?token=${data.token}`
-      const tabletUrl = `${host}/#/scoring-tablet?token=${data.token}`
-      const [mobileQr, tabletQr] = await Promise.all([
-        QRCode.toDataURL(mobileUrl, { width: 300, margin: 2 }),
-        QRCode.toDataURL(tabletUrl, { width: 300, margin: 2 }),
-      ])
+      // Persist raw token in localStorage for QR regeneration
+      saveRawToken(data.tokenId, data.token)
 
-      setNewToken({ tokenId: data.tokenId, token: data.token, mobileQr, tabletQr, mobileUrl, tabletUrl, label: form.label.trim() })
       setSuccess(`Token created for "${form.label.trim()}"`)
       setForm({ ssiEmail: '', ssiPassword: '', label: '' })
       setShowForm(false)
@@ -93,47 +221,15 @@ export default function DeviceTokens() {
   }
 
   async function handleRevoke(tokenId, label) {
-    if (!confirm(`Revoke token "${label}"? The device will need a new QR code to login.`)) return
+    if (!confirm(`Peruuta tunniste "${label}"? Laite tarvitsee uuden QR-koodin kirjautuakseen.`)) return
     try {
       await apiFetch(`/auth/device-tokens/${tokenId}`, { method: 'DELETE' })
-      setSuccess(`Token "${label}" revoked`)
-      setNewToken(null)
+      removeRawToken(tokenId)
+      setSuccess(`Tunniste "${label}" peruutettu`)
       await loadTokens()
     } catch (err) {
       setError(err.message)
     }
-  }
-
-  function handlePrint() {
-    if (!newToken?.mobileQr) return
-    const win = window.open('', '_blank', 'width=700,height=500')
-    win.document.write(`
-      <html><head><title>QR Login — ${newToken.label}</title>
-      <style>body{font-family:Arial,sans-serif;text-align:center;padding:20px}
-      h2{margin:0 0 5px}p{color:#666;margin:5px 0}
-      .codes{display:flex;justify-content:center;gap:40px;margin:20px 0}
-      .code-box{text-align:center}
-      .code-box img{margin:10px 0}
-      .code-label{font-size:14px;font-weight:bold;color:#333}
-      .label{font-size:24px;font-weight:bold;margin-top:10px}
-      .hint{font-size:12px;color:#999}</style></head><body>
-      <h2>${newToken.label}</h2>
-      <p>Skannaa QR-koodi laitteella</p>
-      <div class="codes">
-        <div class="code-box">
-          <div class="code-label">📱 Puhelin</div>
-          <img src="${newToken.mobileQr}" width="200" height="200" />
-        </div>
-        <div class="code-box">
-          <div class="code-label">📋 Tabletti</div>
-          <img src="${newToken.tabletQr}" width="200" height="200" />
-        </div>
-      </div>
-      <p class="hint">Token expires in 5 days</p>
-      </body></html>
-    `)
-    win.document.close()
-    setTimeout(() => win.print(), 250)
   }
 
   return (
@@ -143,7 +239,7 @@ export default function DeviceTokens() {
           <h3 className="font-bold text-gray-800">QR-kirjautuminen</h3>
           <p className="text-xs text-gray-500">Luo QR-koodeja pistelaitteille</p>
         </div>
-        {!showForm && !newToken && (
+        {!showForm && (
           <button onClick={() => { setShowForm(true); setError(null); setSuccess(null) }}
             className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700">
             + Luo QR-koodi
@@ -153,34 +249,6 @@ export default function DeviceTokens() {
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm mb-3">{error}</div>}
       {success && <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded text-sm mb-3">{success}</div>}
-
-      {/* New QR code display */}
-      {newToken && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 text-center">
-          <h4 className="font-bold text-blue-800 mb-1">{newToken.label}</h4>
-          <p className="text-xs text-blue-600 mb-3">Skannaa QR-koodi laitteella</p>
-          <div className="flex justify-center gap-6 mb-3">
-            <div className="text-center">
-              <div className="text-xs font-semibold text-gray-600 mb-1">📱 Puhelin</div>
-              <img src={newToken.mobileQr} alt="Mobile QR" style={{ width: 180, height: 180 }} />
-              <p className="text-[10px] text-blue-400 mt-1 break-all max-w-[200px]">{newToken.mobileUrl}</p>
-            </div>
-            <div className="text-center">
-              <div className="text-xs font-semibold text-gray-600 mb-1">📋 Tabletti</div>
-              <img src={newToken.tabletQr} alt="Tablet QR" style={{ width: 180, height: 180 }} />
-              <p className="text-[10px] text-blue-400 mt-1 break-all max-w-[200px]">{newToken.tabletUrl}</p>
-            </div>
-          </div>
-          <div className="flex items-center justify-center gap-2">
-            <button onClick={handlePrint} className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700">
-              🖨️ Tulosta
-            </button>
-            <button onClick={() => setNewToken(null)} className="text-sm text-gray-500 hover:text-gray-700">
-              Sulje
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Create form */}
       {showForm && (
@@ -216,34 +284,22 @@ export default function DeviceTokens() {
         </form>
       )}
 
-      {/* Active tokens list */}
+      {/* Active tokens list with inline QR codes */}
       {loading ? (
         <div className="text-sm text-gray-400">Ladataan...</div>
       ) : tokens.length === 0 ? (
         <div className="text-sm text-gray-400">Ei aktiivisia laitetunnisteita.</div>
       ) : (
-        <div className="space-y-2">
-          {tokens.map(t => {
-            const days = daysUntil(t.expiresAt)
-            return (
-              <div key={t.tokenId} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
-                <div>
-                  <div className="text-sm font-medium text-gray-900">{t.label}</div>
-                  <div className="text-xs text-gray-400">
-                    {t.ssiEmail} · Luotu {formatDate(t.createdAt)}
-                    {t.lastUsedAt && ` · Käytetty ${formatDate(t.lastUsedAt)}`}
-                    {days !== null && (
-                      <span className={days < 2 ? 'text-amber-600' : ''}> · {days}pv jäljellä</span>
-                    )}
-                  </div>
-                </div>
-                <button onClick={() => handleRevoke(t.tokenId, t.label)}
-                  className="text-xs text-red-500 hover:text-red-700">
-                  Peruuta
-                </button>
-              </div>
-            )
-          })}
+        <div className="space-y-3">
+          {tokens.map(t => (
+            <TokenCard
+              key={t.tokenId}
+              token={t}
+              qrData={qrCache[t.tokenId] || null}
+              onRevoke={handleRevoke}
+              onPrint={printQrCodes}
+            />
+          ))}
         </div>
       )}
     </div>
