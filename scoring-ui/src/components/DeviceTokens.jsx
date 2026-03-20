@@ -40,8 +40,7 @@ export default function DeviceTokens() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
-  const [newToken, setNewToken] = useState(null) // { tokenId, token, qrDataUrl }
-  const qrRef = useRef(null)
+  const [newToken, setNewToken] = useState(null) // { tokenId, token, mobileQr, tabletQr, mobileUrl, tabletUrl }
 
   async function loadTokens() {
     try {
@@ -72,12 +71,16 @@ export default function DeviceTokens() {
         }),
       })
 
-      // Generate QR code URL
+      // Generate QR codes for both mobile and tablet scoring
       const host = window.location.origin
-      const url = `${host}/#/scoring?token=${data.token}`
-      const qrDataUrl = await QRCode.toDataURL(url, { width: 300, margin: 2 })
+      const mobileUrl = `${host}/#/scoring?token=${data.token}`
+      const tabletUrl = `${host}/#/scoring-tablet?token=${data.token}`
+      const [mobileQr, tabletQr] = await Promise.all([
+        QRCode.toDataURL(mobileUrl, { width: 300, margin: 2 }),
+        QRCode.toDataURL(tabletUrl, { width: 300, margin: 2 }),
+      ])
 
-      setNewToken({ tokenId: data.tokenId, token: data.token, qrDataUrl, url, label: form.label.trim() })
+      setNewToken({ tokenId: data.tokenId, token: data.token, mobileQr, tabletQr, mobileUrl, tabletUrl, label: form.label.trim() })
       setSuccess(`Token created for "${form.label.trim()}"`)
       setForm({ ssiEmail: '', ssiPassword: '', label: '' })
       setShowForm(false)
@@ -102,18 +105,30 @@ export default function DeviceTokens() {
   }
 
   function handlePrint() {
-    if (!newToken?.qrDataUrl) return
-    const win = window.open('', '_blank', 'width=400,height=500')
+    if (!newToken?.mobileQr) return
+    const win = window.open('', '_blank', 'width=700,height=500')
     win.document.write(`
       <html><head><title>QR Login — ${newToken.label}</title>
       <style>body{font-family:Arial,sans-serif;text-align:center;padding:20px}
-      h2{margin:0 0 5px}p{color:#666;margin:5px 0}img{margin:20px 0}
+      h2{margin:0 0 5px}p{color:#666;margin:5px 0}
+      .codes{display:flex;justify-content:center;gap:40px;margin:20px 0}
+      .code-box{text-align:center}
+      .code-box img{margin:10px 0}
+      .code-label{font-size:14px;font-weight:bold;color:#333}
       .label{font-size:24px;font-weight:bold;margin-top:10px}
       .hint{font-size:12px;color:#999}</style></head><body>
-      <h2>Scan to Score</h2>
-      <p>Skannaa aloittaaksesi pisteytyksen</p>
-      <img src="${newToken.qrDataUrl}" width="250" height="250" />
-      <div class="label">${newToken.label}</div>
+      <h2>${newToken.label}</h2>
+      <p>Skannaa QR-koodi laitteella</p>
+      <div class="codes">
+        <div class="code-box">
+          <div class="code-label">📱 Puhelin</div>
+          <img src="${newToken.mobileQr}" width="200" height="200" />
+        </div>
+        <div class="code-box">
+          <div class="code-label">📋 Tabletti</div>
+          <img src="${newToken.tabletQr}" width="200" height="200" />
+        </div>
+      </div>
       <p class="hint">Token expires in 5 days</p>
       </body></html>
     `)
@@ -143,8 +158,19 @@ export default function DeviceTokens() {
       {newToken && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 text-center">
           <h4 className="font-bold text-blue-800 mb-1">{newToken.label}</h4>
-          <p className="text-xs text-blue-600 mb-3">Skannaa tämä QR-koodi laitteella</p>
-          <img src={newToken.qrDataUrl} alt="QR Code" className="mx-auto mb-3" style={{ width: 200, height: 200 }} />
+          <p className="text-xs text-blue-600 mb-3">Skannaa QR-koodi laitteella</p>
+          <div className="flex justify-center gap-6 mb-3">
+            <div className="text-center">
+              <div className="text-xs font-semibold text-gray-600 mb-1">📱 Puhelin</div>
+              <img src={newToken.mobileQr} alt="Mobile QR" style={{ width: 180, height: 180 }} />
+              <p className="text-[10px] text-blue-400 mt-1 break-all max-w-[200px]">{newToken.mobileUrl}</p>
+            </div>
+            <div className="text-center">
+              <div className="text-xs font-semibold text-gray-600 mb-1">📋 Tabletti</div>
+              <img src={newToken.tabletQr} alt="Tablet QR" style={{ width: 180, height: 180 }} />
+              <p className="text-[10px] text-blue-400 mt-1 break-all max-w-[200px]">{newToken.tabletUrl}</p>
+            </div>
+          </div>
           <div className="flex items-center justify-center gap-2">
             <button onClick={handlePrint} className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-md hover:bg-blue-700">
               🖨️ Tulosta
@@ -153,7 +179,6 @@ export default function DeviceTokens() {
               Sulje
             </button>
           </div>
-          <p className="text-[10px] text-blue-400 mt-2 break-all">{newToken.url}</p>
         </div>
       )}
 

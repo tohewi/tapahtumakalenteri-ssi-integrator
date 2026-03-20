@@ -221,11 +221,38 @@ export function TabletApp() {
   }, [])
 
   // On reload, keep users in scoring flow when session cookie is still valid.
+  // QR5: Also checks for ?token= in URL for QR code device login.
   useEffect(() => {
     let isActive = true
 
     const bootstrapFromActiveSession = async () => {
       try {
+        // QR5: Check for device token in URL (from QR code scan)
+        const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '')
+        const deviceToken = hashParams.get('token')
+        if (deviceToken) {
+          try {
+            const result = await api.tokenLogin(deviceToken)
+            // Clear token from URL only after login attempt
+            window.location.hash = '#/scoring-tablet'
+            if (result?.success) {
+              if (isActive) {
+                setSessionExpiredMessage(null)
+                await restoreNavState()
+                void fetchAndSetUserInfo()
+              }
+              return
+            }
+          } catch (err) {
+            window.location.hash = '#/scoring-tablet'
+            if (isActive) {
+              setSessionExpiredMessage(err.message || 'QR login failed')
+              setView('login')
+            }
+            return
+          }
+        }
+
         const status = await api.getAuthStatus()
         if (!isActive) return
 
