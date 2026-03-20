@@ -1,12 +1,19 @@
 # Progress
 
-Last updated: 2026-03-15 by Cascade
-Branch: `release/r80-match-manager-base` at `a10e879`
+Last updated: 2026-03-20 by Cascade
+Branch: `release/r80-match-manager-base` at `7308e32`
 Tests: 908 backend (40 files) + 221 frontend (10 files) = 1129, all passing
 
 ---
 
 ## Current Session Work
+
+### Completed — 2026-03-19/20: Bug fixes + Integration UI wiring
+
+55. **fix: Integration labels + M19 credential migration** (`7308e32`) — SSI-tunnukset → Kisahallintaintegraatio, Kalteri → Tapahtumakalenteri-integraatio (typo fix). M19 migration backfills `integrations` JSONB from legacy `ssiCredentials`/`calendarConfig` so new UI shows correct type selected.
+54. **fix: Wire TenantIntegrationsTab into settings** (`03384bc`) — Phase 4 component was created but never added to settings view. Now visible between Regional and legacy tabs.
+53. **fix: PRF-1 actually wire pages to SWR cache** (`33aecf0`) — DashboardView + SchedulePage were still doing manual fetches despite prefetch running. Now use `useCachedFetch()`. Fixed infinite recursion in `refreshAll()`.
+52. **fix: M18 ssi_create_url nullable** (`3997678`) — Y8 changed sync to store null but DB had NOT NULL constraint.
 
 ### Completed — 2026-03-15: Code Review + INT-1 + i18n
 
