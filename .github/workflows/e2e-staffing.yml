@@ -1,0 +1,112 @@
+name: E2E Staffing SSI Sync
+
+# Runs Playwright E2E tests for staffing ↔ SSI bidirectional sync.
+# Triggered manually or on PRs that touch staffing-related code.
+#
+# To DISABLE: set repository variable E2E_ENABLED = "false"
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Target deployment URL'
+        required: false
+        default: 'https://turres-ssi-tools.onrender.com'
+  pull_request:
+    branches: [main, 'release/**']
+    paths:
+      - 'scoring-proxy/routes/platform.js'
+      - 'scoring-proxy/lib/db/platform-store.js'
+      - 'scoring-proxy/lib/ssi-core/**'
+      - 'scoring-ui/src/components/platform/**'
+      - 'e2e/**'
+
+jobs:
+  e2e-staffing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: vars.E2E_ENABLED != 'false'
+
+    steps:
+      - name: Check required secrets
+        env:
+          HAS_PLATFORM_EMAIL: ${{ secrets.PLATFORM_TEST_EMAIL != '' }}
+          HAS_PLATFORM_PASSWORD: ${{ secrets.PLATFORM_TEST_PASSWORD != '' }}
+        run: |
+          if [ "$HAS_PLATFORM_EMAIL" != "true" ] || [ "$HAS_PLATFORM_PASSWORD" != "true" ]; then
+            echo "⚠️  Skipping E2E tests: PLATFORM_TEST_EMAIL and/or PLATFORM_TEST_PASSWORD secrets are not configured."
+            echo "   To enable E2E tests, add these secrets in GitHub → Settings → Secrets → Actions."
+            echo "   To suppress this workflow entirely, set repository variable E2E_ENABLED=false."
+            echo "SKIP_E2E=true" >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/checkout@v4
+        if: env.SKIP_E2E != 'true'
+
+      - uses: actions/setup-node@v4
+        if: env.SKIP_E2E != 'true'
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install E2E dependencies
+        if: env.SKIP_E2E != 'true'
+        run: npm ci
+        working-directory: e2e
+
+      - name: Install Playwright browsers
+        if: env.SKIP_E2E != 'true'
+        run: npx playwright install --with-deps chromium
+        working-directory: e2e
+
+      - name: Wait for preview environment to respond
+        if: env.SKIP_E2E != 'true'
+        run: |
+          URL="${{ github.event.inputs.base_url || format('https://turres-ssi-tools-pr-{0}.onrender.com', github.event.pull_request.number) }}"
+          echo "Waiting for ${URL} to respond…"
+          for i in $(seq 1 18); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${URL}/api/v1" || echo "000")
+            if [ "$STATUS" != "000" ] && [ "$STATUS" != "502" ] && [ "$STATUS" != "503" ]; then
+              echo "✅ Preview environment is up (HTTP ${STATUS})"
+              exit 0
+            fi
+            echo "  Attempt ${i}/18 — status ${STATUS}, waiting 10 s…"
+            sleep 10
+          done
+          echo "❌ Preview environment did not respond after 3 minutes"
+          exit 1
+
+      - name: Seed UAT owner account
+        if: env.SKIP_E2E != 'true'
+        env:
+          PLATFORM_BASE_URL: ${{ github.event.inputs.base_url || format('https://turres-ssi-tools-pr-{0}.onrender.com', github.event.pull_request.number) }}
+          PLATFORM_EMAIL: ${{ secrets.PLATFORM_TEST_EMAIL }}
+          PLATFORM_PASSWORD: ${{ secrets.PLATFORM_TEST_PASSWORD }}
+        run: node test-harness/seed-uat-account.mjs
+
+      - name: Run staffing SSI sync tests
+        if: env.SKIP_E2E != 'true'
+        run: npx playwright test tests/10-staffing-ssi-sync.spec.js
+        working-directory: e2e
+        env:
+          BASE_URL: ${{ github.event.inputs.base_url || format('https://turres-ssi-tools-pr-{0}.onrender.com', github.event.pull_request.number) }}
+          PLATFORM_EMAIL: ${{ secrets.PLATFORM_TEST_EMAIL }}
+          PLATFORM_PASSWORD: ${{ secrets.PLATFORM_TEST_PASSWORD }}
+          SSI_TEST_EMAIL: ${{ secrets.SSI_TEST_EMAIL }}
+          CI: 'true'
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always() && env.SKIP_E2E != 'true'
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 14
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always() && env.SKIP_E2E != 'true'
+        with:
+          name: test-results
+          path: e2e/test-results/
+          retention-days: 14

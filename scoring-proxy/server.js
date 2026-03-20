@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit'
 import path from 'path'
 import { existsSync } from 'fs'
 import { fileURLToPath } from 'url'
-import { ssiGraphQL, ssiLogin, ssiRefreshJWT } from './lib/ssi-core/graphql.js'
+import { ssiGraphQL, ssiGraphQLAuth, ssiLogin, ssiRefreshJWT } from './lib/ssi-core/graphql.js'
 import { log } from './lib/logger.js'
 import { errorHandler } from './middleware/errorHandler.js'
 import { createScoringRouter } from './routes/scoring.js'
@@ -18,6 +18,10 @@ import { initRedis, getActiveSessionCount, isUsingRedis, touchSession } from './
 import { requireAuthV7 } from './middleware/auth-v7.js'
 import { createAuthV7Router } from './routes/auth-v7.js'
 import apiV1Router from './routes/v1/index.js'
+import { createPlatformRouter } from './routes/platform.js'
+import { createAdminRouter } from './routes/admin.js'
+import { initPostgres } from './lib/db/postgres.js'
+import { startSsiDisciplineSync } from './lib/services/ssi-discipline-sync.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -34,10 +38,11 @@ function legacyApiAlias(req, res, next) {
   next()
 }
 
-// Trust exactly one reverse proxy (Render). Without this, req.ip is always
-// the Render proxy IP, making all rate limiters share a single counter.
-// This applies to both production and preview environments on Render.
-if (IS_RENDER) app.set('trust proxy', 1)
+// Trust exactly one reverse proxy hop. Required on Render and Azure App Service,
+// both of which terminate TLS and inject X-Forwarded-For before forwarding to Node.
+// Without this express-rate-limit cannot identify real client IPs.
+const IS_AZURE = !!process.env.WEBSITE_SITE_NAME // Azure App Service sets this
+if (IS_RENDER || IS_AZURE) app.set('trust proxy', 1)
 
 // ============================================================
 // Security middleware
@@ -55,7 +60,11 @@ const ALLOWED_ORIGINS = IS_PROD
   : true
 app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }))
 
-app.use(express.json({ limit: '10kb' })) // global body size limit (RSEC4)
+// Global body size limit (RSEC4) — skip for logo upload which has its own 4MB parser
+app.use((req, res, next) => {
+  if (req.method === 'POST' && req.path.match(/\/tenants\/[^/]+\/logo$/)) return next()
+  express.json({ limit: '10kb' })(req, res, next)
+})
 app.use(cookieParser())
 
 // ============================================================
@@ -70,15 +79,12 @@ function logRateLimit(limiterName, windowMs, ip, message) {
   if (!rateLimitLog.has(key)) {
     rateLimitLog.set(key, { ip, limiter: limiterName, firstThrottled: now })
   }
-  console.warn(`[rate-limit] ${limiterName}: IP ${ip} throttled at ${now.toISOString()}`)
+  log.warn(`[rate-limit] ${limiterName}: IP ${ip} throttled at ${now.toISOString()}`)
 
   // Log all currently active throttled IPs
   const active = [...rateLimitLog.values()]
   if (active.length > 0) {
-    console.warn(`[rate-limit] Currently throttled IPs (${active.length}):`)
-    for (const entry of active) {
-      console.warn(`  ${entry.limiter}: ${entry.ip} since ${entry.firstThrottled.toISOString()}`)
-    }
+    log.warn(`[rate-limit] Currently throttled IPs (${active.length}):`, active.map(e => `${e.limiter}:${e.ip} since ${e.firstThrottled.toISOString()}`))
   }
 
   return message
@@ -224,16 +230,9 @@ async function getAdminSession() {
     adminCookies = await ssiLogin(email, password)
     adminCookieTime = now
 
-    const authResult = await ssiGraphQL(null, `
-      mutation Auth($email: String!, $password: String!) {
-        token_auth(email: $email, password: $password) {
-          token { token }
-          refresh_token { token }
-        }
-      }
-    `, { email, password }, apiKey)
-    adminJwt = authResult.token_auth?.token?.token || null
-    adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
+    const authResult = await ssiGraphQLAuth({ email, password, apiKey })
+    adminJwt = authResult.token || null
+    adminRefreshToken = authResult.refreshToken || null
     adminJwtTime = now
 
     log.debug('[admin] Session ready (fresh login)')
@@ -252,16 +251,9 @@ async function getAdminSession() {
         log.debug('[admin] JWT refreshed via refresh token')
       } else {
         // No refresh token — full re-auth for JWT
-        const authResult = await ssiGraphQL(null, `
-          mutation Auth($email: String!, $password: String!) {
-            token_auth(email: $email, password: $password) {
-              token { token }
-              refresh_token { token }
-            }
-          }
-        `, { email, password }, apiKey)
-        adminJwt = authResult.token_auth?.token?.token || null
-        adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
+        const authResult = await ssiGraphQLAuth({ email, password, apiKey })
+        adminJwt = authResult.token || null
+        adminRefreshToken = authResult.refreshToken || null
         adminJwtTime = now
         log.debug('[admin] JWT refreshed via re-auth')
       }
@@ -270,16 +262,9 @@ async function getAdminSession() {
       // Full re-login as fallback
       adminCookies = await ssiLogin(email, password)
       adminCookieTime = now
-      const authResult = await ssiGraphQL(null, `
-        mutation Auth($email: String!, $password: String!) {
-          token_auth(email: $email, password: $password) {
-            token { token }
-            refresh_token { token }
-          }
-        }
-      `, { email, password }, apiKey)
-      adminJwt = authResult.token_auth?.token?.token || null
-      adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
+      const authResult = await ssiGraphQLAuth({ email, password, apiKey })
+      adminJwt = authResult.token || null
+      adminRefreshToken = authResult.refreshToken || null
       adminJwtTime = now
     }
   }
@@ -318,6 +303,51 @@ setInterval(() => {
     if (now - c.created > CAPTCHA_TTL) captchaChallenges.delete(id)
   }
 }, 5 * 60 * 1000)
+
+// Rate limit for platform sign-up: 5 per hour per IP
+const platformSignUpLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler('platform-signup', 60 * 60 * 1000, { error: 'Too many sign-up attempts. Try again later.' }),
+})
+
+// Rate limit for platform login: 10 per 15 min per IP
+const platformLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler('platform-login', 15 * 60 * 1000, { error: 'Too many login attempts. Try again in 15 minutes.' }),
+})
+
+// Rate limit for password reset: 5 per 15 min per IP (SEC-H3)
+const platformPasswordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler('platform-reset', 15 * 60 * 1000, { error: 'Too many password reset attempts. Try again later.' }),
+})
+
+// Rate limit for general platform mutations: 30 per minute per IP (SEC-H1)
+const platformMutationLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler('platform-mutation', 60 * 1000, { error: 'Too many requests. Please slow down.' }),
+})
+
+// Rate limit for SSI operations: 5 per minute per IP (SEC-H1)
+const platformSsiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler('platform-ssi', 60 * 1000, { error: 'Too many SSI operations. Please slow down.' }),
+})
 
 // Rate limit for registration: 5 submit attempts per 10 min per IP
 const registerLimiter = rateLimit({
@@ -359,13 +389,13 @@ const registerBodyLimit = express.json({ limit: '1kb' })
 // API versioning info endpoint
 app.use(API_V1_BASE, apiV1Router)
 
-// Scoring routes (mounted at /api/v1/scoring)
+// Scoring routes
 const scoringRouter = createScoringRouter({
   requireAuth,
   graphqlWithRefresh,
 })
-app.use(`${API_V1_BASE}/scoring`, scoringRouter)
-app.use(`${API_LEGACY_BASE}/scoring`, legacyApiAlias, scoringRouter)
+app.use(API_V1_BASE, scoringRouter)
+app.use(API_LEGACY_BASE, legacyApiAlias, scoringRouter)
 
 // Auth routes (V7 — Redis/memory backed dual sessions)
 const authRouter = createAuthV7Router({ 
@@ -410,6 +440,21 @@ const reportsRouter = createReportsRouter({
 app.use(`${API_V1_BASE}/report`, reportsRouter)
 app.use(`${API_LEGACY_BASE}/report`, legacyApiAlias, reportsRouter)
 
+// Platform routes (account sign-up, login, tenant management)
+const platformRouter = createPlatformRouter({
+  platformSignUpLimiter,
+  platformLoginLimiter,
+  platformPasswordResetLimiter,
+  platformMutationLimiter,
+  platformSsiLimiter,
+  getAdminSession
+})
+app.use(`${API_V1_BASE}/platform`, platformRouter)
+
+// Admin routes (BL-1 — secured by ADMIN_API_KEY)
+const adminRouter = createAdminRouter()
+app.use(`${API_V1_BASE}/admin`, adminRouter)
+
 // Staffing routes
 const staffingRouter = createStaffingRouter({
   requireAuth,
@@ -441,23 +486,30 @@ const isDirectRun = process.argv[1] && import.meta.url.endsWith(process.argv[1].
   || process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 
 if (isDirectRun) {
-  // Initialize session store before accepting requests (Redis or in-memory fallback)
+  // Initialize data stores before accepting requests
   await initRedis()
+  const pgReady = await initPostgres()
+
+  // Start background jobs if DB is ready
+  if (pgReady && process.env.SSI_ADMIN_EMAIL && process.env.SSI_ADMIN_PASSWORD) {
+    startSsiDisciplineSync(process.env.SSI_ADMIN_EMAIL, process.env.SSI_ADMIN_PASSWORD)
+  }
 
   app.listen(PORT, () => {
     console.log(`Scoring proxy running on http://localhost:${PORT}`)
     console.log(`Mode: ${IS_PROD ? 'production' : 'development'}`)
     console.log(`Session backend: ${isUsingRedis() ? 'redis' : 'memory'}`)
+    console.log(`Database: ${pgReady ? 'postgresql' : 'not configured'}`)
     console.log('Endpoints:')
     console.log('  POST /api/v1/auth/login     { email, password, apiKey }')
     console.log('  GET  /api/v1/auth/status')
     console.log('  POST /api/v1/auth/logout')
     console.log('  GET  /api/v1/health')
-    console.log('  GET  /api/v1/scoring/cups?search=')
-    console.log('  GET  /api/v1/scoring/cup/:id')
-    console.log('  GET  /api/v1/scoring/match/:id')
-    console.log('  GET  /api/v1/scoring/competitor/:id')
-    console.log('  POST /api/v1/scoring/competitor/:id/score  { scores, warning, dqReason, comment }')
+    console.log('  GET  /api/v1/cups?search=')
+    console.log('  GET  /api/v1/cup/:id')
+    console.log('  GET  /api/v1/match/:id')
+    console.log('  GET  /api/v1/competitor/:id')
+    console.log('  POST /api/v1/competitor/:id/score  { scores, warning, dqReason, comment }')
     console.log('  GET  /api/v1/register/captcha')
     console.log('  POST /api/v1/register/verify-captcha  { captchaId, captchaAnswer }')
     console.log('  GET  /api/v1/register/cups')
@@ -467,7 +519,14 @@ if (isDirectRun) {
     console.log('  POST /api/v1/manage/cup/:id/assign-squad  { shooterName, squadNumber }')
     console.log('  POST /api/v1/manage/cup/:id/fix-squad     { shooterName, targetSquad }')
     console.log('  POST /api/v1/manage/cup/:id/add-to-cup    { shooterName }')
-    console.log('  GET  /api/v1/scoring/matches?search=')
+    console.log('  POST /api/v1/platform/register  { email, password, name, organizationName }')
+    console.log('  POST /api/v1/platform/login     { email, password }')
+    console.log('  POST /api/v1/platform/logout')
+    console.log('  GET  /api/v1/platform/status')
+    console.log('  GET  /api/v1/platform/me')
+    console.log('  GET  /api/v1/platform/tenants')
+    console.log('  POST /api/v1/platform/tenants   { name }')
+    console.log('  GET  /api/v1/matches?search=')
     console.log('  POST /api/v1/report/summary       { matches }')
     console.log('  POST /api/v1/report/matches       { matchIds }')
     if (existsSync(indexPath)) {

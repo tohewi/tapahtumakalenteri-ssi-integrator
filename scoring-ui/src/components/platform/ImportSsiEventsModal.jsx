@@ -1,0 +1,411 @@
+// ============================================================
+// ImportSsiEventsModal — Search SSI events and import selected
+//
+// Provides:
+//   - Search form with filters (name, sport, date range, region)
+//   - Results table with checkboxes (select all / select some)
+//   - Import button to create local scheduled_events
+// ============================================================
+
+import { useState, useEffect } from 'react'
+import { ssiSearchEventsApi, ssiImportEventsApi, listDisciplines } from '../../platform-api.js'
+import { usePlatformT } from '../../platform-i18n.jsx'
+
+// Known SSI sport/rule codes for the filter dropdown
+const SPORT_OPTIONS = [
+  { value: '', label: 'Any' },
+  { value: 'rl', label: 'RESUL' },
+  { value: 'sr', label: 'SRA' },
+  { value: 'ip', label: 'IPSC' },
+  { value: 'nd', label: 'Nordic' },
+  { value: 'pc', label: 'Precision' },
+]
+
+// Known SSI region codes
+const REGION_OPTIONS = [
+  { value: '', label: 'Any' },
+  { value: 'FIN', label: 'Finland' },
+  { value: 'SWE', label: 'Sweden' },
+  { value: 'NOR', label: 'Norway' },
+  { value: 'DNK', label: 'Denmark' },
+  { value: 'EST', label: 'Estonia' },
+]
+
+function formatDate(isoStr) {
+  if (!isoStr) return '—'
+  const d = new Date(isoStr)
+  if (isNaN(d.getTime())) return isoStr
+  return d.toLocaleDateString('fi-FI', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function sportLabel(rule) {
+  const found = SPORT_OPTIONS.find(s => s.value === rule)
+  return found ? found.label : rule || '—'
+}
+
+export default function ImportSsiEventsModal({ tenantId, onClose, onImported }) {
+  const { t } = usePlatformT()
+  // Disciplines for the tenant (loaded on mount)
+  const [disciplines, setDisciplines] = useState([])
+  const [selectedDisciplineId, setSelectedDisciplineId] = useState('')
+
+  // Load disciplines on mount
+  useEffect(() => {
+    listDisciplines(tenantId).then(data => {
+      const discs = data.disciplines || []
+      setDisciplines(discs)
+      // Auto-select if only one discipline
+      if (discs.length === 1) setSelectedDisciplineId(discs[0].id)
+    }).catch(() => {})
+  }, [tenantId])
+
+  // Search form state
+  const [search, setSearch] = useState('')
+  const [sport, setSport] = useState('')
+  const [startsAfter, setStartsAfter] = useState('')
+  const [startsBefore, setStartsBefore] = useState('')
+  const [region, setRegion] = useState('')
+
+  // Results state
+  const [results, setResults] = useState(null)
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState(null)
+
+  // Selection state
+  const [selected, setSelected] = useState(new Set())
+
+  // Import state
+  const [importing, setImporting] = useState(false)
+  const [importResults, setImportResults] = useState(null)
+  const [importError, setImportError] = useState(null)
+
+  async function handleSearch(e) {
+    e.preventDefault()
+    if (!search || search.trim().length < 2) return
+
+    setSearching(true)
+    setSearchError(null)
+    setImportError(null)
+    setResults(null)
+    setSelected(new Set())
+    setImportResults(null)
+
+    try {
+      const data = await ssiSearchEventsApi(tenantId, {
+        search: search.trim(),
+        sport: sport || undefined,
+        startsAfter: startsAfter || undefined,
+        startsBefore: startsBefore || undefined,
+        region: region || undefined,
+      })
+      setResults(data.events || [])
+    } catch (err) {
+      setSearchError(err.message)
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  // Only importable events (not already imported)
+  const importableResults = (results || []).filter(e => !e.alreadyImported)
+
+  function toggleSelect(ssiEventId) {
+    // Don't allow selecting already-imported events
+    const evt = (results || []).find(e => e.ssiEventId === ssiEventId)
+    if (evt?.alreadyImported) return
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(ssiEventId)) {
+        next.delete(ssiEventId)
+      } else {
+        next.add(ssiEventId)
+      }
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (!results) return
+    if (selected.size === importableResults.length) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(importableResults.map(e => e.ssiEventId)))
+    }
+  }
+
+  async function handleImport() {
+    if (selected.size === 0 || !results) return
+
+    const eventsToImport = results.filter(e => selected.has(e.ssiEventId))
+    setImporting(true)
+    setImportResults(null)
+    setImportError(null)
+
+    try {
+      const data = await ssiImportEventsApi(tenantId, eventsToImport, selectedDisciplineId || null)
+      setImportResults(data)
+
+      // If all imported successfully, notify parent to refresh
+      if (data.imported > 0 && onImported) {
+        onImported()
+      }
+    } catch (err) {
+      setImportError(err.message)
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-start justify-center p-4 z-50 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full my-8">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">{t('importSsiTitle')}</h2>
+            <p className="text-xs text-gray-500">{t('importSsiDesc')}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+        </div>
+
+        {/* Search Form */}
+        <form onSubmit={handleSearch} className="px-6 py-4 border-b bg-gray-50 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {/* Name search */}
+            <div className="sm:col-span-2 lg:col-span-1">
+              <label className="block text-xs font-medium text-gray-600 mb-1">{t('searchLabel')}</label>
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder={t('searchPlaceholder')}
+                required
+                minLength={2}
+                className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
+              />
+            </div>
+
+            {/* Sport filter */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{t('sportLabel')}</label>
+              <select
+                value={sport}
+                onChange={e => setSport(e.target.value)}
+                className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
+              >
+                {SPORT_OPTIONS.map(s => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Region filter */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{t('regionLabel')}</label>
+              <select
+                value={region}
+                onChange={e => setRegion(e.target.value)}
+                className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
+              >
+                {REGION_OPTIONS.map(r => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Starts after */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{t('startsAfter')}</label>
+              <input
+                type="date"
+                value={startsAfter}
+                onChange={e => setStartsAfter(e.target.value)}
+                className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
+              />
+            </div>
+
+            {/* Starts before */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">{t('startsBefore')}</label>
+              <input
+                type="date"
+                value={startsBefore}
+                onChange={e => setStartsBefore(e.target.value)}
+                className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-sky-200 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={searching || search.trim().length < 2}
+              className="bg-sky-600 text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-sky-700 disabled:opacity-50 transition-colors"
+            >
+              {searching ? t('searching') : t('searchBtn')}
+            </button>
+            {results !== null && (
+              <span className="text-xs text-gray-500">{t('searchResults', results.length)}</span>
+            )}
+          </div>
+        </form>
+
+        {/* Search Error */}
+        {searchError && (
+          <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
+            {t('searchFailed')}: {searchError}
+          </div>
+        )}
+
+        {/* Import Error */}
+        {importError && (
+          <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
+            {t('importFailed')}: {importError}
+          </div>
+        )}
+
+        {/* Results Table */}
+        {results !== null && results.length > 0 && (
+          <div className="px-6 py-4">
+            <div className="overflow-x-auto border rounded-lg">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-3 py-2.5 w-10">
+                      <input
+                        type="checkbox"
+                        checked={importableResults.length > 0 && selected.size === importableResults.length}
+                        onChange={toggleSelectAll}
+                        disabled={importableResults.length === 0}
+                        className="rounded text-sky-600"
+                      />
+                    </th>
+                    <th className="px-3 py-2.5 font-medium text-gray-600">{t('nameColumn')}</th>
+                    <th className="px-3 py-2.5 font-medium text-gray-600">{t('dateColumn')}</th>
+                    <th className="px-3 py-2.5 font-medium text-gray-600">{t('sportColumn')}</th>
+                    <th className="px-3 py-2.5 font-medium text-gray-600">{t('regionColumn')}</th>
+                    <th className="px-3 py-2.5 font-medium text-gray-600">{t('statusColumn')}</th>
+                    <th className="px-3 py-2.5 font-medium text-gray-600">{t('ssiColumn')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {results.map(evt => (
+                    <tr
+                      key={evt.ssiEventId}
+                      onClick={() => toggleSelect(evt.ssiEventId)}
+                      className={`transition-colors ${evt.alreadyImported ? 'opacity-50 cursor-default' : 'cursor-pointer'} ${selected.has(evt.ssiEventId) ? 'bg-sky-50' : evt.alreadyImported ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
+                    >
+                      <td className="px-3 py-2.5">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(evt.ssiEventId)}
+                          onChange={() => toggleSelect(evt.ssiEventId)}
+                          onClick={e => e.stopPropagation()}
+                          disabled={evt.alreadyImported}
+                          className="rounded text-sky-600"
+                        />
+                      </td>
+                      <td className="px-3 py-2.5 font-medium text-gray-900">
+                        {evt.name}
+                        {evt.alreadyImported && <span className="ml-2 text-xs text-green-600 font-normal">{t('alreadyImported')}</span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{formatDate(evt.starts)}</td>
+                      <td className="px-3 py-2.5 text-gray-600">{sportLabel(evt.rule)}</td>
+                      <td className="px-3 py-2.5 text-gray-600">{evt.region || '—'}</td>
+                      <td className="px-3 py-2.5">
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                          evt.status === 'on' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                        }`}>
+                          {evt.status === 'on' ? t('active') : evt.status || '—'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {evt.url && (
+                          <a
+                            href={evt.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="text-sky-500 hover:text-sky-700 text-xs"
+                          >
+                            {t('open')}
+                          </a>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Import Action */}
+            <div className="flex items-center justify-between mt-4 gap-3">
+              <span className="text-sm text-gray-500 flex-shrink-0">
+                {t('eventsSelected', selected.size)}
+              </span>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-500 whitespace-nowrap">{t('disciplineLabel')}</label>
+                  <select
+                    value={selectedDisciplineId}
+                    onChange={e => setSelectedDisciplineId(e.target.value)}
+                    className="border rounded-md px-2 py-1.5 text-sm focus:ring-sky-500 focus:border-sky-500 min-w-[140px]"
+                  >
+                    <option value="">{t('selectDiscipline')}</option>
+                    {disciplines.map(d => (
+                      <option key={d.id} value={d.id}>{d.labelFi || d.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={handleImport}
+                  disabled={selected.size === 0 || importing || !selectedDisciplineId}
+                  className="bg-sky-600 text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-sky-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                >
+                  {importing ? t('importing') : t('importNEvents', selected.size)}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Empty results */}
+        {results !== null && results.length === 0 && !searching && (
+          <div className="px-6 py-8 text-center text-sm text-gray-400">
+            {t('noEventsFound')}
+          </div>
+        )}
+
+        {/* Import Results */}
+        {importResults && (
+          <div className="px-6 py-4 border-t">
+            <div className="text-sm font-medium text-gray-700 mb-2">
+              {t('importResultsTitle', importResults.imported, importResults.total)}
+            </div>
+            <div className="space-y-1 max-h-40 overflow-y-auto">
+              {importResults.results.map((r, i) => (
+                <div key={i} className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded ${
+                  r.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                }`}>
+                  <span>{r.success ? '✓' : '✗'}</span>
+                  <span>{r.name}</span>
+                  {!r.success && <span className="text-xs ml-auto">— {r.error}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-xl">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-md border transition-colors"
+          >
+            {importResults ? t('done') : t('cancel')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

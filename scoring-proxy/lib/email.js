@@ -1,4 +1,5 @@
 import { Resend } from 'resend'
+import { log } from './logger.js'
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -27,7 +28,7 @@ const MY_REGISTRATIONS_URL = 'https://shootnscoreit.com/my-registrations/'
  */
 export async function sendRegistrationConfirmation(to, shooterName, cupName, matchSquads) {
   if (!resend) {
-    console.warn('[email] RESEND_API_KEY not configured — skipping confirmation email')
+    log.warn('[email] RESEND_API_KEY not configured — skipping confirmation email')
     return { success: false, error: 'Email not configured' }
   }
 
@@ -109,14 +110,112 @@ Tämä viesti on lähetetty automaattisesti.`
     })
 
     if (result.error) {
-      console.error('[email] Send failed:', result.error)
+      log.error('[email] Send failed:', result.error)
       return { success: false, error: result.error.message || 'Send failed' }
     }
 
-    console.log(`[email] Confirmation sent to ${to} (id: ${result.data?.id})`)
+    log.info(`[email] Confirmation sent to ${to} (id: ${result.data?.id})`)
     return { success: true }
   } catch (err) {
-    console.error('[email] Send error:', err.message)
+    log.error('[email] Send error:', err.message)
     return { success: false, error: err.message }
   }
+}
+
+/**
+ * Send a generic email.
+ * @param {object} params - { to, subject, text, html }
+ */
+export async function sendEmail({ to, subject, text, html }) {
+  if (!resend) {
+    log.warn('[email] RESEND_API_KEY not configured — skipping email send')
+    return { success: false, error: 'Email not configured' }
+  }
+
+  try {
+    const result = await resend.emails.send({
+      from: FROM_EMAIL,
+      to,
+      subject,
+      html,
+      text: text || (html ? html.replace(/<[^>]*>?/gm, '') : ''), // fallback strip html
+    })
+
+    if (result.error) {
+      log.error('[email] Send failed:', result.error)
+      return { success: false, error: result.error.message || 'Send failed' }
+    }
+
+    log.info(`[email] Sent to ${to} (id: ${result.data?.id})`)
+    return { success: true }
+  } catch (err) {
+    log.error('[email] Send error:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+// ---- Staffing Notifications ----
+
+/**
+ * Send email when a member signs up for a staffing role.
+ */
+export async function sendStaffingSignupConfirmation(to, memberName, eventName, eventDate, roleLabel) {
+  const html = `
+    <div style="font-family:Arial,Helvetica,sans-serif;color:#333;max-width:600px;margin:0 auto;padding:20px;">
+      <h2 style="color:#1a73e8;">Staffing Confirmation ✓</h2>
+      <p>Hi ${escapeHtml(memberName)},</p>
+      <p>You are confirmed for <strong>${escapeHtml(eventName)}</strong> on ${escapeHtml(eventDate)}.</p>
+      <p>Role: <strong>${escapeHtml(roleLabel)}</strong></p>
+      <p>Thank you for volunteering!</p>
+    </div>
+  `
+  return sendEmail({ 
+    to, 
+    subject: `Staffing Confirmed: ${eventName}`, 
+    html, 
+    text: `Confirmed for ${eventName} as ${roleLabel}` 
+  })
+}
+
+/**
+ * Send email when a member withdraws from a staffing role.
+ */
+export async function sendStaffingWithdrawalNotice(to, memberName, eventName, eventDate, roleLabel) {
+  const html = `
+    <div style="font-family:Arial,Helvetica,sans-serif;color:#333;max-width:600px;margin:0 auto;padding:20px;">
+      <h2 style="color:#e53e3e;">Staffing Withdrawal</h2>
+      <p><strong>${escapeHtml(memberName)}</strong> has withdrawn from <strong>${escapeHtml(eventName)}</strong> on ${escapeHtml(eventDate)}.</p>
+      <p>Role: <strong>${escapeHtml(roleLabel)}</strong></p>
+      <p>This role may now need a replacement. Please log in to check the roster.</p>
+    </div>
+  `
+  return sendEmail({ 
+    to, 
+    subject: `Staffing Withdrawal: ${eventName}`, 
+    html, 
+    text: `${memberName} withdrew from ${roleLabel} at ${eventName}` 
+  })
+}
+
+/**
+ * Send alert that an upcoming event is understaffed.
+ */
+export async function sendUnderstaffedAlert(to, eventName, eventDate, missingRolesList) {
+  const html = `
+    <div style="font-family:Arial,Helvetica,sans-serif;color:#333;max-width:600px;margin:0 auto;padding:20px;">
+      <h2 style="color:#d97706;">Staffing Alert: Helpers Needed</h2>
+      <p>The upcoming event <strong>${escapeHtml(eventName)}</strong> on ${escapeHtml(eventDate)} is understaffed and needs volunteers.</p>
+      <h3 style="margin-bottom:4px;">Still needed:</h3>
+      <ul>
+        ${missingRolesList.map(role => `<li>${escapeHtml(role.count)}x ${escapeHtml(role.label)}</li>`).join('')}
+      </ul>
+      <p>Please log in to the platform to sign up.</p>
+    </div>
+  `
+  return sendEmail({ 
+    to, 
+    subject: `URGENT: Staff needed for ${eventName}`, 
+    html, 
+    text: `Staff needed for ${eventName}: ${missingRolesList.map(r => `${r.count}x ${r.label}`).join(', ')}` 
+  })
 }

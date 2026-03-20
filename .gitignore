@@ -1,6 +1,7 @@
 # API keys and secrets
 scripts-graphql/config/api-key.yml
 scoring-proxy/.env
+e2e/.env
 test-harness/config/test-users.yml
 
 # Debug files
@@ -11,6 +12,9 @@ test-harness/send-*.mjs
 # Generated schema/form dumps (regenerable)
 scripts-graphql/schema-output.json
 scripts-graphql/*.raw.html
+
+# Compiled Bicep ARM template (build artifact — source is infra/main.bicep)
+infra/main.json
 
 # PowerShell module cache
 *.psm1.cache
@@ -27,3 +31,7 @@ Thumbs.db
 node_modules/
 scoring-ui/dist/
 scoring-proxy/data/
+
+# Playwright test artifacts
+e2e/playwright-report/
+e2e/test-results/

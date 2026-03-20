@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head><title>Log In &lsaquo; Test Site &#8212; WordPress</title></head>
+<body class="login">
+<div id="login">
+<h1><a href="https://wordpress.org/">Test Site</a></h1>
+<form name="loginform" id="loginform" action="https://example.com/wp-login.php" method="post">
+  <p>
+    <label for="user_login">Käyttäjätunnus tai sähköpostiosoite</label>
+    <input type="text" name="log" id="user_login" class="input" value="" size="20" autocapitalize="off" autocomplete="username" />
+  </p>
+  <p>
+    <label for="user_pass">Salasana</label>
+    <input type="password" name="pwd" id="user_pass" class="input" value="" size="20" autocomplete="current-password" />
+  </p>
+  <p class="submit">
+    <input type="submit" name="wp-submit" id="wp-submit" class="button button-primary button-large" value="Kirjaudu sisään" />
+    <input type="hidden" name="redirect_to" value="https://example.com/wp-admin/" />
+    <input type="hidden" name="testcookie" value="1" />
+  </p>
+</form>
+</div>
+</body>
+</html>

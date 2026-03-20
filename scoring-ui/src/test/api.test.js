@@ -730,7 +730,7 @@ describe('API client', () => {
 
       const result = await searchCups('Kupittaa')
       expect(result).toEqual(cups)
-      expect(fetch).toHaveBeenCalledWith('/api/v1/scoring/cups?search=Kupittaa', { credentials: 'include' })
+      expect(fetch).toHaveBeenCalledWith('/api/v1/cups?search=Kupittaa', { credentials: 'include' })
     })
 
     it('returns empty array when no cups found', async () => {
@@ -803,7 +803,7 @@ describe('API client', () => {
       const scores = { s1: '1,0,0,0,0,0,0,0,0,0,0,4,5' }
       await submitScore('12345', scores, { warning: false, comment: 'test' })
 
-      expect(fetch).toHaveBeenCalledWith('/api/v1/scoring/competitor/12345/score', {
+      expect(fetch).toHaveBeenCalledWith('/api/v1/competitor/12345/score', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

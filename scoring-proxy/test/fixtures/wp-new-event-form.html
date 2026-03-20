@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head><title>Add New Event &lsaquo; Test Site &#8212; WordPress</title></head>
+<body class="wp-admin post-type-event">
+<div id="poststuff">
+<form name="post" action="https://example.com/wp-admin/post.php" method="post" id="post">
+  <input type="hidden" id="_wpnonce" name="_wpnonce" value="wp_nonce_abc123" />
+  <input type="hidden" name="_wp_http_referer" value="/wp-admin/post-new.php?post_type=event" />
+  <input type="hidden" id="user-id" name="user_ID" value="904" />
+  <input type="hidden" id="hiddenaction" name="action" value="editpost" />
+  <input type="hidden" id="originalaction" name="originalaction" value="editpost" />
+  <input type="hidden" id="post_author" name="post_author" value="904" />
+  <input type="hidden" id="post_type" name="post_type" value="event" />
+  <input type="hidden" id="original_post_status" name="original_post_status" value="auto-draft" />
+  <input type="hidden" id='post_ID' name='post_ID' value='12345' />
+  <div id="titlediv">
+    <input type="text" name="post_title" size="30" value="" id="title" />
+  </div>
+  <!-- ACF fields -->
+  <div id="acf-group">
+    <input type="hidden" id="_acf_nonce" name="_acf_nonce" value="acf_nonce_xyz789" />
+    <input type="hidden" name="_acf_screen" value="post" />
+    <input type="hidden" name="_acf_post_id" value="12345" />
+  </div>
+</form>
+</div>
+</body>
+</html>

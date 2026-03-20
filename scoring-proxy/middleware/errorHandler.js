@@ -80,6 +80,14 @@ function formatErrorResponse(err) {
     if (err instanceof SSIError && err.ssiStatusCode) {
       response.ssiStatusCode = err.ssiStatusCode
     }
+
+    // Platform auth metadata — used by frontend to trigger session restore or MFA challenge
+    if (err.platformSessionExpired) {
+      response.platformSessionExpired = true
+    }
+    if (err.mfaRequired) {
+      response.mfaRequired = true
+    }
   }
   
   // Add request ID for tracing

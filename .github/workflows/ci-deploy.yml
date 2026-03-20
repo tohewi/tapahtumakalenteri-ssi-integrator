@@ -1,11 +1,13 @@
 name: CI / Deploy
 
-# GitHub Flow: Runs tests on all PRs, deploys only from main
+# Runs tests on pushes and PRs to main (v7) and release/r80-match-manager-base (v8).
+# Deploys only from main via Render deploy hook (v7 production).
+# V8 production auto-deploys via Render autoDeploy on commit to release/r80-match-manager-base.
 on:
   push:
-    branches: [main]
+    branches: [main, release/r80-match-manager-base]
   pull_request:
-    branches: [main]
+    branches: [main, release/r80-match-manager-base]
 
 jobs:
   test-audit-build:

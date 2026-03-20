@@ -1,53 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { AppHeader } from './shared'
+import TabletShooterList from './tablet/TabletShooterList'
+import TabletScoreTrack from './tablet/TabletScoreTrack'
+import TabletScorePad from './tablet/TabletScorePad'
 import * as api from '../api'
 import t from '../i18n'
 import { log } from '../log.js'
-
-// ============================================================
-// Constants
-// ============================================================
-
-const SCORE_ZONES = ['X', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'M']
-const ZONE_POINTS = { X: 10, '10': 10, '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2, '1': 1, M: 0 }
-const SERIES_COUNT = 6
-const MAX_HITS_PER_SERIES = 5
-
-// ============================================================
-// Helper functions
-// ============================================================
-
-function hitsInSeries(seriesScores) {
-  return SCORE_ZONES.reduce((sum, z) => sum + seriesScores[z], 0)
-}
-
-function pointsInSeries(seriesScores) {
-  return SCORE_ZONES.reduce((sum, z) => sum + seriesScores[z] * ZONE_POINTS[z], 0)
-}
-
-function getTotalHits(allSeriesScores) {
-  let total = 0
-  for (let i = 0; i < SERIES_COUNT; i++) {
-    total += hitsInSeries(allSeriesScores[i])
-  }
-  return total
-}
-
-function getTotalPoints(allSeriesScores) {
-  let total = 0
-  for (let i = 0; i < SERIES_COUNT; i++) {
-    total += pointsInSeries(allSeriesScores[i])
-  }
-  return total
-}
-
-function getXCount(allSeriesScores) {
-  let total = 0
-  for (let i = 0; i < SERIES_COUNT; i++) {
-    total += allSeriesScores[i].X || 0
-  }
-  return total
-}
+import {
+  SCORE_ZONES, SERIES_COUNT, MAX_HITS_PER_SERIES,
+  hitsInSeries, getTotalHits, getTotalPoints, getXCount,
+} from '../lib/scoring-constants'
 
 // String color scheme (rotates between strings)
 const STRING_COLORS = [
@@ -449,199 +411,30 @@ export default function TabletScoringView({
 
       {/* Main content area - 3 columns on desktop, stacked on mobile */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
-        {/* Left: Shooter list */}
-        <div className="w-full lg:w-56 xl:w-64 bg-white border-b lg:border-b-0 lg:border-r border-gray-200 flex-shrink-0 flex flex-col overflow-hidden">
-          <div className="p-2 border-b border-gray-200 flex-shrink-0">
-            <h3 className="font-semibold text-gray-700 text-xs">{squad.name}</h3>
-            <p className="text-xs text-gray-500">{squad.shooters.length} {t.shooters}</p>
-          </div>
-          <div role="listbox" aria-label={t.selectShooter} className="divide-y divide-gray-100 overflow-y-auto flex-1">
-            {squad.shooters.map((shooter, shooterIdx) => {
-              const isSelected = selectedShooter?.id === shooter.id
-              const shooterScores = allScores[shooter.id]
-              const shooterShots = shooterScores ? getTotalHits(shooterScores) : 0
-              const shooterPoints = shooterScores ? getTotalPoints(shooterScores) : 0
-              
-              return (
-                <div
-                  key={shooter.id}
-                  role="option"
-                  aria-selected={isSelected}
-                  aria-label={`${shooter.number}. ${shooter.name}, ${shooterPoints} ${t.pts}, ${shooterShots}/${totalShotsInMatch}`}
-                  tabIndex={0}
-                  onClick={() => handleShooterSelect(shooter)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleShooterSelect(shooter) } }}
-                  className={`p-2 cursor-pointer transition-colors ${
-                    isSelected
-                      ? 'bg-blue-50 border-l-4 border-blue-600'
-                      : 'hover:bg-gray-50 border-l-4 border-transparent'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        aria-label={`Move ${shooter.name} up`}
-                        disabled={shooterIdx === 0}
-                        onClick={(e) => { e.stopPropagation(); handleMoveShooter(shooter, -1) }}
-                        className="text-gray-400 hover:text-gray-600 disabled:opacity-20 text-xs p-0.5"
-                      >▲</button>
-                      <button
-                        aria-label={`Move ${shooter.name} down`}
-                        disabled={shooterIdx === squad.shooters.length - 1}
-                        onClick={(e) => { e.stopPropagation(); handleMoveShooter(shooter, 1) }}
-                        className="text-gray-400 hover:text-gray-600 disabled:opacity-20 text-xs p-0.5"
-                      >▼</button>
-                    </div>
-                    <div className="flex-1 min-w-0 ml-1">
-                      <div className={`text-xs font-medium truncate ${
-                        isSelected ? 'text-blue-900' : 'text-gray-900'
-                      }`}>
-                        {shooter.number}. {shooter.name}
-                      </div>
-                      <div className="text-xs text-gray-500 truncate">{shooter.division}</div>
-                    </div>
-                    <div className="ml-2 text-right">
-                      <div className={`text-sm font-bold ${
-                        isSelected ? 'text-blue-600' : 'text-gray-700'
-                      }`}>
-                        {shooterPoints}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {shooterShots}/{totalShotsInMatch}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Center: Score track */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 min-w-0">
-          <div className="p-2 bg-white border-b border-gray-200 flex-shrink-0">
-            <h3 className="font-semibold text-gray-700 text-xs">{t.scoreTrack}</h3>
-          </div>
-          
-          {/* Save error message */}
-          {saveError && (
-            <div className="mx-2 mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs flex-shrink-0">
-              <p className="text-amber-700 font-medium">{t.saveFailed}</p>
-              <p className="text-amber-600 mt-1">{saveError}</p>
-              <button
-                onClick={handleSaveScores}
-                className="mt-1 font-medium text-amber-700 hover:text-amber-800"
-              >
-                {t.retryAction}
-              </button>
-            </div>
-          )}
-
-          {/* Score track */}
-          <div ref={scoreTrackRef} className="flex-1 overflow-hidden p-2 min-h-0">
-            {!selectedShooter ? (
-              <div className="h-full flex items-center justify-center text-gray-400 text-xs">
-                <p>{t.selectShooter}</p>
-              </div>
-            ) : scoreTrack.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-gray-400 text-xs">
-                <p>{t.noShootersFound}</p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-1 h-full">
-                {scoreTrack.map((track, idx) => (
-                  <div key={idx} className={`rounded px-2 py-1 ${track.color} flex-1 flex flex-col min-h-0`}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-semibold text-gray-700">
-                        {t.string} {idx + 1}
-                      </span>
-                      <span className="text-xs text-gray-600">
-                        {track.hits.length} / {MAX_HITS_PER_SERIES}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-5 gap-1.5 flex-1">
-                      {Array.from({ length: MAX_HITS_PER_SERIES }, (_, hitIdx) => {
-                        const zone = track.hits[hitIdx]
-                        if (!zone) {
-                          // Empty placeholder cell — keeps grid uniform
-                          return <div key={hitIdx} className="rounded bg-black/5" />
-                        }
-                        return (
-                          <button
-                            key={hitIdx}
-                            onClick={() => handleScoreTap(idx, zone, hitIdx)}
-                            aria-label={`${t.string} ${idx + 1}, ${zone === 'M' ? 'Miss' : zone} ${t.pts}, double-tap to delete`}
-                            className={`rounded font-bold text-base transition-all touch-manipulation ${
-                              zone === 'X' || zone === '10'
-                                ? 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'
-                                : zone === 'M'
-                                ? 'bg-red-500 text-white hover:bg-red-600 active:bg-red-700'
-                                : 'bg-gray-600 text-white hover:bg-gray-700 active:bg-gray-800'
-                            }`}
-                          >
-                            {zone}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Save button */}
-          <div className="p-2 bg-white border-t border-gray-200 flex-shrink-0">
-            <button
-              onClick={handleSaveScores}
-              disabled={saving || !selectedShooter || isMatchCompleted}
-              aria-label={saving ? t.saving : isMatchCompleted ? t.matchCompleted : `${t.saveToSSI}: ${selectedShooter?.name || ''}`}
-              className={`w-full py-2 rounded-lg text-sm font-semibold transition-colors ${
-                saving || isMatchCompleted
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
-              }`}
-            >
-              {saving ? t.saving : isMatchCompleted ? t.matchCompleted : t.saveScores}
-            </button>
-          </div>
-
-          {/* Aria-live region for score update announcements */}
-          <div aria-live="polite" aria-atomic="true" className="sr-only">
-            {lastSaveStatus}
-          </div>
-        </div>
-
-        {/* Right: Number pad */}
-        <div className="w-full lg:w-64 xl:w-72 bg-white border-t lg:border-t-0 lg:border-l border-gray-200 flex-shrink-0 flex flex-col overflow-hidden">
-          <div className="p-2 border-b border-gray-200 flex-shrink-0">
-            <h3 className="font-semibold text-gray-700 text-xs">Score Pad</h3>
-          </div>
-          <div className="p-2 flex-1 overflow-y-auto">
-            <div className="grid grid-cols-3 gap-2">
-              {SCORE_ZONES.map((zone) => {
-                const variant = zone === 'X' || zone === '10' ? 'high' : zone === 'M' ? 'miss' : 'low'
-                const colors = {
-                  high: 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white',
-                  low: 'bg-gray-600 hover:bg-gray-700 active:bg-gray-800 text-white',
-                  miss: 'bg-red-600 hover:bg-red-700 active:bg-red-800 text-white',
-                }
-                
-                return (
-                  <button
-                    key={zone}
-                    onClick={() => handleScoreAdd(zone)}
-                    disabled={!selectedShooter || isMatchCompleted}
-                    aria-label={`${zone === 'M' ? 'Miss' : `Score ${zone}`}`}
-                    className={`h-16 lg:h-14 xl:h-16 rounded-lg font-bold text-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation ${colors[variant]}`}
-                  >
-                    {zone}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
+        <TabletShooterList
+          squad={squad}
+          selectedShooter={selectedShooter}
+          allScores={allScores}
+          totalShotsInMatch={totalShotsInMatch}
+          onShooterSelect={handleShooterSelect}
+          onMoveShooter={handleMoveShooter}
+        />
+        <TabletScoreTrack
+          scoreTrack={scoreTrack}
+          selectedShooter={selectedShooter}
+          saving={saving}
+          saveError={saveError}
+          isMatchCompleted={isMatchCompleted}
+          onSaveScores={handleSaveScores}
+          onScoreTap={handleScoreTap}
+          lastSaveStatus={lastSaveStatus}
+          scoreTrackRef={scoreTrackRef}
+        />
+        <TabletScorePad
+          selectedShooter={selectedShooter}
+          isMatchCompleted={isMatchCompleted}
+          onScoreAdd={handleScoreAdd}
+        />
       </div>
     </div>
   )

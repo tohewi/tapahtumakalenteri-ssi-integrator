@@ -3,6 +3,15 @@ projects:
     environments:
       - name: production
         services:
+          # ── PostgreSQL for persistent platform data ──
+          # Stores accounts, tenants, and future operational data.
+          # The web service references this via DATABASE_URL → connectionString.
+          - type: pserv
+            name: turres-ssi-tools-db
+            region: frankfurt
+            plan: starter
+            databaseName: turres_platform
+            ipAllowList: []  # internal access only (private network)
           # ── Redis (Key Value) for session storage ──
           # Deployed alongside the web service. Internal-only (no public access).
           # The web service references this via REDIS_URL → connectionString.
@@ -20,7 +29,7 @@ projects:
             plan: starter
             branch: main
             repo: https://github.com/tohewi/tapahtumakalenteri-ssi-integrator
-            # PR previews are managed by .github/workflows/pr-preview.yml
+            # PR previews (including Postgres + Redis) are managed by .github/workflows/pr-preview.yml
             # to support all Render plans and deterministic naming.
             buildCommand: cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm ci
             startCommand: cd scoring-proxy && node server.js
@@ -33,8 +42,22 @@ projects:
                 value: https://turres-ssi-tools.onrender.com
               - key: SESSION_SECRET
                 generateValue: true
+              - key: DATABASE_URL
+                fromService:
+                  name: turres-ssi-tools-db
+                  type: pserv
+                  property: connectionString
               - key: REDIS_URL
                 fromService:
                   name: turres-ssi-tools-redis
                   type: keyvalue
                   property: connectionString
+              # AES-256-GCM encryption keys for sensitive data at rest.
+              # Must be exactly 64 hex characters (32 bytes). Generate with:
+              #   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+              # Set manually in Render Dashboard → Environment.
+              # See docs/design/key-management.md for backup and rotation procedures.
+              - key: PLATFORM_CREDENTIALS_KEY
+                sync: false
+              - key: MFA_SECRET_KEY
+                sync: false

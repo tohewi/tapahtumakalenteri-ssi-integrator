@@ -10,7 +10,8 @@ This document describes the automated preview deployment system for pull request
 
 - 🚀 **Fully automated** - No manual setup required
 - 🔗 **Unique URL per PR** - Each PR gets its own isolated environment
-- 🧹 **Auto cleanup** - Preview services are deleted when PRs are closed
+- 🗄️ **Database isolation** - Each PR gets its own PostgreSQL schema (`DB_SCHEMA=pr_{N}`)
+- 🧹 **Auto cleanup** - Preview services and database schemas are deleted when PRs are closed
 - ✅ **Production-like** - Same configuration as the main service
 - 💬 **PR integration** - Preview URLs posted as PR comments
 
@@ -18,9 +19,9 @@ This document describes the automated preview deployment system for pull request
 
 The preview deployment system uses GitHub Actions (`.github/workflows/pr-preview.yml`) to automatically manage Render services:
 
-1. **PR Opened/Updated** → Creates or updates a preview service for the PR branch
+1. **PR Opened/Updated** → Creates or updates a preview service for the PR branch with its own DB schema
 2. **New Commits** → Triggers automatic deployment to the preview service
-3. **PR Closed/Merged** → Deletes the preview service
+3. **PR Closed/Merged** → Drops the PR's database schema and deletes the preview service
 
 ### Preview Service Naming
 
@@ -72,6 +73,39 @@ Example: `https://ssi-scoring-pr-42.onrender.com`
 2. **Visit the preview** to test the changes
 3. **Leave feedback** in the PR if issues are found
 
+## Database Schema Isolation
+
+PR previews share a single PostgreSQL instance with production but use **PostgreSQL schemas** for full data isolation:
+
+```
+turres-ssi-tools-v8-db (shared Render Starter PG)
+├── public              ← v8 production (DB_SCHEMA not set)
+├── pr_42               ← PR #42 preview (DB_SCHEMA=pr_42)
+├── pr_43               ← PR #43 preview (DB_SCHEMA=pr_43)
+└── ...
+```
+
+### How It Works
+
+1. Preview service starts with `DB_SCHEMA=pr_{N}` env var
+2. `postgres.js` creates the schema if needed (`CREATE SCHEMA IF NOT EXISTS`)
+3. Sets `search_path` on every pool connection → all queries target the PR's schema
+4. Each schema gets its own tables via the normal `CREATE TABLE IF NOT EXISTS` migrations
+5. On PR close, the workflow runs `DROP SCHEMA IF EXISTS "pr_{N}" CASCADE` via `psql`
+
+### Key Properties
+
+- **Zero extra cost** — schemas are free within a single PG instance
+- **Full data isolation** — PRs can't read/write each other's data or production data
+- **Safe migrations** — destructive schema changes in a PR don't affect production
+- **Automatic cleanup** — schema is dropped when PR is closed or merged
+
+### Implementation
+
+- **Backend:** `scoring-proxy/lib/db/postgres.js` — reads `DB_SCHEMA`, creates schema, sets `search_path`
+- **Workflow:** `.github/workflows/pr-preview.yml` — passes `DB_SCHEMA=pr_{N}`, runs cleanup on close
+- **Production:** Does NOT set `DB_SCHEMA` → defaults to `public` schema
+
 ## Configuration
 
 ### GitHub Secrets Required
@@ -82,6 +116,9 @@ The workflow requires these secrets to be configured in repository settings:
 |--------|-------------|---------------|
 | `RENDER_API_KEY` | Render API authentication token | Generate in Render Dashboard → Account Settings → API Keys |
 | `RENDER_OWNER_ID` | Your Render workspace ID (format: `tea-XXXXXXXXXXXXX`) | Run: `curl --request GET --url 'https://api.render.com/v1/owners?limit=20' --header 'authorization: Bearer YOUR_API_KEY' \| jq '.[0].owner.id'` |
+| `RENDER_V8_DATABASE_URL` | Shared v8 PostgreSQL internal connection string | From Render PG dashboard → Internal Connection String |
+| `RENDER_V8_DATABASE_EXTERNAL_URL` | Shared v8 PostgreSQL external URL | From Render PG dashboard → External Connection String (for schema cleanup) |
+| `RENDER_V8_REDIS_URL` | Shared v8 Redis internal connection string | From Render Redis dashboard → Internal URL |
 
 ### Preview Service Configuration
 

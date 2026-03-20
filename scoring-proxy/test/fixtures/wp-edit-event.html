@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head><title>Edit Event &lsaquo; Test Site &#8212; WordPress</title></head>
+<body class="wp-admin post-type-event">
+<div id="poststuff">
+<form name="post" action="https://example.com/wp-admin/post.php" method="post" id="post">
+  <input type="hidden" id="_wpnonce" name="_wpnonce" value="edit_nonce_456" />
+  <input type="hidden" name="_wp_http_referer" value="/wp-admin/post.php?post=12345&action=edit" />
+  <input type="hidden" id="post_type" name="post_type" value="event" />
+  <input type="hidden" id="original_post_status" name="original_post_status" value="publish" />
+  <input type="hidden" id='post_ID' name='post_ID' value='12345' />
+  <div id="titlediv">
+    <input type="text" name="post_title" size="30" value="Kupittaan ampumavuoro 31.01.2026" id="title" />
+  </div>
+  <!-- ACF fields -->
+  <div id="acf-group">
+    <input type="hidden" id="_acf_nonce" name="_acf_nonce" value="acf_edit_nonce_321" />
+    <input type="hidden" name="_acf_screen" value="post" />
+    <input type="hidden" name="_acf_post_id" value="12345" />
+    <!-- Short description -->
+    <textarea name="acf[field_5d3e9d9626a82]" rows="4">Kupittaa Cup lauantaina</textarea>
+    <!-- Content -->
+    <textarea name="acf[field_5d3e9dc926a83]" rows="10">&lt;p&gt;Tervetuloa Kupittaa Cupiin!&lt;/p&gt;</textarea>
+    <!-- Start date -->
+    <input type="text" name="acf[field_5d3e9ddc26a84]" value="20260131" />
+    <!-- End date -->
+    <input type="text" name="acf[field_5d3e9e5f26a85]" value="20260131" />
+    <!-- Time -->
+    <input type="text" name="acf[field_62949bdcbb12e]" value="Klo 09.00-12.00" />
+    <!-- Location group → Address -->
+    <textarea name="acf[field_5d3e9efab663d][field_5d3e9f0fb663e]" rows="3">Kupittaan urheiluhallin ampumarata</textarea>
+    <!-- Location group → Map link -->
+    <input type="url" name="acf[field_5d3e9efab663d][field_5d3e9f28b663f]" value="https://maps.google.com/test" />
+    <!-- Statistics -->
+    <input type="number" name="acf[field_4k2esk3rske32]" value="500" />
+    <input type="number" name="acf[field_6j3ak3kj2kjs2]" value="5" />
+    <input type="number" name="acf[field_4k3ak3sj2kj6b]" value="1" />
+  </div>
+  <!-- Trash link -->
+  <a class="submitdelete deletion" href="https://example.com/wp-admin/post.php?post=12345&amp;action=trash&amp;_wpnonce=trash_abc123">Move to Trash</a>
+</form>
+</div>
+</body>
+</html>

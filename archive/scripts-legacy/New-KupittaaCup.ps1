@@ -150,7 +150,7 @@ Write-Host "========================================`n" -ForegroundColor Cyan
 
 # Load configuration
 if (-not $ConfigPath) {
-    $ConfigPath = Join-Path -Path $PSScriptRoot -ChildPath "..\config\kupittaa-cup-config.yml"
+    $ConfigPath = Join-Path -Path $PSScriptRoot -ChildPath "..\..\config\kupittaa-cup-config.yml"
 }
 
 if (-not (Test-Path $ConfigPath)) {
@@ -706,6 +706,7 @@ foreach ($match in $createdMatches) {
 #endregion
 
 #region Calendar Event (Tapahtumakalenteri)
+<#
 $calendarEvent = $null
 
 if ($wpSessionActive) {
@@ -860,6 +861,7 @@ if ($wpSessionActive) {
         Write-Host "`nWARNING: Failed to create calendar event." -ForegroundColor Yellow
     }
 }
+    #>
 #endregion
 
 #region Summary

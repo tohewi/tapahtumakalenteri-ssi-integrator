@@ -1,42 +1,34 @@
-name: PR Preview Environment
+name: V8 PR Preview Environment
 
-# Automatically creates, updates, and deletes Render preview environments for pull requests.
+# Creates, updates, and deletes Render preview environments for v8 pull requests.
+#
+# Key design: PR previews share the v8 project's PostgreSQL and Redis instances.
+# Each PR gets its own PostgreSQL schema (DB_SCHEMA=pr_{NUMBER}) for data isolation.
+# Only a web service is created per PR — no per-PR database provisioning.
+# This keeps costs low ($7/mo per active PR) and avoids free-tier DB expiry issues.
 #
 # This workflow:
-# 1. Creates a new Render service when a PR is opened (format: turres-ssi-tools-pr-{NUMBER})
-# 2. Triggers redeployment when new commits are pushed to the PR
-# 3. Deletes the preview service when the PR is closed or merged
-# 4. Posts preview URLs and status as PR comments
+# 1. Creates a new Render web service when a PR is opened (format: turres-ssi-tools-v8-pr-{NUMBER})
+# 2. Connects it to the shared v8 DATABASE_URL and REDIS_URL (from GitHub secrets)
+# 3. Triggers redeployment when new commits are pushed to the PR
+# 4. Drops the PR's PostgreSQL schema and deletes the web service when the PR is closed/merged
+# 5. Posts preview URLs and status as PR comments
 #
 # Required GitHub Secrets:
-# - RENDER_API_KEY: Render API token (generate in Render Dashboard → Account Settings → API Keys)
-# - RENDER_OWNER_ID: Render workspace ID (format: tea-XXXXXXXXXXXXX)
-#   Find by running: curl --request GET --url 'https://api.render.com/v1/owners?limit=20' --header 'authorization: Bearer YOUR_API_KEY' | jq '.[0].owner.id'
-#   For this repo: tea-d62r4ucoud1c73d50qg0
+# - RENDER_API_KEY: Render API token
+# - RENDER_OWNER_ID: Render workspace ID (tea-d62r4ucoud1c73d50qg0)
+# - RENDER_V8_DATABASE_URL: Shared v8 PostgreSQL external connection string
+# - RENDER_V8_REDIS_URL: Shared v8 Redis external connection string
 #
-# Optional GitHub Secrets copied to preview envs (recommended):
-# - SSI_ADMIN_EMAIL
-# - SSI_ADMIN_PASSWORD
-# - SSI_ADMIN_API_KEY
-# - RESEND_API_KEY
-# - EMAIL_FROM
-# - SSI_BASE_URL
-# - STAFFING_CRON_SECRET
-# - STAFFING_API_URL
-#
-# Preview services are created with the same configuration as production:
-# - Runtime: Node.js
-# - Plan: Starter
-# - Region: Frankfurt
-# - Build: cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm ci
-# - Start: cd scoring-proxy && node server.js
-#
-# Documentation: docs/instructions/PR-PREVIEW-DEPLOYMENTS.md
+# Optional GitHub Secrets copied to preview envs:
+# - SSI_ADMIN_EMAIL, SSI_ADMIN_PASSWORD, SSI_ADMIN_API_KEY
+# - RESEND_API_KEY, EMAIL_FROM, SSI_BASE_URL
+# - STAFFING_CRON_SECRET, STAFFING_API_URL
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
-    branches: [main]
+    branches: [release/r80-match-manager-base]
 
 jobs:
   preview:
@@ -47,14 +39,6 @@ jobs:
     env:
       RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
       RENDER_OWNER_ID: ${{ secrets.RENDER_OWNER_ID }}
-      PREVIEW_SSI_ADMIN_EMAIL: ${{ secrets.SSI_ADMIN_EMAIL }}
-      PREVIEW_SSI_ADMIN_PASSWORD: ${{ secrets.SSI_ADMIN_PASSWORD }}
-      PREVIEW_SSI_ADMIN_API_KEY: ${{ secrets.SSI_ADMIN_API_KEY }}
-      PREVIEW_RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-      PREVIEW_EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-      PREVIEW_SSI_BASE_URL: ${{ secrets.SSI_BASE_URL }}
-      PREVIEW_STAFFING_CRON_SECRET: ${{ secrets.STAFFING_CRON_SECRET }}
-      PREVIEW_STAFFING_API_URL: ${{ secrets.STAFFING_API_URL }}
 
     steps:
       - name: Checkout code
@@ -64,9 +48,8 @@ jobs:
       - name: Generate preview service name
         id: preview-name
         run: |
-          # Generate a unique service name for this PR
           PR_NUMBER="${{ github.event.pull_request.number }}"
-          SERVICE_NAME="turres-ssi-tools-pr-${PR_NUMBER}"
+          SERVICE_NAME="turres-ssi-tools-v8-pr-${PR_NUMBER}"
           echo "service_name=${SERVICE_NAME}" >> $GITHUB_OUTPUT
           echo "Preview service name: ${SERVICE_NAME}"
 
@@ -76,7 +59,6 @@ jobs:
         run: |
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
 
-          # Query Render API to check if service exists
           RESPONSE=$(curl -s -w "\n%{http_code}" \
             -H "Authorization: Bearer ${RENDER_API_KEY}" \
             "https://api.render.com/v1/services?name=${SERVICE_NAME}")
@@ -85,19 +67,14 @@ jobs:
           BODY=$(echo "$RESPONSE" | sed '$d')
 
           if [ "$HTTP_CODE" = "200" ]; then
-            # Check if any services were returned
             SERVICE_COUNT=$(echo "$BODY" | jq '. | length')
             if [ "$SERVICE_COUNT" -gt 0 ]; then
               SERVICE_ID=$(echo "$BODY" | jq -r '.[0].service.id')
               SERVICE_URL=$(echo "$BODY" | jq -r '.[0].service.serviceDetails.url')
-              BUILD_CMD=$(echo "$BODY" | jq -r '.[0].service.serviceDetails.envSpecificDetails.buildCommand')
               echo "exists=true" >> $GITHUB_OUTPUT
               echo "service_id=${SERVICE_ID}" >> $GITHUB_OUTPUT
               echo "service_url=${SERVICE_URL}" >> $GITHUB_OUTPUT
-              echo "build_command=${BUILD_CMD}" >> $GITHUB_OUTPUT
-              echo "Service exists with ID: ${SERVICE_ID}"
-              echo "Service URL: ${SERVICE_URL}"
-              echo "Current build command: ${BUILD_CMD}"
+              echo "Service exists: ${SERVICE_ID} at ${SERVICE_URL}"
             else
               echo "exists=false" >> $GITHUB_OUTPUT
               echo "Service does not exist"
@@ -107,65 +84,38 @@ jobs:
             echo "Service does not exist or API error (HTTP ${HTTP_CODE})"
           fi
 
-      - name: Delete service if build command is outdated
-        id: delete-if-outdated
-        if: github.event.action != 'closed' && steps.check-service.outputs.exists == 'true' && (!contains(steps.check-service.outputs.build_command, 'npm ci') || !contains(steps.check-service.outputs.build_command, '--include=dev'))
-        run: |
-          SERVICE_ID="${{ steps.check-service.outputs.service_id }}"
-          SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
-          
-          echo "⚠️  Service has outdated build command, deleting and will recreate..."
-          
-          DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
-            -H "Authorization: Bearer ${RENDER_API_KEY}" \
-            "https://api.render.com/v1/services/${SERVICE_ID}")
-          
-          DELETE_HTTP_CODE=$(echo "$DELETE_RESPONSE" | tail -n1)
-          
-          if [ "$DELETE_HTTP_CODE" = "204" ]; then
-            echo "✅ Outdated service deleted successfully"
-            echo "deleted=true" >> $GITHUB_OUTPUT
-          else
-            echo "⚠️  Failed to delete service (HTTP ${DELETE_HTTP_CODE})"
-            echo "deleted=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create preview service
+      - name: Create preview service (web-only, shared DB)
         id: create-service
-        if: github.event.action != 'closed' && (steps.check-service.outputs.exists != 'true' || steps.delete-if-outdated.outputs.deleted == 'true')
+        if: github.event.action != 'closed' && steps.check-service.outputs.exists != 'true'
+        env:
+          PREVIEW_SSI_ADMIN_EMAIL: ${{ secrets.SSI_ADMIN_EMAIL }}
+          PREVIEW_SSI_ADMIN_PASSWORD: ${{ secrets.SSI_ADMIN_PASSWORD }}
+          PREVIEW_SSI_ADMIN_API_KEY: ${{ secrets.SSI_ADMIN_API_KEY }}
+          PREVIEW_RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          PREVIEW_EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          PREVIEW_SSI_BASE_URL: ${{ secrets.SSI_BASE_URL }}
+          PREVIEW_STAFFING_CRON_SECRET: ${{ secrets.STAFFING_CRON_SECRET }}
+          PREVIEW_STAFFING_API_URL: ${{ secrets.STAFFING_API_URL }}
+          PREVIEW_PLATFORM_CREDENTIALS_KEY: ${{ secrets.PLATFORM_CREDENTIALS_KEY }}
+          PREVIEW_MFA_SECRET_KEY: ${{ secrets.MFA_SECRET_KEY }}
         run: |
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
           BRANCH_NAME="${{ github.head_ref }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
           APP_URL="https://${SERVICE_NAME}.onrender.com"
-
-          # Generate a random session secret (base64-encoded, 256-bit)
           SESSION_SECRET=$(openssl rand -base64 32)
+          DB_SCHEMA="pr_${PR_NUMBER}"
 
-          OPTIONAL_SECRETS=(
-            PREVIEW_SSI_ADMIN_EMAIL
-            PREVIEW_SSI_ADMIN_PASSWORD
-            PREVIEW_SSI_ADMIN_API_KEY
-            PREVIEW_RESEND_API_KEY
-            PREVIEW_EMAIL_FROM
-            PREVIEW_SSI_BASE_URL
-            PREVIEW_STAFFING_CRON_SECRET
-            PREVIEW_STAFFING_API_URL
-          )
-          MISSING_SECRETS=()
-          for secret_name in "${OPTIONAL_SECRETS[@]}"; do
-            if [ -z "${!secret_name}" ]; then
-              MISSING_SECRETS+=("${secret_name}")
-            fi
-          done
-          if [ "${#MISSING_SECRETS[@]}" -gt 0 ]; then
-            echo "::warning::Missing optional preview secrets (${MISSING_SECRETS[*]}). Features depending on these values may not work in preview."
-          fi
-
+          # Build env vars — uses shared v8 DATABASE_URL and REDIS_URL from GitHub secrets
+          # DB_SCHEMA isolates each PR into its own PostgreSQL schema within the shared DB
           ENV_VARS=$(jq -cn \
             --arg nodeEnv "production" \
             --arg sessionSecret "${SESSION_SECRET}" \
             --arg logLevel "info" \
             --arg appUrl "${APP_URL}" \
+            --arg dbSchema "${DB_SCHEMA}" \
+            --arg databaseUrl "${{ secrets.RENDER_V8_DATABASE_URL }}" \
+            --arg redisUrl "${{ secrets.RENDER_V8_REDIS_URL }}" \
             --arg ssiAdminEmail "${PREVIEW_SSI_ADMIN_EMAIL}" \
             --arg ssiAdminPassword "${PREVIEW_SSI_ADMIN_PASSWORD}" \
             --arg ssiAdminApiKey "${PREVIEW_SSI_ADMIN_API_KEY}" \
@@ -174,12 +124,17 @@ jobs:
             --arg ssiBaseUrl "${PREVIEW_SSI_BASE_URL}" \
             --arg staffingCronSecret "${PREVIEW_STAFFING_CRON_SECRET}" \
             --arg staffingApiUrl "${PREVIEW_STAFFING_API_URL}" \
+            --arg platformCredentialsKey "${PREVIEW_PLATFORM_CREDENTIALS_KEY}" \
+            --arg mfaSecretKey "${PREVIEW_MFA_SECRET_KEY}" \
             '[
               {"key": "NODE_ENV", "value": $nodeEnv},
               {"key": "SESSION_SECRET", "value": $sessionSecret},
               {"key": "LOG_LEVEL", "value": $logLevel},
-              {"key": "APP_URL", "value": $appUrl}
+              {"key": "APP_URL", "value": $appUrl},
+              {"key": "DB_SCHEMA", "value": $dbSchema}
             ]
+            + (if $databaseUrl != "" then [{"key": "DATABASE_URL", "value": $databaseUrl}] else [] end)
+            + (if $redisUrl != "" then [{"key": "REDIS_URL", "value": $redisUrl}] else [] end)
             + (if $ssiAdminEmail != "" then [{"key": "SSI_ADMIN_EMAIL", "value": $ssiAdminEmail}] else [] end)
             + (if $ssiAdminPassword != "" then [{"key": "SSI_ADMIN_PASSWORD", "value": $ssiAdminPassword}] else [] end)
             + (if $ssiAdminApiKey != "" then [{"key": "SSI_ADMIN_API_KEY", "value": $ssiAdminApiKey}] else [] end)
@@ -187,11 +142,10 @@ jobs:
             + (if $emailFrom != "" then [{"key": "EMAIL_FROM", "value": $emailFrom}] else [] end)
             + (if $ssiBaseUrl != "" then [{"key": "SSI_BASE_URL", "value": $ssiBaseUrl}] else [] end)
             + (if $staffingCronSecret != "" then [{"key": "STAFFING_CRON_SECRET", "value": $staffingCronSecret}] else [] end)
-            + (if $staffingApiUrl != "" then [{"key": "STAFFING_API_URL", "value": $staffingApiUrl}] else [] end)')
+            + (if $staffingApiUrl != "" then [{"key": "STAFFING_API_URL", "value": $staffingApiUrl}] else [] end)
+            + (if $platformCredentialsKey != "" then [{"key": "PLATFORM_CREDENTIALS_KEY", "value": $platformCredentialsKey}] else [] end)
+            + (if $mfaSecretKey != "" then [{"key": "MFA_SECRET_KEY", "value": $mfaSecretKey}] else [] end)')
 
-          # Create the service using Render API
-          # Note: preview services use in-memory session store (no REDIS_URL).
-          # This is acceptable for short-lived test environments.
           PAYLOAD=$(jq -cn \
             --arg serviceName "${SERVICE_NAME}" \
             --arg ownerId "${RENDER_OWNER_ID}" \
@@ -235,14 +189,21 @@ jobs:
             SERVICE_URL=$(echo "$BODY" | jq -r '.service.serviceDetails.url')
             echo "service_id=${SERVICE_ID}" >> $GITHUB_OUTPUT
             echo "service_url=${SERVICE_URL}" >> $GITHUB_OUTPUT
-            echo "✅ Preview service created successfully"
-            echo "   Service ID: ${SERVICE_ID}"
-            echo "   URL: ${SERVICE_URL}"
+            echo "✅ Preview service created: ${SERVICE_ID} at ${SERVICE_URL}"
           else
             echo "❌ Failed to create preview service (HTTP ${HTTP_CODE})"
-            echo "$BODY" | jq '.' || echo "$BODY"
+            echo "$BODY" | jq '.' 2>/dev/null || echo "$BODY"
             exit 1
           fi
+
+      - name: Trigger redeploy on existing preview service
+        if: github.event.action == 'synchronize' && steps.check-service.outputs.exists == 'true'
+        run: |
+          SERVICE_ID="${{ steps.check-service.outputs.service_id }}"
+          echo "Triggering redeploy for ${SERVICE_ID}..."
+          # Render auto-deploys on commit if autoDeploy=yes, so this is a no-op.
+          # The service will pick up the new commit automatically.
+          echo "✅ Render will auto-deploy from the updated branch."
 
       - name: Comment on PR with preview URL
         if: github.event.action != 'closed'
@@ -257,32 +218,29 @@ jobs:
             const action = isNewService ? 'created' : 'updated';
             const emoji = isNewService ? '🎉' : '🔄';
 
-            const body = `${emoji} **Preview environment ${action}!**
+            const body = `${emoji} **V8 Preview environment ${action}!**
 
             🚀 **Service:** \`${serviceName}\`
             🔗 **URL:** ${serviceUrl}
             📊 **Dashboard:** https://dashboard.render.com/web/${serviceId}
 
-            ${isNewService ? '⏳ **First deployment in progress** - The preview environment is being built and will be available in a few minutes.' : '⏳ **Deployment in progress** - Your changes are being deployed.'}
+            ${isNewService ? '⏳ **First deployment in progress** — the preview will be available in a few minutes.' : '⏳ **Deployment in progress** — your changes are being deployed.'}
 
-            ${isNewService ? '> **Note:** Preview services on Render may take 30-60 seconds to wake up on the first request after inactivity.' : ''}
+            > Uses shared v8 database with isolated PostgreSQL schema (\`pr_${context.issue.number}\`). Schema is auto-cleaned on PR close.
 
-            This preview environment will be automatically deleted when this PR is closed or merged.`;
+            This preview will be automatically deleted when this PR is closed or merged.`;
 
-            // Check if we already commented on this PR
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
             });
 
-            const botComment = comments.find(comment =>
-              comment.user.type === 'Bot' &&
-              comment.body.includes('Preview environment')
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('V8 Preview environment')
             );
 
             if (botComment) {
-              // Update existing comment
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -290,7 +248,6 @@ jobs:
                 body: body
               });
             } else {
-              // Create new comment
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -299,14 +256,28 @@ jobs:
               });
             }
 
-      - name: Delete preview service
+      - name: Clean up PR database schema
+        if: github.event.action == 'closed'
+        env:
+          DATABASE_URL: ${{ secrets.RENDER_V8_DATABASE_EXTERNAL_URL }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          SCHEMA_NAME="pr_${PR_NUMBER}"
+
+          if [ -n "${DATABASE_URL}" ]; then
+            echo "Dropping schema: ${SCHEMA_NAME}"
+            psql "${DATABASE_URL}?sslmode=require" -c "DROP SCHEMA IF EXISTS \"${SCHEMA_NAME}\" CASCADE" 2>&1 || true
+            echo "✅ Database schema cleaned up: ${SCHEMA_NAME}"
+          else
+            echo "⚠️  RENDER_V8_DATABASE_EXTERNAL_URL not set — skipping schema cleanup"
+          fi
+
+      - name: Delete preview service (web only — shared DB preserved)
         if: github.event.action == 'closed'
         run: |
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
-
           echo "Checking for preview service to delete: ${SERVICE_NAME}"
 
-          # Query Render API to find the service
           RESPONSE=$(curl -s -w "\n%{http_code}" \
             -H "Authorization: Bearer ${RENDER_API_KEY}" \
             "https://api.render.com/v1/services?name=${SERVICE_NAME}")
@@ -316,10 +287,8 @@ jobs:
 
           if [ "$HTTP_CODE" = "200" ]; then
             SERVICE_COUNT=$(echo "$BODY" | jq '. | length')
-
             if [ "$SERVICE_COUNT" -gt 0 ]; then
               SERVICE_ID=$(echo "$BODY" | jq -r '.[0].service.id')
-
               echo "Deleting preview service: ${SERVICE_ID}"
 
               DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
@@ -327,21 +296,16 @@ jobs:
                 "https://api.render.com/v1/services/${SERVICE_ID}")
 
               DELETE_HTTP_CODE=$(echo "$DELETE_RESPONSE" | tail -n1)
-
               if [ "$DELETE_HTTP_CODE" = "204" ]; then
-                echo "✅ Preview service deleted successfully"
+                echo "✅ Preview service deleted (shared DB preserved)"
               else
                 echo "⚠️  Failed to delete preview service (HTTP ${DELETE_HTTP_CODE})"
-                echo "$DELETE_RESPONSE" | sed '$d'
-                # Don't fail the workflow if deletion fails
               fi
             else
               echo "ℹ️  No preview service found to delete"
             fi
           else
             echo "⚠️  Failed to query services (HTTP ${HTTP_CODE})"
-            echo "$BODY"
-            # Don't fail the workflow if query fails
           fi
 
       - name: Comment on PR about deletion
@@ -350,10 +314,8 @@ jobs:
         with:
           script: |
             const serviceName = '${{ steps.preview-name.outputs.service_name }}';
-
-            const body = `🗑️ **Preview environment deleted**
-
-            The preview environment \`${serviceName}\` has been deleted as this PR is now closed.`;
+            const prNumber = context.issue.number;
+            const body = `🗑️ **V8 Preview environment deleted**\n\nThe preview service \`${serviceName}\` and database schema \`pr_${prNumber}\` have been cleaned up.`;
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
