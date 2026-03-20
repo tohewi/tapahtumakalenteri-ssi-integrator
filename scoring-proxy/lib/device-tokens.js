@@ -10,18 +10,21 @@
 
 import crypto from 'node:crypto'
 import { getRedisClient } from './session/redis.js'
+import { sessionConfig } from './session/config.js'
 import { log } from './logger.js'
 
 const PREFIX = 'device_token:'
 const DEFAULT_TTL_DAYS = 5
+const MAX_TTL_DAYS = 30
 
 // ---- Encryption (AES-256-GCM) ----
-// Uses SESSION_SECRET as the key source (available on main branch)
+// Uses the same secret as session configuration (dev fallback included)
 
 function getEncryptionKey() {
-  const secret = process.env.SESSION_SECRET
-  if (!secret) throw new Error('SESSION_SECRET required for device token encryption')
-  // Derive a 32-byte key from SESSION_SECRET via SHA-256
+  const rawSecret = sessionConfig?.session?.secret
+  const secret = Array.isArray(rawSecret) ? rawSecret[0] : rawSecret
+  if (!secret) throw new Error('Session secret required for device token encryption')
+  // Derive a 32-byte key from the session secret via SHA-256
   return crypto.createHash('sha256').update(secret).digest()
 }
 
@@ -62,7 +65,9 @@ export async function createDeviceToken({ ssiEmail, ssiPassword, label, createdB
   const token = crypto.randomBytes(32).toString('hex')
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex')
 
-  const ttlSeconds = expiresInDays * 24 * 60 * 60
+  // Validate TTL: must be a finite number between 1 and MAX_TTL_DAYS
+  const days = Math.max(1, Math.min(MAX_TTL_DAYS, Number(expiresInDays) || DEFAULT_TTL_DAYS))
+  const ttlSeconds = days * 24 * 60 * 60
 
   const record = {
     tokenId,
@@ -101,7 +106,10 @@ export async function validateDeviceToken(token) {
     if (!raw) continue
     try {
       const record = JSON.parse(raw)
-      if (record.tokenHash === tokenHash) {
+      // Constant-time comparison to prevent timing side-channel attacks
+      const hashA = Buffer.from(record.tokenHash, 'hex')
+      const hashB = Buffer.from(tokenHash, 'hex')
+      if (hashA.length === hashB.length && crypto.timingSafeEqual(hashA, hashB)) {
         // Decrypt credentials
         const creds = JSON.parse(decrypt(record.ssiCredentials))
 

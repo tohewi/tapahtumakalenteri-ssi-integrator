@@ -361,7 +361,9 @@ export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth,
       })
     } catch (err) {
       log.error('[auth-v7] Token login failed:', err.message)
-      res.status(401).json({ error: 'Token login failed' })
+      // Distinguish auth failures from internal errors
+      const status = err.message?.includes('credentials') || err.message?.includes('auth') ? 401 : 500
+      res.status(status).json({ error: status === 401 ? 'Token login failed' : 'Internal error during token login' })
     }
   })
 

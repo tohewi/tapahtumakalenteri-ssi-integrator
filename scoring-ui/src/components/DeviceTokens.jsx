@@ -26,7 +26,7 @@ async function apiFetch(path, opts = {}) {
 
 function formatDate(ts) {
   if (!ts) return '—'
-  return new Date(ts).toLocaleDateString('fi-FI', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return new Date(ts).toLocaleString('fi-FI', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 function daysUntil(ts) {
@@ -48,8 +48,14 @@ async function generateQrCodes(rawToken) {
 }
 
 // --- Print QR codes for a token ---
+// Escape HTML to prevent XSS in print window
+function escapeHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
 function printQrCodes({ label, mobileQr, tabletQr }) {
   const win = window.open('', '_blank', 'width=700,height=500')
+  if (!win) return // popup blocked
   win.document.write(`
     <html><head><title>QR Login — ${label}</title>
     <style>body{font-family:Arial,sans-serif;text-align:center;padding:20px}
@@ -59,7 +65,7 @@ function printQrCodes({ label, mobileQr, tabletQr }) {
     .code-box img{margin:10px 0}
     .code-label{font-size:14px;font-weight:bold;color:#333}
     .hint{font-size:12px;color:#999}</style></head><body>
-    <h2>${label}</h2>
+    <h2>${escapeHtml(label)}</h2>
     <p>Skannaa QR-koodi laitteella</p>
     <div class="codes">
       <div class="code-box">
