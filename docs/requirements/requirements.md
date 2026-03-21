@@ -244,7 +244,7 @@
 
 | # | Requirement | Status | Tokens (est.) |
 |---|-------------|--------|---------------|
-| MGMT1 | **Management Independent of Registration**: Kupittaa Cup Hallinta must keep cups available for management independent of registration status, once registration start date has passed and while the cup is still active. Management is available until the cup's end date and time (`ends`), or `starts + 24h` fallback. Cups with no `registration_starts` are excluded. Uses dedicated `/api/manage/cups` endpoint. | ✅ Implemented | ~14,000 |
+| MGMT1 | **Management Independent of Registration**: Kupittaa Cup Hallinta must keep cups available for management independent of registration status, once registration start date has passed and while the cup is still active. Management is available until 24h after the cup's end date (`ends + 24h` grace period), or `starts + 48h` fallback when `ends` is null. The grace period ensures cups remain manageable on event day regardless of timezone. Cups with no `registration_starts` are excluded. Uses dedicated `/api/manage/cups` endpoint. | ✅ Implemented | ~14,000 |
 
 ## Release 7.3 — Refactoring Analysis (Complete)
 
@@ -398,6 +398,28 @@ Establish architectural patterns and foundations for future scalability while ma
 - **Service Extraction**: Pure business logic functions without Express dependencies. Enables unit testing without HTTP mocking
 - **Import Rules**: Enforced via ESLint to prevent re-coupling. Domain modules in ssi-core/ may only import http-helpers; routes must import specific domain modules, not barrel exports
 
+## Release 7.7 — QR Code Login for Scoring
+
+Quick-login for scoring devices (tablets, smartphones) at the range via QR codes. Eliminates manual credential entry on shared devices. Tokens are managed on the `#/manage` page and scoped to scoring only.
+
+| # | Requirement | Status | Notes |
+|---|-------------|--------|-------|
+| QR1 | **Device Token Model**: Server-side device tokens stored in Redis with AES-256-GCM encryption of SSI credentials. Token hash (SHA-256, timing-safe comparison) for validation. Configurable TTL (1–30 days, default 5). Uses session secret for encryption key (dev fallback via sessionConfig). | ✅ Implemented | `lib/device-tokens.js`. Encrypted raw token also stored for QR regeneration. |
+| QR2 | **Token CRUD API**: `POST /auth/device-tokens` (create, manage scope required), `GET /auth/device-tokens` (list with raw tokens for QR, manage scope), `DELETE /auth/device-tokens/:id` (revoke, manage scope). Rate-limited via loginLimiter. | ✅ Implemented | `routes/auth-v7.js` |
+| QR3 | **Token Login Endpoint**: `POST /auth/token-login` — validates token hash, decrypts SSI credentials, authenticates with SSI (GraphQL + web login), creates scoring session with device metadata. Distinguishes 401 (auth) from 500 (internal) errors. | ✅ Implemented | `routes/auth-v7.js` |
+| QR4 | **QR Code Management UI**: `DeviceTokens` component on `#/manage` page (below cup list). Create tokens with SSI email/password/label. Dual QR codes per token (📱 mobile `#/scoring`, 📋 tablet `#/scoring-tablet`). Print layout with both codes. QR codes persist via server-side encrypted token storage — device-independent. Revoke with confirmation. | ✅ Implemented | `components/DeviceTokens.jsx`. Uses `qrcode` npm package. |
+| QR5 | **Scoring App Token Detection**: Both `App.jsx` (mobile) and `TabletApp.jsx` (tablet) detect `?token=` in URL hash on bootstrap. Auto-login via `tokenLogin()` API. URL cleared after login attempt. Hash-based router strips query params for route matching. | ✅ Implemented | `main.jsx` `hashPath()`, `App.jsx`, `TabletApp.jsx` |
+| QR6 | **Security**: AES-256-GCM encryption at rest (credentials + raw token). Timing-safe hash comparison. Scope locked to scoring. Token TTL validated (1–30 days). XSS protection in print window (`escapeHtml`). Popup-blocked null check. `e2e/.env` credential leak found and scrubbed from git history. `.gitignore` broadened to global `.env`. | ✅ Implemented | Copilot review: 7/21 findings fixed. |
+
+### Release 7.7.1 — Management Page Hotfix
+
+| # | Fix | Status |
+|---|-----|--------|
+| QR-FIX1 | **Cup list visibility**: DeviceTokens rendered above CupList, pushing cups below fold. Moved below. | ✅ Fixed |
+| QR-FIX2 | **Cup auto-restore on login**: localStorage manage state not cleared on logout — next login skipped cup selection. Now cleared on logout/session expiry. | ✅ Fixed |
+| QR-FIX3 | **Same-day cup filtering**: `filterManageableCups` compared `ends` (midnight UTC) against current time — cups disappeared by afternoon. Added 24h management grace period after `ends`. | ✅ Fixed |
+| QR-FIX4 | **Squad move audit logging**: `assign-squad` and `fix-squad` routes had only debug-level logging (suppressed in production). Added info-level audit trail: user, shooter, target squad, per-match results, summary. | ✅ Implemented |
+
 ## Release 7.9 — GraphQL Cup Management
 
 Migrate Cup creation and maintenance from web scraping to SSI GraphQL API. The legacy `New-KupittaaCup.ps1` script uses web scraping (CSRF tokens, form POSTs, HTML parsing) which is fragile and breaks when SSI updates their UI. The GraphQL `create_event` mutation is now confirmed working (Feb 2026) and should be the primary method.
@@ -456,6 +478,7 @@ Vision: Transform the current "link collection" home page into a structured matc
 - **Release 7.4.1** (Authentication UX Hardening): 5 requirements — 5 ✅ (AUTH-UX1–AUTH-UX5)
 - **Release 7.5** (Architecture V2 Foundation): 5 requirements — 3 ✅, 2 📋 ➜ R7.6 (ARCH3, ARCH4)
 - **Release 7.6** (Consolidation & Completion): 18 requirements from R6.0/R7.0/R7.2/R7.5 — see `release-7.6.md`
+- **Release 7.7** (QR Code Login for Scoring): 6 requirements — 6 ✅ (QR1–QR6). Device token auth for tablets/phones at the range. **7.7.1 hotfix**: 4 fixes (cup list visibility, auto-restore, same-day filtering, squad audit logging)
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
 - **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
