@@ -163,7 +163,13 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
     }
 
     const cookies = req.ssiSession.ssiCookies
-    if (!cookies) return res.status(401).json({ error: 'No SSI session cookies' })
+    if (!cookies) {
+      log.warn(`[manage] assign-squad: No SSI cookies for user ${req.ssiSession.userId || 'unknown'}, cup ${req.params.id}`)
+      return res.status(401).json({ error: 'No SSI session cookies' })
+    }
+
+    const user = req.ssiSession.userId || 'unknown'
+    log.info(`[manage] assign-squad: user=${user} cup=${req.params.id} shooter="${shooterName}" email=${email || 'none'} → squad ${squadNumber}`)
 
     try {
       // 1. Get cup component matches
@@ -200,19 +206,23 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
         // 3. Find participant ID in the match
         const participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies, email)
         if (!participantId) {
+          log.warn(`[manage] assign-squad: Could not find "${shooterName}" in match ${matchId} after adding`)
           results.push({ matchId, success: false, message: 'Could not find participant after adding' })
           continue
         }
 
         // 4. Set squad
         const sqResult = await ssiSetParticipantSquad(participantId, squadNumber, cookies)
+        log.info(`[manage] assign-squad: match=${matchId} participant=${participantId} → squad ${squadNumber}: ${sqResult.success ? 'OK' : sqResult.message}`)
         results.push({ matchId, success: sqResult.success, message: sqResult.message || 'OK' })
       }
 
       const allOk = results.every(r => r.success)
+      const failed = results.filter(r => !r.success).length
+      log.info(`[manage] assign-squad: DONE user=${user} shooter="${shooterName}" → squad ${squadNumber}: ${allOk ? 'ALL OK' : `${failed}/${results.length} failed`}`)
       res.json({ success: allOk, results })
     } catch (err) {
-      log.error('[manage] assign-squad error:', err.message)
+      log.error(`[manage] assign-squad: FAILED user=${user} shooter="${shooterName}" → squad ${squadNumber}: ${err.message}`)
       return next(internalError('Failed to assign squad'))
     }
   })
@@ -229,7 +239,13 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
     }
 
     const cookies = req.ssiSession.ssiCookies
-    if (!cookies) return res.status(401).json({ error: 'No SSI session cookies' })
+    if (!cookies) {
+      log.warn(`[manage] fix-squad: No SSI cookies for user ${req.ssiSession.userId || 'unknown'}, cup ${req.params.id}`)
+      return res.status(401).json({ error: 'No SSI session cookies' })
+    }
+
+    const user = req.ssiSession.userId || 'unknown'
+    log.info(`[manage] fix-squad: user=${user} cup=${req.params.id} shooter="${shooterName}" email=${email || 'none'} → squad ${targetSquad}`)
 
     try {
       // 1. Get cup component matches
@@ -262,25 +278,29 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
 
         // 3. If not found, add them first using email for disambiguation
         if (!participantId) {
-          log.debug(`[manage] "${shooterName}" (${email || 'no email'}) not in match ${matchId}, adding...`)
+          log.info(`[manage] fix-squad: "${shooterName}" not in match ${matchId}, adding...`)
           await ssiSearchAndAddParticipant(91, matchId, email, cookies, { firstName, lastName })
           participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies, email)
         }
 
         if (!participantId) {
+          log.warn(`[manage] fix-squad: Could not find or add "${shooterName}" in match ${matchId}`)
           results.push({ matchId, success: false, message: 'Could not find or add participant' })
           continue
         }
 
         // 4. Set squad
         const sqResult = await ssiSetParticipantSquad(participantId, targetSquad, cookies)
+        log.info(`[manage] fix-squad: match=${matchId} participant=${participantId} → squad ${targetSquad}: ${sqResult.success ? 'OK' : sqResult.message}`)
         results.push({ matchId, success: sqResult.success, message: sqResult.message || 'OK' })
       }
 
       const allOk = results.every(r => r.success)
+      const failed = results.filter(r => !r.success).length
+      log.info(`[manage] fix-squad: DONE user=${user} shooter="${shooterName}" → squad ${targetSquad}: ${allOk ? 'ALL OK' : `${failed}/${results.length} failed`}`)
       res.json({ success: allOk, results })
     } catch (err) {
-      log.error('[manage] fix-squad error:', err.message)
+      log.error(`[manage] fix-squad: FAILED user=${user} shooter="${shooterName}" → squad ${targetSquad}: ${err.message}`)
       return next(internalError('Failed to fix squad assignment'))
     }
   })
