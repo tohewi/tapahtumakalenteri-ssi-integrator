@@ -58,9 +58,12 @@ export default function ManagePage() {
     }))
   }, [authed, view, selectedCup])
 
-  // Load cups from management API (shows cups until end date, regardless of registration status)
+  // Load cups from management API (shows cups until end date, regardless of registration status).
+  // Always reloads when entering cups view — ensures fresh data after re-login or back-navigation.
+  // Cleanup flag prevents stale in-flight responses from overwriting state after session expiry.
   useEffect(() => {
-    if (view !== 'cups' || cups.length > 0) return
+    if (view !== 'cups' || !authed) return
+    let isActive = true
     const loadCups = async () => {
       setLoading(true)
       try {
@@ -78,17 +81,18 @@ export default function ManagePage() {
           }
           if (!resp.ok) throw new Error('Failed to load cups')
           const data = await resp.json()
-          setCups(data.cups || [])
+          if (isActive) setCups(data.cups || [])
         })
       } catch (err) {
         if (!(err instanceof api.SessionExpiredError)) {
-          setError(err.message)
+          if (isActive) setError(err.message)
         }
       }
-      setLoading(false)
+      if (isActive) setLoading(false)
     }
     loadCups()
-  }, [view, withSessionCheck]) // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { isActive = false }
+  }, [view, authed, withSessionCheck]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load management data for selected cup
   const handleSelectCup = useCallback(async (cup) => {
