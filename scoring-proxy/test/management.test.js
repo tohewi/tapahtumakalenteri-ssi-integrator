@@ -220,9 +220,9 @@ describe('GET /api/manage/cups', () => {
         },
         {
           id: '101',
-          name: 'Recently Ended Cup',
-          starts: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
-          ends: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),        // 1 hour ago (ended)
+          name: 'Old Ended Cup',
+          starts: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
+          ends: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),   // 2 days ago (past 24h grace)
           status: 'on',
           get_content_type_key: 136,
           max_competitors: 25,

@@ -22,6 +22,8 @@ export default function ManagePage() {
     setCups([])
     setSelectedCup(null)
     setData(null)
+    // Clear saved navigation so next login starts with cup list
+    localStorage.removeItem(LS_MANAGE_STATE)
   }, [])
 
   const {
@@ -56,9 +58,12 @@ export default function ManagePage() {
     }))
   }, [authed, view, selectedCup])
 
-  // Load cups from management API (shows cups until end date, regardless of registration status)
+  // Load cups from management API (shows cups until end date, regardless of registration status).
+  // Always reloads when entering cups view — ensures fresh data after re-login or back-navigation.
+  // Cleanup flag prevents stale in-flight responses from overwriting state after session expiry.
   useEffect(() => {
-    if (view !== 'cups' || cups.length > 0) return
+    if (view !== 'cups' || !authed) return
+    let isActive = true
     const loadCups = async () => {
       setLoading(true)
       try {
@@ -76,17 +81,18 @@ export default function ManagePage() {
           }
           if (!resp.ok) throw new Error('Failed to load cups')
           const data = await resp.json()
-          setCups(data.cups || [])
+          if (isActive) setCups(data.cups || [])
         })
       } catch (err) {
         if (!(err instanceof api.SessionExpiredError)) {
-          setError(err.message)
+          if (isActive) setError(err.message)
         }
       }
-      setLoading(false)
+      if (isActive) setLoading(false)
     }
     loadCups()
-  }, [view, withSessionCheck]) // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { isActive = false }
+  }, [view, authed, withSessionCheck]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load management data for selected cup
   const handleSelectCup = useCallback(async (cup) => {
@@ -194,14 +200,7 @@ export default function ManagePage() {
       <ErrorBanner error={error} />
       {loading && <Spinner />}
 
-      {/* Device Tokens — QR Code Login (R7.7) */}
-      {view === 'cups' && !loading && (
-        <div className="p-3">
-          <DeviceTokens />
-        </div>
-      )}
-
-      {/* Cup picker — same as Registration */}
+      {/* Cup picker — primary purpose of the manage page */}
       {view === 'cups' && !loading && (
         <div className="p-3">
           <CupList
@@ -212,6 +211,13 @@ export default function ManagePage() {
             emptyLabel="Ei cupeja"
             allClickable
           />
+        </div>
+      )}
+
+      {/* Device Tokens — QR Code Login (R7.7), below cup list */}
+      {view === 'cups' && !loading && (
+        <div className="p-3">
+          <DeviceTokens />
         </div>
       )}
 

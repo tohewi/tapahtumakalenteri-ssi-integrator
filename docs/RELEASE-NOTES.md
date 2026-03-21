@@ -5,6 +5,50 @@
 
 ---
 
+## Release 7.7 — QR Code Login for Scoring (2026-03-20)
+
+**Requirements:** QR1–QR6 ✅ (all implemented)
+
+### Overview
+
+Adds QR code-based device token login for scoring devices (tablets, smartphones) at the shooting range. Eliminates manual credential entry on shared devices. Tokens are created and managed on the `#/manage` page, scoped to scoring only.
+
+### New Features
+
+- **Device token model** (`lib/device-tokens.js`): Server-side tokens stored in Redis with AES-256-GCM encryption of SSI credentials. SHA-256 token hash with timing-safe comparison. Configurable TTL (1–30 days, default 5). Encrypted raw token stored for QR code regeneration from any device.
+- **Token CRUD API** (`routes/auth-v7.js`): Create, list (with raw tokens for QR), and revoke device tokens. Manage scope required. Rate-limited.
+- **Token login endpoint** (`POST /auth/token-login`): Validates token, decrypts SSI credentials, authenticates with SSI, creates scoring session. No prior session required.
+- **QR code management UI** (`DeviceTokens.jsx`): Dual QR codes per token — 📱 mobile (`#/scoring`) and 📋 tablet (`#/scoring-tablet`). Printable layout. Device-independent (QR codes generated from server-stored encrypted tokens).
+- **Scoring app auto-login** (`App.jsx`, `TabletApp.jsx`): Detects `?token=` in URL hash, auto-authenticates via `tokenLogin()` API. Hash-based router updated to strip query params for route matching.
+
+### Security
+
+- AES-256-GCM encryption at rest (credentials + raw token)
+- Timing-safe token hash comparison (`crypto.timingSafeEqual`)
+- Scope locked to scoring — no manage/admin access via QR tokens
+- Token TTL validated (1–30 days)
+- XSS protection in print window (`escapeHtml`)
+- Credential leak (`e2e/.env`) found and scrubbed from git history
+- `.gitignore` broadened to global `.env`
+- Copilot code review: 7 of 21 findings fixed (encryption key source, TTL validation, timing-safe compare, error status codes, date formatting, popup null check, XSS)
+- All npm vulnerabilities fixed: scoring-proxy 0, scoring-ui 0
+
+### Release 7.7.1 — Management Page Hotfix (2026-03-21)
+
+- **Cup list visibility**: QR token cards (~600px) were rendered above cup list, pushing it below the fold. Moved DeviceTokens below CupList.
+- **Cup auto-restore on login**: localStorage manage state not cleared on logout — next login skipped cup selection. Now cleared on logout/session expiry.
+- **Same-day cup filtering**: `filterManageableCups` compared `ends` (midnight UTC) against current time — cups disappeared by afternoon. Added 24h management grace period after `ends`.
+- **Squad move audit logging**: `assign-squad` and `fix-squad` routes had only debug-level logging (suppressed at `LOG_LEVEL=info` in production). Added info-level audit trail: user, shooter, target squad, per-match results, outcome summary.
+
+### Test Status
+
+| Suite | Passing | Notes |
+|-------|--------:|-------|
+| Backend (scoring-proxy) | 211 | All green including updated cup-manage and management tests |
+| Frontend (scoring-ui) | — | Build passes, no regression |
+
+---
+
 ## Release 7.5 — Architecture V2 Foundation (2026-02-23)
 
 **Requirements:** ARCH1 ✅, ARCH2 ✅, ARCH5 ✅, ARCH3–ARCH4 📋
