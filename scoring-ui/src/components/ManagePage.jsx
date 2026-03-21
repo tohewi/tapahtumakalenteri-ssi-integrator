@@ -194,14 +194,7 @@ export default function ManagePage() {
       <ErrorBanner error={error} />
       {loading && <Spinner />}
 
-      {/* Device Tokens — QR Code Login (R7.7) */}
-      {view === 'cups' && !loading && (
-        <div className="p-3">
-          <DeviceTokens />
-        </div>
-      )}
-
-      {/* Cup picker — same as Registration */}
+      {/* Cup picker — primary purpose of the manage page */}
       {view === 'cups' && !loading && (
         <div className="p-3">
           <CupList
@@ -212,6 +205,13 @@ export default function ManagePage() {
             emptyLabel="Ei cupeja"
             allClickable
           />
+        </div>
+      )}
+
+      {/* Device Tokens — QR Code Login (R7.7), below cup list */}
+      {view === 'cups' && !loading && (
+        <div className="p-3">
+          <DeviceTokens />
         </div>
       )}
 
