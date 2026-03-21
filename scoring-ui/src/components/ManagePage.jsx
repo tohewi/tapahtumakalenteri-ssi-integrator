@@ -22,6 +22,8 @@ export default function ManagePage() {
     setCups([])
     setSelectedCup(null)
     setData(null)
+    // Clear saved navigation so next login starts with cup list
+    localStorage.removeItem(LS_MANAGE_STATE)
   }, [])
 
   const {
