@@ -306,9 +306,10 @@ export function filterManageableCups(events, now = new Date()) {
     .filter(e => {
       const regStarts = e.registration_starts ? new Date(e.registration_starts) : null
       if (!regStarts || regStarts > now) return false
+      // Keep cups manageable for 24h after end date (management needed on event day + after)
       const ends = e.ends ? new Date(e.ends) : null
       const fallbackEnd = new Date(new Date(e.starts).getTime() + 24 * 60 * 60 * 1000)
-      const effectiveEnd = ends || fallbackEnd
+      const effectiveEnd = new Date((ends || fallbackEnd).getTime() + 24 * 60 * 60 * 1000)
       return effectiveEnd > now
     })
     .map(c => {

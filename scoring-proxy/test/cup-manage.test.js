@@ -47,20 +47,26 @@ describe('filterManageableCups', () => {
     expect(cups).toHaveLength(0)
   })
 
-  it('excludes cups that have ended', () => {
-    const now = new Date('2026-03-02T12:00:00Z')
-    const cups = filterManageableCups([baseCup], now)
-    expect(cups).toHaveLength(0)
+  it('keeps cups manageable for 24h after end date', () => {
+    // Cup ends at 18:00 on March 1 — still visible 12h later
+    const now12hAfter = new Date('2026-03-02T06:00:00Z')
+    expect(filterManageableCups([baseCup], now12hAfter)).toHaveLength(1)
+    // 25h after end — should be gone
+    const now25hAfter = new Date('2026-03-02T19:01:00Z')
+    expect(filterManageableCups([baseCup], now25hAfter)).toHaveLength(0)
   })
 
-  it('uses starts + 24h fallback when no ends date', () => {
+  it('uses starts + 24h + 24h grace when no ends date', () => {
     const cupNoEnds = { ...baseCup, ends: null }
     // 12 hours after starts — should still be visible
     const now12h = new Date('2026-03-01T22:00:00Z')
     expect(filterManageableCups([cupNoEnds], now12h)).toHaveLength(1)
-    // 25 hours after starts — should be gone
-    const now25h = new Date('2026-03-02T11:01:00Z')
-    expect(filterManageableCups([cupNoEnds], now25h)).toHaveLength(0)
+    // 36 hours after starts (within 48h window) — still visible
+    const now36h = new Date('2026-03-02T22:00:00Z')
+    expect(filterManageableCups([cupNoEnds], now36h)).toHaveLength(1)
+    // 49 hours after starts — should be gone
+    const now49h = new Date('2026-03-03T11:01:00Z')
+    expect(filterManageableCups([cupNoEnds], now49h)).toHaveLength(0)
   })
 
   it('excludes non-cup events (wrong content type)', () => {
