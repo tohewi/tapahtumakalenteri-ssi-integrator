@@ -422,6 +422,8 @@ Quick-login for scoring devices (tablets, smartphones) at the range via QR codes
 
 ## Release 7.9 — GraphQL Cup Management
 
+> **Note**: This release MUST be developed as an **exploratory branch**. SSI's GraphQL API currently has significant limitations (e.g. `form_input` opaque scalar, missing mutations for squads) which means many tasks still require hybrid web-scraping fallbacks. Initial work should focus on mapping capabilities and confirming which legacy operations can be reliably replaced.
+
 Migrate Cup creation and maintenance from web scraping to SSI GraphQL API. The legacy `New-KupittaaCup.ps1` script uses web scraping (CSRF tokens, form POSTs, HTML parsing) which is fragile and breaks when SSI updates their UI. The GraphQL `create_event` mutation is now confirmed working (Feb 2026) and should be the primary method.
 
 | # | Requirement | Status |
