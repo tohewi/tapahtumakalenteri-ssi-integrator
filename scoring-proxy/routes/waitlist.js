@@ -8,6 +8,7 @@ import {
   listWaitlistAdminData,
   registerWaitlistEntry,
 } from '../lib/services/waitlist-service.js'
+import { findActiveEntryByEmail } from '../lib/waitlist/store.js'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -109,8 +110,7 @@ export function createWaitlistRouter({
       return res.status(400).json({ error: 'Virheelliset tiedot.' })
     }
 
-    const { entries } = await listWaitlistAdminData()
-    const entry = entries.find(item => item.email === email.trim().toLowerCase() && ['waiting', 'selected'].includes(item.status))
+    const entry = await findActiveEntryByEmail(email.trim())
     if (!entry) {
       return res.status(404).json({ error: 'Wait list entry not found.' })
     }
