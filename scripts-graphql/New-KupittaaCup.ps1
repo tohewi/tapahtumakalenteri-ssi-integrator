@@ -102,7 +102,22 @@ try {
     Write-Host "  Authenticated as: $($me.email)" -ForegroundColor Green
 }
 catch {
-    Write-Error "Authentication failed: $($_.Exception.Message)"
+    Write-Error "GraphQL Authentication failed: $($_.Exception.Message)"
+    exit 1
+}
+
+# Authenticate with SSI Web (for linking and squads)
+Write-Host "Authenticating with SSI Web (for linking and squads)..." -ForegroundColor Cyan
+try {
+    $connectScript = ".\archive\scripts-legacy\Connect-SSI.ps1"
+    $webSession = & $connectScript -Username $apiKeyConfig.email -Password $apiKeyConfig.password
+    if (-not $webSession) {
+        throw "Web session creation failed"
+    }
+    Write-Host "  Web session established" -ForegroundColor Green
+}
+catch {
+    Write-Error "Web Authentication failed: $($_.Exception.Message)"
     exit 1
 }
 
@@ -203,32 +218,33 @@ $cupData = @{
     information = $cupInformation
     region = $config.cup.region
     
-    # Cup-specific fields
-    scoringMode = $config.cup.scoringMode
-    matchRegistrationMode = $config.cup.matchRegistrationMode
-    matchCount = $config.cup.matchCount
+    # Cup-specific fields (SSI GraphQL expectations)
+    scoring_mode = $config.cup.scoringMode
+    match_registration_mode = $config.cup.matchRegistrationMode
+    count = $config.cup.matchCount
+    has_accepted_event_data_ass_agreement = $true
     
     # Dates/times
-    startsDate = $isoDate
-    startsTime = $startTime
-    endsDate = $isoDate
-    endsTime = $endTime
-    regStartDate = $regStartDate
-    regStartTime = $regStartTime
-    regCloseDate = $regCloseDate
-    regCloseTime = $regCloseTime
+    starts_date = $isoDate
+    starts_time = $startTime
+    ends_date = $isoDate
+    ends_time = $endTime
+    reg_start_date = $regStartDate
+    reg_start_time = $regStartTime
+    reg_close_date = $regCloseDate
+    reg_close_time = $regCloseTime
     
     # Additional fields
     timezone = $config.cup.timezone
     currency = $config.cup.currency
     venue = $config.cup.venue
     url = $config.cup.url
-    urlDisplay = $config.cup.urlDisplay
+    url_display = $config.cup.urlDisplay
     
-    # Categories and divisions
-    weaponGroups = $config.cup.weaponGroups
+    # Categories and divisions (arrays)
+    weapon_groups = $config.cup.weaponGroups
     categories = $config.cup.categories
-    competenceClasses = $config.cup.competenceClasses
+    competence_classes = $config.cup.competenceClasses
 }
 
 try {
@@ -284,31 +300,31 @@ foreach ($matchTypeConfig in $config.matchTypes) {
         
         # 25m Pistooli Kuvio specific fields
         layouts = $config.match.layouts
-        precisionStrings = $config.match.precisionStrings
-        precisionShotsPerString = $config.match.precisionShotsPerString
-        stringScoringFormat = $config.match.stringScoringFormat
+        precision_strings = $config.match.precisionStrings
+        precision_shots_per_string = $config.match.precisionShotsPerString
+        string_scoring_format = $config.match.stringScoringFormat
         
         # Required fields
         level = $config.match.level
-        numberOfTeamMembers = $config.match.numberOfTeamMembers
-        resultFromTeamMembers = $config.match.resultFromTeamMembers
+        number_of_team_members = $config.match.numberOfTeamMembers
+        result_from_team_members = $config.match.resultFromTeamMembers
         prematch = $config.match.prematch
-        maxPrematchCompetitors = $config.match.maxPrematchCompetitors
-        verifyUsing = $config.match.verifyUsing
+        max_prematch_competitors = $config.match.maxPrematchCompetitors
+        verify_using = $config.match.verifyUsing
         
         # Dates/times
-        startsDate = $isoDate
-        startsTime = $startTime
-        regStartDate = $regStartDate
-        regStartTime = $regStartTime
-        endsDate = $cupEndDate
-        endsTime = $cupEndTime
-        regCloseDate = $cupEndDate
-        regCloseTime = $cupEndTime
-        sqStartDate = $regStartDate
-        sqStartTime = $regStartTime
-        sqCloseDate = $isoDate
-        sqCloseTime = $startTime
+        starts_date = $isoDate
+        starts_time = $startTime
+        reg_start_date = $regStartDate
+        reg_start_time = $regStartTime
+        ends_date = $cupEndDate
+        ends_time = $cupEndTime
+        reg_close_date = $cupEndDate
+        reg_close_time = $cupEndTime
+        sq_start_date = $regStartDate
+        sq_start_time = $regStartTime
+        sq_close_date = $isoDate
+        sq_close_time = $startTime
         
         # Additional fields
         timezone = $config.match.timezone
@@ -316,9 +332,9 @@ foreach ($matchTypeConfig in $config.matchTypes) {
         venue = $config.match.venue
         
         # Categories and divisions
-        weaponGroups = $config.match.weaponGroups
+        weapon_groups = $config.match.weaponGroups
         categories = $config.match.categories
-        competenceClasses = $config.match.competenceClasses
+        competence_classes = $config.match.competenceClasses
     }
     
     # Get sub_rule from matchType config (e.g., 'p2p' for 25m Fast-pistol)
@@ -353,7 +369,8 @@ foreach ($match in $createdMatches) {
     Write-Host "Linking $($match.Name) (ID: $($match.Id)) to Cup..." -ForegroundColor Gray
     
     try {
-        $success = Add-SSICupMatch -Headers $headers -CupId $cupEventInfo.Id -MatchId $match.Id -ComponentNumber $matchNumber
+        # Use web fallback since addCupMatch mutation is missing from GQL
+        $success = Add-SSICupMatchWeb -Session $webSession -CupId $cupEventInfo.Id -MatchId $match.Id -ComponentNumber $matchNumber
         
         if ($success) {
             Write-Host "  SUCCESS: Linked $($match.Name) as component #$matchNumber" -ForegroundColor Green
@@ -381,8 +398,13 @@ foreach ($match in $createdMatches) {
         $maxShooters = $squadDef.maxShooters
         
         $squadData = @{
-            quantity = 1
-            maxCompetitors = $maxShooters
+            # Use web fallback since createSquad mutation is missing from GQL
+            $success = quantity = 1WebSsionwbSsion
+           if($sccess) {
+                maxCompetitors = $maxShooters
+            } else {
+                Write-Host "  WARNING: Squad creation may have failed for '$squadName'. Check manually." -ForegroundColor Yellow
+            }
             registration = "aa"  # Anyone can register
             comment = $squadName
             startsDate = $regStartDate

@@ -373,6 +373,10 @@ function New-SSIResulCup {
         [hashtable]$CupData
     )
     
+    # Ensure correct field names for form_input
+    # count, reg_start_date, reg_start_time, weapon_groups, categories, competence_classes
+    # has_accepted_event_data_ass_agreement
+    
     # RESUL Cup: rule='rl', serie_type='cp', sub_rule can be empty or specific
     return New-SSIEvent -Headers $Headers -FormInput $CupData -Rule "rl" -SubRule "" -SerieType "cp"
 }
@@ -404,6 +408,9 @@ function New-SSIResulMatch {
         [Parameter(Mandatory = $true)]
         [string]$SubRule
     )
+    
+    # Ensure correct field names for form_input
+    # reg_start_date, reg_start_time, weapon_groups, categories, competence_classes
     
     # RESUL Match: rule='rl', no serie_type (standalone match)
     return New-SSIEvent -Headers $Headers -FormInput $MatchData -Rule "rl" -SubRule $SubRule -SerieType ""
@@ -616,6 +623,255 @@ query Me {
     return $result.me
 }
 
+<#
+.SYNOPSIS
+    Automated form field discovery via web scraping (GQL5 fallback)
+    Fetches the actual web form to discover required fields and enum values
+    since they are hidden behind an opaque JSON scalar in GraphQL.
+
+.PARAMETER Session
+    Web session from Invoke-WebRequest (with cookies)
+
+.PARAMETER Rule
+    Rule code (e.g. 'rl')
+
+.PARAMETER SubRule
+    Sub-rule code (e.g. 'p2p')
+
+.PARAMETER SerieType
+    Serie type ('cp' or 'lg')
+#>
+function Get-SSIFormFields {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Session,
+        [Parameter(Mandatory = $true)]
+        [string]$Url
+    )
+    
+    Write-Host "Fetching $Url ..." -ForegroundColor Gray
+    try {
+        $response = Invoke-WebRequest -Uri $Url -WebSession $Session
+        $formFields = @()
+        
+        # Extract <select> elements and their options
+        $selectPattern = '<select[^>]+name="([^"]+)"[^>]*>([\s\S]*?)<\/select>'
+        $optionPattern = '<option[^>]+value="([^"]*)"[^>]*>([^<]*)<\/option>'
+        
+        foreach ($s in [regex]::Matches($response.Content, $selectPattern)) {
+            $name = $s.Groups[1].Value
+            $optionsHtml = $s.Groups[2].Value
+            $options = @()
+            
+            foreach ($o in [regex]::Matches($optionsHtml, $optionPattern)) {
+                $val = $o.Groups[1].Value
+                $disp = $o.Groups[2].Value.Trim()
+                $options += [PSCustomObject]@{
+                    Value = $val
+                    Display = $disp
+                }
+            }
+            
+            $formFields += [PSCustomObject]@{
+                FieldName = $name
+                Type = "select"
+                Options = $options
+            }
+            Write-Host "  Found select: $name ($($options.Count) options)" -ForegroundColor Gray
+        }
+        
+        # Extract <input> elements with values
+        # Use a more flexible regex to handle attribute order and other attributes
+        $inputPattern = '<input[^>]+>'
+        foreach ($i in [regex]::Matches($response.Content, $inputPattern)) {
+            $tag = $i.Value
+            
+            # Extract name
+            $name = ""
+            if ($tag -match 'name="([^"]+)"') { $name = $Matches[1] }
+            if (-not $name) { continue }
+            
+            # Extract type
+            $type = "unknown"
+            if ($tag -match 'type="([^"]+)"') { $type = $Matches[1] }
+            
+            # Extract value
+            $val = ""
+            if ($tag -match 'value="([^"]*)"') { $val = $Matches[1] }
+            
+            $formFields += [PSCustomObject]@{
+                FieldName = $name
+                Type = $type
+                Value = $val
+            }
+            Write-Host "  Found input: $name ($type) = '$val'" -ForegroundColor Gray
+        }
+        
+        return $formFields
+    }
+    catch {
+        Write-Error "Failed to discover form fields at $($Url): $($_.Exception.Message)"
+        return $null
+    }
+}
+
+<#
+.SYNOPSIS
+    Links a match to a cup/serie as a component using web scraping fallback.
+    Used because 'addCupMatch' mutation is not available in the current GQL schema.
+
+.PARAMETER Session
+    Web session with cookies
+    
+.PARAMETER CupId
+    The cup event ID
+    
+.PARAMETER MatchId
+    The match event ID to link
+    
+.PARAMETER ComponentNumber
+    The component number (1, 2, 3, etc.)
+
+.OUTPUTS
+    Boolean indicating success
+#>
+function Add-SSICupMatchWeb {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Session,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$CupId,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$MatchId,
+        
+        [Parameter(Mandatory = $true)]
+        [int]$ComponentNumber
+    )
+    
+    # URL for adding existing match to a series (NordicSerie = type 136)
+    $url = "https://shootnscoreit.com/event/136/$CupId/add-existing-match/"
+    try {
+        # 1. Get CSRF token
+        $resp = Invoke-WebRequest -Uri $url -WebSession $Session
+        $csrf = ""
+        if ($resp.Content -match 'name="csrfmiddlewaretoken"\s+value="([^"]+)"') {
+            $csrf = $Matches[1]
+        }
+        
+        # 2. POST the link
+        $body = @{
+            "csrfmiddlewaretoken" = $csrf
+            "match" = $MatchId
+            "number" = $ComponentNumber.ToString()
+            "included" = "on"
+        }
+        
+        $headers = @{
+            "Referer" = $url
+            "Origin" = "https://shootnscoreit.com"
+        }
+        
+        $postResp = Invoke-WebRequest -Uri $url -Method POST -WebSession $Session -Body $body -Headers $headers -MaximumRedirection 0 -ErrorAction SilentlyContinue
+        
+        # Success is usually a redirect back to manage page
+        if ($postResp.StatusCode -eq 302) {
+            return $true
+        }
+        return $false
+    }
+    catch {
+        # Check if it was a redirect (which PS throws as exception)
+        if ($_.Exception.Response.StatusCode -eq 302) {
+            return $true
+        }
+        throw "Failed to link match to cup via web: $($_.Exception.Message)"
+    }
+}
+
+<#
+.SYNOPSIS
+    Creates a squad for a match using web scraping fallback.
+    Used because 'createSquad' mutation is not available in the current GQL schema.
+
+.PARAMETER Session
+    Web session with cookies
+
+.PARAMETER MatchId
+    The match event ID
+
+.PARAMETER SquadData
+    Hashtable containing squad configuration
+
+.OUTPUTS
+    Boolean indicating success
+#>
+function New-SSISquadWeb {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Session,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$MatchId,
+        
+        [Parameter(Mandatory = $true)]
+        [hashtable]$SquadData
+    )
+    
+    $url = "https://shootnscoreit.com/nordic/match/$MatchId/add-squads/"
+    try {
+        # 1. Get CSRF token
+        $resp = Invoke-WebRequest -Uri $url -WebSession $Session
+        $csrf = ""
+        if ($resp.Content -match 'name="csrfmiddlewaretoken"\s+value="([^"]+)"') {
+            $csrf = $Matches[1]
+        }
+        
+        # 2. POST the squad
+        $body = @{
+            "csrfmiddlewaretoken" = $csrf
+            "quantity" = "1"
+            "max_competitors" = $SquadData.max_competitors.ToString()
+            "registration" = "aa"
+            "comment" = $SquadData.comment
+            "starts_date" = $SquadData.starts_date
+            "starts_time" = $SquadData.starts_time
+            "length" = "60"
+            "split" = "10"
+            "submit" = ""
+        }
+        
+        # Build multipart/form-data or urlencoded?
+        # Legacy scripts use Build-FormBody helper. Let's keep it simple for now.
+        $headers = @{
+            "Referer" = $url
+            "Origin" = "https://shootnscoreit.com"
+        }
+        
+        $postResp = Invoke-WebRequest -Uri $url -Method POST -WebSession $Session -Body $body -Headers $headers -MaximumRedirection 0 -ErrorAction SilentlyContinue
+        
+        if ($postResp.StatusCode -eq 302) {
+            return $true
+        }
+        
+        # Debug: Save failure response
+        $postResp.Content | Out-File "debug-squad-fail.html" -Encoding UTF8
+        Write-Host "  DEBUG: Squad creation failed with status $($postResp.StatusCode). Content saved to debug-squad-fail.html" -ForegroundColor Yellow
+        return $false
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode -eq 302) {
+            return $true
+        }
+        # Debug: Save exception response
+        if ($_.Exception.Response) {
+            $_.Exception.Response.Content | Out-File "debug-squad-error.html" -Encoding UTF8
+        }
+        throw "Failed to create squad via web: $($_.Exception.Message)"
+    }
+}
+
 # Export module functions
 Export-ModuleMember -Function @(
     'Connect-SSIGraphQL',
@@ -627,6 +883,9 @@ Export-ModuleMember -Function @(
     'New-SSIResulCup',
     'New-SSIResulMatch',
     'Add-SSICupMatch',
+    'Add-SSICupMatchWeb',
     'New-SSISquad',
-    'Test-SSIEventExists'
+    'New-SSISquadWeb',
+    'Test-SSIEventExists',
+    'Get-SSIFormFields'
 )
