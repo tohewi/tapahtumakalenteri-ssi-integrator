@@ -215,6 +215,7 @@ export const fi = {
   waitlistAdminNoDate: 'Ei päivää asetettu',
   waitlistAdminParticipantCount: 'Osallistujia',
   waitlistAdminCompleteGroupButton: 'Merkitse suoritetuksi',
+  waitlistAdminThresholdReached: 'Jonotuslista on saavuttanut suunnittelukynnyksen — on aika harkita uuden perehdytysryhmän järjestämistä.',
 }
 
 // English UI strings
@@ -434,6 +435,7 @@ export const en = {
   waitlistAdminNoDate: 'No date set',
   waitlistAdminParticipantCount: 'Participants',
   waitlistAdminCompleteGroupButton: 'Mark completed',
+  waitlistAdminThresholdReached: 'The wait list has reached the planning threshold — consider organising a new induction group.',
 }
 
 // Detect browser language and return appropriate translations

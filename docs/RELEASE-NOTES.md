@@ -5,7 +5,48 @@
 
 ---
 
-## Release 7.7 — QR Code Login for Scoring (2026-03-20)
+## Release 7.8 — Kupittaa Reservilaisammunta Induction Wait List (2026-04-12)
+
+**Requirements:** WL1–WL13, WL-SEC1–SEC7, WL-CFG1–CFG3, WL-OPS1–OPS3, WL-UX1–UX2, WL-TEST1–TEST4 ✅ (all 32 implemented)
+
+### Overview
+
+Adds the Kupittaa Reservilaisammunta induction wait list feature to the existing website. People join the public wait list without SSI login — providing their name, email, association, and equipment choice — and the system verifies their identity against SSI before accepting the entry. Administrators log in via SSI (restricted to a configured allowlist) and can form arbitrary induction groups, mark completions, and monitor planning thresholds.
+
+### New Features
+
+- **Public wait list page** (`InductionWaitlistPage.jsx`): Mobile-first public form accessible at `#/induction-waitlist`. Collects first name, last name, SSI email, association/club, and equipment choice (club .22 pistol or own pistol). Math captcha verification before submission. Finnish and English bilingual support via existing i18n model.
+- **Hard SSI identity validation** (`server.js` + `participants.js`): Registration hard-validates that the submitted email exists in SSI using `ssiFindUserByEmail`. Non-SSI emails are rejected with a user-facing error.
+- **Atomic registration** (`lib/services/waitlist-service.js`): Duplicate active entries blocked by email. Confirmation email sent via Resend; if email fails, the entry is deleted atomically — no silent partial registrations.
+- **Admin wait list page** (`InductionWaitlistAdminPage.jsx`): SSI login restricted to `adminAllowlist` in config. Shows waiting, selected, completed, and withdrawn entry counts plus equipment breakdown. Admins select arbitrary participants into named induction groups with optional planned date.
+- **Threshold visibility** (WL11): Admin data API returns `threshold` and `thresholdReached`. Admin page shows an amber banner when the waiting count reaches the configured threshold (default 5), prompting induction planning.
+- **Induction group lifecycle** (`lib/services/waitlist-service.js`): Groups are first-class records with planned date, status (`planned` → `completed`), and full audit metadata. Completing a group marks all participants as `completed` and sends status-change emails.
+- **State change emails** (`lib/email.js`): Bilingual email notifications for registration confirmation, induction group selection, completion (`joined induction`), and cancellation/withdrawal.
+- **Self-cancellation** (`POST /api/v1/waitlist/cancel`): Participants can cancel by email without authentication.
+- **Admin cancellation** (`POST /api/v1/waitlist/admin/entries/:id/cancel`): Admins can cancel any active entry.
+- **Redis persistence** (`lib/waitlist/store.js`): All wait list data stored in Redis with UUID IDs, stable timestamps, and per-entry audit arrays. Survives restarts and deployments.
+- **Configuration** (`config/kupittaa-induction-waitlist-config.yml`): Admin allowlist, SSI validation group ID, induction threshold, routes, and notification language support all defined in YAML config.
+- **Auth scope** (`routes/auth-v7.js`, `middleware/auth-v7.js`): `waitlist` scope added as a valid login scope. Login requires both valid SSI credentials and allowlist membership.
+- **Navigation** (`HomePage.jsx`): Wait list and admin entry points added to the home page alongside existing features.
+
+### Security
+
+- Public inputs validated with explicit bounds (name ≤ 100 chars, association ≤ 150 chars, email ≤ 254 chars, equipment strict enum, captcha UUID + integer range)
+- Admin endpoints require both SSI session (`requireAuth('waitlist')`) and allowlist check
+- Rate limiting and body size limits inherited from existing registration pattern
+- User-provided strings escaped with `escapeHtml` before use in email HTML templates
+- No SSI internals exposed in public API responses
+
+### Test Status
+
+| Suite | Passing | Notes |
+|-------|--------:|-------|
+| Backend (scoring-proxy) | 241 | Includes 7 new waitlist test files (waitlist-router, waitlist-service, waitlist-admin-router, waitlist-admin-service, waitlist-store, waitlist-config, auth-v7-waitlist-scope) |
+| Frontend (scoring-ui) | 197 | Includes waitlist-api and waitlist-pages tests |
+
+---
+
+
 
 **Requirements:** QR1–QR6 ✅ (all implemented)
 

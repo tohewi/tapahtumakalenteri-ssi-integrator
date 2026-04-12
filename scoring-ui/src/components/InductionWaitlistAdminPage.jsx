@@ -16,6 +16,7 @@ export default function InductionWaitlistAdminPage() {
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
   const [entries, setEntries] = useState([])
   const [groups, setGroups] = useState([])
+  const [thresholdReached, setThresholdReached] = useState(false)
   const [selectedIds, setSelectedIds] = useState([])
   const [groupLabel, setGroupLabel] = useState('')
   const [plannedDate, setPlannedDate] = useState('')
@@ -41,6 +42,7 @@ export default function InductionWaitlistAdminPage() {
       const data = await fetchWaitlistAdminData()
       setEntries(data.entries || [])
       setGroups(data.groups || [])
+      setThresholdReached(data.thresholdReached === true)
     } catch (err) {
       if (err.status === 401 || err.status === 403) {
         setSessionExpiredMessage(t.waitlistAdminSessionExpired)
@@ -207,6 +209,12 @@ export default function InductionWaitlistAdminPage() {
           <SummaryCard label={t.waitlistAdminCompletedCount} value={completedEntries.length} tone="blue" />
           <SummaryCard label={t.waitlistAdminWithdrawnCount} value={withdrawnEntries.length} tone="slate" />
         </div>
+
+        {thresholdReached && (
+          <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 text-sm text-amber-900 font-medium">
+            ⚠️ {t.waitlistAdminThresholdReached}
+          </div>
+        )}
 
         <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
           <section className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">

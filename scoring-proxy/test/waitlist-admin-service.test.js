@@ -94,4 +94,19 @@ describe('wait list admin service', () => {
     expect(updated.status).toBe('withdrawn')
     expect((await getEntry(entry.id)).status).toBe('withdrawn')
   })
+
+  it('includes threshold and thresholdReached in admin data response', async () => {
+    const data = await listWaitlistAdminData()
+    expect(typeof data.threshold).toBe('number')
+    expect(data.threshold).toBeGreaterThan(0)
+    expect(data.thresholdReached).toBe(false)
+
+    // Seed entries up to threshold
+    for (let i = 0; i < data.threshold; i++) {
+      await seedEntry(`user${i}@example.com`)
+    }
+
+    const dataAfter = await listWaitlistAdminData()
+    expect(dataAfter.thresholdReached).toBe(true)
+  })
 })

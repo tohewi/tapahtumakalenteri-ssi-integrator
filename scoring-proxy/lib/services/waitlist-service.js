@@ -11,6 +11,7 @@ import {
   updateEntry,
   updateInductionGroup,
 } from '../waitlist/store.js'
+import { getInductionThreshold } from '../waitlist/config-loader.js'
 
 const EQUIPMENT_CHOICES = new Set(['need-club-22', 'own-pistol'])
 
@@ -63,7 +64,15 @@ export async function listWaitlistAdminData() {
     listInductionGroups(),
   ])
 
-  return { entries, groups }
+  const threshold = getInductionThreshold()
+  const waitingCount = entries.filter(e => e.status === 'waiting').length
+
+  return {
+    entries,
+    groups,
+    threshold,
+    thresholdReached: waitingCount >= threshold,
+  }
 }
 
 export async function createInductionGroupSelection({ participantIds, label, plannedDate, actorEmail }) {
