@@ -47,6 +47,7 @@ export const sessionConfig = {
   // Scope-specific TTL overrides (in ms)
   scopeTTL: {
     staffing: 5 * 60 * 1000, // 5 minutes for staffing
+    waitlist: 15 * 60 * 1000, // 15 minutes for wait list admin work
   },
 }
 

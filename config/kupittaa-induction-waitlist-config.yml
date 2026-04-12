@@ -1,0 +1,19 @@
+# Kupittaa Reservilaisammunta induction wait list configuration
+
+adminAllowlist: []
+
+ssiUserValidation:
+  groupId: "25874"
+
+induction:
+  threshold: 5
+
+routes:
+  publicPath: "#/induction-waitlist"
+  adminPath: "#/induction-waitlist-admin"
+
+notifications:
+  fromName: "TurRes Wait List"
+  supportedLanguages:
+    - fi
+    - en

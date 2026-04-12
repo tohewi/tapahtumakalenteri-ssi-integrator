@@ -4,6 +4,7 @@
 // ============================================================
 
 export {
+  ssiFindUserByEmail,
   ssiSearchAndAddParticipant,
   ssiFindAndDeleteCupParticipant,
   ssiFindAndApproveCupParticipant,

@@ -1008,6 +1008,43 @@ export async function ssiGetMatchOfficials(eventContentType, eventId, cookies) {
 // officials values: MD=Match Director, QM=Quarter Master, etc.
 // ============================================================
 
+export async function ssiFindUserByEmail(groupId, email, cookies) {
+  const debug = log.isEnabled('debug')
+  const nextUrl = '/dashboard/'
+  const searchUrl = `${SSI_BASE_URL}/groups/${groupId}/role/search/?next=${nextUrl}`
+
+  const searchData = new URLSearchParams()
+  searchData.append('last_name', '')
+  searchData.append('first_name', '')
+  searchData.append('email', email)
+  searchData.append('submit', 'Search')
+
+  if (debug) console.log(`[user-search] POST search email=${email} to ${searchUrl}`)
+  const searchResp = await fetch(searchUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': formatCookies(cookies),
+      'Referer': searchUrl,
+      'Origin': SSI_BASE_URL,
+    },
+    body: searchData.toString(),
+    redirect: 'follow',
+  })
+
+  if (!searchResp.ok) {
+    throw new Error(`User search failed HTTP ${searchResp.status}`)
+  }
+
+  const searchHtml = await searchResp.text()
+  if (searchHtml.includes('no results') || searchHtml.includes('gave no results')) {
+    return { found: false, userId: null }
+  }
+
+  const addLink = searchHtml.match(/\/groups\/\d+\/add-user-with-role\/(\d+)\//)
+  return { found: !!addLink, userId: addLink?.[1] || null }
+}
+
 export async function ssiAddToMatchManagement(groupId, eventContentType, eventId, email, role, officials, cookies) {
   const debug = log.isEnabled('debug')
   const nextUrl = `/event/${eventContentType}/${eventId}/staff/`

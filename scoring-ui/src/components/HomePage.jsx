@@ -36,6 +36,28 @@ const features = [
     color: 'green',
   },
   {
+    href: '#/induction-waitlist',
+    titleKey: 'waitlistTitle',
+    descriptionKey: 'waitlistDescription',
+    icon: (
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7h8M8 12h8m-8 5h5M6 3h12a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2z" />
+      </svg>
+    ),
+    color: 'teal',
+  },
+  {
+    href: '#/induction-waitlist-admin',
+    titleKey: 'waitlistAdminTitle',
+    descriptionKey: 'waitlistAdminDescription',
+    icon: (
+      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422A12.083 12.083 0 0112 20.055 12.083 12.083 0 015.84 10.578L12 14zm0 0v6" />
+      </svg>
+    ),
+    color: 'amber',
+  },
+  {
     href: '#/manage',
     titleKey: 'managementTitle',
     descriptionKey: 'managementDescription',

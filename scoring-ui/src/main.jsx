@@ -5,6 +5,8 @@ import HomePage from './components/HomePage.jsx'
 import App from './App.jsx'
 import TabletApp from './TabletApp.jsx'
 import RegisterPage from './components/RegisterPage.jsx'
+import InductionWaitlistPage from './components/InductionWaitlistPage.jsx'
+import InductionWaitlistAdminPage from './components/InductionWaitlistAdminPage.jsx'
 import ManagePage from './components/ManagePage.jsx'
 import ReportPage from './components/ReportPage.jsx'
 import SummaryReportPage from './components/SummaryReportPage.jsx'
@@ -65,6 +67,12 @@ function Router() {
   }
   if (path === '#/register') {
     return <RegisterPage />
+  }
+  if (path === '#/induction-waitlist') {
+    return <InductionWaitlistPage />
+  }
+  if (path === '#/induction-waitlist-admin') {
+    return <InductionWaitlistAdminPage />
   }
   if (path === '#/manage') {
     return <ManagePage />
