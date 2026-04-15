@@ -14,10 +14,14 @@ import { createRegistrationRouter } from './routes/registration.js'
 import { createReportsRouter } from './routes/reports.js'
 import { createManagementRouter } from './routes/management.js'
 import { createStaffingRouter } from './routes/staffing.js'
+import { createWaitlistRouter } from './routes/waitlist.js'
 import { initRedis, getActiveSessionCount, isUsingRedis, touchSession } from './lib/session/index.js'
 import { requireAuthV7 } from './middleware/auth-v7.js'
 import { createAuthV7Router } from './routes/auth-v7.js'
 import apiV1Router from './routes/v1/index.js'
+import { ssiFindUserByEmail } from './lib/ssi-core/participants.js'
+import { sendWaitlistRegistrationConfirmation, sendWaitlistStatusChangeNotification } from './lib/email.js'
+import { getValidationGroupId } from './lib/waitlist/config-loader.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -401,6 +405,24 @@ const registrationRouter = createRegistrationRouter({
 })
 app.use(`${API_V1_BASE}/register`, registrationRouter)
 app.use(`${API_LEGACY_BASE}/register`, legacyApiAlias, registrationRouter)
+
+const waitlistRouter = createWaitlistRouter({
+  captchaChallenges,
+  CAPTCHA_TTL,
+  captchaLimiter,
+  bodyLimit: registerBodyLimit,
+  submitLimiter: registerLimiter,
+  requireAuth,
+  emailExistsInSSI: async (email) => {
+    const admin = await getAdminSession()
+    const result = await ssiFindUserByEmail(getValidationGroupId(), email, admin.cookies)
+    return result.found
+  },
+  sendConfirmationEmail: sendWaitlistRegistrationConfirmation,
+  sendStatusChangeEmail: sendWaitlistStatusChangeNotification,
+})
+app.use(`${API_V1_BASE}/waitlist`, waitlistRouter)
+app.use(`${API_LEGACY_BASE}/waitlist`, legacyApiAlias, waitlistRouter)
 
 // Reports routes
 const reportsRouter = createReportsRouter({

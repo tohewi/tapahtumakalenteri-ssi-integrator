@@ -8,7 +8,8 @@
 import express from 'express'
 import { ssiGraphQL, ssiLogin } from '../lib/ssi-core/graphql.js'
 import { log } from '../lib/logger.js'
-import { isAdminEmail } from '../lib/staffing/config-loader.js'
+import { isAdminEmail as isStaffingAdminEmail } from '../lib/staffing/config-loader.js'
+import { isAdminEmail as isWaitlistAdminEmail } from '../lib/waitlist/config-loader.js'
 import { AppError } from '../lib/errors/AppError.js'
 import { createDeviceToken, validateDeviceToken, listDeviceTokens, revokeDeviceToken } from '../lib/device-tokens.js'
 import {
@@ -50,13 +51,18 @@ export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth,
     }
 
     // Validate scope
-    const validScopes = ['scoring', 'manage', 'reporting', 'staffing']
+    const validScopes = ['scoring', 'manage', 'reporting', 'staffing', 'waitlist']
     const sessionScope = scope && validScopes.includes(scope) ? scope : 'scoring'
 
     // Staffing scope: cross-check email against instructor allowlist
-    if (sessionScope === 'staffing' && !isAdminEmail(email)) {
+    if (sessionScope === 'staffing' && !isStaffingAdminEmail(email)) {
       auditLogin(email, req.ip, false, 'Not on instructor list')
       return res.status(403).json({ error: 'Not authorized. You are not on the instructor list.' })
+    }
+
+    if (sessionScope === 'waitlist' && !isWaitlistAdminEmail(email)) {
+      auditLogin(email, req.ip, false, 'Not on wait list admin allowlist')
+      return res.status(403).json({ error: 'Not authorized. You are not on the wait list admin list.' })
     }
 
     try {

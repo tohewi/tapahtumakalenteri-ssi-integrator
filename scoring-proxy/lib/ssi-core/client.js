@@ -1008,6 +1008,70 @@ export async function ssiGetMatchOfficials(eventContentType, eventId, cookies) {
 // officials values: MD=Match Director, QM=Quarter Master, etc.
 // ============================================================
 
+export async function ssiFindUserByEmail(groupId, email, cookies) {
+  const debug = log.isEnabled('debug')
+  const nextUrl = '/dashboard/'
+  const searchUrl = `${SSI_BASE_URL}/groups/${groupId}/role/search/?next=${nextUrl}`
+
+  const searchData = new URLSearchParams()
+  searchData.append('last_name', '')
+  searchData.append('first_name', '')
+  searchData.append('email', email)
+  searchData.append('submit', 'Search')
+
+  if (debug) console.log(`[user-search] POST search email=${email} to ${searchUrl}`)
+  const searchResp = await fetch(searchUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': formatCookies(cookies),
+      'Referer': searchUrl,
+      'Origin': SSI_BASE_URL,
+    },
+    body: searchData.toString(),
+    redirect: 'follow',
+  })
+
+  if (!searchResp.ok) {
+    throw new Error(`User search failed HTTP ${searchResp.status}`)
+  }
+
+  const searchHtml = await searchResp.text()
+  const errorMatch = searchHtml.match(/<ul[^>]*(?:errorlist|text-danger)[^>]*>([\s\S]*?)<\/ul>/i)
+  const errorText = errorMatch ? errorMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : ''
+
+  if (/\b(?:gave\s+)?no results\b/i.test(searchHtml) || /\bei tuloksia\b/i.test(searchHtml) || /\b(?:gave\s+)?no results\b/i.test(errorText) || /\bei tuloksia\b/i.test(errorText)) {
+    return { found: false, userId: null }
+  }
+
+  if (errorText) {
+    throw new Error(`User search returned SSI form error: ${errorText}`)
+  }
+
+  // A user can already be in the target group, in which case SSI may show the
+  // result row without an add-user link. For wait list validation we care about
+  // SSI identity existence, not whether the person can be added to this group.
+  const actionLink = searchHtml.match(/\/groups\/\d+\/(?:add-user-with-role|edit-user-role|remove-user-with-role|remove-user)\/(\d+)\//)
+  if (actionLink) {
+    return { found: true, userId: actionLink[1] || null }
+  }
+
+  const escapedEmail = String(email).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const resultRowWithEmail = new RegExp(`<tr[^>]*>[\\s\\S]*?<td[^>]*>[\\s\\S]*?${escapedEmail}[\\s\\S]*?<\\/td>[\\s\\S]*?<\\/tr>`, 'i')
+  if (resultRowWithEmail.test(searchHtml)) {
+    return { found: true, userId: null }
+  }
+
+  // SSI's group search sometimes renders a generic result table without the
+  // email cell or an actionable add/edit link. For wait list validation, a
+  // non-error result table is still sufficient evidence that the email exists.
+  if (/<table[\s\S]*?<tr[\s\S]*?<\/tr>[\s\S]*?<\/table>/i.test(searchHtml)) {
+    return { found: true, userId: null }
+  }
+
+  return { found: false, userId: null }
+}
+
 export async function ssiAddToMatchManagement(groupId, eventContentType, eventId, email, role, officials, cookies) {
   const debug = log.isEnabled('debug')
   const nextUrl = `/event/${eventContentType}/${eventId}/staff/`

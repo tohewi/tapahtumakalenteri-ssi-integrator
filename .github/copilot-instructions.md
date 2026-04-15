@@ -7,6 +7,7 @@
   - Example: `R12-feature-staffing-filters` or `R07-hotfix-squad-sync`.
 - **Commit messages:** explain how the commit advances the requirement toward completion. Include the requirement number in the subject or body.
 - When a requirement is completed and tests pass, **update the requirements document** to mark it ✅ **Implemented/Ready**.
+- **Tag every release:** When a release is completed (requirements ✅, tests pass, merged to `main`), create a git tag using `git tag vX.Y.Z` where `X.Y.Z` matches the release number. Push the tag with `git push origin vX.Y.Z`. Hotfix releases use `vX.Y.Z` patch increments (e.g., `v7.7.1`). Always tag before closing the release branch.
 - **Keep release notes in sync with requirements:** When completing a release or significant feature, update `docs/RELEASE-NOTES.md` with a new section. Release numbers in release notes **must match** the release numbers in `docs/requirements/requirements.md`. Do not invent new version numbers — use the requirement release number (e.g., "Release 7.2" not "Version 5.0"). Include: overview, new features, bug fixes, requirements met, and test status.
 - **Hotfix release numbering must match the base release stream:** Always align hotfix release numbers with the related requirement/base release (for example, R74 hotfixes use `Release 7.4.x`, such as `7.4.1`, `7.4.2`). Do not relabel hotfixes into unrelated release lines.
 - **Keep instructions in sync:** if you modify these agent instructions, update **both** `AGENTS.md` and `.github/copilot-instructions.md` with the same changes.

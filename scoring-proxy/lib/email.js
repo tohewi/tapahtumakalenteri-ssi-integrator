@@ -120,3 +120,120 @@ Tämä viesti on lähetetty automaattisesti.`
     return { success: false, error: err.message }
   }
 }
+
+export async function sendWaitlistRegistrationConfirmation(entry) {
+  if (!resend) {
+    console.warn('[email] RESEND_API_KEY not configured — cannot send wait list confirmation email')
+    return { success: false, error: 'Email not configured' }
+  }
+
+  const isEnglish = entry.preferredLanguage === 'en'
+  const subject = isEnglish
+    ? 'Induction wait list confirmation'
+    : 'Perehdytyksen jonotuslistan vahvistus'
+
+  const greeting = isEnglish ? 'Hello' : 'Hei'
+  const bodyIntro = isEnglish
+    ? 'You have been added to the Kupittaa Reservilaisammunta induction wait list.'
+    : 'Sinut on lisätty Kupittaan reserviläisammunnan perehdytyksen jonotuslistalle.'
+  const equipmentText = entry.equipmentChoice === 'need-club-22'
+    ? (isEnglish ? 'Needs club .22 pistol' : 'Tarvitsee seuran .22 pistoolin')
+    : (isEnglish ? 'Brings own pistol' : 'Tulee omalla pistoolilla')
+
+  const html = `
+<!DOCTYPE html>
+<html lang="${isEnglish ? 'en' : 'fi'}">
+<head><meta charset="utf-8"></head>
+<body style="font-family:Arial,Helvetica,sans-serif;color:#333;max-width:600px;margin:0 auto;padding:20px;">
+  <h2 style="color:#1a73e8;">${escapeHtml(subject)}</h2>
+  <p>${greeting} ${escapeHtml(entry.firstName)},</p>
+  <p>${bodyIntro}</p>
+  <ul>
+    <li>${isEnglish ? 'Email' : 'Sähköposti'}: ${escapeHtml(entry.email)}</li>
+    <li>${isEnglish ? 'Association' : 'Yhdistys'}: ${escapeHtml(entry.association)}</li>
+    <li>${isEnglish ? 'Equipment' : 'Varustus'}: ${escapeHtml(equipmentText)}</li>
+  </ul>
+  <p>${isEnglish ? 'We will contact you when an induction group is planned.' : 'Otamme yhteyttä, kun perehdytysryhmä on suunnitteilla.'}</p>
+  <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+  <p style="font-size:12px;color:#999;">${isEnglish ? 'Automatic message. Please do not reply.' : 'Automaattinen viesti. Älä vastaa tähän viestiin.'}</p>
+</body>
+</html>`
+
+  const text = `${subject}\n\n${greeting} ${entry.firstName},\n\n${bodyIntro}\n\n${isEnglish ? 'Email' : 'Sähköposti'}: ${entry.email}\n${isEnglish ? 'Association' : 'Yhdistys'}: ${entry.association}\n${isEnglish ? 'Equipment' : 'Varustus'}: ${equipmentText}\n\n${isEnglish ? 'We will contact you when an induction group is planned.' : 'Otamme yhteyttä, kun perehdytysryhmä on suunnitteilla.'}`
+
+  try {
+    const result = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: entry.email,
+      subject,
+      html,
+      text,
+    })
+
+    if (result.error) {
+      console.error('[email] Wait list confirmation failed:', result.error)
+      return { success: false, error: result.error.message || 'Send failed' }
+    }
+
+    console.log(`[email] Wait list confirmation sent to ${entry.email} (id: ${result.data?.id})`)
+    return { success: true }
+  } catch (err) {
+    console.error('[email] Wait list send error:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+export async function sendWaitlistStatusChangeNotification(entry, { status, groupLabel = null, plannedDate = null }) {
+  if (!resend) {
+    console.warn('[email] RESEND_API_KEY not configured — cannot send wait list status email')
+    return { success: false, error: 'Email not configured' }
+  }
+
+  const isEnglish = entry.preferredLanguage === 'en'
+  const subjects = {
+    selected: isEnglish ? 'You have been selected for an induction group' : 'Sinut on valittu perehdytysryhmään',
+    completed: isEnglish ? 'Induction marked completed' : 'Perehdytys merkitty suoritetuksi',
+    withdrawn: isEnglish ? 'Wait list registration cancelled' : 'Jonotuslistan ilmoittautuminen peruttu',
+  }
+  const subject = subjects[status] || (isEnglish ? 'Wait list status updated' : 'Jonotuslistan tila päivitetty')
+
+  const detailLines = []
+  if (groupLabel) detailLines.push(`${isEnglish ? 'Group' : 'Ryhmä'}: ${groupLabel}`)
+  if (plannedDate) detailLines.push(`${isEnglish ? 'Planned date' : 'Suunniteltu päivä'}: ${plannedDate}`)
+
+  const html = `
+<!DOCTYPE html>
+<html lang="${isEnglish ? 'en' : 'fi'}">
+<head><meta charset="utf-8"></head>
+<body style="font-family:Arial,Helvetica,sans-serif;color:#333;max-width:600px;margin:0 auto;padding:20px;">
+  <h2 style="color:#1a73e8;">${escapeHtml(subject)}</h2>
+  <p>${isEnglish ? 'Hello' : 'Hei'} ${escapeHtml(entry.firstName)},</p>
+  <p>${escapeHtml(subject)}</p>
+  ${detailLines.length ? `<ul>${detailLines.map(line => `<li>${escapeHtml(line)}</li>`).join('')}</ul>` : ''}
+  <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+  <p style="font-size:12px;color:#999;">${isEnglish ? 'Automatic message. Please do not reply.' : 'Automaattinen viesti. Älä vastaa tähän viestiin.'}</p>
+</body>
+</html>`
+
+  const text = `${subject}\n\n${isEnglish ? 'Hello' : 'Hei'} ${entry.firstName},\n\n${subject}${detailLines.length ? `\n\n${detailLines.join('\n')}` : ''}`
+
+  try {
+    const result = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: entry.email,
+      subject,
+      html,
+      text,
+    })
+
+    if (result.error) {
+      console.error('[email] Wait list status change failed:', result.error)
+      return { success: false, error: result.error.message || 'Send failed' }
+    }
+
+    return { success: true }
+  } catch (err) {
+    console.error('[email] Wait list status change error:', err.message)
+    return { success: false, error: err.message }
+  }
+}

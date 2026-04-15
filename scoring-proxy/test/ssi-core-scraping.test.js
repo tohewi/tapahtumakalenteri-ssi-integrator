@@ -20,6 +20,7 @@ const fixture = (name) => readFileSync(join(__dirname, 'fixtures', 'ssi-html', n
 
 // Import functions under test
 import {
+  ssiFindUserByEmail,
   ssiGetMatchGroupId,
   ssiGetMatchOfficials,
   ssiGetEventStaff,
@@ -117,6 +118,52 @@ describe('ssiGetEventStaff', () => {
     expect(staff[0]).toEqual({ name: 'Alice Admin', role: 'admin' })
     expect(staff[1]).toEqual({ name: 'Bob Staff', role: 'staff' })
     expect(staff[2]).toEqual({ name: 'Carol Helper', role: 'assistant' })
+  })
+})
+
+describe('ssiFindUserByEmail', () => {
+  it('treats a search result row as found even without an add link', async () => {
+    vi.stubGlobal('fetch', mockFetchOk(`
+      <html><body>
+        <table>
+          <tr>
+            <td>Ada Lovelace</td>
+            <td>ada@example.com</td>
+            <td><a href="/groups/25874/edit-user-role/12345/">Edit</a></td>
+          </tr>
+        </table>
+      </body></html>
+    `))
+
+    const result = await ssiFindUserByEmail('25874', 'ada@example.com', cookies)
+    expect(result).toEqual({ found: true, userId: '12345' })
+  })
+
+  it('returns not found when SSI explicitly reports no results', async () => {
+    vi.stubGlobal('fetch', mockFetchOk('<ul class="list-unstyled text-danger"><li>Search gave no results</li></ul>'))
+
+    const result = await ssiFindUserByEmail('25874', 'ghost@example.com', cookies)
+    expect(result).toEqual({ found: false, userId: null })
+  })
+
+  it('treats a generic result table as found when SSI returns no explicit error', async () => {
+    vi.stubGlobal('fetch', mockFetchOk(`
+      <html><body>
+        <table class="table">
+          <tr>
+            <th>Name</th>
+            <th>Club</th>
+          </tr>
+          <tr>
+            <td>Ada Lovelace</td>
+            <td>TurRes</td>
+          </tr>
+        </table>
+      </body></html>
+    `))
+
+    const result = await ssiFindUserByEmail('25874', 'ada@example.com', cookies)
+    expect(result).toEqual({ found: true, userId: null })
   })
 })
 
