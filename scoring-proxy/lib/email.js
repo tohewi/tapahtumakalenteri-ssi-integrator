@@ -15,7 +15,6 @@ function escapeHtml(str) {
 }
 const REGISTER_URL = 'https://tapahtumakalenteri-ssi-integrator.onrender.com/#/register'
 const MY_REGISTRATIONS_URL = 'https://shootnscoreit.com/my-registrations/'
-const WAITLIST_ADMIN_URL = 'https://tapahtumakalenteri-ssi-integrator.onrender.com/#/induction-waitlist-admin'
 
 /**
  * Send registration confirmation email to shooter.
@@ -157,7 +156,6 @@ export async function sendWaitlistRegistrationConfirmation(entry) {
   <p>${isEnglish ? 'We will contact you when an induction group is planned.' : 'Otamme yhteyttä, kun perehdytysryhmä on suunnitteilla.'}</p>
   <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
   <p style="font-size:12px;color:#999;">${isEnglish ? 'Automatic message. Please do not reply.' : 'Automaattinen viesti. Älä vastaa tähän viestiin.'}</p>
-  <p style="font-size:12px;color:#999;">Admin: <a href="${WAITLIST_ADMIN_URL}">${WAITLIST_ADMIN_URL}</a></p>
 </body>
 </html>`
 

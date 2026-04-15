@@ -1,6 +1,7 @@
 # Kupittaa Reservilaisammunta induction wait list configuration
 
-adminAllowlist: []
+adminAllowlist:
+  - "tohewi@live.com"
 
 ssiUserValidation:
   groupId: "26740"
