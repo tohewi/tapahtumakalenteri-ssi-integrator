@@ -1037,12 +1037,25 @@ export async function ssiFindUserByEmail(groupId, email, cookies) {
   }
 
   const searchHtml = await searchResp.text()
-  if (searchHtml.includes('no results') || searchHtml.includes('gave no results')) {
+  if (/\b(?:gave\s+)?no results\b/i.test(searchHtml) || /\bei tuloksia\b/i.test(searchHtml)) {
     return { found: false, userId: null }
   }
 
-  const addLink = searchHtml.match(/\/groups\/\d+\/add-user-with-role\/(\d+)\//)
-  return { found: !!addLink, userId: addLink?.[1] || null }
+  // A user can already be in the target group, in which case SSI may show the
+  // result row without an add-user link. For wait list validation we care about
+  // SSI identity existence, not whether the person can be added to this group.
+  const actionLink = searchHtml.match(/\/groups\/\d+\/(?:add-user-with-role|edit-user-role|remove-user-with-role|remove-user)\/(\d+)\//)
+  if (actionLink) {
+    return { found: true, userId: actionLink[1] || null }
+  }
+
+  const escapedEmail = String(email).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const resultRowWithEmail = new RegExp(`<tr[^>]*>[\\s\\S]*?<td[^>]*>[\\s\\S]*?${escapedEmail}[\\s\\S]*?<\\/td>[\\s\\S]*?<\\/tr>`, 'i')
+  if (resultRowWithEmail.test(searchHtml)) {
+    return { found: true, userId: null }
+  }
+
+  return { found: false, userId: null }
 }
 
 export async function ssiAddToMatchManagement(groupId, eventContentType, eventId, email, role, officials, cookies) {
