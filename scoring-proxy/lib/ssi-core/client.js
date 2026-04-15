@@ -1037,8 +1037,15 @@ export async function ssiFindUserByEmail(groupId, email, cookies) {
   }
 
   const searchHtml = await searchResp.text()
-  if (/\b(?:gave\s+)?no results\b/i.test(searchHtml) || /\bei tuloksia\b/i.test(searchHtml)) {
+  const errorMatch = searchHtml.match(/<ul[^>]*(?:errorlist|text-danger)[^>]*>([\s\S]*?)<\/ul>/i)
+  const errorText = errorMatch ? errorMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : ''
+
+  if (/\b(?:gave\s+)?no results\b/i.test(searchHtml) || /\bei tuloksia\b/i.test(searchHtml) || /\b(?:gave\s+)?no results\b/i.test(errorText) || /\bei tuloksia\b/i.test(errorText)) {
     return { found: false, userId: null }
+  }
+
+  if (errorText) {
+    throw new Error(`User search returned SSI form error: ${errorText}`)
   }
 
   // A user can already be in the target group, in which case SSI may show the
@@ -1052,6 +1059,13 @@ export async function ssiFindUserByEmail(groupId, email, cookies) {
   const escapedEmail = String(email).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const resultRowWithEmail = new RegExp(`<tr[^>]*>[\\s\\S]*?<td[^>]*>[\\s\\S]*?${escapedEmail}[\\s\\S]*?<\\/td>[\\s\\S]*?<\\/tr>`, 'i')
   if (resultRowWithEmail.test(searchHtml)) {
+    return { found: true, userId: null }
+  }
+
+  // SSI's group search sometimes renders a generic result table without the
+  // email cell or an actionable add/edit link. For wait list validation, a
+  // non-error result table is still sufficient evidence that the email exists.
+  if (/<table[\s\S]*?<tr[\s\S]*?<\/tr>[\s\S]*?<\/table>/i.test(searchHtml)) {
     return { found: true, userId: null }
   }
 

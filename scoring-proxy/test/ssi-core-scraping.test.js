@@ -145,6 +145,26 @@ describe('ssiFindUserByEmail', () => {
     const result = await ssiFindUserByEmail('25874', 'ghost@example.com', cookies)
     expect(result).toEqual({ found: false, userId: null })
   })
+
+  it('treats a generic result table as found when SSI returns no explicit error', async () => {
+    vi.stubGlobal('fetch', mockFetchOk(`
+      <html><body>
+        <table class="table">
+          <tr>
+            <th>Name</th>
+            <th>Club</th>
+          </tr>
+          <tr>
+            <td>Ada Lovelace</td>
+            <td>TurRes</td>
+          </tr>
+        </table>
+      </body></html>
+    `))
+
+    const result = await ssiFindUserByEmail('25874', 'ada@example.com', cookies)
+    expect(result).toEqual({ found: true, userId: null })
+  })
 })
 
 // ============================================================
