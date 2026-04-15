@@ -3,7 +3,7 @@
 adminAllowlist: []
 
 ssiUserValidation:
-  groupId: "25874"
+  groupId: "26740"
 
 induction:
   threshold: 5

@@ -27,6 +27,11 @@ describe('wait list config loader', () => {
     expect(mod.getSupportedLanguages()).toEqual(['fi', 'en'])
   })
 
+  it('loads the wait list SSI validation group from config', async () => {
+    const mod = await import('../lib/waitlist/config-loader.js')
+    expect(mod.getValidationGroupId()).toBe('26740')
+  })
+
   it('rejects invalid config objects', async () => {
     const mod = await import('../lib/waitlist/config-loader.js')
 
