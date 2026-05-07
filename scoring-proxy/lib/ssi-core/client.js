@@ -5,15 +5,26 @@ import { log } from '../logger.js'
 // GraphQL client (JWT auth for reads)
 // ============================================================
 
+function resolveGraphQLApiKey(apiKey) {
+  const keyFromArg = typeof apiKey === 'string' ? apiKey.trim() : ''
+  if (keyFromArg) return keyFromArg
+
+  const keyFromEnv = typeof process.env.SSI_ADMIN_API_KEY === 'string'
+    ? process.env.SSI_ADMIN_API_KEY.trim()
+    : ''
+  if (keyFromEnv) return keyFromEnv
+
+  throw new Error('SSI GraphQL API key missing: set SSI_ADMIN_API_KEY')
+}
+
 export async function ssiGraphQL(jwtToken, query, variables = {}, apiKey = null) {
+  const resolvedApiKey = resolveGraphQLApiKey(apiKey)
   const headers = {
     'Content-Type': 'application/json',
+    'x-api-key': resolvedApiKey,
   }
   if (jwtToken) {
     headers['Authorization'] = `JWT ${jwtToken}`
-  }
-  if (apiKey) {
-    headers['X-Api-Key'] = apiKey
   }
 
   const body = JSON.stringify({ query, variables })
@@ -42,7 +53,7 @@ export async function ssiGraphQL(jwtToken, query, variables = {}, apiKey = null)
 // JWT token refresh
 // ============================================================
 
-export async function ssiRefreshJWT(refreshToken) {
+export async function ssiRefreshJWT(refreshToken, apiKey = null) {
   const result = await ssiGraphQL(null, `
     mutation Refresh($refreshToken: String!, $revokeRefreshToken: Boolean!) {
       refresh_token(refresh_token: $refreshToken, revoke_refresh_token: $revokeRefreshToken) {
@@ -50,7 +61,7 @@ export async function ssiRefreshJWT(refreshToken) {
         refresh_token { token }
       }
     }
-  `, { refreshToken, revokeRefreshToken: true })
+  `, { refreshToken, revokeRefreshToken: true }, apiKey)
 
   if (!result.refresh_token?.token?.token) {
     throw new Error('Token refresh failed')
