@@ -3,14 +3,51 @@
     Discovers SSI GraphQL scoring-related schema details
 #>
 
-Import-Module -Name powershell-yaml -ErrorAction Stop
+param(
+    [string]$ApiKey,
+    [string]$ApiKeyPath
+)
 
-$ApiKeyPath = Join-Path -Path $PSScriptRoot -ChildPath "config\api-key.yml"
-$apiKeyConfig = Get-Content -Path $ApiKeyPath -Raw -Encoding UTF8 | ConvertFrom-Yaml
+$resolvedApiKey = $null
+
+if ($ApiKey -and $ApiKey -ne "YOUR_API_KEY_HERE") {
+    $resolvedApiKey = $ApiKey.Trim()
+}
+
+if (-not $resolvedApiKey -and $env:SSI_ADMIN_API_KEY) {
+    $resolvedApiKey = $env:SSI_ADMIN_API_KEY.Trim()
+}
+
+if (-not $resolvedApiKey) {
+    Import-Module -Name powershell-yaml -ErrorAction Stop
+
+    if (-not $ApiKeyPath) {
+        $ApiKeyPath = Join-Path -Path $PSScriptRoot -ChildPath "config\api-key.yml"
+    }
+
+    if (-not (Test-Path $ApiKeyPath)) {
+        Write-Error "API key configuration file not found: $ApiKeyPath"
+        exit 1
+    }
+
+    $apiKeyConfig = Get-Content -Path $ApiKeyPath -Raw -Encoding UTF8 | ConvertFrom-Yaml
+
+    if (-not $apiKeyConfig.apiKey -or $apiKeyConfig.apiKey -eq "YOUR_API_KEY_HERE") {
+        Write-Error "API key not configured. Set SSI_ADMIN_API_KEY env var or update: $ApiKeyPath"
+        exit 1
+    }
+
+    $resolvedApiKey = $apiKeyConfig.apiKey.Trim()
+}
+
+if (-not $resolvedApiKey) {
+    Write-Error "API key is missing. Set SSI_ADMIN_API_KEY env var or provide -ApiKey/-ApiKeyPath"
+    exit 1
+}
 
 $GraphQLEndpoint = "https://shootnscoreit.com/graphql/"
 $headers = @{
-    "Authorization" = "Bearer $($apiKeyConfig.apiKey)"
+    "x-api-key" = $resolvedApiKey
     "Content-Type"  = "application/json"
     "Accept"        = "application/json"
 }
