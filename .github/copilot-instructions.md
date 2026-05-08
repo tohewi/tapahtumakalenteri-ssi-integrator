@@ -18,6 +18,13 @@
 
   Use the approximation: **1 token ≈ 0.75 words** (i.e., total tokens ≈ total words × 1.33). This is a rough estimate for cost awareness, not exact billing.
 
+- **GitHub CLI (`gh`) quoting in PowerShell:**
+  - Prefer `--body-file` for PR descriptions instead of long inline `--body` strings.
+  - For multiline PR text, write Markdown to a file and run: `gh pr create --title '...' --body-file <path-to-md>`.
+  - If inline `--body` is unavoidable, wrap the whole value in single quotes (`'...'`) and escape embedded single quotes as `''`.
+  - Avoid inline backticks, code fences, and complex escaping in `--body`; they frequently break in `pwsh`.
+  - For JSON filters, keep jq expressions single-quoted (example: `gh pr view --json number,url --jq '.url'`).
+
 ## Project Overview
 
 This is a **shooting competition management system** to help setting up events in SSI (ShootnScoreIt, a SaaS service for competition management) with two main components:
