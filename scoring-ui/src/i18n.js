@@ -43,6 +43,7 @@ export const fi = {
   noCupsFound: 'Cupeja ei löytynyt',
   tryDifferentSearch: 'Kokeile eri hakutermiä',
   today: 'TÄNÄÄN',
+  debugModeEnabled: 'Debug-tila: näytetään myös vanhat ja ei-aktiiviset cupit',
   
   // MatchPicker
   selectMatchSubtitle: 'Valitse ottelu tulosten syöttöön',
@@ -51,6 +52,7 @@ export const fi = {
   noMatchesToday: 'Ei otteluita tänään',
   selectFromOtherMatches: 'Valitse tulevista tai menneistä otteluista',
   active: 'Aktiivinen',
+  cancelled: 'Peruutettu',
   
   // SquadPicker
   selectSquad: 'Valitse squad',
@@ -204,6 +206,7 @@ export const en = {
   noCupsFound: 'No cups found',
   tryDifferentSearch: 'Try a different search term',
   today: 'TODAY',
+  debugModeEnabled: 'Debug mode: showing past and inactive cups',
   
   // MatchPicker
   selectMatchSubtitle: 'Select a match for scoring',
@@ -212,6 +215,7 @@ export const en = {
   noMatchesToday: 'No matches today',
   selectFromOtherMatches: 'Select from upcoming or past matches',
   active: 'Active',
+  cancelled: 'Cancelled',
   
   // SquadPicker
   selectSquad: 'Select squad',

@@ -7,6 +7,7 @@ function getStatusText(status) {
   // Map codes to translation keys
   const codeToKey = {
     'cp': 'completed',
+    'cs': 'cancelled',
     'on': 'active',
   }
   
@@ -14,6 +15,8 @@ function getStatusText(status) {
   const textToKey = {
     'Completed': 'completed',
     'Valmis': 'completed',
+    'Cancelled': 'cancelled',
+    'Peruutettu': 'cancelled',
     'Active': 'active',
     'Aktiivinen': 'active',
   }
