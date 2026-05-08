@@ -50,29 +50,41 @@ beforeAll(async () => {
     let hasMockResponse = false
     let mockResponse = null
     let mockError = null
-    let lastCall = null
+    let mockResponder = null
+    const calls = []
     
     return {
       setResponse: (response) => {
         mockResponse = response
         hasMockResponse = true
         mockError = null
+        mockResponder = null
       },
       setError: (error) => {
         mockError = error
+        hasMockResponse = false
+        mockResponder = null
+      },
+      setResponder: (responder) => {
+        mockResponder = responder
+        mockError = null
         hasMockResponse = false
       },
       clear: () => {
         mockResponse = null
         hasMockResponse = false
         mockError = null
-        lastCall = null
+        mockResponder = null
+        calls.length = 0
       },
-      getLastCall: () => lastCall,
+      getCalls: () => [...calls],
       execute: async (query, variables) => {
-        lastCall = { query, variables }
+        calls.push({ query, variables })
         if (mockError) {
           throw mockError
+        }
+        if (mockResponder) {
+          return await mockResponder(query, variables)
         }
         if (hasMockResponse) {
           return mockResponse
@@ -89,8 +101,9 @@ beforeAll(async () => {
   // Expose mock control methods on app for test access
   app.setMockResponse = mockState.setResponse
   app.setMockError = mockState.setError
+  app.setMockResponder = mockState.setResponder
   app.clearMock = mockState.clear
-  app.getManageQueryCall = mockState.getLastCall
+  app.getManageQueryCalls = mockState.getCalls
   app.setGraphqlResponse = graphState.setResponse
   app.setGraphqlError = graphState.setError
   app.clearGraphqlMock = graphState.clear
@@ -250,13 +263,66 @@ describe('GET /api/manage/cups', () => {
     expect(res.data.cups[0].id).toBe('100')
     expect(res.data.cups[0].name).toBe('Manage Window Cup')
 
-    const call = app.getManageQueryCall()
-    expect(call?.query || '').toContain('starts_after')
-    expect(call?.query || '').toContain('starts_before')
-    expect(call?.variables?.search).toBe('Kupittaa CUP')
-    expect(typeof call?.variables?.startsAfter).toBe('string')
-    expect(typeof call?.variables?.startsBefore).toBe('string')
-    expect(new Date(call.variables.startsBefore).getTime()).toBeGreaterThan(new Date(call.variables.startsAfter).getTime())
+    const calls = app.getManageQueryCalls()
+    const listCall = calls.find(c => (c.query || '').includes('events(search: $search'))
+    expect(listCall?.query || '').toContain('starts_after')
+    expect(listCall?.query || '').toContain('starts_before')
+    expect(listCall?.variables?.search).toBe('Kupittaa CUP')
+    expect(typeof listCall?.variables?.startsAfter).toBe('string')
+    expect(typeof listCall?.variables?.startsBefore).toBe('string')
+    expect(new Date(listCall.variables.startsBefore).getTime()).toBeGreaterThan(new Date(listCall.variables.startsAfter).getTime())
+  })
+
+  it('uses per-cup detail query for accurate registered count in list view', async () => {
+    const ip = uniqueIp()
+    const { sessionId } = await createSession(createMockSessionInput({ scope: 'manage' }))
+
+    app.setMockResponder(async (query, variables) => {
+      if ((query || '').includes('events(search: $search')) {
+        return {
+          events: [
+            {
+              id: '148',
+              name: 'TurRes Kupittaa CUP 09.05.2026',
+              starts: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+              ends: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+              status: 'on',
+              get_content_type_key: 136,
+              max_competitors: 25,
+              registration: 'op',
+              registration_starts: new Date(Date.now() - 1000).toISOString(),
+              registration_closes: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
+              competitors: [],
+              component_matches: [],
+            },
+          ],
+        }
+      }
+
+      if ((query || '').includes('query ManageCupCount')) {
+        expect(variables).toEqual({ id: '148' })
+        return {
+          event: {
+            id: '148',
+            competitors: Array.from({ length: 15 }, (_, i) => ({ id: String(i + 1), status: 'a' })),
+            component_matches: [],
+          },
+        }
+      }
+
+      return { events: [] }
+    })
+
+    const res = await request('GET', '/api/manage/cups', null, ip, { ssi_session: sessionId })
+
+    expect(res.status).toBe(200)
+    expect(res.data.cups.length).toBe(1)
+    expect(res.data.cups[0].id).toBe('148')
+    expect(res.data.cups[0].registered).toBe(15)
+
+    const calls = app.getManageQueryCalls()
+    const detailCalls = calls.filter(c => (c.query || '').includes('query ManageCupCount'))
+    expect(detailCalls.length).toBe(1)
   })
 
   it('does not require registration_starts when event is in window', async () => {

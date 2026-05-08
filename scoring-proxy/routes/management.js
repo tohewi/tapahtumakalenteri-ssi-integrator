@@ -25,6 +25,52 @@ function internalError(message) {
   return new AppError(message, 500, 'INTERNAL_ERROR')
 }
 
+const MANAGE_CUPS_LIST_QUERY = `
+  query ManageCups($search: String!, $startsAfter: String!, $startsBefore: String!) {
+    events(search: $search, starts_after: $startsAfter, starts_before: $startsBefore) {
+      id name starts ends status get_content_type_key
+      max_competitors
+      registration
+      ... on NordicSerieNode {
+        competitors { id status }
+        registration_starts
+        registration_closes
+        component_matches {
+          number included
+          match {
+            squads {
+              ... on NordicSquadNode {
+                competitors { id status }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`
+
+const MANAGE_CUP_COUNT_QUERY = `
+  query ManageCupCount($id: String!) {
+    event(content_type: 136, id: $id) {
+      id
+      ... on NordicSerieNode {
+        competitors { id status }
+        component_matches {
+          number included
+          match {
+            squads {
+              ... on NordicSquadNode {
+                competitors { id status }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`
+
 export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminGraphQL, getAdminSession }) {
   const router = express.Router()
 
@@ -39,36 +85,49 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
       const now = new Date()
       const { windowStart, windowEndExclusive } = getManageWindowBounds(now)
 
-      const result = await adminGraphQL(`
-        query ManageCups($search: String!, $startsAfter: String!, $startsBefore: String!) {
-          events(search: $search, starts_after: $startsAfter, starts_before: $startsBefore) {
-            id name starts ends status get_content_type_key
-            max_competitors
-            registration
-            ... on NordicSerieNode {
-              competitors { id status }
-              registration_starts
-              registration_closes
-              component_matches {
-                number included
-                match {
-                  squads {
-                    ... on NordicSquadNode {
-                      competitors { id status }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      `, {
+      const result = await adminGraphQL(MANAGE_CUPS_LIST_QUERY, {
         search: 'Kupittaa CUP',
         startsAfter: windowStart.toISOString(),
         startsBefore: windowEndExclusive.toISOString(),
       })
 
-      const cups = filterManageableCups(result.events, now)
+      const listEvents = result.events || []
+      const manageableEvents = filterManageableCups(listEvents, now)
+
+      const detailFetches = manageableEvents.map(async (cup) => {
+        try {
+          const detail = await adminGraphQL(MANAGE_CUP_COUNT_QUERY, { id: String(cup.id) })
+          return {
+            id: String(cup.id),
+            competitors: detail?.event?.competitors,
+            component_matches: detail?.event?.component_matches,
+          }
+        } catch (err) {
+          log.warn(`[manage] Failed to fetch detail count data for cup ${cup.id}: ${err.message}`)
+          return {
+            id: String(cup.id),
+            competitors: undefined,
+            component_matches: undefined,
+          }
+        }
+      })
+
+      const detailResults = await Promise.all(detailFetches)
+      const detailById = new Map(
+        detailResults.map(r => [String(r.id), r])
+      )
+
+      const enrichedEvents = listEvents.map((event) => {
+        const detail = detailById.get(String(event.id))
+        if (!detail) return event
+        return {
+          ...event,
+          competitors: detail.competitors ?? event.competitors,
+          component_matches: detail.component_matches ?? event.component_matches,
+        }
+      })
+
+      const cups = filterManageableCups(enrichedEvents, now)
 
       res.json({ cups })
     } catch (err) {

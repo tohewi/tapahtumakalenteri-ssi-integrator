@@ -58,13 +58,15 @@ cup:
   
   # Max 800 characters for information (Yksityiskohtaiset tiedot / Detailed information)
   information: |
-    Ohjattu pienoispistooliammunta sovelletulla ampumaohjelmalla:
-    - Tarkkuus- ja pikaosio (SAL 25m urheilupistooli)
-    - Pistoolipika-osio (sovellettu RESUL pistoolipika-ammunta)
-    - Laukausmäärä yhteensä: 100
-    Tarkkuusosa kiinteään tauluun, pika- ja pikapistooliosio kääntyviin Olympia-tauluihin.
+    Mahdolliset muutokset aikoihin ilmoitetaan sisäampumaradan ilmoitustaululla ja Turun Reserviläisten verkkosivuilla.
 
-    Vakuutus (Reserviläisen toimintaturva/SAL) ja suojalasit+kuulosuojaimet pakollisia.
+    Ohjattu pienoispistooliammunta sovelletuilla ampumaohjelmilla:
+
+    - Tarkkuus- ja pikaosio (SAL 25m urheilupistooli)
+    - Pistoolipika-osio (RESUL pistoolipika-ammunta)
+    - Laukausmäärä yhteensä: 100
+
+    Tarkkuusosa ammutaan kiinteään tauluun, pika- ja pikapistooliosio kääntyviin Olympia-tauluihin.
 
     Ensikertalainen? Ilmoittaudu ensin perehdytysvuorolle (ks. TurRes tapahtumakalenteri).
 
@@ -77,7 +79,7 @@ cup:
 
     Maksuväline: MobilePay 24130
 
-    Ovet lukitaan klo 9.30 jolloin ammunta alkaa.
+    Ovet lukitaan klo 9.20.
 
     Lisätietoja: ampumajaosto(at)turunreservilaiset.fi
 
@@ -203,7 +205,7 @@ tapahtumakalenteri:
     <li>Cup koostuu kolmesta osakilpailusta. Cup-ilmoittautuminen lisää sinut automaattisesti jokaiseen.</li>
     <li>Valitse kuhunkin kilpailuun Squad, jossa ammut:
       <ul>
-      <li>Squad 1 on laina-aseella ampuville</li>
+      <li>Squad 1 on harjoitusaseella ampuville</li>
       <li>Squad 2 on omalla aseella ampuville</li>
       <li>Squad 3 on omalla aseella ampuville</li>
       </ul>
@@ -211,22 +213,21 @@ tapahtumakalenteri:
     </ol>
     {ssiCupLink}
 
-
     <em><strong>Ensikertalaiset vain perehdytysvuoron kautta.</strong></em>
 
     Vakuutus (Reserviläisen toimintaturva tai SAL) ja suojalasit sekä kuulosuojaimet ovat pakollisia.
 
-    Laina-aseita (pienoispistooli, .22lr) on rajallisesti käytettävissä (valvottu käyttö).
+    Harjoitusaseita (pienoispistooli, .22lr) on rajallisesti käytettävissä (valvottu käyttö).
 
-    <strong>Ratamaksut:</strong>
+    <strong>Maksut:</strong>
     <ul>
-    <li>Harjoitusmaksu sisältäen laina-aseen, ratamaksun ja 100 kpl patruunat (.22lr) 20 €</li>
-    <li>Laina-ase (omat patruunat, (.22lr)) 7 €</li>
-    <li>Oma ase (omat patruunat) 6 €</li>
+    <li>Harjoitusmaksu sisältäen harjoitusaseen, ratamaksun ja 100 kpl patruunat 20 €</li>
+    <li>Ratamaksu ja harjoitusase 7 €</li>
+    <li>Ratamaksu 6 €</li>
     </ul>
     Maksuväline: <strong>MobilePay 24130</strong>
 
-    Ovet sulkeutuvat klo 9.30 ammunnan alkaessa.
+    Ovet sulkeutuvat klo 9.20.
 
     <strong>Lisätiedot sähköpostitse</strong>: <a href="mailto:ampumajaosto@turunreservilaiset.fi">ampumajaosto@turunreservilaiset.fi</a>
 
