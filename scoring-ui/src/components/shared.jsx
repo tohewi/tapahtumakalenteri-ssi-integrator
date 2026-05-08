@@ -38,6 +38,30 @@ export function isFuture(isoDate) {
   return parseDateLocal(isoDate) > new Date()
 }
 
+function toFiniteNumber(value, fallback = 0) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : fallback
+}
+
+function getCupRegisteredCount(cup) {
+  return toFiniteNumber(
+    cup?.registered
+    ?? cup?.registeredCompetitors
+    ?? cup?.competitorCount
+    ?? cup?.currentCompetitors,
+    0
+  )
+}
+
+function getCupMaxCompetitors(cup) {
+  return toFiniteNumber(
+    cup?.maxCompetitors
+    ?? cup?.max_competitors
+    ?? cup?.competitorLimit,
+    25
+  )
+}
+
 export function BackButton({ label, onClick }) {
   return (
     <button
@@ -119,6 +143,8 @@ export function CupList({ cups, onSelect, loading, openLabel = 'Ilmoittautuminen
           </h2>
           {openCups.map(cup => {
             const cupIsToday = isToday(cup.starts)
+            const registeredCount = getCupRegisteredCount(cup)
+            const maxCompetitors = getCupMaxCompetitors(cup)
             return (
               <button
                 key={cup.id}
@@ -145,7 +171,7 @@ export function CupList({ cups, onSelect, loading, openLabel = 'Ilmoittautuminen
                   <div className="text-xs text-gray-400 mt-0.5">{formatDateShort(cup.starts)}</div>
                 </div>
                 <span className="inline-block px-2 py-1 rounded-lg text-xs font-medium shrink-0 bg-green-100 text-green-700">
-                  {cup.registered}/{cup.maxCompetitors}
+                  {registeredCount}/{maxCompetitors}
                 </span>
                 <div className="text-gray-300 shrink-0">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

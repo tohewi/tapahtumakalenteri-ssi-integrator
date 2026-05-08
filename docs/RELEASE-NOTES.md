@@ -38,6 +38,38 @@ Hotfix release focused on production resilience for transient SSI GraphQL outage
 
 ---
 
+## Release 7.9.2 — Cup Competitor Count Hotfix (2026-05-08)
+
+**Requirements:** GQL-HF4 ✅
+
+### Overview
+
+Hotfix release focused on restoring accurate cup competitor counts across registration and management UIs. Count badges now use CUP-level approved competitor data and no longer collapse to `0/max` when squad competitor payloads are sparse.
+
+### New Features
+
+- **CUP-level count source**: Registered competitor totals now prefer CUP-level competitor collection (`event.competitors`) with approved-status filtering (`a` / `approved`).
+- **Fallback compatibility path**: Match-squad competitor counting remains as fallback to preserve behavior when CUP-level list is unavailable.
+- **UI count mapping hardening**: Shared cup list rendering now accepts alternate count field names and numeric-string payloads, keeping badges visible across views.
+
+### Bug Fixes
+
+- **Missing/zero competitor badges fixed**: Registration and management cup lists no longer rely solely on first-match squads, which could be empty and produce false zero counts.
+- **Count consistency across endpoints**: `/api/register/cups`, `/api/register/cup/:id`, and `/api/manage/cups` now use aligned counting rules.
+
+### Requirements Met
+
+- **GQL-HF4:** Cup competitor count source hardened to CUP-level approved competitors with fallback path, restoring accurate UI count display.
+
+### Test Status
+
+| Suite | Passing | Notes |
+|-------|--------:|-------|
+| Backend (scoring-proxy) | 60 | Targeted suites green: `cup-manage`, `management`, `registration` |
+| Frontend (scoring-ui) | 27 | `components.test.jsx` green including new `CupList` count regression |
+
+---
+
 ## Release 7.7 — QR Code Login for Scoring (2026-03-20)
 
 **Requirements:** QR1–QR6 ✅ (all implemented)

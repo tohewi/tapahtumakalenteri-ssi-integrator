@@ -110,6 +110,31 @@ describe('filterManageableCups', () => {
     expect(cups[0].registrationOpen).toBe(false)
   })
 
+  it('prefers cup-level competitors when squad competitor data is missing', () => {
+    const cupWithCupCompetitorsOnly = {
+      ...baseCup,
+      max_competitors: 5,
+      competitors: [
+        { id: 'cp1', status: 'a' },
+        { id: 'cp2', status: 'a' },
+        { id: 'cp3', status: 'p' },
+      ],
+      component_matches: [{
+        included: true,
+        match: {
+          squads: [],
+        },
+      }],
+    }
+
+    const now = new Date('2026-02-15T12:00:00Z')
+    const cups = filterManageableCups([cupWithCupCompetitorsOnly], now)
+
+    expect(cups).toHaveLength(1)
+    expect(cups[0].registered).toBe(2)
+    expect(cups[0].full).toBe(false)
+  })
+
   it('sorts cups by start date', () => {
     const cup1 = { ...baseCup, id: '1', starts: '2026-03-10T10:00:00Z', ends: '2026-03-10T18:00:00Z' }
     const cup2 = { ...baseCup, id: '2', starts: '2026-03-05T10:00:00Z', ends: '2026-03-05T18:00:00Z' }

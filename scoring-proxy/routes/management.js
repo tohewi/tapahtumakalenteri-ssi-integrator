@@ -42,6 +42,7 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
             max_competitors
             registration
             ... on NordicSerieNode {
+              competitors { id status }
               registration_starts
               registration_closes
               component_matches {
