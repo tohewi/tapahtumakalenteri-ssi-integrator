@@ -50,6 +50,7 @@ beforeAll(async () => {
     let hasMockResponse = false
     let mockResponse = null
     let mockError = null
+    let lastCall = null
     
     return {
       setResponse: (response) => {
@@ -65,8 +66,11 @@ beforeAll(async () => {
         mockResponse = null
         hasMockResponse = false
         mockError = null
+        lastCall = null
       },
+      getLastCall: () => lastCall,
       execute: async (query, variables) => {
+        lastCall = { query, variables }
         if (mockError) {
           throw mockError
         }
@@ -86,6 +90,7 @@ beforeAll(async () => {
   app.setMockResponse = mockState.setResponse
   app.setMockError = mockState.setError
   app.clearMock = mockState.clear
+  app.getManageQueryCall = mockState.getLastCall
   app.setGraphqlResponse = graphState.setResponse
   app.setGraphqlError = graphState.setError
   app.clearGraphqlMock = graphState.clear
@@ -186,7 +191,7 @@ describe('GET /api/manage/cups', () => {
     expect(res.data.error).toContain('Access denied')
   })
 
-  it('returns cups filtered by end date with manage scope', async () => {
+  it('returns cups happening today or within five days', async () => {
     const ip = uniqueIp()
     // Create session with 'manage' scope
     const { sessionId } = await createSession(createMockSessionInput({ scope: 'manage' }))
@@ -196,9 +201,9 @@ describe('GET /api/manage/cups', () => {
       events: [
         {
           id: '100',
-          name: 'Future Cup',
-          starts: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
-          ends: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),   // 8 days from now
+          name: 'Manage Window Cup',
+          starts: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+          ends: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
           status: 'on',
           get_content_type_key: 136,
           max_competitors: 30,
@@ -220,9 +225,9 @@ describe('GET /api/manage/cups', () => {
         },
         {
           id: '101',
-          name: 'Old Ended Cup',
-          starts: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
-          ends: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),   // 2 days ago (past 24h grace)
+          name: 'Outside Window Cup',
+          starts: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          ends: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),
           status: 'on',
           get_content_type_key: 136,
           max_competitors: 25,
@@ -240,13 +245,21 @@ describe('GET /api/manage/cups', () => {
     expect(res.data.cups).toBeDefined()
     expect(Array.isArray(res.data.cups)).toBe(true)
     
-    // Should only include the future cup (not the ended one)
+    // Should only include the cup in management window
     expect(res.data.cups.length).toBe(1)
     expect(res.data.cups[0].id).toBe('100')
-    expect(res.data.cups[0].name).toBe('Future Cup')
+    expect(res.data.cups[0].name).toBe('Manage Window Cup')
+
+    const call = app.getManageQueryCall()
+    expect(call?.query || '').toContain('starts_after')
+    expect(call?.query || '').toContain('starts_before')
+    expect(call?.variables?.search).toBe('Kupittaa CUP')
+    expect(typeof call?.variables?.startsAfter).toBe('string')
+    expect(typeof call?.variables?.startsBefore).toBe('string')
+    expect(new Date(call.variables.startsBefore).getTime()).toBeGreaterThan(new Date(call.variables.startsAfter).getTime())
   })
 
-  it('filters out cups with registration_starts in the future', async () => {
+  it('does not require registration_starts when event is in window', async () => {
     const ip = uniqueIp()
     const { sessionId } = await createSession(createMockSessionInput({ scope: 'manage' }))
     
@@ -254,27 +267,27 @@ describe('GET /api/manage/cups', () => {
       events: [
         {
           id: '200',
-          name: 'Registration Not Yet Started',
-          starts: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
-          ends: new Date(Date.now() + 11 * 24 * 60 * 60 * 1000).toISOString(),
+          name: 'No Registration Start Date',
+          starts: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+          ends: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
           status: 'on',
           get_content_type_key: 136,
           max_competitors: 25,
           registration: 'op',
-          registration_starts: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days future
-          registration_closes: new Date(Date.now() + 9 * 24 * 60 * 60 * 1000).toISOString(),
+          registration_starts: null,
+          registration_closes: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
           component_matches: []
         },
         {
           id: '201',
-          name: 'Registration Already Started',
-          starts: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-          ends: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),
+          name: 'Registration Starts Later',
+          starts: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
+          ends: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
           status: 'on',
           get_content_type_key: 136,
           max_competitors: 25,
           registration: 'op',
-          registration_starts: new Date(Date.now() - 1000).toISOString(), // just started
+          registration_starts: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
           registration_closes: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
           component_matches: []
         },
@@ -284,8 +297,8 @@ describe('GET /api/manage/cups', () => {
     const res = await request('GET', '/api/manage/cups', null, ip, { ssi_session: sessionId })
     
     expect(res.status).toBe(200)
-    expect(res.data.cups.length).toBe(1)
-    expect(res.data.cups[0].id).toBe('201') // Only the one with registration started
+    expect(res.data.cups.length).toBe(2)
+    expect(res.data.cups.map(c => c.id)).toEqual(['200', '201'])
   })
 
   it('only returns active cups (status === on)', async () => {
@@ -340,8 +353,8 @@ describe('GET /api/manage/cups', () => {
         {
           id: '400',
           name: 'Later Cup',
-          starts: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
-          ends: new Date(Date.now() + 11 * 24 * 60 * 60 * 1000).toISOString(),
+          starts: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+          ends: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
           status: 'on',
           get_content_type_key: 136,
           max_competitors: 25,
@@ -353,8 +366,8 @@ describe('GET /api/manage/cups', () => {
         {
           id: '401',
           name: 'Earlier Cup',
-          starts: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-          ends: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
+          starts: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
+          ends: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
           status: 'on',
           get_content_type_key: 136,
           max_competitors: 25,
@@ -394,7 +407,7 @@ describe('GET /api/manage/cups', () => {
     expect(res.data.error).toContain('Hallintapalvelu ei ole käytettävissä')
   })
 
-  it('uses end date for filtering (not registration status)', async () => {
+  it('includes cups in window even when registration is closed', async () => {
     const ip = uniqueIp()
     const { sessionId } = await createSession(createMockSessionInput({ scope: 'manage' }))
     
@@ -402,9 +415,9 @@ describe('GET /api/manage/cups', () => {
       events: [
         {
           id: '500',
-          name: 'Registration Closed But Not Ended',
-          starts: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-          ends: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),   // 1 day future
+          name: 'Registration Closed In Window',
+          starts: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+          ends: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
           status: 'on',
           get_content_type_key: 136,
           max_competitors: 25,
@@ -419,13 +432,13 @@ describe('GET /api/manage/cups', () => {
     const res = await request('GET', '/api/manage/cups', null, ip, { ssi_session: sessionId })
     
     expect(res.status).toBe(200)
-    // Should include the cup even though registration is closed, because it hasn't ended yet
+    // Should include the cup even though registration is closed, because event is in window
     expect(res.data.cups.length).toBe(1)
     expect(res.data.cups[0].id).toBe('500')
     expect(res.data.cups[0].registrationOpen).toBe(false) // registration is closed
   })
 
-  it('uses starts + 24h as fallback when ends is null', async () => {
+  it('includes in-window cups when ends is null', async () => {
     const ip = uniqueIp()
     const { sessionId } = await createSession(createMockSessionInput({ scope: 'manage' }))
     

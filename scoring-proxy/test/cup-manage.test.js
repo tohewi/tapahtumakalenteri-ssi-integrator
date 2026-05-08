@@ -25,11 +25,11 @@ describe('filterManageableCups', () => {
     name: 'Test Cup',
     get_content_type_key: 136,
     status: 'on',
-    starts: '2026-03-01T10:00:00Z',
-    ends: '2026-03-01T18:00:00Z',
+    starts: '2026-02-18T10:00:00Z',
+    ends: '2026-02-18T18:00:00Z',
     registration: 'op',
     registration_starts: '2026-01-01T00:00:00Z',
-    registration_closes: '2026-02-28T23:59:59Z',
+    registration_closes: '2026-02-17T23:59:59Z',
     max_competitors: 25,
     component_matches: [],
   }
@@ -41,32 +41,34 @@ describe('filterManageableCups', () => {
     expect(cups[0].name).toBe('Test Cup')
   })
 
-  it('excludes cups where registration has not started', () => {
-    const now = new Date('2025-12-01T12:00:00Z')
+  it('excludes cups before the manage window', () => {
+    const now = new Date('2026-02-10T12:00:00Z')
     const cups = filterManageableCups([baseCup], now)
     expect(cups).toHaveLength(0)
   })
 
-  it('keeps cups manageable for 24h after end date', () => {
-    // Cup ends at 18:00 on March 1 — still visible 12h later
-    const now12hAfter = new Date('2026-03-02T06:00:00Z')
-    expect(filterManageableCups([baseCup], now12hAfter)).toHaveLength(1)
-    // 25h after end — should be gone
-    const now25hAfter = new Date('2026-03-02T19:01:00Z')
-    expect(filterManageableCups([baseCup], now25hAfter)).toHaveLength(0)
+  it('includes cups happening today', () => {
+    const todayCup = {
+      ...baseCup,
+      starts: '2026-02-15T06:00:00Z',
+      ends: '2026-02-15T18:00:00Z',
+    }
+
+    const now = new Date('2026-02-15T20:00:00Z')
+    const cups = filterManageableCups([todayCup], now)
+    expect(cups).toHaveLength(1)
   })
 
-  it('uses starts + 24h + 24h grace when no ends date', () => {
-    const cupNoEnds = { ...baseCup, ends: null }
-    // 12 hours after starts — should still be visible
-    const now12h = new Date('2026-03-01T22:00:00Z')
-    expect(filterManageableCups([cupNoEnds], now12h)).toHaveLength(1)
-    // 36 hours after starts (within 48h window) — still visible
-    const now36h = new Date('2026-03-02T22:00:00Z')
-    expect(filterManageableCups([cupNoEnds], now36h)).toHaveLength(1)
-    // 49 hours after starts — should be gone
-    const now49h = new Date('2026-03-03T11:01:00Z')
-    expect(filterManageableCups([cupNoEnds], now49h)).toHaveLength(0)
+  it('excludes cups beyond five days from today', () => {
+    const farCup = {
+      ...baseCup,
+      starts: '2026-02-21T10:00:00Z',
+      ends: '2026-02-21T18:00:00Z',
+    }
+
+    const now = new Date('2026-02-15T12:00:00Z')
+    const cups = filterManageableCups([farCup], now)
+    expect(cups).toHaveLength(0)
   })
 
   it('excludes non-cup events (wrong content type)', () => {
@@ -81,10 +83,10 @@ describe('filterManageableCups', () => {
     expect(filterManageableCups([inactive], now)).toHaveLength(0)
   })
 
-  it('excludes cups with no registration_starts', () => {
+  it('includes cups with no registration_starts when event is in window', () => {
     const noReg = { ...baseCup, registration_starts: null }
     const now = new Date('2026-02-15T12:00:00Z')
-    expect(filterManageableCups([noReg], now)).toHaveLength(0)
+    expect(filterManageableCups([noReg], now)).toHaveLength(1)
   })
 
   it('calculates registered count and full status', () => {
@@ -159,8 +161,8 @@ describe('filterManageableCups', () => {
   })
 
   it('sorts cups by start date', () => {
-    const cup1 = { ...baseCup, id: '1', starts: '2026-03-10T10:00:00Z', ends: '2026-03-10T18:00:00Z' }
-    const cup2 = { ...baseCup, id: '2', starts: '2026-03-05T10:00:00Z', ends: '2026-03-05T18:00:00Z' }
+    const cup1 = { ...baseCup, id: '1', starts: '2026-02-19T10:00:00Z', ends: '2026-02-19T18:00:00Z' }
+    const cup2 = { ...baseCup, id: '2', starts: '2026-02-17T10:00:00Z', ends: '2026-02-17T18:00:00Z' }
     const now = new Date('2026-02-15T12:00:00Z')
     const cups = filterManageableCups([cup1, cup2], now)
     expect(cups[0].id).toBe('2')

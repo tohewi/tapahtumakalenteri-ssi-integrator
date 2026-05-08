@@ -16,6 +16,7 @@ import {
   attachCupStatuses,
   getIncludedMatchIds,
   filterManageableCups,
+  getManageWindowBounds,
 } from '../lib/services/cup-manage.js'
 import { log } from '../lib/logger.js'
 import { AppError } from '../lib/errors/AppError.js'
@@ -29,15 +30,18 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
 
   // ============================================================
   // GET /api/manage/cups — List cups available for management
-  // Returns cups that haven't ended yet, regardless of registration status.
-  // Uses admin GraphQL to query SSI events (same as registration endpoint
-  // but with relaxed filtering: no registration status check, uses end date).
+  // Returns cups happening today or within the next 5 days.
+  // Applies the same date window in GraphQL (starts_after/starts_before)
+  // and in local filtering for deterministic behavior.
   // ============================================================
   router.get('/cups', requireAuth('manage'), async (req, res, next) => {
     try {
+      const now = new Date()
+      const { windowStart, windowEndExclusive } = getManageWindowBounds(now)
+
       const result = await adminGraphQL(`
-        query {
-          events(search: "Kupittaa CUP") {
+        query ManageCups($search: String!, $startsAfter: String!, $startsBefore: String!) {
+          events(search: $search, starts_after: $startsAfter, starts_before: $startsBefore) {
             id name starts ends status get_content_type_key
             max_competitors
             registration
@@ -58,9 +62,13 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
             }
           }
         }
-      `)
+      `, {
+        search: 'Kupittaa CUP',
+        startsAfter: windowStart.toISOString(),
+        startsBefore: windowEndExclusive.toISOString(),
+      })
 
-      const cups = filterManageableCups(result.events)
+      const cups = filterManageableCups(result.events, now)
 
       res.json({ cups })
     } catch (err) {

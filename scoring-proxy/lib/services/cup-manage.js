@@ -299,19 +299,31 @@ export function getIncludedMatchIds(cupEvent) {
 // Filter active cups for management listing
 // ============================================================
 
-export function filterManageableCups(events, now = new Date()) {
+export const MANAGE_WINDOW_DAYS = 5
+
+export function getManageWindowBounds(now = new Date(), windowDays = MANAGE_WINDOW_DAYS) {
+  const windowStart = new Date(now)
+  windowStart.setUTCHours(0, 0, 0, 0)
+
+  const windowEndExclusive = new Date(windowStart)
+  windowEndExclusive.setUTCDate(windowEndExclusive.getUTCDate() + windowDays + 1)
+
+  return { windowStart, windowEndExclusive }
+}
+
+function isWithinManageWindow(starts, windowStart, windowEndExclusive) {
+  const startsAt = starts ? new Date(starts) : null
+  if (!startsAt || Number.isNaN(startsAt.getTime())) return false
+  return startsAt >= windowStart && startsAt < windowEndExclusive
+}
+
+export function filterManageableCups(events, now = new Date(), windowDays = MANAGE_WINDOW_DAYS) {
+  const { windowStart, windowEndExclusive } = getManageWindowBounds(now, windowDays)
+
   return (events || [])
     .filter(e => e.get_content_type_key === 136)
     .filter(e => e.status === 'on')
-    .filter(e => {
-      const regStarts = e.registration_starts ? new Date(e.registration_starts) : null
-      if (!regStarts || regStarts > now) return false
-      // Keep cups manageable for 24h after end date (management needed on event day + after)
-      const ends = e.ends ? new Date(e.ends) : null
-      const fallbackEnd = new Date(new Date(e.starts).getTime() + 24 * 60 * 60 * 1000)
-      const effectiveEnd = new Date((ends || fallbackEnd).getTime() + 24 * 60 * 60 * 1000)
-      return effectiveEnd > now
-    })
+    .filter(e => isWithinManageWindow(e.starts, windowStart, windowEndExclusive))
     .map(c => {
       const registered = countRegisteredCupCompetitors(c)
       const maxCompetitors = c.max_competitors || 25
