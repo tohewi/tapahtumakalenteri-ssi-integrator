@@ -7,6 +7,7 @@ import { ssiFindCompetitorInMatch, ssiGraphQL } from '../lib/ssi-core/client.js'
 
 afterEach(() => {
   delete process.env.SSI_GRAPHQL_MAX_RETRIES
+  delete process.env.SSI_ADMIN_API_KEY
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
@@ -20,6 +21,7 @@ function makeHeaders(values = {}) {
 describe('ssiGraphQL hardening', () => {
   it('retries once on transient 502 and succeeds', async () => {
     process.env.SSI_GRAPHQL_MAX_RETRIES = '2'
+    process.env.SSI_ADMIN_API_KEY = 'test-api-key'
 
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({
@@ -44,6 +46,7 @@ describe('ssiGraphQL hardening', () => {
 
   it('maps fetch-failed upstream errors to UPSTREAM_UNAVAILABLE', async () => {
     process.env.SSI_GRAPHQL_MAX_RETRIES = '0'
+    process.env.SSI_ADMIN_API_KEY = 'test-api-key'
 
     const fetchMock = vi.fn().mockRejectedValue(new Error('fetch failed'))
     vi.stubGlobal('fetch', fetchMock)
