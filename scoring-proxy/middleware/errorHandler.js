@@ -15,6 +15,23 @@ import {
   SSIError
 } from '../lib/errors/AppError.js'
 
+const UPSTREAM_UNAVAILABLE_CODE = 'UPSTREAM_UNAVAILABLE'
+const UPSTREAM_UNAVAILABLE_MESSAGE = 'SSI service temporarily unavailable. Please retry.'
+
+/**
+ * Detects transient upstream SSI/GraphQL failures.
+ */
+function isUpstreamUnavailableError(err) {
+  if (!err) return false
+  if (err.code === UPSTREAM_UNAVAILABLE_CODE || err.isUpstreamTransient === true) return true
+
+  const message = String(err.message || '')
+  return (
+    /GraphQL HTTP (502|503|504):/i.test(message)
+    || message.toLowerCase().includes('fetch failed')
+  )
+}
+
 /**
  * Enhances error with request context
  */
@@ -67,8 +84,13 @@ function formatErrorResponse(err) {
     code: 'INTERNAL_ERROR',
     timestamp: new Date().toISOString()
   }
+
+  if (isUpstreamUnavailableError(err)) {
+    response.error = UPSTREAM_UNAVAILABLE_MESSAGE
+    response.code = UPSTREAM_UNAVAILABLE_CODE
+  }
   
-  if (isClientSafeError(err)) {
+  if (!isUpstreamUnavailableError(err) && isClientSafeError(err)) {
     response.error = err.message
     response.code = err.code || 'UNKNOWN_ERROR'
     
@@ -108,12 +130,19 @@ function errorHandler(err, req, res, next) {
   err = enhanceError(err, req)
   
   // Log the error
-  const logLevel = err instanceof AppError && err.isOperational ? 'warn' : 'error'
+  const isUpstreamUnavailable = isUpstreamUnavailableError(err)
+  const logLevel = (err instanceof AppError && err.isOperational) || isUpstreamUnavailable ? 'warn' : 'error'
   
   log[logLevel]('API Error', {
     error: err.message,
     code: err.code,
     statusCode: err.statusCode,
+    upstreamStatus: err.upstreamStatus,
+    upstreamStatusText: err.upstreamStatusText,
+    upstreamHeaders: err.upstreamHeaders,
+    upstreamBodySnippet: err.upstreamBodySnippet,
+    attempts: err.attempts,
+    isUpstreamTransient: err.isUpstreamTransient,
     stack: err.stack,
     path: req.path,
     method: req.method,
@@ -125,7 +154,7 @@ function errorHandler(err, req, res, next) {
   })
   
   // Send response
-  const statusCode = err.statusCode || 500
+  const statusCode = isUpstreamUnavailable ? 503 : (err.statusCode || 500)
   const response = formatErrorResponse(err)
   
   res.status(statusCode).json(response)
@@ -172,6 +201,7 @@ export {
   asyncHandler,
   createError,
   enhanceError,
+  isUpstreamUnavailableError,
   isClientSafeError,
   formatErrorResponse
 }

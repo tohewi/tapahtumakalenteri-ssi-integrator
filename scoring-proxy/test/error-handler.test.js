@@ -107,6 +107,19 @@ describe('Error Handling Middleware', () => {
       expect(response.body.ssiStatusCode).toBe(504)
     })
 
+    it('maps transient GraphQL upstream failures to 503 with a clean UI message', async () => {
+      app.get('/test', (req, res, next) => {
+        next(new Error('GraphQL HTTP 502: Bad Gateway'))
+      })
+      app.use(errorHandler)
+
+      const response = await request(app).get('/test')
+
+      expect(response.status).toBe(503)
+      expect(response.body.error).toBe('SSI service temporarily unavailable. Please retry.')
+      expect(response.body.code).toBe('UPSTREAM_UNAVAILABLE')
+    })
+
     it('hides generic error details from client', async () => {
       app.get('/test', (req, res, next) => {
         next(new Error('Unexpected internal bug'))
@@ -266,6 +279,14 @@ describe('Error Handling Middleware', () => {
 
       expect(response.error).toBe('Internal server error')
       expect(response.code).toBe('INTERNAL_ERROR')
+    })
+
+    it('formats upstream unavailable errors with a user-safe response', () => {
+      const err = new Error('fetch failed')
+      const response = formatErrorResponse(err)
+
+      expect(response.error).toBe('SSI service temporarily unavailable. Please retry.')
+      expect(response.code).toBe('UPSTREAM_UNAVAILABLE')
     })
 
     it('includes requestId when present on error', () => {

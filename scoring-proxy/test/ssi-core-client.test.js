@@ -3,11 +3,58 @@
 // ============================================================
 
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { ssiFindCompetitorInMatch } from '../lib/ssi-core/client.js'
+import { ssiFindCompetitorInMatch, ssiGraphQL } from '../lib/ssi-core/client.js'
 
 afterEach(() => {
+  delete process.env.SSI_GRAPHQL_MAX_RETRIES
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
+})
+
+function makeHeaders(values = {}) {
+  return {
+    get: (name) => values[name.toLowerCase()] || null,
+  }
+}
+
+describe('ssiGraphQL hardening', () => {
+  it('retries once on transient 502 and succeeds', async () => {
+    process.env.SSI_GRAPHQL_MAX_RETRIES = '2'
+
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        statusText: 'Bad Gateway',
+        text: async () => '<html>bad gateway</html>',
+        headers: makeHeaders({ 'content-type': 'text/html' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: { ok: true } }),
+      })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const data = await ssiGraphQL('jwt-token', 'query { ok }')
+
+    expect(data).toEqual({ ok: true })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('maps fetch-failed upstream errors to UPSTREAM_UNAVAILABLE', async () => {
+    process.env.SSI_GRAPHQL_MAX_RETRIES = '0'
+
+    const fetchMock = vi.fn().mockRejectedValue(new Error('fetch failed'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(ssiGraphQL('jwt-token', 'query { ok }')).rejects.toMatchObject({
+      code: 'UPSTREAM_UNAVAILABLE',
+      statusCode: 503,
+      isUpstreamTransient: true,
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('ssiFindCompetitorInMatch', () => {

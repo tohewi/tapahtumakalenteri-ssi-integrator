@@ -21,6 +21,20 @@ import {
   auditLogout,
 } from '../lib/session/index.js'
 
+const UPSTREAM_UNAVAILABLE_CODE = 'UPSTREAM_UNAVAILABLE'
+const UPSTREAM_UNAVAILABLE_MESSAGE = 'SSI service temporarily unavailable. Please retry.'
+
+function isUpstreamUnavailableError(err) {
+  if (!err) return false
+  if (err.code === UPSTREAM_UNAVAILABLE_CODE || err.isUpstreamTransient === true) return true
+
+  const message = String(err.message || '')
+  return (
+    /GraphQL HTTP (502|503|504):/i.test(message)
+    || message.toLowerCase().includes('fetch failed')
+  )
+}
+
 function internalError(message) {
   return new AppError(message, 500, 'INTERNAL_ERROR')
 }
@@ -132,6 +146,19 @@ export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth,
         scope: sessionScope,
       })
     } catch (err) {
+      if (isUpstreamUnavailableError(err)) {
+        auditLogin(email, req.ip, false, UPSTREAM_UNAVAILABLE_CODE)
+        log.warn('[auth-v7] Login failed due upstream availability issue:', {
+          error: err.message,
+          upstreamStatus: err.upstreamStatus,
+          attempts: err.attempts,
+        })
+        return res.status(503).json({
+          error: UPSTREAM_UNAVAILABLE_MESSAGE,
+          code: UPSTREAM_UNAVAILABLE_CODE,
+        })
+      }
+
       auditLogin(email, req.ip, false, err.message)
       log.error('[auth-v7] Login failed:', err.message)
       res.status(401).json({ error: 'Login failed' })
@@ -360,6 +387,18 @@ export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth,
         label: validated.label,
       })
     } catch (err) {
+      if (isUpstreamUnavailableError(err)) {
+        log.warn('[auth-v7] Token login failed due upstream availability issue:', {
+          error: err.message,
+          upstreamStatus: err.upstreamStatus,
+          attempts: err.attempts,
+        })
+        return res.status(503).json({
+          error: UPSTREAM_UNAVAILABLE_MESSAGE,
+          code: UPSTREAM_UNAVAILABLE_CODE,
+        })
+      }
+
       log.error('[auth-v7] Token login failed:', err.message)
       // Distinguish auth failures from internal errors
       const status = err.message?.includes('credentials') || err.message?.includes('auth') ? 401 : 500

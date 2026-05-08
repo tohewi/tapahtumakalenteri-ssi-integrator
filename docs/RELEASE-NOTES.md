@@ -5,6 +5,39 @@
 
 ---
 
+## Release 7.9.1 — GraphQL Upstream Reliability Hotfix (2026-05-08)
+
+**Requirements:** GQL-HF1 ✅, GQL-HF2 ✅, GQL-HF3 ✅
+
+### Overview
+
+Hotfix release focused on production resilience for transient SSI GraphQL outages. The proxy now retries short-lived upstream failures, records actionable diagnostics for incident triage, and returns a clean availability response to UI clients.
+
+### New Features
+
+- **Transient retry with jitter**: `ssiGraphQL` retries transient upstream failures (`HTTP 502/503/504`) and network-style `fetch failed` errors with bounded jittered backoff.
+- **Configurable retry cap**: Retry behavior can be tuned with `SSI_GRAPHQL_MAX_RETRIES` (clamped to 0–2, default 2).
+- **Upstream diagnostics capture**: Retry/final-failure logs include attempt metadata, selected upstream headers, and a response body snippet.
+
+### Bug Fixes
+
+- **Cleaner availability handling**: Transient upstream failures are now mapped to HTTP `503` with user-safe payload (`UPSTREAM_UNAVAILABLE`) instead of surfacing as generic auth/internal failures.
+- **Auth endpoint consistency**: `/api/v1/auth/login` and `/api/v1/auth/token-login` now return consistent `503` responses for transient upstream SSI incidents.
+
+### Requirements Met
+
+- **GQL-HF1:** GraphQL transient retry hardening implemented with jittered backoff.
+- **GQL-HF2:** Upstream diagnostics logging (headers + body snippet) implemented for incident analysis.
+- **GQL-HF3:** UI-facing upstream availability mapping implemented with standardized `503`/`UPSTREAM_UNAVAILABLE` responses.
+
+### Test Status
+
+| Suite | Passing | Notes |
+|-------|--------:|-------|
+| Backend (scoring-proxy) | 215 | Full suite green after hardening + new regression tests |
+
+---
+
 ## Release 7.7 — QR Code Login for Scoring (2026-03-20)
 
 **Requirements:** QR1–QR6 ✅ (all implemented)
