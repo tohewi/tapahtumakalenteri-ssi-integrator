@@ -482,7 +482,7 @@ describe('GET /api/manage/cups', () => {
                   competitors: [
                     { id: '1', status: 'a' },
                     { id: '2', status: 'a' },
-                    { id: '3', status: 'p' }, // pending, not approved
+                    { id: '3', status: 'p' },
                   ]
                 },
                 {
@@ -501,9 +501,9 @@ describe('GET /api/manage/cups', () => {
     
     expect(res.status).toBe(200)
     expect(res.data.cups.length).toBe(1)
-    expect(res.data.cups[0].registered).toBe(2) // Only approved (status 'a') and unique IDs
+    expect(res.data.cups[0].registered).toBe(3) // approved + pending, unique IDs
     expect(res.data.cups[0].maxCompetitors).toBe(3)
-    expect(res.data.cups[0].full).toBe(false) // 2 < 3
+    expect(res.data.cups[0].full).toBe(true) // 3 >= 3
   })
 
   it('marks cup as full when registered >= maxCompetitors', async () => {
@@ -628,8 +628,47 @@ describe('GET /api/manage/cups', () => {
 
     expect(res.status).toBe(200)
     expect(res.data.cups.length).toBe(1)
-    expect(res.data.cups[0].registered).toBe(2)
+    expect(res.data.cups[0].registered).toBe(3)
     expect(res.data.cups[0].maxCompetitors).toBe(5)
+  })
+
+  it('counts cup competitors when status is missing', async () => {
+    const ip = uniqueIp()
+    const { sessionId } = await createSession(createMockSessionInput({ scope: 'manage' }))
+
+    app.setMockResponse({
+      events: [
+        {
+          id: '704',
+          name: 'Statusless Competitors Cup',
+          starts: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+          ends: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'on',
+          get_content_type_key: 136,
+          max_competitors: 10,
+          registration: 'op',
+          registration_starts: new Date(Date.now() - 1000).toISOString(),
+          registration_closes: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
+          competitors: [
+            { id: 'cp1', status: '' },
+            { id: 'cp2' },
+          ],
+          component_matches: [{
+            number: 1,
+            included: true,
+            match: {
+              squads: [],
+            },
+          }],
+        },
+      ],
+    })
+
+    const res = await request('GET', '/api/manage/cups', null, ip, { ssi_session: sessionId })
+
+    expect(res.status).toBe(200)
+    expect(res.data.cups.length).toBe(1)
+    expect(res.data.cups[0].registered).toBe(2)
   })
 })
 

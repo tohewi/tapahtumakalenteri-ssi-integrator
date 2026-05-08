@@ -385,7 +385,7 @@ function countRegisteredCupCompetitors(cupEvent) {
 function countApprovedCupCompetitors(competitors = []) {
   const approvedIds = new Set()
   for (const competitor of competitors || []) {
-    if (isApprovedStatus(competitor?.status) && competitor?.id != null) {
+    if (isCountableRegistrationStatus(competitor?.status) && competitor?.id != null) {
       approvedIds.add(String(competitor.id))
     }
   }
@@ -399,7 +399,7 @@ function countApprovedMatchSquadCompetitors(componentMatches = []) {
   if (firstMatch?.match?.squads) {
     for (const squad of firstMatch.match.squads) {
       for (const competitor of (squad.competitors || [])) {
-        if (isApprovedStatus(competitor?.status) && competitor?.id != null) {
+        if (isCountableRegistrationStatus(competitor?.status) && competitor?.id != null) {
           approvedIds.add(String(competitor.id))
         }
       }
@@ -409,9 +409,15 @@ function countApprovedMatchSquadCompetitors(componentMatches = []) {
   return approvedIds.size
 }
 
-function isApprovedStatus(status) {
+function isCountableRegistrationStatus(status) {
   const normalized = String(status || '').toLowerCase()
-  return normalized === 'a' || normalized === 'approved'
+  if (!normalized) return true
+  return normalized === 'a'
+    || normalized === 'approved'
+    || normalized === 'p'
+    || normalized === 'pending'
+    || normalized === 'r'
+    || normalized === 'registered'
 }
 
 // Key for unique shooter identification by (firstName, lastName, email) triplet

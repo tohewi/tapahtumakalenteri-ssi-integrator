@@ -131,8 +131,31 @@ describe('filterManageableCups', () => {
     const cups = filterManageableCups([cupWithCupCompetitorsOnly], now)
 
     expect(cups).toHaveLength(1)
-    expect(cups[0].registered).toBe(2)
+    expect(cups[0].registered).toBe(3)
     expect(cups[0].full).toBe(false)
+  })
+
+  it('counts cup competitors even when status is missing', () => {
+    const cupWithStatuslessCompetitors = {
+      ...baseCup,
+      max_competitors: 10,
+      competitors: [
+        { id: 'cp1', status: '' },
+        { id: 'cp2' },
+      ],
+      component_matches: [{
+        included: true,
+        match: {
+          squads: [],
+        },
+      }],
+    }
+
+    const now = new Date('2026-02-15T12:00:00Z')
+    const cups = filterManageableCups([cupWithStatuslessCompetitors], now)
+
+    expect(cups).toHaveLength(1)
+    expect(cups[0].registered).toBe(2)
   })
 
   it('sorts cups by start date', () => {
