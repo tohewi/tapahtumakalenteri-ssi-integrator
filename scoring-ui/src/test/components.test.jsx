@@ -6,6 +6,7 @@ import MatchPicker from '../components/MatchPicker'
 import SquadPicker from '../components/SquadPicker'
 import ShooterPicker from '../components/ShooterPicker'
 import CupSearch from '../components/CupSearch'
+import { CupList } from '../components/shared'
 
 // ============================================================
 // LoginScreen
@@ -97,6 +98,27 @@ describe('CupSearch', () => {
     render(<CupSearch onSelectCup={vi.fn()} loading={false} onLogout={onLogout} />)
     await userEvent.click(screen.getByText('Kirjaudu ulos'))
     expect(onLogout).toHaveBeenCalled()
+  })
+})
+
+// ============================================================
+// CupList
+// ============================================================
+
+describe('CupList', () => {
+  it('renders competitor count using fallback field names', () => {
+    const cups = [{
+      id: 'cup-1',
+      name: 'Fallback Count Cup',
+      starts: '2026-02-21T10:00:00Z',
+      registrationOpen: true,
+      competitorCount: '7',
+      max_competitors: '30',
+    }]
+
+    render(<CupList cups={cups} onSelect={vi.fn()} loading={false} />)
+
+    expect(screen.getByText('7/30')).toBeInTheDocument()
   })
 })
 

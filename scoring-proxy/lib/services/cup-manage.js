@@ -313,16 +313,7 @@ export function filterManageableCups(events, now = new Date()) {
       return effectiveEnd > now
     })
     .map(c => {
-      const firstMatch = (c.component_matches || []).find(cm => cm.included && cm.match)
-      const approvedIds = new Set()
-      if (firstMatch?.match?.squads) {
-        for (const s of firstMatch.match.squads) {
-          for (const comp of (s.competitors || [])) {
-            if (comp.status === 'a') approvedIds.add(comp.id)
-          }
-        }
-      }
-      const registered = approvedIds.size
+      const registered = countRegisteredCupCompetitors(c)
       const maxCompetitors = c.max_competitors || 25
       const full = registered >= maxCompetitors
       const regStarts = c.registration_starts ? new Date(c.registration_starts) : null
@@ -383,6 +374,44 @@ function mapCupCompetitor(c) {
     hasEmailError: !email,
     name: `${firstName} ${lastName}`.trim(),
   }
+}
+
+function countRegisteredCupCompetitors(cupEvent) {
+  const fromCup = countApprovedCupCompetitors(cupEvent?.competitors)
+  if (fromCup > 0) return fromCup
+  return countApprovedMatchSquadCompetitors(cupEvent?.component_matches)
+}
+
+function countApprovedCupCompetitors(competitors = []) {
+  const approvedIds = new Set()
+  for (const competitor of competitors || []) {
+    if (isApprovedStatus(competitor?.status) && competitor?.id != null) {
+      approvedIds.add(String(competitor.id))
+    }
+  }
+  return approvedIds.size
+}
+
+function countApprovedMatchSquadCompetitors(componentMatches = []) {
+  const firstMatch = (componentMatches || []).find(cm => cm.included && cm.match)
+  const approvedIds = new Set()
+
+  if (firstMatch?.match?.squads) {
+    for (const squad of firstMatch.match.squads) {
+      for (const competitor of (squad.competitors || [])) {
+        if (isApprovedStatus(competitor?.status) && competitor?.id != null) {
+          approvedIds.add(String(competitor.id))
+        }
+      }
+    }
+  }
+
+  return approvedIds.size
+}
+
+function isApprovedStatus(status) {
+  const normalized = String(status || '').toLowerCase()
+  return normalized === 'a' || normalized === 'approved'
 }
 
 // Key for unique shooter identification by (firstName, lastName, email) triplet

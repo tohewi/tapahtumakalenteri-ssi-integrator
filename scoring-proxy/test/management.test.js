@@ -590,6 +590,47 @@ describe('GET /api/manage/cups', () => {
     expect(res.data.cups[0].full).toBe(false) // 1 < 5
     expect(res.data.cups[0].registrationOpen).toBe(true) // open and has space
   })
+
+  it('uses cup-level competitors for count when squads are empty', async () => {
+    const ip = uniqueIp()
+    const { sessionId } = await createSession(createMockSessionInput({ scope: 'manage' }))
+
+    app.setMockResponse({
+      events: [
+        {
+          id: '703',
+          name: 'Cup Competitor Count Fallback',
+          starts: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+          ends: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'on',
+          get_content_type_key: 136,
+          max_competitors: 5,
+          registration: 'op',
+          registration_starts: new Date(Date.now() - 1000).toISOString(),
+          registration_closes: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
+          competitors: [
+            { id: 'cp1', status: 'a' },
+            { id: 'cp2', status: 'a' },
+            { id: 'cp3', status: 'p' },
+          ],
+          component_matches: [{
+            number: 1,
+            included: true,
+            match: {
+              squads: [],
+            },
+          }],
+        },
+      ],
+    })
+
+    const res = await request('GET', '/api/manage/cups', null, ip, { ssi_session: sessionId })
+
+    expect(res.status).toBe(200)
+    expect(res.data.cups.length).toBe(1)
+    expect(res.data.cups[0].registered).toBe(2)
+    expect(res.data.cups[0].maxCompetitors).toBe(5)
+  })
 })
 
 // ============================================================

@@ -15,6 +15,44 @@ function internalError(message) {
   return new AppError(message, 500, 'INTERNAL_ERROR')
 }
 
+function isApprovedStatus(status) {
+  const normalized = String(status || '').toLowerCase()
+  return normalized === 'a' || normalized === 'approved'
+}
+
+function countApprovedCupCompetitors(competitors = []) {
+  const approvedIds = new Set()
+  for (const competitor of competitors || []) {
+    if (isApprovedStatus(competitor?.status) && competitor?.id != null) {
+      approvedIds.add(String(competitor.id))
+    }
+  }
+  return approvedIds.size
+}
+
+function countApprovedSquadCompetitors(componentMatches = []) {
+  const firstMatch = (componentMatches || []).find(cm => cm.included && cm.match)
+  const approvedIds = new Set()
+
+  if (firstMatch?.match?.squads) {
+    for (const squad of firstMatch.match.squads) {
+      for (const competitor of (squad.competitors || [])) {
+        if (isApprovedStatus(competitor?.status) && competitor?.id != null) {
+          approvedIds.add(String(competitor.id))
+        }
+      }
+    }
+  }
+
+  return approvedIds.size
+}
+
+function countRegisteredCupCompetitors(cupEvent) {
+  const fromCup = countApprovedCupCompetitors(cupEvent?.competitors)
+  if (fromCup > 0) return fromCup
+  return countApprovedSquadCompetitors(cupEvent?.component_matches)
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MAX_EMAIL_LEN = 254
@@ -119,6 +157,7 @@ export function createRegistrationRouter({
             max_competitors
             registration
             ... on NordicSerieNode {
+              competitors { id status }
               registration_starts
               registration_closes
               component_matches {
@@ -142,18 +181,7 @@ export function createRegistrationRouter({
         .filter(e => new Date(e.starts) > now) // future only
         .filter(e => e.status === 'on')         // active only
         .map(c => {
-          // Count approved competitors from the first component match's squads
-          // (all matches have the same competitors, so first match is representative)
-          const firstMatch = (c.component_matches || []).find(cm => cm.included && cm.match)
-          const approvedIds = new Set()
-          if (firstMatch?.match?.squads) {
-            for (const s of firstMatch.match.squads) {
-              for (const comp of (s.competitors || [])) {
-                if (comp.status === 'a') approvedIds.add(comp.id)
-              }
-            }
-          }
-          const registered = approvedIds.size
+          const registered = countRegisteredCupCompetitors(c)
           const maxCompetitors = c.max_competitors || 25
           const full = registered >= maxCompetitors
           const regStarts = c.registration_starts ? new Date(c.registration_starts) : null
@@ -199,6 +227,7 @@ export function createRegistrationRouter({
             id name starts status
             max_competitors
             ... on NordicSerieNode {
+              competitors { id status }
               component_matches {
                 number included
                 match {
@@ -255,13 +284,7 @@ export function createRegistrationRouter({
         }
       })
 
-      // Count approved competitors from first match's squads (same as cups list endpoint)
-      const approvedIds = new Set()
-      for (const sq of (firstMatch.squads || [])) {
-        for (const comp of (sq.competitors || [])) {
-          if (comp.status === 'a') approvedIds.add(comp.id)
-        }
-      }
+      const registered = countRegisteredCupCompetitors(cup)
 
       res.json({
         id: cup.id,
@@ -269,7 +292,7 @@ export function createRegistrationRouter({
         starts: cup.starts,
         status: cup.status,
         maxCompetitors: cup.max_competitors || 25,
-        registered: approvedIds.size,
+        registered,
         squads,
       })
     } catch (err) {

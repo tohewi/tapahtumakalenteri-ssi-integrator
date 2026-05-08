@@ -450,6 +450,12 @@ Migrate Cup creation and maintenance from web scraping to SSI GraphQL API. The l
 | GQL-HF2 | **Upstream diagnostics logging**: Failed transient upstream attempts log response header snapshot and body snippet for faster incident triage on Render. | ✅ Implemented |
 | GQL-HF3 | **Clean UI availability error**: Transient upstream incidents are mapped to HTTP `503` with user-safe message/code (`UPSTREAM_UNAVAILABLE`) instead of generic auth/internal failures. | ✅ Implemented |
 
+### Release 7.9.2 — Cup Competitor Count Hotfix
+
+| # | Fix | Status |
+|---|-----|--------|
+| GQL-HF4 | **Cup competitor count source hardening**: Cup registered competitor totals are calculated from CUP-level approved competitors first (`status` = `a/approved`) with match-squad fallback, so registration and management UI views keep accurate count badges even when squad competitor data is incomplete. | ✅ Implemented |
+
 ## Release 8.1 — Match Management Platform (Roadmap)
 
 Vision: Transform the current "link collection" home page into a structured match management platform. This requires significant UI design and architecture work before implementation.
@@ -489,7 +495,7 @@ Vision: Transform the current "link collection" home page into a structured matc
 - **Release 7.5** (Architecture V2 Foundation): 5 requirements — 3 ✅, 2 📋 ➜ R7.6 (ARCH3, ARCH4)
 - **Release 7.6** (Consolidation & Completion): 18 requirements from R6.0/R7.0/R7.2/R7.5 — see `release-7.6.md`
 - **Release 7.7** (QR Code Login for Scoring): 6 requirements — 6 ✅ (QR1–QR6). Device token auth for tablets/phones at the range. **7.7.1 hotfix**: 4 fixes (cup list visibility, auto-restore, same-day filtering, squad audit logging)
-- **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes implemented (GQL-HF1–GQL-HF3)
+- **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes implemented (GQL-HF1–GQL-HF3). **7.9.2 hotfix**: 1 fix implemented (GQL-HF4)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
 - **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
 
