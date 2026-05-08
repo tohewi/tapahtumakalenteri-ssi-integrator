@@ -5,6 +5,11 @@
 .DESCRIPTION
     Uses GraphQL introspection to discover available queries, mutations, and types
     in the SSI GraphQL API. Outputs the schema to help understand the API structure.
+    API key resolution order: -ApiKey parameter, SSI_ADMIN_API_KEY env var, then config file.
+
+.PARAMETER ApiKey
+    Optional GraphQL API key. If omitted, script uses SSI_ADMIN_API_KEY env var
+    or falls back to the API key config file.
 
 .PARAMETER ApiKeyPath
     Path to the API key configuration file (default: config/api-key.yml)
@@ -17,35 +22,52 @@
 #>
 
 param(
+    [string]$ApiKey,
     [string]$ApiKeyPath,
     [string]$OutputPath = "schema-output.json"
 )
 
-# Import required modules
-Import-Module -Name PowerShell-Yaml -ErrorAction Stop
+$resolvedApiKey = $null
 
-# Load API key configuration
-if (-not $ApiKeyPath) {
-    $ApiKeyPath = Join-Path -Path $PSScriptRoot -ChildPath "config\api-key.yml"
+if ($ApiKey -and $ApiKey -ne "YOUR_API_KEY_HERE") {
+    $resolvedApiKey = $ApiKey.Trim()
 }
 
-if (-not (Test-Path $ApiKeyPath)) {
-    Write-Error "API key configuration file not found: $ApiKeyPath"
-    exit 1
+if (-not $resolvedApiKey -and $env:SSI_ADMIN_API_KEY) {
+    $resolvedApiKey = $env:SSI_ADMIN_API_KEY.Trim()
 }
 
-$apiKeyContent = Get-Content -Path $ApiKeyPath -Raw -Encoding UTF8
-$apiKeyConfig = $apiKeyContent | ConvertFrom-Yaml
+if (-not $resolvedApiKey) {
+    if (-not $ApiKeyPath) {
+        $ApiKeyPath = Join-Path -Path $PSScriptRoot -ChildPath "config\api-key.yml"
+    }
 
-if (-not $apiKeyConfig.apiKey -or $apiKeyConfig.apiKey -eq "YOUR_API_KEY_HERE") {
-    Write-Error "API key not configured. Please set your API key in: $ApiKeyPath"
+    if (-not (Test-Path $ApiKeyPath)) {
+        Write-Error "API key configuration file not found: $ApiKeyPath"
+        exit 1
+    }
+
+    Import-Module -Name PowerShell-Yaml -ErrorAction Stop
+    $apiKeyContent = Get-Content -Path $ApiKeyPath -Raw -Encoding UTF8
+    $apiKeyConfig = $apiKeyContent | ConvertFrom-Yaml
+
+    if (-not $apiKeyConfig.apiKey -or $apiKeyConfig.apiKey -eq "YOUR_API_KEY_HERE") {
+        Write-Error "API key not configured. Set SSI_ADMIN_API_KEY env var or update: $ApiKeyPath"
+        exit 1
+    }
+
+    $resolvedApiKey = $apiKeyConfig.apiKey.Trim()
+}
+
+if (-not $resolvedApiKey) {
+    Write-Error "API key is missing. Set SSI_ADMIN_API_KEY env var or provide -ApiKey/-ApiKeyPath"
     exit 1
 }
 
 $GraphQLEndpoint = "https://shootnscoreit.com/graphql/"
 
 $headers = @{
-    "Authorization" = "Bearer $($apiKeyConfig.apiKey)"
+    "x-api-key" = $resolvedApiKey
     "Content-Type" = "application/json"
     "Accept" = "application/json"
 }

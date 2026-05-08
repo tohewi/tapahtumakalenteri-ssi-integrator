@@ -51,6 +51,8 @@ const AUTH_MUTATION = `
   }
 `
 
+const SSI_ADMIN_API_KEY = (process.env.SSI_ADMIN_API_KEY || '').trim()
+
 export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth, graphqlWithRefresh }) {
   const router = express.Router()
 
@@ -58,7 +60,7 @@ export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth,
   // POST /api/auth/login — V7 Login (dual session)
   // ============================================================
   router.post('/login', loginLimiter, async (req, res) => {
-    const { email, password, apiKey, scope } = req.body
+    const { email, password, scope } = req.body
     if (!email || !password) {
       return res.status(400).json({ error: 'email and password required' })
     }
@@ -74,8 +76,14 @@ export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth,
     }
 
     try {
+      const effectiveApiKey = SSI_ADMIN_API_KEY
+      if (!effectiveApiKey) {
+        log.error('[auth-v7] SSI_ADMIN_API_KEY is missing')
+        return res.status(500).json({ error: 'Server configuration error' })
+      }
+
       // 1. Authenticate user — get user's own SSI tokens
-      const authResult = await ssiGraphQL(null, AUTH_MUTATION, { email, password }, apiKey)
+      const authResult = await ssiGraphQL(null, AUTH_MUTATION, { email, password }, effectiveApiKey)
 
       if (!authResult.token_auth?.token?.token) {
         auditLogin(email, req.ip, false, 'Invalid credentials')
@@ -110,7 +118,7 @@ export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth,
           jwt: userJwt,
           refreshToken: userRefreshToken,
           cookies: userCookies,
-          apiKey: apiKey || null,
+          apiKey: effectiveApiKey,
           expiresAt: Date.now() + 15 * 60 * 1000, // SSI JWT ~15 min
         },
         adminSSI,
@@ -313,6 +321,11 @@ export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth,
     }
 
     try {
+      if (!SSI_ADMIN_API_KEY) {
+        log.error('[auth-v7] SSI_ADMIN_API_KEY is missing for token login')
+        return res.status(500).json({ error: 'Server configuration error' })
+      }
+
       const validated = await validateDeviceToken(token)
       if (!validated) {
         log.warn(`[auth-v7] Invalid/expired device token attempt from ${req.ip}`)
@@ -323,7 +336,7 @@ export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth,
       const authResult = await ssiGraphQL(null, AUTH_MUTATION, {
         email: validated.ssiEmail,
         password: validated.ssiPassword,
-      })
+      }, SSI_ADMIN_API_KEY)
 
       if (!authResult.token_auth?.token?.token) {
         log.error(`[auth-v7] Device token SSI auth failed for ${validated.ssiEmail}`)
@@ -357,6 +370,7 @@ export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth,
           jwt: userJwt,
           refreshToken: userRefreshToken,
           cookies: userCookies,
+          apiKey: SSI_ADMIN_API_KEY,
           expiresAt: Date.now() + 15 * 60 * 1000,
         },
         adminSSI,

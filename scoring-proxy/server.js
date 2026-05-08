@@ -26,6 +26,11 @@ const IS_PROD = process.env.NODE_ENV === 'production'
 const IS_RENDER = process.env.RENDER === 'true' // Render platform (production or preview)
 const API_V1_BASE = '/api/v1'
 const API_LEGACY_BASE = '/api'
+const SSI_ADMIN_API_KEY = (process.env.SSI_ADMIN_API_KEY || '').trim()
+
+if (!SSI_ADMIN_API_KEY) {
+  log.warn('[graphql] SSI_ADMIN_API_KEY is not set — GraphQL requests will fail')
+}
 
 function legacyApiAlias(req, res, next) {
   // Temporary backward-compatibility signal for unversioned endpoints.
@@ -145,8 +150,9 @@ function requireAuth(allowedScopes = null) {
 // Works with the legacy-compatible session view from toLegacySession:
 // session.jwt and session.refreshToken are write-through getters/setters.
 async function graphqlWithRefresh(session, query, variables = {}) {
+  const apiKey = session?.apiKey || SSI_ADMIN_API_KEY
   try {
-    return await ssiGraphQL(session.jwt, query, variables)
+    return await ssiGraphQL(session.jwt, query, variables, apiKey)
   } catch (err) {
     // If it looks like a token expiry, try refreshing
     if (session.refreshToken && (
@@ -155,7 +161,7 @@ async function graphqlWithRefresh(session, query, variables = {}) {
       err.message.includes('401')
     )) {
       try {
-        const newTokens = await ssiRefreshJWT(session.refreshToken)
+        const newTokens = await ssiRefreshJWT(session.refreshToken, apiKey)
         session.jwt = newTokens.token
         session.refreshToken = newTokens.refreshToken
         // Persist refreshed tokens back to V7 session store
@@ -169,7 +175,7 @@ async function graphqlWithRefresh(session, query, variables = {}) {
             },
           }).catch(() => {}) // best-effort persistence
         }
-        return await ssiGraphQL(session.jwt, query, variables)
+        return await ssiGraphQL(session.jwt, query, variables, apiKey)
       } catch {
         throw new Error('Session expired. Please login again.')
       }
@@ -211,9 +217,12 @@ const ADMIN_JWT_TTL = 14 * 60 * 1000         // 14 min — SSI JWTs expire ~15 m
 async function getAdminSession() {
   const email = process.env.SSI_ADMIN_EMAIL
   const password = process.env.SSI_ADMIN_PASSWORD
-  const apiKey = process.env.SSI_ADMIN_API_KEY || null
+  const apiKey = SSI_ADMIN_API_KEY || null
   if (!email || !password) {
     throw new Error('Registration not configured: SSI_ADMIN_EMAIL and SSI_ADMIN_PASSWORD required')
+  }
+  if (!apiKey) {
+    throw new Error('Registration not configured: SSI_ADMIN_API_KEY required')
   }
 
   const now = Date.now()
@@ -245,7 +254,7 @@ async function getAdminSession() {
     log.debug('[admin] Refreshing JWT (expired after ~14 min)...')
     try {
       if (adminRefreshToken) {
-        const newTokens = await ssiRefreshJWT(adminRefreshToken)
+        const newTokens = await ssiRefreshJWT(adminRefreshToken, apiKey)
         adminJwt = newTokens.token
         adminRefreshToken = newTokens.refreshToken
         adminJwtTime = now
@@ -291,13 +300,13 @@ async function getAdminSession() {
 async function adminGraphQL(query, variables = {}) {
   const admin = await getAdminSession()
   try {
-    return await ssiGraphQL(admin.jwt, query, variables)
+    return await ssiGraphQL(admin.jwt, query, variables, SSI_ADMIN_API_KEY)
   } catch (err) {
     if (admin.refreshToken && (err.message.includes('expired') || err.message.includes('Signature'))) {
-      const newTokens = await ssiRefreshJWT(admin.refreshToken)
+      const newTokens = await ssiRefreshJWT(admin.refreshToken, SSI_ADMIN_API_KEY)
       adminJwt = newTokens.token
       adminRefreshToken = newTokens.refreshToken
-      return await ssiGraphQL(adminJwt, query, variables)
+      return await ssiGraphQL(adminJwt, query, variables, SSI_ADMIN_API_KEY)
     }
     throw err
   }
@@ -449,7 +458,7 @@ if (isDirectRun) {
     console.log(`Mode: ${IS_PROD ? 'production' : 'development'}`)
     console.log(`Session backend: ${isUsingRedis() ? 'redis' : 'memory'}`)
     console.log('Endpoints:')
-    console.log('  POST /api/v1/auth/login     { email, password, apiKey }')
+    console.log('  POST /api/v1/auth/login     { email, password }')
     console.log('  GET  /api/v1/auth/status')
     console.log('  POST /api/v1/auth/logout')
     console.log('  GET  /api/v1/health')
