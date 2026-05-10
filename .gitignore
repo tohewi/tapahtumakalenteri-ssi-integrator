@@ -18,6 +18,7 @@ scripts-graphql/*.raw.html
 # IDE
 .vscode/
 .idea/
+ssi-tools.code-workspace
 
 # OS files
 .DS_Store
