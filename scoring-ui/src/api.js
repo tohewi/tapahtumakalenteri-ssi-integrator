@@ -214,16 +214,6 @@ export async function manageUndoDns(cupId, shooterName, email = null, cupPartici
   return handleResponse(resp)
 }
 
-export async function manageTogglePaid(cupId, shooterName, cupParticipantId) {
-  const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/toggle-paid`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ shooterName, cupParticipantId }),
-  })
-  return handleResponse(resp)
-}
-
 // ============================================================
 // Data transformers: SSI API → UI format
 // ============================================================

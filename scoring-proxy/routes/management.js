@@ -71,7 +71,13 @@ const MANAGE_CUP_COUNT_QUERY = `
   }
 `
 
-export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminGraphQL, getAdminSession }) {
+export function createManagementRouter({
+  requireAuth,
+  graphqlWithRefresh,
+  adminGraphQL,
+  getAdminSession,
+  paidToggleEnabled = false,
+}) {
   const router = express.Router()
 
   // ============================================================
@@ -205,13 +211,25 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
         shooters, cupOnly, cup.competitors, cupParticipantStatuses
       )
 
+      // Compliance toggle: when paid feature is disabled, do not expose paid state.
+      const applyPaidVisibility = (list = []) => {
+        if (paidToggleEnabled) return list
+        return list.map((shooter) => {
+          if (!shooter || typeof shooter !== 'object') return shooter
+          return { ...shooter, paid: false }
+        })
+      }
+
       res.json({
         cup: { id: cup.id, name: cup.name, starts: cup.starts },
         matches,
-        shooters: shootersWithStatus,
-        cupOnly: cupOnlyWithStatus,
-        matchOnly,
-        pendingShooters,
+        shooters: applyPaidVisibility(shootersWithStatus),
+        cupOnly: applyPaidVisibility(cupOnlyWithStatus),
+        matchOnly: applyPaidVisibility(matchOnly),
+        pendingShooters: applyPaidVisibility(pendingShooters),
+        features: {
+          paidToggleEnabled,
+        },
       })
     } catch (err) {
       log.error('[manage] Failed to fetch management data:', err.message)
@@ -698,6 +716,10 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
     const { shooterName, cupParticipantId } = req.body
     if (!shooterName || !cupParticipantId) {
       return res.status(400).json({ error: 'shooterName and cupParticipantId required' })
+    }
+
+    if (!paidToggleEnabled) {
+      return res.status(403).json({ error: 'Paid toggle feature is disabled' })
     }
 
     try {

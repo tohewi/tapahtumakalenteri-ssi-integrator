@@ -117,6 +117,7 @@ beforeAll(async () => {
     graphqlWithRefresh: graphState.execute,
     adminGraphQL: mockState.execute,
     getAdminSession: adminSessionState.execute,
+    paidToggleEnabled: false,
   })
   
   app.use('/api/manage', managementRouter)
@@ -897,20 +898,17 @@ describe('POST /api/manage/cup/:id/toggle-paid', () => {
     expect(res.data.error).toBe('shooterName and cupParticipantId required')
   })
 
-  it('toggles paid status at cup level', async () => {
+  it('returns 403 when paid feature flag is disabled', async () => {
     const ip = uniqueIp()
     const cookies = await createManageSessionCookie()
-
-    ssiClientMocks.ssiTogglePaid.mockResolvedValue({ success: true, message: 'Marked as paid' })
 
     const res = await request('POST', '/api/manage/cup/123/toggle-paid', {
       shooterName: 'Test Shooter',
       cupParticipantId: 'cup-88'
     }, ip, cookies)
 
-    expect(res.status).toBe(200)
-    expect(res.data).toEqual({ success: true, message: 'Marked as paid' })
-    expect(ssiClientMocks.ssiTogglePaid).toHaveBeenCalledTimes(1)
-    expect(ssiClientMocks.ssiTogglePaid).toHaveBeenCalledWith(137, 'cup-88', expect.any(Object))
+    expect(res.status).toBe(403)
+    expect(res.data.error).toBe('Paid toggle feature is disabled')
+    expect(ssiClientMocks.ssiTogglePaid).not.toHaveBeenCalled()
   })
 })

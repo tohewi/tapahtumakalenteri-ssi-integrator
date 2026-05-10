@@ -31,6 +31,8 @@ projects:
                 value: info
               - key: APP_URL
                 value: https://turres-ssi-tools.onrender.com
+              - key: FEATURE_PAID_TOGGLE_ENABLED
+                value: "false"
               - key: SESSION_SECRET
                 generateValue: true
               - key: REDIS_URL

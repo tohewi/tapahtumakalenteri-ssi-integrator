@@ -403,20 +403,6 @@ function SquaddingOverview({ data, cupId, onRefresh, onPatchShooterStatus }) {
     }
   }
 
-  // CUP3: Paid toggle handler
-  const handleTogglePaid = (shooter) => {
-    if (!shooter.cupParticipantId) return
-    runAction(
-      () => api.manageTogglePaid(cupId, shooter.name, shooter.cupParticipantId),
-      shooter.name,
-      'paid',
-      {
-        refresh: false,
-        afterSuccess: () => onPatchShooterStatus?.(shooter.cupParticipantId, s => ({ paid: !s.paid })),
-      }
-    )
-  }
-
   // CUP1: Move squad handler (for shooters already in a squad)
   const handleMoveSquad = (shooter) => {
     setSquadPicker({ shooter, type: 'move' })
@@ -516,7 +502,7 @@ function SquaddingOverview({ data, cupId, onRefresh, onPatchShooterStatus }) {
                         <div className="text-xs text-red-600 mt-0.5 font-medium">🚨 Sähköposti puuttuu</div>
                       )}
                       <div className="text-xs text-red-500 mt-0.5">Osakilpailuissa mutta ei squadissa</div>
-                      <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={handleSetDns} onUndoDns={handleUndoDns} onTogglePaid={handleTogglePaid} />
+                      <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={handleSetDns} onUndoDns={handleUndoDns} />
                     </div>
                     <ActionButton
                       label={fi.moveSquad}
@@ -546,7 +532,7 @@ function SquaddingOverview({ data, cupId, onRefresh, onPatchShooterStatus }) {
                       ) : (
                         <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
                       )}
-                      <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={handleSetDns} onUndoDns={handleUndoDns} onTogglePaid={handleTogglePaid} />
+                      <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={handleSetDns} onUndoDns={handleUndoDns} />
                     </div>
                     <ActionButton
                       label={`Korjaa → S${s.suggestedSquad}`}
@@ -591,7 +577,7 @@ function SquaddingOverview({ data, cupId, onRefresh, onPatchShooterStatus }) {
                             <div className="text-xs text-red-600 mt-0.5 font-medium">🚨 Sähköposti puuttuu</div>
                           )}
                           <div className="text-xs text-red-500 mt-0.5">Ilmoittautunut cupiin, ei osakilpailuissa</div>
-                          <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={handleSetDns} onUndoDns={handleUndoDns} onTogglePaid={handleTogglePaid} />
+                          <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={handleSetDns} onUndoDns={handleUndoDns} />
                         </div>
                         <ActionButton
                           label={fi.moveSquad}
@@ -692,7 +678,6 @@ function SquaddingOverview({ data, cupId, onRefresh, onPatchShooterStatus }) {
               onMoveSquad={handleMoveSquad}
               onSetDns={handleSetDns}
               onUndoDns={handleUndoDns}
-              onTogglePaid={handleTogglePaid}
               expanded={expandedSquads.has(group.number)}
               onToggleExpand={() => setExpandedSquads(prev => {
                 const next = new Set(prev)

@@ -126,13 +126,11 @@ export const fi = {
   filterMyEvents: 'Omat',
   missingRolesWarning: 'Vastuuvetäjä tai kalustovastaava puuttuu',
 
-  // Management: DNS and Paid (CUP2/CUP3)
+  // Management: DNS (CUP2/CUP3)
   setDns: 'DNS',
   undoDns: 'Peru DNS',
   dnsConfirm: (name) => `Aseta ${name} DNS?`,
   undoDnsConfirm: (name) => `Peru ${name} DNS?`,
-  paid: 'Maksettu',
-  unpaid: 'Ei maksettu',
   didNotShow: 'DNS',
   moveSquad: '→ S?',
 
@@ -289,13 +287,11 @@ export const en = {
   filterMyEvents: 'My events',
   missingRolesWarning: 'Lead instructor or equipment manager missing',
 
-  // Management: DNS and Paid (CUP2/CUP3)
+  // Management: DNS (CUP2/CUP3)
   setDns: 'DNS',
   undoDns: 'Undo DNS',
   dnsConfirm: (name) => `Set ${name} as DNS?`,
   undoDnsConfirm: (name) => `Undo DNS for ${name}?`,
-  paid: 'Paid',
-  unpaid: 'Unpaid',
   didNotShow: 'DNS',
   moveSquad: '→ S?',
 
