@@ -1,0 +1,75 @@
+name: Docs PR Gate
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  docs-only:
+    name: Verify docs-only PR
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.check.outputs.docs_only }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check changed files
+        id: check
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" > changed-files.txt
+
+          echo "Changed files:"
+          cat changed-files.txt
+
+          if [ ! -s changed-files.txt ]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "No changed files found."
+            exit 0
+          fi
+
+          non_docs=$(grep -Ev '^(docs/|\.github/ISSUE_TEMPLATE/|\.github/PULL_REQUEST_TEMPLATE|README\.md$|AGENTS\.md$|.*\.md$)' changed-files.txt || true)
+
+          if [ -n "$non_docs" ]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "Non-doc files changed:"
+            echo "$non_docs"
+            exit 1
+          fi
+
+          echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          echo "This PR only changes documentation files."
+
+  enable-merge-queue:
+    name: Enable merge queue for labeled docs PR
+    needs: docs-only
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.pull_request.draft == false &&
+      needs.docs-only.outputs.docs_only == 'true' &&
+      contains(github.event.pull_request.labels.*.name, 'auto-merge-docs')
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Enable GitHub auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          gh pr merge "$PR_URL" --auto --squash
