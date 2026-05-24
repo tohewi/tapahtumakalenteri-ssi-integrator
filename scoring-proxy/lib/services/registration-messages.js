@@ -1,7 +1,7 @@
 export const REGISTRATION_MESSAGES_FI = {
   validationInvalid: 'Virheelliset tiedot.',
-  captchaExpired: 'Captcha vanhentunut. Päivitä sivu ja yritä uudelleen.',
-  captchaWrong: 'Väärä vastaus.',
+  captchaExpired: 'Varmistus vanhentunut. Päivitä sivu ja yritä uudelleen.',
+  captchaWrong: 'Väärä vastaus. Yritä uudelleen.',
   cupFull: 'Tapahtuma on täynnä.',
   squadFull: 'Valittu squad on täynnä.',
   capacityFull: 'Tapahtuma tai squad on täynnä.',
