@@ -1,24 +1,18 @@
+import { ConflictError } from '../errors/AppError.js'
 import {
   countActiveRegistrations,
   upsertRegistration,
   updateRegistrationStatus,
   recordSyncAttempt,
 } from '../db/registration-store.js'
+import { registrationMessage } from './registration-messages.js'
 
 export function registrationSuccessMessage(syncStatus) {
-  if (syncStatus === 'synced') {
-    return 'Ilmoittautuminen onnistui ja SSI-squadiin asettelu onnistui.'
-  }
-  if (syncStatus === 'manual_needed' || syncStatus === 'not_applicable') {
-    return 'Ilmoittautuminen vastaanotettu. Järjestäjä näkee ilmoittautumisesi osallistujalistalla.'
-  }
-  if (syncStatus === 'partial') {
-    return 'Ilmoittautuminen vastaanotettu. SSI-käsittely onnistui osittain ja järjestäjä tarkistaa tilanteen.'
-  }
-  if (syncStatus === 'failed') {
-    return 'Ilmoittautuminen vastaanotettu. SSI-käsittely epäonnistui, mutta järjestäjä näkee ilmoittautumisesi.'
-  }
-  return 'Ilmoittautuminen vastaanotettu.'
+  if (syncStatus === 'synced') return registrationMessage('registrationSynced')
+  if (syncStatus === 'manual_needed' || syncStatus === 'not_applicable') return registrationMessage('registrationManualNeeded')
+  if (syncStatus === 'partial') return registrationMessage('registrationPartial')
+  if (syncStatus === 'failed') return registrationMessage('registrationSyncFailed')
+  return registrationMessage('registrationReceived')
 }
 
 export function buildPublicRegistrationResult({ registration, created }) {
@@ -46,16 +40,14 @@ export async function assertLocalCapacity(db, { cupId, squadNumber, cupMaxCompet
   ])
 
   if (cupMaxCompetitors != null && cupCount >= Number(cupMaxCompetitors)) {
-    const err = new Error('Cup is full')
+    const err = new ConflictError(registrationMessage('cupFull'))
     err.code = 'CUP_FULL'
-    err.publicMessage = 'Tapahtuma on täynnä.'
     throw err
   }
 
   if (squadMaxCompetitors != null && squadCount >= Number(squadMaxCompetitors)) {
-    const err = new Error('Squad is full')
+    const err = new ConflictError(registrationMessage('squadFull'))
     err.code = 'SQUAD_FULL'
-    err.publicMessage = 'Valittu squad on täynnä.'
     throw err
   }
 
