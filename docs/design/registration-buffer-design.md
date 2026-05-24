@@ -3,7 +3,8 @@
 **Release:** 10.0 — Public Registration Buffer  
 **Requirement prefix:** R100  
 **Status:** Draft design  
-**Branch:** `R100-feature-registration-buffer-design`  
+**Branch:** `release/r100-registration-buffer`  
+**Feature PR target:** R100 feature PRs target the release branch first; the release branch is merged to `main` only when the release is ready.  
 **Product variant:** Current `main` TurRes SSI tools product, not the R80 platform product.
 
 ---
@@ -52,6 +53,8 @@ The MVP should use `#/reg-management` instead of extending `#/manage`. The exist
 ## 3. Product Boundary
 
 This design is for the `main` product only. R80 may be used as a reference for PostgreSQL patterns such as `DATABASE_URL`, optional database availability, idempotent schema initialization, `DB_SCHEMA` preview isolation, parameterized `query()`, and `withTransaction()`. The R80 tenant/account/platform model must not be merged into this feature unless explicitly approved.
+
+R100 implementation work is accumulated in `release/r100-registration-buffer`. Feature PRs should target that release branch. CI should run for PRs into `release/**`, while deployment remains limited to `main`.
 
 ---
 
@@ -149,11 +152,11 @@ Target body:
 {
   "cupId": "150",
   "squadNumber": 1,
-  "name": "Matti Meikäläinen",
-  "email": "person@example.com",
+  "name": "Example Shooter",
+  "email": "shooter@example.invalid",
   "phone": "optional",
   "hasSsiAccount": "yes",
-  "ssiEmail": "person@example.com",
+  "ssiEmail": "ssi@example.invalid",
   "captchaId": "...",
   "captchaAnswer": 42
 }
