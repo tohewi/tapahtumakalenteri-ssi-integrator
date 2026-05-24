@@ -1,11 +1,15 @@
 name: CI / Deploy
 
-# GitHub Flow: Runs tests on all PRs, deploys only from main
+# GitHub Flow:
+# - Runs tests on PRs targeting main and release branches.
+# - Deploys only from pushes to main.
 on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - 'release/**'
 
 jobs:
   test-audit-build:
