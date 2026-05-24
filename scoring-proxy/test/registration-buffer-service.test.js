@@ -10,25 +10,22 @@ import {
 
 function createDb({ cupCount = 0, squadCount = 0, existingRows = [] } = {}) {
   const calls = []
+  const query = vi.fn(async (sql, params = []) => {
+    calls.push({ sql, params })
+    if (sql.includes('SELECT pg_advisory_xact_lock')) return { rows: [] }
+    if (sql.includes('SELECT COUNT') && params.length === 2) return { rows: [{ count: cupCount }] }
+    if (sql.includes('SELECT COUNT') && params.length === 3) return { rows: [{ count: squadCount }] }
+    if (sql.includes('SELECT * FROM public_registrations') && sql.includes('FOR UPDATE')) return { rows: existingRows }
+    if (sql.includes('INSERT INTO public_registrations')) return { rows: [rowFromParams(params)] }
+    if (sql.includes('UPDATE public_registrations')) return { rows: [{ ...rowFromParams(['reg-1', '150', 'Cup', null, 1, 'Laina-ase', 'Example Shooter', 'shooter@example.invalid', null, 'yes', 'ssi@example.invalid', 'confirmed', params[2] || 'synced', params[3], params[4]]) }] }
+    if (sql.includes('INSERT INTO public_registration_sync_attempts')) return { rows: [{ id: params[0], registration_id: params[1], status: params[4] }] }
+    return { rows: [] }
+  })
+
   return {
     calls,
-    withTransaction: vi.fn(async (callback) => callback({
-      query: vi.fn(async (sql, params = []) => {
-        calls.push({ sql, params })
-        if (sql.includes('SELECT * FROM public_registrations') && sql.includes('FOR UPDATE')) return { rows: existingRows }
-        if (sql.includes('INSERT INTO public_registrations')) return { rows: [rowFromParams(params)] }
-        if (sql.includes('UPDATE public_registrations')) return { rows: [{ ...rowFromParams(['reg-1', '150', 'Cup', null, 1, 'Laina-ase', 'Matti', 'matti@example.com', null, 'yes', 'matti@example.com', 'confirmed', params[2] || 'synced', params[3], params[4]]) }] }
-        return { rows: [] }
-      }),
-    })),
-    query: vi.fn(async (sql, params = []) => {
-      calls.push({ sql, params })
-      if (sql.includes('SELECT COUNT') && params.length === 2) return { rows: [{ count: cupCount }] }
-      if (sql.includes('SELECT COUNT') && params.length === 3) return { rows: [{ count: squadCount }] }
-      if (sql.includes('UPDATE public_registrations')) return { rows: [{ ...rowFromParams(['reg-1', '150', 'Cup', null, 1, 'Laina-ase', 'Matti', 'matti@example.com', null, 'yes', 'matti@example.com', 'confirmed', params[2] || 'synced', params[3], params[4]]) }] }
-      if (sql.includes('INSERT INTO public_registration_sync_attempts')) return { rows: [{ id: params[0], registration_id: params[1], status: params[4] }] }
-      return { rows: [] }
-    }),
+    query,
+    withTransaction: vi.fn(async (callback) => callback({ query })),
   }
 }
 
@@ -58,8 +55,8 @@ const input = {
   cupStarts: '2026-05-30T09:00:00+03:00',
   squadNumber: 1,
   squadLabel: 'Laina-ase',
-  name: 'Matti',
-  email: 'matti@example.com',
+  name: 'Example Shooter',
+  email: 'shooter@example.invalid',
   hasSsiAccount: 'no',
 }
 
@@ -90,7 +87,7 @@ describe('registration-buffer-service', () => {
         cupStartsSnapshot: '2026-05-30T09:00:00+03:00',
         selectedSquadNumber: 1,
         selectedSquadLabel: 'Laina-ase',
-        email: 'matti@example.com',
+        email: 'shooter@example.invalid',
         syncErrorMessage: 'internal error must not leak',
       },
     })
@@ -102,7 +99,7 @@ describe('registration-buffer-service', () => {
       cupStarts: '2026-05-30T09:00:00+03:00',
       squadNumber: 1,
       squadLabel: 'Laina-ase',
-      email: 'matti@example.com',
+      email: 'shooter@example.invalid',
     })
     expect(JSON.stringify(result)).not.toContain('internal error must not leak')
   })
@@ -116,16 +113,16 @@ describe('registration-buffer-service', () => {
   it('rejects a full cup before storing registration', async () => {
     const db = createDb({ cupCount: 25, squadCount: 3 })
     await expect(assertLocalCapacity(db, { cupId: '150', squadNumber: 1, cupMaxCompetitors: 25, squadMaxCompetitors: 7 }))
-      .rejects.toMatchObject({ code: 'CUP_FULL', publicMessage: 'Tapahtuma on täynnä.' })
+      .rejects.toMatchObject({ code: 'CUP_FULL', message: 'Tapahtuma on täynnä.' })
   })
 
   it('rejects a full squad before storing registration', async () => {
     const db = createDb({ cupCount: 10, squadCount: 7 })
     await expect(assertLocalCapacity(db, { cupId: '150', squadNumber: 1, cupMaxCompetitors: 25, squadMaxCompetitors: 7 }))
-      .rejects.toMatchObject({ code: 'SQUAD_FULL', publicMessage: 'Valittu squad on täynnä.' })
+      .rejects.toMatchObject({ code: 'SQUAD_FULL', message: 'Valittu squad on täynnä.' })
   })
 
-  it('creates a local buffered registration with manual_needed sync for non-SSI participants', async () => {
+  it('creates a local buffered registration with manual_needed sync under a cup lock', async () => {
     const db = createDb({ cupCount: 1, squadCount: 1 })
     const result = await createBufferedRegistration(db, input, {
       cupMaxCompetitors: 25,
@@ -134,10 +131,12 @@ describe('registration-buffer-service', () => {
     })
 
     expect(result).toMatchObject({ success: true, created: true, syncStatus: 'manual_needed' })
+    expect(db.withTransaction).toHaveBeenCalledTimes(1)
+    expect(db.calls.some(call => call.sql.includes('SELECT pg_advisory_xact_lock'))).toBe(true)
     expect(db.calls.some(call => call.sql.includes('INSERT INTO public_registrations'))).toBe(true)
   })
 
-  it('marks sync result and records sync attempt', async () => {
+  it('marks sync result and records failed attempt for manual_needed registration state', async () => {
     const db = createDb()
     const registration = await markRegistrationSyncResult(db, 'reg-1', {
       success: false,
@@ -148,6 +147,20 @@ describe('registration-buffer-service', () => {
     }, { idFactory: () => 'attempt-1' })
 
     expect(registration).toMatchObject({ id: 'reg-1', syncStatus: 'manual_needed', syncErrorCode: 'SSI_USER_NOT_FOUND' })
-    expect(db.calls.some(call => call.sql.includes('INSERT INTO public_registration_sync_attempts'))).toBe(true)
+    const attemptCall = db.calls.find(call => call.sql.includes('INSERT INTO public_registration_sync_attempts'))
+    expect(attemptCall).toBeDefined()
+    expect(attemptCall.params[4]).toBe('failed')
+  })
+
+  it('records partial attempt status separately from registration sync status', async () => {
+    const db = createDb()
+    await markRegistrationSyncResult(db, 'reg-1', {
+      success: false,
+      partial: true,
+      errorCode: 'SSI_PARTIAL',
+    }, { idFactory: () => 'attempt-1' })
+
+    const attemptCall = db.calls.find(call => call.sql.includes('INSERT INTO public_registration_sync_attempts'))
+    expect(attemptCall.params[4]).toBe('partial')
   })
 })
