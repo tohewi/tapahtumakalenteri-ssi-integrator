@@ -1,9 +1,11 @@
 import crypto from 'node:crypto'
-
-export const REGISTRATION_ACTIVE_STATUSES = ['confirmed', 'manual_handled']
-export const REGISTRATION_STATUS_VALUES = ['confirmed', 'waitlisted', 'cancelled', 'manual_handled']
-export const SYNC_STATUS_VALUES = ['not_applicable', 'pending', 'syncing', 'synced', 'partial', 'failed', 'manual_needed']
-export const SSI_ACCOUNT_VALUES = ['yes', 'no', 'unsure']
+import {
+  REGISTRATION_ACTIVE_STATUSES,
+  REGISTRATION_STATUS_VALUES,
+  SSI_ACCOUNT_VALUES,
+  SYNC_ATTEMPT_STATUS_VALUES,
+  SYNC_STATUS_VALUES,
+} from '../services/registration-constants.js'
 
 export const REGISTRATION_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS public_registrations (
@@ -153,11 +155,38 @@ async function runInTransaction(db, callback) {
   return callback(db)
 }
 
+export async function lockRegistrationCup(client, cupId) {
+  await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`public_registration:${String(cupId)}`])
+}
+
 export async function upsertRegistration(db, input, options = {}) {
   const normalized = normalizeRegistrationForStore(input, options.idFactory)
 
-  return runInTransaction(db, async (client) => {
-    const existing = await client.query(
+  return runInTransaction(db, async (client) => upsertRegistrationInClient(client, normalized))
+}
+
+export async function upsertRegistrationInClient(client, normalized) {
+  const existing = await client.query(
+    `SELECT * FROM public_registrations
+     WHERE ssi_cup_id = $1
+       AND LOWER(email) = LOWER($2)
+       AND status != 'cancelled'
+     FOR UPDATE`,
+    [normalized.ssiCupId, normalized.email]
+  )
+
+  if (existing.rows.length > 0) {
+    const updated = await updateExistingRegistrationInClient(client, existing.rows[0].id, normalized)
+    return { registration: mapRegistrationRow(updated), created: false }
+  }
+
+  try {
+    const inserted = await insertRegistrationInClient(client, normalized)
+    return { registration: mapRegistrationRow(inserted), created: true }
+  } catch (err) {
+    if (err?.code !== '23505') throw err
+
+    const raced = await client.query(
       `SELECT * FROM public_registrations
        WHERE ssi_cup_id = $1
          AND LOWER(email) = LOWER($2)
@@ -165,78 +194,83 @@ export async function upsertRegistration(db, input, options = {}) {
        FOR UPDATE`,
       [normalized.ssiCupId, normalized.email]
     )
+    if (raced.rows.length === 0) throw err
 
-    if (existing.rows.length > 0) {
-      const current = existing.rows[0]
-      const updated = await client.query(
-        `UPDATE public_registrations
-         SET cup_name_snapshot = $2,
-             cup_starts_snapshot = $3,
-             selected_squad_number = $4,
-             selected_squad_label = $5,
-             shooter_name = $6,
-             phone = $7,
-             has_ssi_account = $8,
-             ssi_email = $9,
-             status = $10,
-             sync_status = $11,
-             sync_error_code = $12,
-             sync_error_message = $13,
-             updated_at = NOW()
-         WHERE id = $1
-         RETURNING *`,
-        [
-          current.id,
-          normalized.cupNameSnapshot,
-          normalized.cupStartsSnapshot,
-          normalized.selectedSquadNumber,
-          normalized.selectedSquadLabel,
-          normalized.shooterName,
-          normalized.phone,
-          normalized.hasSsiAccount,
-          normalized.ssiEmail,
-          normalized.status,
-          normalized.syncStatus,
-          normalized.syncErrorCode,
-          normalized.syncErrorMessage,
-        ]
-      )
-      return { registration: mapRegistrationRow(updated.rows[0]), created: false }
-    }
+    const updated = await updateExistingRegistrationInClient(client, raced.rows[0].id, normalized)
+    return { registration: mapRegistrationRow(updated), created: false }
+  }
+}
 
-    const inserted = await client.query(
-      `INSERT INTO public_registrations (
-         id, ssi_cup_id, cup_name_snapshot, cup_starts_snapshot,
-         selected_squad_number, selected_squad_label,
-         shooter_name, email, phone, has_ssi_account, ssi_email,
-         status, sync_status, sync_error_code, sync_error_message
-       ) VALUES (
-         $1, $2, $3, $4,
-         $5, $6,
-         $7, $8, $9, $10, $11,
-         $12, $13, $14, $15
-       )
-       RETURNING *`,
-      [
-        normalized.id,
-        normalized.ssiCupId,
-        normalized.cupNameSnapshot,
-        normalized.cupStartsSnapshot,
-        normalized.selectedSquadNumber,
-        normalized.selectedSquadLabel,
-        normalized.shooterName,
-        normalized.email,
-        normalized.phone,
-        normalized.hasSsiAccount,
-        normalized.ssiEmail,
-        normalized.status,
-        normalized.syncStatus,
-        normalized.syncErrorCode,
-        normalized.syncErrorMessage,
-      ]
-    )
-    return { registration: mapRegistrationRow(inserted.rows[0]), created: true }
-  })
+async function updateExistingRegistrationInClient(client, registrationId, normalized) {
+  const updated = await client.query(
+    `UPDATE public_registrations
+     SET cup_name_snapshot = $2,
+         cup_starts_snapshot = $3,
+         selected_squad_number = $4,
+         selected_squad_label = $5,
+         shooter_name = $6,
+         phone = $7,
+         has_ssi_account = $8,
+         ssi_email = $9,
+         status = $10,
+         sync_status = $11,
+         sync_error_code = $12,
+         sync_error_message = $13,
+         updated_at = NOW()
+     WHERE id = $1
+     RETURNING *`,
+    [
+      registrationId,
+      normalized.cupNameSnapshot,
+      normalized.cupStartsSnapshot,
+      normalized.selectedSquadNumber,
+      normalized.selectedSquadLabel,
+      normalized.shooterName,
+      normalized.phone,
+      normalized.hasSsiAccount,
+      normalized.ssiEmail,
+      normalized.status,
+      normalized.syncStatus,
+      normalized.syncErrorCode,
+      normalized.syncErrorMessage,
+    ]
+  )
+  return updated.rows[0]
+}
+
+async function insertRegistrationInClient(client, normalized) {
+  const inserted = await client.query(
+    `INSERT INTO public_registrations (
+       id, ssi_cup_id, cup_name_snapshot, cup_starts_snapshot,
+       selected_squad_number, selected_squad_label,
+       shooter_name, email, phone, has_ssi_account, ssi_email,
+       status, sync_status, sync_error_code, sync_error_message
+     ) VALUES (
+       $1, $2, $3, $4,
+       $5, $6,
+       $7, $8, $9, $10, $11,
+       $12, $13, $14, $15
+     )
+     RETURNING *`,
+    [
+      normalized.id,
+      normalized.ssiCupId,
+      normalized.cupNameSnapshot,
+      normalized.cupStartsSnapshot,
+      normalized.selectedSquadNumber,
+      normalized.selectedSquadLabel,
+      normalized.shooterName,
+      normalized.email,
+      normalized.phone,
+      normalized.hasSsiAccount,
+      normalized.ssiEmail,
+      normalized.status,
+      normalized.syncStatus,
+      normalized.syncErrorCode,
+      normalized.syncErrorMessage,
+    ]
+  )
+  return inserted.rows[0]
 }
 
 export async function countActiveRegistrations(db, { cupId, squadNumber = null }) {
@@ -252,6 +286,10 @@ export async function countActiveRegistrations(db, { cupId, squadNumber = null }
     params
   )
   return Number(result.rows[0]?.count || 0)
+}
+
+export async function countActiveRegistrationsInClient(client, { cupId, squadNumber = null }) {
+  return countActiveRegistrations(client, { cupId, squadNumber })
 }
 
 export async function listRegistrationsForCup(db, cupId) {
@@ -286,6 +324,8 @@ export async function updateRegistrationStatus(db, registrationId, { status, syn
 }
 
 export async function recordSyncAttempt(db, { registrationId, attemptNumber, trigger, status, errorCode = null, errorMessage = null, details = {} }, idFactory = crypto.randomUUID) {
+  if (!SYNC_ATTEMPT_STATUS_VALUES.includes(status)) throw new Error('Invalid sync attempt status')
+
   const result = await db.query(
     `INSERT INTO public_registration_sync_attempts (
        id, registration_id, attempt_number, trigger, status,
