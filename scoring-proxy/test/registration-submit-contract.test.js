@@ -7,22 +7,20 @@ import {
 
 function createDb({ cupCount = 0, squadCount = 0 } = {}) {
   const calls = []
+  const query = vi.fn(async (sql, params = []) => {
+    calls.push({ sql, params })
+    if (sql.includes('SELECT pg_advisory_xact_lock')) return { rows: [] }
+    if (sql.includes('SELECT COUNT') && params.length === 2) return { rows: [{ count: cupCount }] }
+    if (sql.includes('SELECT COUNT') && params.length === 3) return { rows: [{ count: squadCount }] }
+    if (sql.includes('SELECT * FROM public_registrations') && sql.includes('FOR UPDATE')) return { rows: [] }
+    if (sql.includes('INSERT INTO public_registrations')) return { rows: [rowFromParams(params)] }
+    return { rows: [] }
+  })
+
   return {
     calls,
-    withTransaction: vi.fn(async (callback) => callback({
-      query: vi.fn(async (sql, params = []) => {
-        calls.push({ sql, params })
-        if (sql.includes('SELECT * FROM public_registrations') && sql.includes('FOR UPDATE')) return { rows: [] }
-        if (sql.includes('INSERT INTO public_registrations')) return { rows: [rowFromParams(params)] }
-        return { rows: [] }
-      }),
-    })),
-    query: vi.fn(async (sql, params = []) => {
-      calls.push({ sql, params })
-      if (sql.includes('SELECT COUNT') && params.length === 2) return { rows: [{ count: cupCount }] }
-      if (sql.includes('SELECT COUNT') && params.length === 3) return { rows: [{ count: squadCount }] }
-      return { rows: [] }
-    }),
+    query,
+    withTransaction: vi.fn(async (callback) => callback({ query })),
   }
 }
 
@@ -82,14 +80,14 @@ describe('registration-submit-contract', () => {
     ])
 
     expect(verifyCaptchaForBufferedSubmit({ captchaChallenges, captchaId: 'missing', captchaAnswer: 7, captchaTtlMs: 1000, now: 1200 }))
-      .toMatchObject({ ok: false, status: 400 })
+      .toMatchObject({ ok: false, status: 400, body: { error: 'Varmistus vanhentunut. Päivitä sivu ja yritä uudelleen.' } })
 
     expect(verifyCaptchaForBufferedSubmit({ captchaChallenges, captchaId: 'cap-1', captchaAnswer: 7, captchaTtlMs: 1000, now: 2501 }))
-      .toMatchObject({ ok: false, status: 400 })
+      .toMatchObject({ ok: false, status: 400, body: { error: 'Varmistus vanhentunut. Päivitä sivu ja yritä uudelleen.' } })
     expect(captchaChallenges.has('cap-1')).toBe(false)
   })
 
-  it('rejects wrong captcha without consuming it', () => {
+  it('rejects wrong captcha and consumes it', () => {
     const captchaChallenges = new Map([
       ['cap-1', { answer: 7, created: 1000 }],
     ])
@@ -102,8 +100,8 @@ describe('registration-submit-contract', () => {
       now: 1200,
     })
 
-    expect(result).toMatchObject({ ok: false, status: 400, body: { error: 'Väärä vastaus.' } })
-    expect(captchaChallenges.has('cap-1')).toBe(true)
+    expect(result).toMatchObject({ ok: false, status: 400, body: { error: 'Väärä vastaus. Yritä uudelleen.' } })
+    expect(captchaChallenges.has('cap-1')).toBe(false)
   })
 
   it('maps public submit body to local registration input with cup and squad snapshots', () => {
