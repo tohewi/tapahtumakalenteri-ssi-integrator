@@ -8,8 +8,9 @@ export function verifyCaptchaForBufferedSubmit({ captchaChallenges, captchaId, c
     return { ok: false, status: 400, body: { error: registrationMessage('captchaExpired') } }
   }
 
+  captchaChallenges.delete(captchaId)
+
   if (now - challenge.created > captchaTtlMs) {
-    captchaChallenges.delete(captchaId)
     return { ok: false, status: 400, body: { error: registrationMessage('captchaExpired') } }
   }
 
@@ -17,7 +18,6 @@ export function verifyCaptchaForBufferedSubmit({ captchaChallenges, captchaId, c
     return { ok: false, status: 400, body: { error: registrationMessage('captchaWrong') } }
   }
 
-  captchaChallenges.delete(captchaId)
   return { ok: true }
 }
 
