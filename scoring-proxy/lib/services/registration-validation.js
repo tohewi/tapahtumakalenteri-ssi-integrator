@@ -1,10 +1,9 @@
+import { SSI_ACCOUNT_VALUES } from './registration-constants.js'
 import { registrationMessage } from './registration-messages.js'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const PHONE_RE = /^[0-9+()\-\s.]{0,40}$/
-
-export const SSI_ACCOUNT_VALUES = ['yes', 'no', 'unsure']
 
 export function validateBufferedRegistrationInput(input = {}) {
   const errors = []
