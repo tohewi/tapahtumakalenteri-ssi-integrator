@@ -19,10 +19,11 @@ projects:
             region: frankfurt
             plan: starter
             branch: main
+            nodeVersion: "24"
             repo: https://github.com/tohewi/tapahtumakalenteri-ssi-integrator
             # PR previews are managed by .github/workflows/pr-preview.yml
             # to support all Render plans and deterministic naming.
-            buildCommand: cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm ci
+            buildCommand: cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm ci --omit=dev
             startCommand: cd scoring-proxy && node server.js
             envVars:
               - key: NODE_ENV

@@ -197,7 +197,7 @@ jobs:
             --arg ownerId "${RENDER_OWNER_ID}" \
             --arg repoUrl "https://github.com/${{ github.repository }}" \
             --arg branchName "${BRANCH_NAME}" \
-            --arg buildCommand "cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm ci" \
+            --arg buildCommand "cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm ci --omit=dev" \
             --arg startCommand "cd scoring-proxy && node server.js" \
             --argjson envVars "${ENV_VARS}" \
             '{
@@ -211,6 +211,7 @@ jobs:
                 "env": "node",
                 "plan": "starter",
                 "region": "frankfurt",
+                "nodeVersion": "24",
                 "envSpecificDetails": {
                   "buildCommand": $buildCommand,
                   "startCommand": $startCommand
