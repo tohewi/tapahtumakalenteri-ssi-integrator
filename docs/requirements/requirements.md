@@ -470,6 +470,24 @@ Migrate Cup creation and maintenance from web scraping to SSI GraphQL API. The l
 - **Reset-numbering policy**: Validate `/reset-numbering/` behavior against a real cup + included matches before use. If it renumbers each event independently, do not rely on it as the final consistency mechanism.
 - **Operational safety**: Sync must be idempotent and produce an audit summary of changed competitors and affected match IDs.
 
+### Release 7.9.4 — iCal Calendar Attachment in Registration Email
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| GQL-HF6 | **iCal attachment on registration confirmation**: When the registration confirmation email is sent (`sendRegistrationConfirmation`), attach a standard `.ics` (iCalendar RFC 5545) file so the shooter can add the event directly to their calendar. Compatible with iPhone Calendar, Android Calendar (Google Calendar), Outlook, and Google Calendar web. | ⬚ Specified |
+
+### Design Notes (GQL-HF6)
+
+- **iCal generation**: Build the `.ics` content in `lib/email.js` — no external library needed for this use case; a simple template string is sufficient (RFC 5545 format: `BEGIN:VCALENDAR`, `BEGIN:VEVENT`, `DTSTART`, `DTEND`, `SUMMARY`, `DESCRIPTION`, `UID`, `END:VEVENT`, `END:VCALENDAR`).
+- **Event span**: Use the cup `starts` and `ends` fields from SSI. If only `starts` is available, default `DTEND` to `starts + 8 hours`. Both must be fetched in the `CupDetail` GraphQL query in `routes/registration.js` (add `starts ends` to the query fields).
+- **SUMMARY**: Cup name (e.g. `TurRes Kupittaa CUP 13.06.2026`).
+- **DESCRIPTION**: Squad assignments (same content as the email body match list), plus the cancel/re-register URLs.
+- **UID**: Deterministic — `registration-{cupId}-{shooterEmail}@ssi-tools` so re-registrations produce an update rather than a duplicate entry when the same `.ics` is imported again.
+- **Resend attachment**: Pass the `.ics` as a base64-encoded attachment via Resend's `attachments` field: `{ filename: 'ilmoittautuminen.ics', content: Buffer.from(icsContent).toString('base64'), contentType: 'text/calendar; charset=utf-8; method=REQUEST' }`.
+- **Content-Type `method=REQUEST`**: Triggers the native "Add to Calendar" prompt in iOS Mail, Outlook, and Gmail without requiring the user to manually open the attachment.
+- **No new npm dependency**: iCal content is simple enough to generate inline; avoids supply-chain risk.
+- **Fallback**: If `starts` is missing from the SSI response (older cups), omit the attachment silently and log a warning — email still sends.
+
 ## Release 8.1 — Match Management Platform (Roadmap)
 
 Vision: Transform the current "link collection" home page into a structured match management platform. This requires significant UI design and architecture work before implementation.
@@ -509,7 +527,7 @@ Vision: Transform the current "link collection" home page into a structured matc
 - **Release 7.5** (Architecture V2 Foundation): 5 requirements — 3 ✅, 2 📋 ➜ R7.6 (ARCH3, ARCH4)
 - **Release 7.6** (Consolidation & Completion): 21 requirements from R6.0/R7.0/R7.2/R7.5 plus compliance follow-up (Privacy Policy + Terms of Service, disable paid tracking, per-user SSI execution identity) — see `release-7.6.md`
 - **Release 7.7** (QR Code Login for Scoring): 6 requirements — 6 ✅ (QR1–QR6). Device token auth for tablets/phones at the range. **7.7.1 hotfix**: 4 fixes (cup list visibility, auto-restore, same-day filtering, squad audit logging)
-- **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes implemented (GQL-HF1–GQL-HF3). **7.9.2 hotfix**: 1 fix implemented (GQL-HF4). **7.9.3 hotfix**: 1 fix specified (GQL-HF5)
+- **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes implemented (GQL-HF1–GQL-HF3). **7.9.2 hotfix**: 1 fix implemented (GQL-HF4). **7.9.3 hotfix**: 1 fix specified (GQL-HF5). **7.9.4**: 1 requirement specified (GQL-HF6 — iCal calendar attachment)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
 - **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
 
