@@ -1,6 +1,6 @@
 // ============================================================
 // SSI Core — Scoring Domain
-// Re-exports from client.js for domain-specific imports.
+// Re-exports from @ssi-tools/core for backward compatibility.
 // ============================================================
 
-export { ssiGetScoringPage, ssiSubmitScore } from './client.js'
+export { ssiGetScoringPage, ssiSubmitScore } from '../../../packages/ssi-core/lib/ssi/scoring.js'
