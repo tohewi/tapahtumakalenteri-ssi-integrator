@@ -41,9 +41,32 @@ describe('filterManageableCups', () => {
     expect(cups[0].name).toBe('Test Cup')
   })
 
-  it('excludes cups before the manage window', () => {
+  it('excludes cups before the manage window (more than 1 day ago)', () => {
+    // baseCup starts 2026-02-18; now is 2026-02-10 — 8 days before start, well outside window
     const now = new Date('2026-02-10T12:00:00Z')
     const cups = filterManageableCups([baseCup], now)
+    expect(cups).toHaveLength(0)
+  })
+
+  it('includes cups that started yesterday (within lookback window)', () => {
+    const yesterdayCup = {
+      ...baseCup,
+      starts: '2026-02-14T10:00:00Z',
+      ends: '2026-02-14T18:00:00Z',
+    }
+    const now = new Date('2026-02-15T12:00:00Z')
+    const cups = filterManageableCups([yesterdayCup], now)
+    expect(cups).toHaveLength(1)
+  })
+
+  it('excludes cups that started 2 days ago (outside lookback window)', () => {
+    const twoDaysAgoCup = {
+      ...baseCup,
+      starts: '2026-02-13T10:00:00Z',
+      ends: '2026-02-13T18:00:00Z',
+    }
+    const now = new Date('2026-02-15T12:00:00Z')
+    const cups = filterManageableCups([twoDaysAgoCup], now)
     expect(cups).toHaveLength(0)
   })
 

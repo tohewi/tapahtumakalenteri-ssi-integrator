@@ -300,12 +300,16 @@ export function getIncludedMatchIds(cupEvent) {
 // ============================================================
 
 export const MANAGE_WINDOW_DAYS = 5
+export const MANAGE_WINDOW_LOOKBACK_DAYS = 1
 
 export function getManageWindowBounds(now = new Date(), windowDays = MANAGE_WINDOW_DAYS) {
   const windowStart = new Date(now)
   windowStart.setUTCHours(0, 0, 0, 0)
+  // Look back 1 day so cups that started today or yesterday remain visible
+  windowStart.setUTCDate(windowStart.getUTCDate() - MANAGE_WINDOW_LOOKBACK_DAYS)
 
-  const windowEndExclusive = new Date(windowStart)
+  const windowEndExclusive = new Date(now)
+  windowEndExclusive.setUTCHours(0, 0, 0, 0)
   windowEndExclusive.setUTCDate(windowEndExclusive.getUTCDate() + windowDays + 1)
 
   return { windowStart, windowEndExclusive }
