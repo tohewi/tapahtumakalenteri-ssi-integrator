@@ -299,7 +299,7 @@ export function getIncludedMatchIds(cupEvent) {
 // Filter active cups for management listing
 // ============================================================
 
-export const MANAGE_WINDOW_DAYS = 5
+export const MANAGE_WINDOW_DAYS = 7
 export const MANAGE_WINDOW_LOOKBACK_DAYS = 1
 
 export function getManageWindowBounds(now = new Date(), windowDays = MANAGE_WINDOW_DAYS) {

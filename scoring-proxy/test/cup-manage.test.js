@@ -82,11 +82,11 @@ describe('filterManageableCups', () => {
     expect(cups).toHaveLength(1)
   })
 
-  it('excludes cups beyond five days from today', () => {
+  it('excludes cups beyond seven days from today', () => {
     const farCup = {
       ...baseCup,
-      starts: '2026-02-21T10:00:00Z',
-      ends: '2026-02-21T18:00:00Z',
+      starts: '2026-02-25T10:00:00Z', // 10 days ahead
+      ends: '2026-02-25T18:00:00Z',
     }
 
     const now = new Date('2026-02-15T12:00:00Z')

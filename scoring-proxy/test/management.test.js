@@ -205,7 +205,7 @@ describe('GET /api/manage/cups', () => {
     expect(res.data.error).toContain('Access denied')
   })
 
-  it('returns cups happening today or within five days', async () => {
+  it('returns cups happening today or within seven days', async () => {
     const ip = uniqueIp()
     // Create session with 'manage' scope
     const { sessionId } = await createSession(createMockSessionInput({ scope: 'manage' }))
@@ -240,8 +240,8 @@ describe('GET /api/manage/cups', () => {
         {
           id: '101',
           name: 'Outside Window Cup',
-          starts: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-          ends: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),
+          starts: new Date(Date.now() + 9 * 24 * 60 * 60 * 1000).toISOString(),
+          ends: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
           status: 'on',
           get_content_type_key: 136,
           max_competitors: 25,
