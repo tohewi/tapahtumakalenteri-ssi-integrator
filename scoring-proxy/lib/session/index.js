@@ -1,36 +1,8 @@
-// ============================================================
-// Session Module — V7.0 Barrel Export
-// ============================================================
+/**
+ * Re-export shim for @ssi-tools/core/session
+ * 
+ * NOTE: This file will be removed once all imports are migrated.
+ * New code should import from: import { ... } from '@ssi-tools/core/session'
+ */
 
-export { sessionConfig, getSessionTTLForScope } from './config.js'
-export { initRedis, getRedisClient, isUsingRedis, closeRedis, _setClient } from './redis.js'
-export {
-  createSession,
-  getSession,
-  touchSession,
-  deleteSession,
-  getUserSessions,
-  revokeAllUserSessions,
-  isUserTokenValid,
-  userTokenNeedsRefresh,
-  adminTokenNeedsRefresh,
-  getImpersonationContext,
-  getActiveSessionCount,
-} from './store.js'
-export {
-  AuditEvent,
-  logAudit,
-  auditLogin,
-  auditLogout,
-  auditSSIOperation,
-  auditTokenRefresh,
-  auditSecurityViolation,
-} from './audit.js'
-export {
-  executeSSI,
-  executeSSIAsUser,
-  executeSSIWithCookies,
-} from './impersonation.js'
-export {
-  toLegacySession,
-} from './compat.js'
+export * from '../../../packages/ssi-core/lib/session/index.js'
