@@ -1,6 +1,6 @@
 // ============================================================
 // SSI Core — GraphQL & Authentication Domain
-// Re-exports from client.js for domain-specific imports.
+// Re-exports from @ssi-tools/core for backward compatibility.
 // ============================================================
 
-export { ssiGraphQL, ssiRefreshJWT, ssiLogin } from './client.js'
+export { ssiGraphQL, ssiRefreshJWT, ssiLogin, parseCookies, formatCookies } from '../../../packages/ssi-core/lib/ssi/graphql.js'
