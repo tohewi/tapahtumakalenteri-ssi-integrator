@@ -5,4 +5,4 @@
  * New code should import from: import { log } from '@ssi-tools/core/logger'
  */
 
-export { log } from '../../packages/ssi-core/lib/logger.js'
+export { log } from '../../../packages/ssi-core/lib/logger.js'

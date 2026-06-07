@@ -5,4 +5,4 @@
  * New code should import from: import { ... } from '@ssi-tools/core/session'
  */
 
-export * from '../../../packages/ssi-core/lib/session/index.js'
+export * from '../../../../packages/ssi-core/lib/session/index.js'

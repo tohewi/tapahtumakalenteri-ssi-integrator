@@ -5,4 +5,4 @@
  * New code should import from: import { AppError } from '@ssi-tools/core/errors'
  */
 
-export { AppError, NotFoundError, ValidationError, AuthError, ConflictError, SSIError, UpstreamError, RateLimitError, ServerError } from '../../../packages/ssi-core/lib/errors/AppError.js'
+export { AppError, NotFoundError, ValidationError, AuthError, ConflictError, SSIError, UpstreamError, RateLimitError, ServerError } from '../../../../packages/ssi-core/lib/errors/AppError.js'

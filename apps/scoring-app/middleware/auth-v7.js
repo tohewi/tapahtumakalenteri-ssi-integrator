@@ -1,6 +1,6 @@
 // ============================================================
-// SSI Core — GraphQL & Authentication Domain
+// V7.0 Authentication Middleware
 // Re-exports from @ssi-tools/core for backward compatibility.
 // ============================================================
 
-export { ssiGraphQL, ssiRefreshJWT, ssiLogin, parseCookies, formatCookies } from '../../../packages/ssi-core/lib/ssi/graphql.js'
+export { requireAuthV7, requireScopeV7 } from '../../../packages/ssi-core/lib/auth/middleware.js'

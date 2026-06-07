@@ -1,6 +1,6 @@
 // ============================================================
-// V7.0 Authentication Middleware
+// SSI Core — Scoring Domain
 // Re-exports from @ssi-tools/core for backward compatibility.
 // ============================================================
 
-export { requireAuthV7, requireScopeV7 } from '../../packages/ssi-core/lib/auth/middleware.js'
+export { ssiGetScoringPage, ssiSubmitScore } from '../../../../packages/ssi-core/lib/ssi/scoring.js'

@@ -1,6 +1,6 @@
 // ============================================================
-// SSI Integration Constants
+// SSI Core — GraphQL & Authentication Domain
 // Re-exports from @ssi-tools/core for backward compatibility.
 // ============================================================
 
-export { SSI_BASE_URL, SSI_GRAPHQL, API_BASE } from '../../../packages/ssi-core/lib/ssi/constants.js'
+export { ssiGraphQL, ssiRefreshJWT, ssiLogin, parseCookies, formatCookies } from '../../../../packages/ssi-core/lib/ssi/graphql.js'
