@@ -174,6 +174,15 @@ describe('MatchPicker', () => {
     render(<MatchPicker matches={matches} onSelect={vi.fn()} />)
     expect(screen.getByText('Ei otteluita tänään')).toBeInTheDocument()
   })
+
+  it('localizes cancelled status codes', () => {
+    const cancelledMatches = [
+      { id: 3, name: 'Cancelled Match', date: '2026-02-15', type: 'RESUL Nordic', status: 'cs', squads: [] },
+    ]
+
+    render(<MatchPicker matches={cancelledMatches} onSelect={vi.fn()} />)
+    expect(screen.getByText('Peruutettu · RESUL Nordic')).toBeInTheDocument()
+  })
 })
 
 // ============================================================

@@ -3,7 +3,7 @@ import ShooterActions from './ShooterActions'
 import fi from '../../i18n'
 
 // ── Squad card with expandable shooter list ──
-export default function SquadCard({ group, matchLabels, actionLoading, onMoveSquad, onSetDns, onUndoDns, onTogglePaid, expanded, onToggleExpand }) {
+export default function SquadCard({ group, matchLabels, actionLoading, onMoveSquad, onSetDns, onUndoDns, expanded, onToggleExpand }) {
   const shooterCount = group.total
   const hasIssues = group.issueShooters.length > 0
 
@@ -44,7 +44,7 @@ export default function SquadCard({ group, matchLabels, actionLoading, onMoveSqu
                       ) : (
                         <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
                       )}
-                      <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={onSetDns} onUndoDns={onUndoDns} onTogglePaid={onTogglePaid} />
+                      <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={onSetDns} onUndoDns={onUndoDns} />
                     </div>
                     <ActionButton
                       label={fi.moveSquad}
@@ -66,7 +66,7 @@ export default function SquadCard({ group, matchLabels, actionLoading, onMoveSqu
                       ) : (
                         <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
                       )}
-                      <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={onSetDns} onUndoDns={onUndoDns} onTogglePaid={onTogglePaid} />
+                      <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={onSetDns} onUndoDns={onUndoDns} />
                     </div>
                   </div>
                   <div className="flex gap-1 mt-1 ml-6">

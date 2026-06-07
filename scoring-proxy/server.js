@@ -28,6 +28,15 @@ const API_V1_BASE = '/api/v1'
 const API_LEGACY_BASE = '/api'
 const SSI_ADMIN_API_KEY = (process.env.SSI_ADMIN_API_KEY || '').trim()
 
+function readBooleanEnv(name, defaultValue = false) {
+  const raw = process.env[name]
+  if (raw == null || raw === '') return defaultValue
+  return ['1', 'true', 'yes', 'on'].includes(String(raw).trim().toLowerCase())
+}
+
+// Compliance hardening: paid tracking is disabled by default.
+const FEATURE_PAID_TOGGLE_ENABLED = readBooleanEnv('FEATURE_PAID_TOGGLE_ENABLED', false)
+
 if (!SSI_ADMIN_API_KEY) {
   log.warn('[graphql] SSI_ADMIN_API_KEY is not set — GraphQL requests will fail')
 }
@@ -392,6 +401,7 @@ const managementRouter = createManagementRouter({
   graphqlWithRefresh,
   adminGraphQL,
   getAdminSession,
+  paidToggleEnabled: FEATURE_PAID_TOGGLE_ENABLED,
 })
 app.use(`${API_V1_BASE}/manage`, managementRouter)
 app.use(`${API_LEGACY_BASE}/manage`, legacyApiAlias, managementRouter)

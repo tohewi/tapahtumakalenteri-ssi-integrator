@@ -71,8 +71,13 @@ export async function getUserInfo() {
   return handleResponse(resp)
 }
 
-export async function searchCups(search) {
-  const resp = await fetch(`${SCORING_BASE}/cups?search=${encodeURIComponent(search)}`, { credentials: 'include' })
+export async function searchCups(search, options = {}) {
+  const query = new URLSearchParams({ search: String(search ?? '') })
+  if (options.debug) {
+    query.set('debug', 'true')
+  }
+
+  const resp = await fetch(`${SCORING_BASE}/cups?${query.toString()}`, { credentials: 'include' })
   const data = await handleResponse(resp)
   return data.cups || []
 }
@@ -205,16 +210,6 @@ export async function manageUndoDns(cupId, shooterName, email = null, cupPartici
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify({ shooterName, email, cupParticipantId }),
-  })
-  return handleResponse(resp)
-}
-
-export async function manageTogglePaid(cupId, shooterName, cupParticipantId) {
-  const resp = await fetch(`${API_BASE}/manage/cup/${cupId}/toggle-paid`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ shooterName, cupParticipantId }),
   })
   return handleResponse(resp)
 }

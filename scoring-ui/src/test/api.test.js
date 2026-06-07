@@ -733,6 +733,18 @@ describe('API client', () => {
       expect(fetch).toHaveBeenCalledWith('/api/v1/scoring/cups?search=Kupittaa', { credentials: 'include' })
     })
 
+    it('forwards debug query flag when enabled', async () => {
+      const cups = [{ id: '142', name: 'Debug Cup', starts: '2026-02-20T07:00:00+00:00', status: 'cp' }]
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ cups }),
+      })
+
+      const result = await searchCups('Kupittaa', { debug: true })
+      expect(result).toEqual(cups)
+      expect(fetch).toHaveBeenCalledWith('/api/v1/scoring/cups?search=Kupittaa&debug=true', { credentials: 'include' })
+    })
+
     it('returns empty array when no cups found', async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,

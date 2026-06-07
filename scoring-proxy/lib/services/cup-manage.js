@@ -299,19 +299,35 @@ export function getIncludedMatchIds(cupEvent) {
 // Filter active cups for management listing
 // ============================================================
 
-export function filterManageableCups(events, now = new Date()) {
+export const MANAGE_WINDOW_DAYS = 7
+export const MANAGE_WINDOW_LOOKBACK_DAYS = 1
+
+export function getManageWindowBounds(now = new Date(), windowDays = MANAGE_WINDOW_DAYS) {
+  const windowStart = new Date(now)
+  windowStart.setUTCHours(0, 0, 0, 0)
+  // Look back 1 day so cups that started today or yesterday remain visible
+  windowStart.setUTCDate(windowStart.getUTCDate() - MANAGE_WINDOW_LOOKBACK_DAYS)
+
+  const windowEndExclusive = new Date(now)
+  windowEndExclusive.setUTCHours(0, 0, 0, 0)
+  windowEndExclusive.setUTCDate(windowEndExclusive.getUTCDate() + windowDays + 1)
+
+  return { windowStart, windowEndExclusive }
+}
+
+function isWithinManageWindow(starts, windowStart, windowEndExclusive) {
+  const startsAt = starts ? new Date(starts) : null
+  if (!startsAt || Number.isNaN(startsAt.getTime())) return false
+  return startsAt >= windowStart && startsAt < windowEndExclusive
+}
+
+export function filterManageableCups(events, now = new Date(), windowDays = MANAGE_WINDOW_DAYS) {
+  const { windowStart, windowEndExclusive } = getManageWindowBounds(now, windowDays)
+
   return (events || [])
     .filter(e => e.get_content_type_key === 136)
     .filter(e => e.status === 'on')
-    .filter(e => {
-      const regStarts = e.registration_starts ? new Date(e.registration_starts) : null
-      if (!regStarts || regStarts > now) return false
-      // Keep cups manageable for 24h after end date (management needed on event day + after)
-      const ends = e.ends ? new Date(e.ends) : null
-      const fallbackEnd = new Date(new Date(e.starts).getTime() + 24 * 60 * 60 * 1000)
-      const effectiveEnd = new Date((ends || fallbackEnd).getTime() + 24 * 60 * 60 * 1000)
-      return effectiveEnd > now
-    })
+    .filter(e => isWithinManageWindow(e.starts, windowStart, windowEndExclusive))
     .map(c => {
       const registered = countRegisteredCupCompetitors(c)
       const maxCompetitors = c.max_competitors || 25
@@ -385,7 +401,7 @@ function countRegisteredCupCompetitors(cupEvent) {
 function countApprovedCupCompetitors(competitors = []) {
   const approvedIds = new Set()
   for (const competitor of competitors || []) {
-    if (isApprovedStatus(competitor?.status) && competitor?.id != null) {
+    if (isCountableRegistrationStatus(competitor?.status) && competitor?.id != null) {
       approvedIds.add(String(competitor.id))
     }
   }
@@ -399,7 +415,7 @@ function countApprovedMatchSquadCompetitors(componentMatches = []) {
   if (firstMatch?.match?.squads) {
     for (const squad of firstMatch.match.squads) {
       for (const competitor of (squad.competitors || [])) {
-        if (isApprovedStatus(competitor?.status) && competitor?.id != null) {
+        if (isCountableRegistrationStatus(competitor?.status) && competitor?.id != null) {
           approvedIds.add(String(competitor.id))
         }
       }
@@ -409,9 +425,15 @@ function countApprovedMatchSquadCompetitors(componentMatches = []) {
   return approvedIds.size
 }
 
-function isApprovedStatus(status) {
+function isCountableRegistrationStatus(status) {
   const normalized = String(status || '').toLowerCase()
-  return normalized === 'a' || normalized === 'approved'
+  if (!normalized) return true
+  return normalized === 'a'
+    || normalized === 'approved'
+    || normalized === 'p'
+    || normalized === 'pending'
+    || normalized === 'r'
+    || normalized === 'registered'
 }
 
 // Key for unique shooter identification by (firstName, lastName, email) triplet

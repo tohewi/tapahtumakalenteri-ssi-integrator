@@ -5,6 +5,39 @@
 
 ---
 
+## Release 7.6.1 — Compliance Hardening: Paid Tracking Disabled (2026-05-10)
+
+**Requirements:** R76-COM2 ✅
+
+### Overview
+
+Compliance hardening release to remove paid-status bookkeeping controls from Kupittaa Cup management tooling. The UI no longer exposes paid toggle controls, and backend guardrails keep paid toggle writes disabled by default.
+
+### New Features
+
+- **Paid-toggle feature flag scaffold**: Backend now reads `FEATURE_PAID_TOGGLE_ENABLED` (default `false`) and exposes feature state for management consumers.
+- **Server-side paid toggle guard**: `POST /api/v1/manage/cup/:id/toggle-paid` now returns `403` when paid toggle is disabled.
+- **Response hardening for paid visibility**: Management cup payload masks paid status when the feature flag is off.
+
+### Bug Fixes
+
+- **Dead UI paths removed**: Removed paid toggle action plumbing from management UI components, avoiding hidden but still-callable client paths.
+- **Unused API client cleanup**: Removed `manageTogglePaid` client helper from frontend API layer.
+- **Unused translation cleanup**: Removed obsolete paid/unpaid management i18n keys after UI removal.
+
+### Requirements Met
+
+- **R76-COM2:** Paid tracking is disabled in management tooling, with no paid toggle controls in UI and backend writes blocked by default.
+
+### Test Status
+
+| Suite | Passing | Notes |
+|-------|--------:|-------|
+| Backend (scoring-proxy) | 21 | Targeted `management.test.js` suite green, including `toggle-paid` disabled-path assertions |
+| Frontend (scoring-ui) | — | Production build passes after UI/API cleanup |
+
+---
+
 ## Release 7.9.1 — GraphQL Upstream Reliability Hotfix (2026-05-08)
 
 **Requirements:** GQL-HF1 ✅, GQL-HF2 ✅, GQL-HF3 ✅

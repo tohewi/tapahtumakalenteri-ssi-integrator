@@ -201,7 +201,7 @@
 | AUTH7 | **Audit Trail**: Every SSI operation must log which user performed the action, including timestamp, operation type, and success/failure status. | ✅ Implemented |
 | AUTH8 | **State Restoration**: User navigation state must be fully restored after session expiry and re-authentication. State preserved for 30 minutes post-expiry. | ✅ Implemented |
 | AUTH9 | **Cross-Feature Authentication**: Single login works across scoring, management, and reporting features. No separate logins required. | ✅ Implemented |
-| AUTH10 | **Registration Security**: Registration endpoints must require user authentication before using admin SSI operations. Fix current vulnerability. | ⬚ Pending ➜ R7.6 (R76-AUTH10) |
+| AUTH10 | **Registration Security**: Cup registration must require authenticated SSI passthrough login before registration actions are executed. Registration to cup, match enrollment, and squad assignment must run in authenticated user context (not unauthenticated email-only submission). | ⬚ Pending ➜ R7.6 (R76-AUTH10) |
 
 ### Session Management Requirements
 
@@ -368,15 +368,15 @@ Patch release focused on authentication UX consistency across protected feature 
 |---|-------------|--------|
 | CUP1 | **Move Shooter Between Squads**: In the "Squadit" section, it must be possible to move a shooter from one squad to another. The UI must show the same `→ S?` button as in the "Ei Squadeissa" section and function identically (squad picker dialog, SSI sync). Move is only allowed within the same match via Squadit. | 📋 Specified ➜ R7.6 (R76-CUP1) |
 | CUP2 | **Set Shooter as DNS (Did Not Start)**: SSI calls this "Did Not Show". Setting DNS must be applied at the **cup level** and on **all matches** in the cup. The button must appear next to every shooter regardless of which section they are in. Clicking it shows a confirmation dialog: "Set N.N as DNS?" / "Aseta Etu Suku DNS?" (fi/en). It must be possible to **undo** (reverse) DNS if set by accident. SSI endpoints: `GET /event/participant/{ct}/{id}/set-did-not-show/` (set) and `GET /event/participant/{ct}/{id}/undo-did-not-show/` (undo), applied to cup + each match. | ✅ Implemented |
-| CUP3 | **Mark Payment Received**: Per-competitor paid toggle at the **cup level only**. UI shows a button next to each shooter. When paid, the button must be **solid green** (high contrast) so it is immediately obvious who has paid when scanning the list. When unpaid, the button is gray/muted. State is stored in SSI via `GET /event/participant/{ct}/{id}/toggle-paid/`. Must reflect current paid status from SSI and allow toggling. | ✅ Implemented |
+| CUP3 | **Mark Payment Received**: Per-competitor paid toggle at the **cup level only**. UI shows a button next to each shooter. When paid, the button must be **solid green** (high contrast) so it is immediately obvious who has paid when scanning the list. When unpaid, the button is gray/muted. State is stored in SSI via `GET /event/participant/{ct}/{id}/toggle-paid/`. Must reflect current paid status from SSI and allow toggling. | ⚠️ Deprecated ➜ R7.6 (R76-COM2 disable due SSI license clause) |
 
 ### Design Decisions (CUP1–CUP3)
 
 - **All features** are added to the existing **Hallinta** page (`SquadManagementPage` component). No new pages needed.
 - **CUP1**: Move is performed only within Squadit (not across matches). Strict capacity enforcement — cannot move into a full squad. Same `→ S?` button and squad picker as "Ei Squadeissa" section.
 - **CUP2**: DNS is set on cup **and** all matches in the cup in a single action. Reversible — undo removes DNS from cup and all matches. DNS status must be visually distinct (e.g., strikethrough or badge). Confirmation dialog is bilingual (fi/en).
-- **CUP3**: Paid status is read from and written to SSI at **cup level only**. No local persistence — SSI is the source of truth.
-- **SSI integration**: CUP2 and CUP3 use **web scraping** (admin cookies) for both reading and writing state. SSI GraphQL does not support write operations reliably. Endpoints: `set-did-not-show`, `undo-did-not-show`, `toggle-paid` via `GET /event/participant/{ct}/{id}/...`. Reading paid/DNS status also requires scraping the participant page since GraphQL does not expose these fields.
+- **CUP3**: Paid status flow is deprecated for compliance and scheduled for removal under R7.6 `R76-COM2`.
+- **SSI integration**: CUP2 uses **web scraping** (admin cookies) for reading and writing state. SSI GraphQL does not support write operations reliably. Endpoints: `set-did-not-show`, `undo-did-not-show` via `GET /event/participant/{ct}/{id}/...`. Paid tracking endpoint usage (`toggle-paid`) is deprecated and will be removed under R7.6 `R76-COM2`.
 
 ## Release 7.5 — Architecture V2 Foundation
 
@@ -456,6 +456,38 @@ Migrate Cup creation and maintenance from web scraping to SSI GraphQL API. The l
 |---|-----|--------|
 | GQL-HF4 | **Cup competitor count source hardening**: Cup registered competitor totals are calculated from CUP-level approved competitors first (`status` = `a/approved`) with match-squad fallback, so registration and management UI views keep accurate count badges even when squad competitor data is incomplete. | ✅ Implemented |
 
+### Release 7.9.3 — Competitor Number Sync Hardening
+
+| # | Fix | Status |
+|---|-----|--------|
+| GQL-HF5 | **Cup-match competitor number consistency**: When management adds competitors to a cup and/or squads them to all included matches, each competitor's participant number must be identical in the CUP and in every included match. Implement a numbering sync workflow that treats CUP participant numbers as canonical, detects mismatches, and updates match participant numbers to match CUP numbering. Evaluate SSI endpoint `/event/{ct}/{id}/reset-numbering/` for cup+match contexts; if numbering is per-event/non-deterministic, keep it optional and still enforce CUP-canonical final numbers. | 📋 Specified |
+
+### Design Notes (GQL-HF5)
+
+- **Canonical source**: CUP participant numbering is the source of truth.
+- **Identity mapping**: Use shared participant identifiers first; when unavailable, use deterministic fallback key (`first_name + last_name + email`) to map cup participants to match participants.
+- **Sync flow**: Read CUP+match participants -> compute mismatch plan -> apply match number updates -> re-read and verify no mismatches remain.
+- **Reset-numbering policy**: Validate `/reset-numbering/` behavior against a real cup + included matches before use. If it renumbers each event independently, do not rely on it as the final consistency mechanism.
+- **Operational safety**: Sync must be idempotent and produce an audit summary of changed competitors and affected match IDs.
+
+### Release 7.9.4 — iCal Calendar Attachment in Registration Email
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| GQL-HF6 | **iCal attachment on registration confirmation**: When the registration confirmation email is sent (`sendRegistrationConfirmation`), attach a standard `.ics` (iCalendar RFC 5545) file so the shooter can add the event directly to their calendar. Compatible with iPhone Calendar, Android Calendar (Google Calendar), Outlook, and Google Calendar web. | ⬚ Specified |
+
+### Design Notes (GQL-HF6)
+
+- **iCal generation**: Build the `.ics` content in `lib/email.js` — no external library needed for this use case; a simple template string is sufficient (RFC 5545 format: `BEGIN:VCALENDAR`, `BEGIN:VEVENT`, `DTSTART`, `DTEND`, `SUMMARY`, `DESCRIPTION`, `UID`, `END:VEVENT`, `END:VCALENDAR`).
+- **Event span**: Use the cup `starts` and `ends` fields from SSI. If only `starts` is available, default `DTEND` to `starts + 8 hours`. Both must be fetched in the `CupDetail` GraphQL query in `routes/registration.js` (add `starts ends` to the query fields).
+- **SUMMARY**: Cup name (e.g. `TurRes Kupittaa CUP 13.06.2026`).
+- **DESCRIPTION**: Squad assignments (same content as the email body match list), plus the cancel/re-register URLs.
+- **UID**: Deterministic — `registration-{cupId}-{shooterEmail}@ssi-tools` so re-registrations produce an update rather than a duplicate entry when the same `.ics` is imported again.
+- **Resend attachment**: Pass the `.ics` as a base64-encoded attachment via Resend's `attachments` field: `{ filename: 'ilmoittautuminen.ics', content: Buffer.from(icsContent).toString('base64'), contentType: 'text/calendar; charset=utf-8; method=REQUEST' }`.
+- **Content-Type `method=REQUEST`**: Triggers the native "Add to Calendar" prompt in iOS Mail, Outlook, and Gmail without requiring the user to manually open the attachment.
+- **No new npm dependency**: iCal content is simple enough to generate inline; avoids supply-chain risk.
+- **Fallback**: If `starts` is missing from the SSI response (older cups), omit the attachment silently and log a warning — email still sends.
+
 ## Release 8.1 — Match Management Platform (Roadmap)
 
 Vision: Transform the current "link collection" home page into a structured match management platform. This requires significant UI design and architecture work before implementation.
@@ -488,14 +520,14 @@ Vision: Transform the current "link collection" home page into a structured matc
 - **Release 6.0** (Match Management & UI Consolidation): 5 requirements — 1 ✅, 4 pending ➜ R7.6 (MG2–MG5)
 - **Release 7.0** (Authentication & Session Handling): 25 requirements — 19 ✅, 6 pending ➜ R7.6 (AUTH10, SES7, SEC1, SEC7, TEST1–5/7), 2 deferred (TEST6, TEST8)
 - **Release 7.1** (Management Availability): 1 requirement — 1 ✅
-- **Release 7.2** (Kupittaa Cup Management): 3 requirements — 2 ✅ (CUP2, CUP3), 1 📋 ➜ R7.6 (CUP1)
+- **Release 7.2** (Kupittaa Cup Management): 3 requirements — 1 ✅ (CUP2), 1 📋 ➜ R7.6 (CUP1), 1 ⚠️ deprecated ➜ R7.6 (CUP3→R76-COM2)
 - **Release 7.3** (Refactoring Analysis): 1 requirement — 1 ✅ (RFA1). 5 outdated docs removed
 - **Release 7.4** (Refactoring Implementation): 8 requirements — 8 ✅ (RFR1–RFR8)
 - **Release 7.4.1** (Authentication UX Hardening): 5 requirements — 5 ✅ (AUTH-UX1–AUTH-UX5)
 - **Release 7.5** (Architecture V2 Foundation): 5 requirements — 3 ✅, 2 📋 ➜ R7.6 (ARCH3, ARCH4)
-- **Release 7.6** (Consolidation & Completion): 18 requirements from R6.0/R7.0/R7.2/R7.5 — see `release-7.6.md`
+- **Release 7.6** (Consolidation & Completion): 21 requirements from R6.0/R7.0/R7.2/R7.5 plus compliance follow-up (Privacy Policy + Terms of Service, disable paid tracking, per-user SSI execution identity) — see `release-7.6.md`
 - **Release 7.7** (QR Code Login for Scoring): 6 requirements — 6 ✅ (QR1–QR6). Device token auth for tablets/phones at the range. **7.7.1 hotfix**: 4 fixes (cup list visibility, auto-restore, same-day filtering, squad audit logging)
-- **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes implemented (GQL-HF1–GQL-HF3). **7.9.2 hotfix**: 1 fix implemented (GQL-HF4)
+- **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes implemented (GQL-HF1–GQL-HF3). **7.9.2 hotfix**: 1 fix implemented (GQL-HF4). **7.9.3 hotfix**: 1 fix specified (GQL-HF5). **7.9.4**: 1 requirement specified (GQL-HF6 — iCal calendar attachment)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
 - **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
 

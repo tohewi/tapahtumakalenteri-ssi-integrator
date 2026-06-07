@@ -50,25 +50,41 @@ beforeAll(async () => {
     let hasMockResponse = false
     let mockResponse = null
     let mockError = null
+    let mockResponder = null
+    const calls = []
     
     return {
       setResponse: (response) => {
         mockResponse = response
         hasMockResponse = true
         mockError = null
+        mockResponder = null
       },
       setError: (error) => {
         mockError = error
+        hasMockResponse = false
+        mockResponder = null
+      },
+      setResponder: (responder) => {
+        mockResponder = responder
+        mockError = null
         hasMockResponse = false
       },
       clear: () => {
         mockResponse = null
         hasMockResponse = false
         mockError = null
+        mockResponder = null
+        calls.length = 0
       },
+      getCalls: () => [...calls],
       execute: async (query, variables) => {
+        calls.push({ query, variables })
         if (mockError) {
           throw mockError
+        }
+        if (mockResponder) {
+          return await mockResponder(query, variables)
         }
         if (hasMockResponse) {
           return mockResponse
@@ -85,7 +101,9 @@ beforeAll(async () => {
   // Expose mock control methods on app for test access
   app.setMockResponse = mockState.setResponse
   app.setMockError = mockState.setError
+  app.setMockResponder = mockState.setResponder
   app.clearMock = mockState.clear
+  app.getManageQueryCalls = mockState.getCalls
   app.setGraphqlResponse = graphState.setResponse
   app.setGraphqlError = graphState.setError
   app.clearGraphqlMock = graphState.clear
@@ -99,6 +117,7 @@ beforeAll(async () => {
     graphqlWithRefresh: graphState.execute,
     adminGraphQL: mockState.execute,
     getAdminSession: adminSessionState.execute,
+    paidToggleEnabled: false,
   })
   
   app.use('/api/manage', managementRouter)
@@ -186,7 +205,7 @@ describe('GET /api/manage/cups', () => {
     expect(res.data.error).toContain('Access denied')
   })
 
-  it('returns cups filtered by end date with manage scope', async () => {
+  it('returns cups happening today or within seven days', async () => {
     const ip = uniqueIp()
     // Create session with 'manage' scope
     const { sessionId } = await createSession(createMockSessionInput({ scope: 'manage' }))
@@ -196,9 +215,9 @@ describe('GET /api/manage/cups', () => {
       events: [
         {
           id: '100',
-          name: 'Future Cup',
-          starts: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
-          ends: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),   // 8 days from now
+          name: 'Manage Window Cup',
+          starts: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+          ends: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
           status: 'on',
           get_content_type_key: 136,
           max_competitors: 30,
@@ -220,9 +239,9 @@ describe('GET /api/manage/cups', () => {
         },
         {
           id: '101',
-          name: 'Old Ended Cup',
-          starts: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
-          ends: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),   // 2 days ago (past 24h grace)
+          name: 'Outside Window Cup',
+          starts: new Date(Date.now() + 9 * 24 * 60 * 60 * 1000).toISOString(),
+          ends: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
           status: 'on',
           get_content_type_key: 136,
           max_competitors: 25,
@@ -240,13 +259,74 @@ describe('GET /api/manage/cups', () => {
     expect(res.data.cups).toBeDefined()
     expect(Array.isArray(res.data.cups)).toBe(true)
     
-    // Should only include the future cup (not the ended one)
+    // Should only include the cup in management window
     expect(res.data.cups.length).toBe(1)
     expect(res.data.cups[0].id).toBe('100')
-    expect(res.data.cups[0].name).toBe('Future Cup')
+    expect(res.data.cups[0].name).toBe('Manage Window Cup')
+
+    const calls = app.getManageQueryCalls()
+    const listCall = calls.find(c => (c.query || '').includes('events(search: $search'))
+    expect(listCall?.query || '').toContain('starts_after')
+    expect(listCall?.query || '').toContain('starts_before')
+    expect(listCall?.variables?.search).toBe('Kupittaa CUP')
+    expect(typeof listCall?.variables?.startsAfter).toBe('string')
+    expect(typeof listCall?.variables?.startsBefore).toBe('string')
+    expect(new Date(listCall.variables.startsBefore).getTime()).toBeGreaterThan(new Date(listCall.variables.startsAfter).getTime())
   })
 
-  it('filters out cups with registration_starts in the future', async () => {
+  it('uses per-cup detail query for accurate registered count in list view', async () => {
+    const ip = uniqueIp()
+    const { sessionId } = await createSession(createMockSessionInput({ scope: 'manage' }))
+
+    app.setMockResponder(async (query, variables) => {
+      if ((query || '').includes('events(search: $search')) {
+        return {
+          events: [
+            {
+              id: '148',
+              name: 'TurRes Kupittaa CUP 09.05.2026',
+              starts: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+              ends: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+              status: 'on',
+              get_content_type_key: 136,
+              max_competitors: 25,
+              registration: 'op',
+              registration_starts: new Date(Date.now() - 1000).toISOString(),
+              registration_closes: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
+              competitors: [],
+              component_matches: [],
+            },
+          ],
+        }
+      }
+
+      if ((query || '').includes('query ManageCupCount')) {
+        expect(variables).toEqual({ id: '148' })
+        return {
+          event: {
+            id: '148',
+            competitors: Array.from({ length: 15 }, (_, i) => ({ id: String(i + 1), status: 'a' })),
+            component_matches: [],
+          },
+        }
+      }
+
+      return { events: [] }
+    })
+
+    const res = await request('GET', '/api/manage/cups', null, ip, { ssi_session: sessionId })
+
+    expect(res.status).toBe(200)
+    expect(res.data.cups.length).toBe(1)
+    expect(res.data.cups[0].id).toBe('148')
+    expect(res.data.cups[0].registered).toBe(15)
+
+    const calls = app.getManageQueryCalls()
+    const detailCalls = calls.filter(c => (c.query || '').includes('query ManageCupCount'))
+    expect(detailCalls.length).toBe(1)
+  })
+
+  it('does not require registration_starts when event is in window', async () => {
     const ip = uniqueIp()
     const { sessionId } = await createSession(createMockSessionInput({ scope: 'manage' }))
     
@@ -254,27 +334,27 @@ describe('GET /api/manage/cups', () => {
       events: [
         {
           id: '200',
-          name: 'Registration Not Yet Started',
-          starts: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
-          ends: new Date(Date.now() + 11 * 24 * 60 * 60 * 1000).toISOString(),
+          name: 'No Registration Start Date',
+          starts: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+          ends: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
           status: 'on',
           get_content_type_key: 136,
           max_competitors: 25,
           registration: 'op',
-          registration_starts: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days future
-          registration_closes: new Date(Date.now() + 9 * 24 * 60 * 60 * 1000).toISOString(),
+          registration_starts: null,
+          registration_closes: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
           component_matches: []
         },
         {
           id: '201',
-          name: 'Registration Already Started',
-          starts: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-          ends: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),
+          name: 'Registration Starts Later',
+          starts: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
+          ends: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
           status: 'on',
           get_content_type_key: 136,
           max_competitors: 25,
           registration: 'op',
-          registration_starts: new Date(Date.now() - 1000).toISOString(), // just started
+          registration_starts: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
           registration_closes: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
           component_matches: []
         },
@@ -284,8 +364,8 @@ describe('GET /api/manage/cups', () => {
     const res = await request('GET', '/api/manage/cups', null, ip, { ssi_session: sessionId })
     
     expect(res.status).toBe(200)
-    expect(res.data.cups.length).toBe(1)
-    expect(res.data.cups[0].id).toBe('201') // Only the one with registration started
+    expect(res.data.cups.length).toBe(2)
+    expect(res.data.cups.map(c => c.id)).toEqual(['200', '201'])
   })
 
   it('only returns active cups (status === on)', async () => {
@@ -340,8 +420,8 @@ describe('GET /api/manage/cups', () => {
         {
           id: '400',
           name: 'Later Cup',
-          starts: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
-          ends: new Date(Date.now() + 11 * 24 * 60 * 60 * 1000).toISOString(),
+          starts: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+          ends: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
           status: 'on',
           get_content_type_key: 136,
           max_competitors: 25,
@@ -353,8 +433,8 @@ describe('GET /api/manage/cups', () => {
         {
           id: '401',
           name: 'Earlier Cup',
-          starts: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-          ends: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
+          starts: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
+          ends: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
           status: 'on',
           get_content_type_key: 136,
           max_competitors: 25,
@@ -394,7 +474,7 @@ describe('GET /api/manage/cups', () => {
     expect(res.data.error).toContain('Hallintapalvelu ei ole käytettävissä')
   })
 
-  it('uses end date for filtering (not registration status)', async () => {
+  it('includes cups in window even when registration is closed', async () => {
     const ip = uniqueIp()
     const { sessionId } = await createSession(createMockSessionInput({ scope: 'manage' }))
     
@@ -402,9 +482,9 @@ describe('GET /api/manage/cups', () => {
       events: [
         {
           id: '500',
-          name: 'Registration Closed But Not Ended',
-          starts: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-          ends: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),   // 1 day future
+          name: 'Registration Closed In Window',
+          starts: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+          ends: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
           status: 'on',
           get_content_type_key: 136,
           max_competitors: 25,
@@ -419,13 +499,13 @@ describe('GET /api/manage/cups', () => {
     const res = await request('GET', '/api/manage/cups', null, ip, { ssi_session: sessionId })
     
     expect(res.status).toBe(200)
-    // Should include the cup even though registration is closed, because it hasn't ended yet
+    // Should include the cup even though registration is closed, because event is in window
     expect(res.data.cups.length).toBe(1)
     expect(res.data.cups[0].id).toBe('500')
     expect(res.data.cups[0].registrationOpen).toBe(false) // registration is closed
   })
 
-  it('uses starts + 24h as fallback when ends is null', async () => {
+  it('includes in-window cups when ends is null', async () => {
     const ip = uniqueIp()
     const { sessionId } = await createSession(createMockSessionInput({ scope: 'manage' }))
     
@@ -482,7 +562,7 @@ describe('GET /api/manage/cups', () => {
                   competitors: [
                     { id: '1', status: 'a' },
                     { id: '2', status: 'a' },
-                    { id: '3', status: 'p' }, // pending, not approved
+                    { id: '3', status: 'p' },
                   ]
                 },
                 {
@@ -501,9 +581,9 @@ describe('GET /api/manage/cups', () => {
     
     expect(res.status).toBe(200)
     expect(res.data.cups.length).toBe(1)
-    expect(res.data.cups[0].registered).toBe(2) // Only approved (status 'a') and unique IDs
+    expect(res.data.cups[0].registered).toBe(3) // approved + pending, unique IDs
     expect(res.data.cups[0].maxCompetitors).toBe(3)
-    expect(res.data.cups[0].full).toBe(false) // 2 < 3
+    expect(res.data.cups[0].full).toBe(true) // 3 >= 3
   })
 
   it('marks cup as full when registered >= maxCompetitors', async () => {
@@ -628,8 +708,47 @@ describe('GET /api/manage/cups', () => {
 
     expect(res.status).toBe(200)
     expect(res.data.cups.length).toBe(1)
-    expect(res.data.cups[0].registered).toBe(2)
+    expect(res.data.cups[0].registered).toBe(3)
     expect(res.data.cups[0].maxCompetitors).toBe(5)
+  })
+
+  it('counts cup competitors when status is missing', async () => {
+    const ip = uniqueIp()
+    const { sessionId } = await createSession(createMockSessionInput({ scope: 'manage' }))
+
+    app.setMockResponse({
+      events: [
+        {
+          id: '704',
+          name: 'Statusless Competitors Cup',
+          starts: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+          ends: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
+          status: 'on',
+          get_content_type_key: 136,
+          max_competitors: 10,
+          registration: 'op',
+          registration_starts: new Date(Date.now() - 1000).toISOString(),
+          registration_closes: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
+          competitors: [
+            { id: 'cp1', status: '' },
+            { id: 'cp2' },
+          ],
+          component_matches: [{
+            number: 1,
+            included: true,
+            match: {
+              squads: [],
+            },
+          }],
+        },
+      ],
+    })
+
+    const res = await request('GET', '/api/manage/cups', null, ip, { ssi_session: sessionId })
+
+    expect(res.status).toBe(200)
+    expect(res.data.cups.length).toBe(1)
+    expect(res.data.cups[0].registered).toBe(2)
   })
 })
 
@@ -779,20 +898,17 @@ describe('POST /api/manage/cup/:id/toggle-paid', () => {
     expect(res.data.error).toBe('shooterName and cupParticipantId required')
   })
 
-  it('toggles paid status at cup level', async () => {
+  it('returns 403 when paid feature flag is disabled', async () => {
     const ip = uniqueIp()
     const cookies = await createManageSessionCookie()
-
-    ssiClientMocks.ssiTogglePaid.mockResolvedValue({ success: true, message: 'Marked as paid' })
 
     const res = await request('POST', '/api/manage/cup/123/toggle-paid', {
       shooterName: 'Test Shooter',
       cupParticipantId: 'cup-88'
     }, ip, cookies)
 
-    expect(res.status).toBe(200)
-    expect(res.data).toEqual({ success: true, message: 'Marked as paid' })
-    expect(ssiClientMocks.ssiTogglePaid).toHaveBeenCalledTimes(1)
-    expect(ssiClientMocks.ssiTogglePaid).toHaveBeenCalledWith(137, 'cup-88', expect.any(Object))
+    expect(res.status).toBe(403)
+    expect(res.data.error).toBe('Paid toggle feature is disabled')
+    expect(ssiClientMocks.ssiTogglePaid).not.toHaveBeenCalled()
   })
 })

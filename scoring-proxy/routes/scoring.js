@@ -3,6 +3,59 @@ import { ssiGetScoringPage, ssiSubmitScore } from '../lib/ssi-core/scoring.js'
 import { asyncHandler } from '../middleware/errorHandler.js'
 import { log } from '../lib/logger.js'
 
+function isDebugModeEnabled(debugValue) {
+  const normalized = String(debugValue || '').toLowerCase().trim()
+  return normalized === 'true' || normalized === '1'
+}
+
+function getTodayStart(now = new Date()) {
+  const todayStart = new Date(now)
+  todayStart.setHours(0, 0, 0, 0)
+  return todayStart
+}
+
+function startsOnOrAfterDate(starts, dateStart) {
+  const startsAt = starts ? new Date(starts) : null
+  if (!startsAt || Number.isNaN(startsAt.getTime())) return false
+
+  const startsDate = new Date(startsAt)
+  startsDate.setHours(0, 0, 0, 0)
+  return startsDate >= dateStart
+}
+
+function sortByStartAscending(a, b) {
+  return new Date(a.starts).getTime() - new Date(b.starts).getTime()
+}
+
+function isUnsupportedStatusFilterError(err) {
+  const message = String(err?.message || '')
+  return message.includes('Unknown argument') && message.includes('status')
+}
+
+const SEARCH_CUPS_DEBUG_QUERY = `
+  query SearchCupsDebug($search: String!) {
+    events(search: $search) {
+      id name starts status get_content_type_key
+    }
+  }
+`
+
+const SEARCH_CUPS_FILTERED_QUERY = `
+  query SearchCups($search: String!, $startsAfter: String!, $status: String!) {
+    events(search: $search, starts_after: $startsAfter, status: $status) {
+      id name starts status get_content_type_key
+    }
+  }
+`
+
+const SEARCH_CUPS_FALLBACK_QUERY = `
+  query SearchCupsFallback($search: String!, $startsAfter: String!) {
+    events(search: $search, starts_after: $startsAfter) {
+      id name starts status get_content_type_key
+    }
+  }
+`
+
 export function createScoringRouter({ requireAuth, graphqlWithRefresh }) {
   const router = express.Router()
 
@@ -12,20 +65,39 @@ export function createScoringRouter({ requireAuth, graphqlWithRefresh }) {
   // ============================================================
   router.get('/cups', requireAuth('scoring'), asyncHandler(async (req, res) => {
     const search = req.query.search
+    const debugMode = isDebugModeEnabled(req.query.debug)
     if (!search || search.length < 2) {
       return res.json({ cups: [] })
     }
 
-    const result = await graphqlWithRefresh(req.ssiSession, `
-      query SearchCups($search: String!) {
-        events(search: $search) {
-          id name starts status get_content_type_key
-        }
-      }
-    `, { search })
+    const todayStart = getTodayStart()
+    let statusFilterFallback = false
+    let result
 
-    // Filter to cups (CT=136) only
-    const cups = (result.events || [])
+    if (debugMode) {
+      result = await graphqlWithRefresh(req.ssiSession, SEARCH_CUPS_DEBUG_QUERY, { search })
+    } else {
+      try {
+        result = await graphqlWithRefresh(req.ssiSession, SEARCH_CUPS_FILTERED_QUERY, {
+          search,
+          startsAfter: todayStart.toISOString(),
+          status: 'on',
+        })
+      } catch (err) {
+        if (!isUnsupportedStatusFilterError(err)) {
+          throw err
+        }
+
+        statusFilterFallback = true
+        log.warn('[scoring] events(status:) unsupported by SSI GraphQL, applying status filter locally')
+        result = await graphqlWithRefresh(req.ssiSession, SEARCH_CUPS_FALLBACK_QUERY, {
+          search,
+          startsAfter: todayStart.toISOString(),
+        })
+      }
+    }
+
+    const rawCups = (result.events || [])
       .filter(e => e.get_content_type_key === 136)
       .map(c => ({
         id: c.id,
@@ -34,13 +106,31 @@ export function createScoringRouter({ requireAuth, graphqlWithRefresh }) {
         status: c.status,
       }))
 
-    // Sort by date: closest to today first (ascending by absolute distance)
-    const now = Date.now()
-    cups.sort((a, b) => {
-      const da = Math.abs(new Date(a.starts).getTime() - now)
-      const db = Math.abs(new Date(b.starts).getTime() - now)
-      return da - db
-    })
+    // Normal mode: active upcoming/today cups only.
+    // Status is filtered in GraphQL when supported; local fallback remains for compatibility.
+    const upcomingByDate = rawCups
+      .filter(c => startsOnOrAfterDate(c.starts, todayStart))
+    const activeUpcoming = upcomingByDate
+      .filter(c => c.status === 'on')
+
+    const filteredCups = statusFilterFallback
+      ? activeUpcoming
+      : upcomingByDate
+
+    const cups = (debugMode ? rawCups : filteredCups)
+      .sort(sortByStartAscending)
+
+    if (debugMode) {
+      return res.json({
+        cups,
+        debug: {
+          enabled: true,
+          totalRaw: rawCups.length,
+          activeUpcoming: activeUpcoming.length,
+          filteredOut: rawCups.length - activeUpcoming.length,
+        },
+      })
+    }
 
     res.json({ cups })
   }))

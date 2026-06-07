@@ -43,6 +43,7 @@ export const fi = {
   noCupsFound: 'Cupeja ei löytynyt',
   tryDifferentSearch: 'Kokeile eri hakutermiä',
   today: 'TÄNÄÄN',
+  debugModeEnabled: 'Debug-tila: näytetään myös vanhat ja ei-aktiiviset cupit',
   
   // MatchPicker
   selectMatchSubtitle: 'Valitse ottelu tulosten syöttöön',
@@ -51,6 +52,7 @@ export const fi = {
   noMatchesToday: 'Ei otteluita tänään',
   selectFromOtherMatches: 'Valitse tulevista tai menneistä otteluista',
   active: 'Aktiivinen',
+  cancelled: 'Peruutettu',
   
   // SquadPicker
   selectSquad: 'Valitse squad',
@@ -124,13 +126,11 @@ export const fi = {
   filterMyEvents: 'Omat',
   missingRolesWarning: 'Vastuuvetäjä tai kalustovastaava puuttuu',
 
-  // Management: DNS and Paid (CUP2/CUP3)
+  // Management: DNS (CUP2/CUP3)
   setDns: 'DNS',
   undoDns: 'Peru DNS',
   dnsConfirm: (name) => `Aseta ${name} DNS?`,
   undoDnsConfirm: (name) => `Peru ${name} DNS?`,
-  paid: 'Maksettu',
-  unpaid: 'Ei maksettu',
   didNotShow: 'DNS',
   moveSquad: '→ S?',
 
@@ -204,6 +204,7 @@ export const en = {
   noCupsFound: 'No cups found',
   tryDifferentSearch: 'Try a different search term',
   today: 'TODAY',
+  debugModeEnabled: 'Debug mode: showing past and inactive cups',
   
   // MatchPicker
   selectMatchSubtitle: 'Select a match for scoring',
@@ -212,6 +213,7 @@ export const en = {
   noMatchesToday: 'No matches today',
   selectFromOtherMatches: 'Select from upcoming or past matches',
   active: 'Active',
+  cancelled: 'Cancelled',
   
   // SquadPicker
   selectSquad: 'Select squad',
@@ -285,13 +287,11 @@ export const en = {
   filterMyEvents: 'My events',
   missingRolesWarning: 'Lead instructor or equipment manager missing',
 
-  // Management: DNS and Paid (CUP2/CUP3)
+  // Management: DNS (CUP2/CUP3)
   setDns: 'DNS',
   undoDns: 'Undo DNS',
   dnsConfirm: (name) => `Set ${name} as DNS?`,
   undoDnsConfirm: (name) => `Undo DNS for ${name}?`,
-  paid: 'Paid',
-  unpaid: 'Unpaid',
   didNotShow: 'DNS',
   moveSquad: '→ S?',
 

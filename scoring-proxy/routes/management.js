@@ -16,6 +16,7 @@ import {
   attachCupStatuses,
   getIncludedMatchIds,
   filterManageableCups,
+  getManageWindowBounds,
 } from '../lib/services/cup-manage.js'
 import { log } from '../lib/logger.js'
 import { AppError } from '../lib/errors/AppError.js'
@@ -24,43 +25,115 @@ function internalError(message) {
   return new AppError(message, 500, 'INTERNAL_ERROR')
 }
 
-export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminGraphQL, getAdminSession }) {
-  const router = express.Router()
-
-  // ============================================================
-  // GET /api/manage/cups — List cups available for management
-  // Returns cups that haven't ended yet, regardless of registration status.
-  // Uses admin GraphQL to query SSI events (same as registration endpoint
-  // but with relaxed filtering: no registration status check, uses end date).
-  // ============================================================
-  router.get('/cups', requireAuth('manage'), async (req, res, next) => {
-    try {
-      const result = await adminGraphQL(`
-        query {
-          events(search: "Kupittaa CUP") {
-            id name starts ends status get_content_type_key
-            max_competitors
-            registration
-            ... on NordicSerieNode {
-              competitors { id status }
-              registration_starts
-              registration_closes
-              component_matches {
-                number included
-                match {
-                  squads {
-                    ... on NordicSquadNode {
-                      competitors { id status }
-                    }
-                  }
-                }
+const MANAGE_CUPS_LIST_QUERY = `
+  query ManageCups($search: String!, $startsAfter: String!, $startsBefore: String!) {
+    events(search: $search, starts_after: $startsAfter, starts_before: $startsBefore) {
+      id name starts ends status get_content_type_key
+      max_competitors
+      registration
+      ... on NordicSerieNode {
+        competitors { id status }
+        registration_starts
+        registration_closes
+        component_matches {
+          number included
+          match {
+            squads {
+              ... on NordicSquadNode {
+                competitors { id status }
               }
             }
           }
         }
-      `)
+      }
+    }
+  }
+`
 
-      const cups = filterManageableCups(result.events)
+const MANAGE_CUP_COUNT_QUERY = `
+  query ManageCupCount($id: String!) {
+    event(content_type: 136, id: $id) {
+      id
+      ... on NordicSerieNode {
+        competitors { id status }
+        component_matches {
+          number included
+          match {
+            squads {
+              ... on NordicSquadNode {
+                competitors { id status }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`
+
+export function createManagementRouter({
+  requireAuth,
+  graphqlWithRefresh,
+  adminGraphQL,
+  getAdminSession,
+  paidToggleEnabled = false,
+}) {
+  const router = express.Router()
+
+  // ============================================================
+  // GET /api/manage/cups — List cups available for management
+  // Returns cups happening today or within the next 5 days.
+  // Applies the same date window in GraphQL (starts_after/starts_before)
+  // and in local filtering for deterministic behavior.
+  // ============================================================
+  router.get('/cups', requireAuth('manage'), async (req, res, next) => {
+    try {
+      const now = new Date()
+      const { windowStart, windowEndExclusive } = getManageWindowBounds(now)
+
+      const result = await adminGraphQL(MANAGE_CUPS_LIST_QUERY, {
+        search: 'Kupittaa CUP',
+        startsAfter: windowStart.toISOString(),
+        startsBefore: windowEndExclusive.toISOString(),
+      })
+
+      const listEvents = result.events || []
+      const manageableEvents = filterManageableCups(listEvents, now)
+
+      const detailFetches = manageableEvents.map(async (cup) => {
+        try {
+          const detail = await adminGraphQL(MANAGE_CUP_COUNT_QUERY, { id: String(cup.id) })
+          return {
+            id: String(cup.id),
+            competitors: detail?.event?.competitors,
+            component_matches: detail?.event?.component_matches,
+          }
+        } catch (err) {
+          log.warn(`[manage] Failed to fetch detail count data for cup ${cup.id}: ${err.message}`)
+          return {
+            id: String(cup.id),
+            competitors: undefined,
+            component_matches: undefined,
+          }
+        }
+      })
+
+      const detailResults = await Promise.all(detailFetches)
+      const detailById = new Map(
+        detailResults.map(r => [String(r.id), r])
+      )
+
+      const enrichedEvents = listEvents.map((event) => {
+        const detail = detailById.get(String(event.id))
+        if (!detail) return event
+        return {
+          ...event,
+          competitors: detail.competitors ?? event.competitors,
+          component_matches: detail.component_matches ?? event.component_matches,
+        }
+      })
+
+      const cups = filterManageableCups(enrichedEvents, now)
 
       res.json({ cups })
     } catch (err) {
@@ -138,13 +211,25 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
         shooters, cupOnly, cup.competitors, cupParticipantStatuses
       )
 
+      // Compliance toggle: when paid feature is disabled, do not expose paid state.
+      const applyPaidVisibility = (list = []) => {
+        if (paidToggleEnabled) return list
+        return list.map((shooter) => {
+          if (!shooter || typeof shooter !== 'object') return shooter
+          return { ...shooter, paid: false }
+        })
+      }
+
       res.json({
         cup: { id: cup.id, name: cup.name, starts: cup.starts },
         matches,
-        shooters: shootersWithStatus,
-        cupOnly: cupOnlyWithStatus,
-        matchOnly,
-        pendingShooters,
+        shooters: applyPaidVisibility(shootersWithStatus),
+        cupOnly: applyPaidVisibility(cupOnlyWithStatus),
+        matchOnly: applyPaidVisibility(matchOnly),
+        pendingShooters: applyPaidVisibility(pendingShooters),
+        features: {
+          paidToggleEnabled,
+        },
       })
     } catch (err) {
       log.error('[manage] Failed to fetch management data:', err.message)
@@ -631,6 +716,10 @@ export function createManagementRouter({ requireAuth, graphqlWithRefresh, adminG
     const { shooterName, cupParticipantId } = req.body
     if (!shooterName || !cupParticipantId) {
       return res.status(400).json({ error: 'shooterName and cupParticipantId required' })
+    }
+
+    if (!paidToggleEnabled) {
+      return res.status(403).json({ error: 'Paid toggle feature is disabled' })
     }
 
     try {

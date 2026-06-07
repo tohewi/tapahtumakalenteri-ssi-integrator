@@ -2,12 +2,36 @@ import { useState, useCallback } from 'react'
 import { formatDateShort, isToday, isFuture, parseDateLocal } from './shared'
 import fi from '../i18n'
 
+function isDebugModeEnabled() {
+  const hashQuery = window.location.hash.split('?')[1] || ''
+  const params = new URLSearchParams(hashQuery)
+  const debugValue = String(params.get('debug') || '').toLowerCase()
+  return debugValue === 'true' || debugValue === '1'
+}
+
+function getCupStatusText(status) {
+  const statusMap = {
+    on: fi.active,
+    cp: fi.completed,
+    cs: fi.cancelled,
+    Active: fi.active,
+    Aktiivinen: fi.active,
+    Completed: fi.completed,
+    Valmis: fi.completed,
+    Cancelled: fi.cancelled,
+    Peruutettu: fi.cancelled,
+  }
+
+  return statusMap[status] || status
+}
+
 export default function CupSearch({ onSelectCup, loading, onLogout }) {
   const [search, setSearch] = useState('')
   const [cups, setCups] = useState([])
   const [searching, setSearching] = useState(false)
   const [searched, setSearched] = useState(false)
   const [error, setError] = useState(null)
+  const debugMode = isDebugModeEnabled()
 
   const handleSearch = useCallback(async (e) => {
     e.preventDefault()
@@ -17,7 +41,7 @@ export default function CupSearch({ onSelectCup, loading, onLogout }) {
     setSearched(false)
     try {
       const { searchCups } = await import('../api.js')
-      const results = await searchCups(search)
+      const results = await searchCups(search, { debug: debugMode })
       setCups(results)
       setSearched(true)
     } catch (err) {
@@ -25,7 +49,7 @@ export default function CupSearch({ onSelectCup, loading, onLogout }) {
     } finally {
       setSearching(false)
     }
-  }, [search])
+  }, [search, debugMode])
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -39,6 +63,9 @@ export default function CupSearch({ onSelectCup, loading, onLogout }) {
           )}
         </div>
         <p className="text-blue-200 text-sm mt-1">{fi.searchCupSubtitle}</p>
+        {debugMode && (
+          <p className="text-yellow-200 text-xs mt-2">{fi.debugModeEnabled}</p>
+        )}
       </div>
 
       <form onSubmit={handleSearch} className="p-3">
@@ -105,7 +132,7 @@ export default function CupSearch({ onSelectCup, loading, onLogout }) {
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-gray-800 truncate">{cup.name}</div>
                 <div className="text-xs text-gray-400">
-                  {formatDateShort(cup.starts)} · {cup.status === 'on' ? fi.active : cup.status}
+                  {formatDateShort(cup.starts)} · {getCupStatusText(cup.status)}
                 </div>
               </div>
 
