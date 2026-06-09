@@ -2,6 +2,46 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Mobile optimizations */
+@layer utilities {
+  /* Safe area padding for iOS notch */
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Touch action optimization */
+  .touch-pan-y {
+    touch-action: pan-y;
+  }
+}
+
+/* Base mobile styles */
+html {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  @apply antialiased;
+  overscroll-behavior-y: none;
+}
+
+/* Prevent pull-to-refresh on mobile */
+@supports (-webkit-touch-callout: none) {
+  body {
+    overscroll-behavior-y: none;
+  }
+}
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
