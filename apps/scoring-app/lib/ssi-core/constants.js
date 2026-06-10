@@ -1,6 +1,10 @@
 // ============================================================
 // SSI Integration Constants
-// Re-exports from @ssi-tools/core for backward compatibility.
 // ============================================================
 
-export { SSI_BASE_URL, SSI_GRAPHQL, API_BASE } from '../../../../packages/ssi-core/lib/ssi/constants.js'
+// SSI Base URL and GraphQL endpoint
+export const SSI_BASE_URL = process.env.SSI_BASE_URL || 'https://shootnscoreit.com'
+export const SSI_GRAPHQL = `${SSI_BASE_URL}/graphql/`
+
+// API Base path used by UI
+export const API_BASE = '/api'

@@ -343,5 +343,33 @@ export async function ssiLogin(email, password) {
   throw new Error(`Login failed with status ${loginResp.status}`)
 }
 
+// ============================================================
+// GraphQL Authentication (platform sign-in)
+// ============================================================
+
+const AUTH_MUTATION = `
+mutation TokenAuth($email: String!, $password: String!) {
+  token_auth(email: $email, password: $password) {
+    token { token }
+    refresh_token { token }
+    success
+    errors
+  }
+}
+`
+
+export async function ssiGraphQLAuth({ email, password, apiKey }) {
+  const result = await ssiGraphQL(null, AUTH_MUTATION, { email, password }, apiKey || null)
+
+  if (!result.token_auth?.token?.token) {
+    throw new Error('SSI GraphQL Authentication failed')
+  }
+
+  return {
+    token: result.token_auth.token.token,
+    refreshToken: result.token_auth.refresh_token?.token || null,
+  }
+}
+
 // Export cookie helpers for other modules
 export { parseCookies, formatCookies }

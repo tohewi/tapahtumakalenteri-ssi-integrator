@@ -12,6 +12,14 @@ projects:
             plan: starter
             maxmemoryPolicy: allkeys-lru
             ipAllowList: []  # internal access only (private network)
+          # ── PostgreSQL (platform store for R8.0 multi-tenant) ──
+          # Stores accounts, tenants, disciplines, scheduled events, RBAC.
+          - type: pserv
+            name: turres-ssi-tools-db
+            region: frankfurt
+            plan: starter
+            databaseName: ssi_platform
+            databaseUser: ssi_app
           # ── Web service ──
           - type: web
             name: turres-ssi-tools
@@ -40,6 +48,11 @@ projects:
                 fromService:
                   name: turres-ssi-tools-redis
                   type: keyvalue
+                  property: connectionString
+              - key: DATABASE_URL
+                fromService:
+                  name: turres-ssi-tools-db
+                  type: pserv
                   property: connectionString
           # ── Match Manager App (R8.x) ──
           # Event-centric match management platform.

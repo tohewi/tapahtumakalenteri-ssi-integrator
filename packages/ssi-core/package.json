@@ -18,7 +18,8 @@
     "test": "echo 'Error: no test specified' && exit 0"
   },
   "dependencies": {
-    "ioredis": "^5.4.1"
+    "redis": "^5.10.0",
+    "resend": "^6.9.1"
   },
   "engines": {
     "node": ">=24.0.0"
