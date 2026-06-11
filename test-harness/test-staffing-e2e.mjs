@@ -36,7 +36,7 @@ const ADMIN_EMAIL    = process.env.SSI_ADMIN_EMAIL
 const ADMIN_PASSWORD = process.env.SSI_ADMIN_PASSWORD
 const ADMIN_API_KEY  = process.env.SSI_ADMIN_API_KEY
 const EVENT_ID       = process.argv[2] || '27394'
-const TEST_EMAIL     = 'turreskuko1@foo.bar'
+const TEST_EMAIL     = process.env.TEST_EMAIL || 'test@example.com'
 const CONTENT_TYPE   = 22          // SRA/IPSC
 const PARTICIPANT_CT = 23          // IPSC participant content type
 const STAFF_SQUAD    = 'Squad 5'
@@ -131,8 +131,8 @@ async function main() {
   const jwt = auth.token_auth.token.token
   assert('Admin JWT acquired', jwt)
 
-  // Known display name for test user (turreskuko1@foo.bar)
-  const TEST_USER_NAME = 'Turresku Tuloskone 1'
+  // Known display name for test user (from TEST_EMAIL env var)
+  const TEST_USER_NAME = process.env.TEST_USER_NAME || 'Test User'
 
   // ── STEP 1: Verify event exists ────────────────────────────────────
   section('STEP 1 — Verify Event')
