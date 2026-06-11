@@ -5,6 +5,42 @@
 
 ---
 
+## Release 8.1.1 — Platform Layer Code Quality & Security Hardening (2026-06-11)
+
+**Branch:** `R81-feature-match-manager-separation`
+
+### Overview
+
+Code quality and security hardening pass on the R8.1 platform layer (multi-tenant match management). Addresses all bare async error handlers, fragile middleware, dynamic imports, missing test coverage, ad-hoc migration system, and module coupling — plus automated security scanning via GitHub CodeQL.
+
+### New Features
+
+- **GitHub CodeQL security scanning** (`.github/workflows/codeql.yml`): Runs `security-extended` query suite on every PR and weekly schedule. Results surfaced in GitHub Security → Code scanning tab. Covers injection, credential leaks, XSS, prototype pollution, insecure crypto, and path traversal.
+- **Versioned migration system** (`lib/db/postgres.js`): Replaced 19 ad-hoc try/catch migration blocks with a proper `schema_migrations` tracking table. Each migration runs exactly once in its own transaction, never re-runs on a healthy database, and is listed by version + description. New migrations are added by appending to `MIGRATIONS` array.
+- **Admin session service** (`lib/services/admin-session.js`): Extracted the SSI admin session singleton (previously inline in `server.js`) into an independently importable and testable module. Manages two TTL windows (4 h web cookies, 14 min JWT) with automatic refresh/re-login. `server.js` now imports `getAdminSession` and `adminGraphQL` from this module.
+- **Platform test suite** (`test/platform-routes/platform-auth.test.js`): 27 new tests covering registration, login, MFA flow, logout, status, `/me`, `requirePlatformAuth` guard, `requireTenantRole` RBAC (404/403/200 paths), tenant CRUD, SSI credential masking for non-owners, and error propagation to `errorHandler`.
+
+### Bug Fixes / Code Correctness
+
+- **Async error boundaries**: Wrapped all bare `async (req, res) =>` handlers across `platform/auth.js`, `platform/tenants.js`, `platform/disciplines.js`, `platform/templates.js`, `platform/events.js`, `platform/members.js`, and `platform/invitations.js` in try/catch with `next(err)` forwarding. Previously, any thrown error in these handlers would crash the process with an unhandled promise rejection.
+- **Static imports in `platform/staffing.js`**: Converted 6 dynamic `await import()` calls (`ssiGraphQL`, `sendStaffingSignupConfirmation`, `sendStaffingWithdrawalNotice`, `listTenantMembers`, `query`) to static top-level imports, eliminating runtime overhead and making dependency graph explicit.
+- **`requireTenantRole` param fragility**: The middleware previously used `req.params.tenantId || req.params.id` which silently fetched the wrong tenant when a route had multiple `:id`-style params. Accepts an optional `{ param: 'paramName' }` options object as last argument so callers can be explicit.
+
+### Security
+
+- **npm audit**: 0 vulnerabilities in both `apps/scoring-app` and `scoring-ui` (confirmed at release).
+- **CodeQL workflow**: Automated static analysis with `security-extended` query suite (OWASP Top-10, CWE Top-25, injection patterns) now runs on every PR and weekly.
+- **No hardcoded secrets**: Verified — all credentials read from environment variables. AES-256-GCM encryption for tenant SSI credentials at rest remains unchanged.
+
+### Test Status
+
+| Suite | Passing | Notes |
+|-------|--------:|-------|
+| Backend (`scoring-app`) | **254** | 14 test files — 227 existing + 27 new platform route tests |
+| Frontend (`scoring-ui`) | 190 | Unchanged, all green |
+
+---
+
 ## Release 7.6.1 — Compliance Hardening: Paid Tracking Disabled (2026-05-10)
 
 **Requirements:** R76-COM2 ✅

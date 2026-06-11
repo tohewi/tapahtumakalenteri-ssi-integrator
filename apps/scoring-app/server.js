@@ -6,9 +6,12 @@ import rateLimit from 'express-rate-limit'
 import path from 'path'
 import { existsSync } from 'fs'
 import { fileURLToPath } from 'url'
-import { ssiGraphQL, ssiLogin, ssiRefreshJWT } from './lib/ssi-core/graphql.js'
+import { getAdminSession, adminGraphQL } from './lib/services/admin-session.js'
+import { ssiGraphQL, ssiRefreshJWT } from './lib/ssi-core/graphql.js'
 import { log } from './lib/logger.js'
 import { errorHandler } from './middleware/errorHandler.js'
+import { initPostgres } from './lib/db/postgres.js'
+import { createPlatformRouter } from './routes/platform.js'
 import { createScoringRouter } from './routes/scoring.js'
 import { createRegistrationRouter } from './routes/registration.js'
 import { createReportsRouter } from './routes/reports.js'
@@ -211,115 +214,9 @@ app.get(`${API_V1_BASE}/health`, healthHandler)
 app.get(`${API_LEGACY_BASE}/health`, legacyApiAlias, healthHandler)
 
 // ============================================================
-// Registration: Admin session (singleton, lazy-init)
-// Uses SSI_ADMIN_EMAIL + SSI_ADMIN_PASSWORD env vars
+// Registration: Admin session (singleton)
+// Managed by lib/services/admin-session.js — imported above
 // ============================================================
-
-let adminCookies = null
-let adminJwt = null
-let adminRefreshToken = null
-let adminCookieTime = 0
-let adminJwtTime = 0
-const ADMIN_COOKIE_TTL = 4 * 60 * 60 * 1000 // 4 hours — SSI web cookies
-const ADMIN_JWT_TTL = 14 * 60 * 1000         // 14 min — SSI JWTs expire ~15 min
-
-async function getAdminSession() {
-  const email = process.env.SSI_ADMIN_EMAIL
-  const password = process.env.SSI_ADMIN_PASSWORD
-  const apiKey = SSI_ADMIN_API_KEY || null
-  if (!email || !password) {
-    throw new Error('Registration not configured: SSI_ADMIN_EMAIL and SSI_ADMIN_PASSWORD required')
-  }
-  if (!apiKey) {
-    throw new Error('Registration not configured: SSI_ADMIN_API_KEY required')
-  }
-
-  const now = Date.now()
-
-  // Full re-login if cookies expired
-  if (!adminCookies || (now - adminCookieTime) >= ADMIN_COOKIE_TTL) {
-    log.debug('[admin] Full login (cookies expired or first init)...')
-    adminCookies = await ssiLogin(email, password)
-    adminCookieTime = now
-
-    const authResult = await ssiGraphQL(null, `
-      mutation Auth($email: String!, $password: String!) {
-        token_auth(email: $email, password: $password) {
-          token { token }
-          refresh_token { token }
-        }
-      }
-    `, { email, password }, apiKey)
-    adminJwt = authResult.token_auth?.token?.token || null
-    adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
-    adminJwtTime = now
-
-    log.debug('[admin] Session ready (fresh login)')
-    return { cookies: adminCookies, jwt: adminJwt, refreshToken: adminRefreshToken }
-  }
-
-  // Proactively refresh JWT if near expiry (cookies still valid)
-  if (!adminJwt || (now - adminJwtTime) >= ADMIN_JWT_TTL) {
-    log.debug('[admin] Refreshing JWT (expired after ~14 min)...')
-    try {
-      if (adminRefreshToken) {
-        const newTokens = await ssiRefreshJWT(adminRefreshToken, apiKey)
-        adminJwt = newTokens.token
-        adminRefreshToken = newTokens.refreshToken
-        adminJwtTime = now
-        log.debug('[admin] JWT refreshed via refresh token')
-      } else {
-        // No refresh token — full re-auth for JWT
-        const authResult = await ssiGraphQL(null, `
-          mutation Auth($email: String!, $password: String!) {
-            token_auth(email: $email, password: $password) {
-              token { token }
-              refresh_token { token }
-            }
-          }
-        `, { email, password }, apiKey)
-        adminJwt = authResult.token_auth?.token?.token || null
-        adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
-        adminJwtTime = now
-        log.debug('[admin] JWT refreshed via re-auth')
-      }
-    } catch (err) {
-      log.error('[admin] JWT refresh failed, doing full re-login:', err.message)
-      // Full re-login as fallback
-      adminCookies = await ssiLogin(email, password)
-      adminCookieTime = now
-      const authResult = await ssiGraphQL(null, `
-        mutation Auth($email: String!, $password: String!) {
-          token_auth(email: $email, password: $password) {
-            token { token }
-            refresh_token { token }
-          }
-        }
-      `, { email, password }, apiKey)
-      adminJwt = authResult.token_auth?.token?.token || null
-      adminRefreshToken = authResult.token_auth?.refresh_token?.token || null
-      adminJwtTime = now
-    }
-  }
-
-  return { cookies: adminCookies, jwt: adminJwt, refreshToken: adminRefreshToken }
-}
-
-// GraphQL query using admin JWT
-async function adminGraphQL(query, variables = {}) {
-  const admin = await getAdminSession()
-  try {
-    return await ssiGraphQL(admin.jwt, query, variables, SSI_ADMIN_API_KEY)
-  } catch (err) {
-    if (admin.refreshToken && (err.message.includes('expired') || err.message.includes('Signature'))) {
-      const newTokens = await ssiRefreshJWT(admin.refreshToken, SSI_ADMIN_API_KEY)
-      adminJwt = newTokens.token
-      adminRefreshToken = newTokens.refreshToken
-      return await ssiGraphQL(adminJwt, query, variables, SSI_ADMIN_API_KEY)
-    }
-    throw err
-  }
-}
 
 // ============================================================
 // Registration: Captcha store
@@ -369,6 +266,52 @@ const registerReadLimiter = rateLimit({
 
 // Request body size limit for registration endpoints (1 KB max)
 const registerBodyLimit = express.json({ limit: '1kb' })
+
+// Platform rate limiters (R8.0 multi-tenant)
+const platformSignUpLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many sign-up attempts. Try again later.' },
+  handler: rateLimitHandler('platform-signup', 60 * 60 * 1000, { error: 'Too many sign-up attempts. Try again later.' }),
+})
+
+const platformLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts. Try again in 15 minutes.' },
+  handler: rateLimitHandler('platform-login', 15 * 60 * 1000, { error: 'Too many login attempts. Try again in 15 minutes.' }),
+})
+
+const platformPasswordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many password reset attempts. Try again later.' },
+  handler: rateLimitHandler('platform-reset', 15 * 60 * 1000, { error: 'Too many password reset attempts. Try again later.' }),
+})
+
+const platformMutationLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please slow down.' },
+  handler: rateLimitHandler('platform-mutation', 60 * 1000, { error: 'Too many requests. Please slow down.' }),
+})
+
+const platformSsiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many SSI operations. Please slow down.' },
+  handler: rateLimitHandler('platform-ssi', 60 * 1000, { error: 'Too many SSI operations. Please slow down.' }),
+})
 
 // ============================================================
 // Mount route modules
@@ -429,6 +372,16 @@ const reportsRouter = createReportsRouter({
 app.use(`${API_V1_BASE}/report`, reportsRouter)
 app.use(`${API_LEGACY_BASE}/report`, legacyApiAlias, reportsRouter)
 
+// Platform routes (account sign-up, login, tenant management — R8.0 multi-tenant)
+const platformRouter = createPlatformRouter({
+  platformSignUpLimiter,
+  platformLoginLimiter,
+  platformPasswordResetLimiter,
+  platformMutationLimiter,
+  platformSsiLimiter,
+})
+app.use(`${API_V1_BASE}/platform`, platformRouter)
+
 // Staffing routes
 const staffingRouter = createStaffingRouter({
   requireAuth,
@@ -463,6 +416,10 @@ if (isDirectRun) {
   // Initialize session store before accepting requests (Redis or in-memory fallback)
   await initRedis()
 
+  // Initialize PostgreSQL (optional — graceful degradation if DATABASE_URL not set)
+  const pgReady = await initPostgres()
+  log.info(`[server] Database: ${pgReady ? 'postgresql' : 'not configured'}`)
+
   app.listen(PORT, () => {
     console.log(`Scoring proxy running on http://localhost:${PORT}`)
     console.log(`Mode: ${IS_PROD ? 'production' : 'development'}`)
@@ -472,6 +429,13 @@ if (isDirectRun) {
     console.log('  GET  /api/v1/auth/status')
     console.log('  POST /api/v1/auth/logout')
     console.log('  GET  /api/v1/health')
+    console.log('  POST /api/v1/platform/register  { email, password, name, organizationName }')
+    console.log('  POST /api/v1/platform/login     { email, password }')
+    console.log('  POST /api/v1/platform/logout')
+    console.log('  GET  /api/v1/platform/status')
+    console.log('  GET  /api/v1/platform/me')
+    console.log('  GET  /api/v1/platform/tenants')
+    console.log('  POST /api/v1/platform/tenants   { name }')
     console.log('  GET  /api/v1/scoring/cups?search=')
     console.log('  GET  /api/v1/scoring/cup/:id')
     console.log('  GET  /api/v1/scoring/match/:id')

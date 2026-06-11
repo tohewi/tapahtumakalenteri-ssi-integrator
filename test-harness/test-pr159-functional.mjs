@@ -7,8 +7,14 @@
  */
 
 const BASE = process.argv[2] || 'https://turres-ssi-tools-pr-159.onrender.com';
-const EMAIL = 'tohewi@live.com';
-const PASSWORD = 'H3ibottiakanssa!';
+const EMAIL = process.env.TEST_EMAIL || 'test@example.com';
+const PASSWORD = process.env.TEST_PASSWORD;
+
+if (!PASSWORD) {
+  console.error('Error: TEST_PASSWORD environment variable is required');
+  console.error('Usage: TEST_PASSWORD=yourpass node test-harness/test-pr159-functional.mjs [BASE_URL]');
+  process.exit(1);
+}
 
 let passed = 0;
 let failed = 0;
