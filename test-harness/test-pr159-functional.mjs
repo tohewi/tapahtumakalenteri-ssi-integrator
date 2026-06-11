@@ -7,7 +7,11 @@
  */
 
 const BASE = process.argv[2] || 'https://turres-ssi-tools-pr-159.onrender.com';
+<<<<<<< HEAD
 const EMAIL = process.env.TEST_EMAIL || 'test@example.com';
+=======
+const EMAIL = process.env.TEST_EMAIL || 'tohewi@live.com';
+>>>>>>> 81fd8d5 (R81: Remove hardcoded password from test-harness/test-pr159-functional.mjs)
 const PASSWORD = process.env.TEST_PASSWORD;
 
 if (!PASSWORD) {
