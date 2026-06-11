@@ -52,30 +52,40 @@ export function mountTenantRoutes(router, { requirePlatformAuth, requireTenantRo
   })
 
   // GET /api/v1/platform/tenants — List account's tenants
-  router.get('/tenants', requirePlatformAuth(), async (req, res) => {
-    const tenants = await listAccountTenants(req.account.id)
-    const disCounts = await countDisciplinesByTenant(tenants.map(t => t.id))
-    res.json({
-      tenants: tenants.map(t => ({
-        id: t.id,
-        name: t.name,
-        subscription: t.subscription,
-        disciplineCount: disCounts.get(t.id) || 0,
-        createdAt: t.createdAt,
-        updatedAt: t.updatedAt,
-      })),
-    })
+  router.get('/tenants', requirePlatformAuth(), async (req, res, next) => {
+    try {
+      const tenants = await listAccountTenants(req.account.id)
+      const disCounts = await countDisciplinesByTenant(tenants.map(t => t.id))
+      res.json({
+        tenants: tenants.map(t => ({
+          id: t.id,
+          name: t.name,
+          subscription: t.subscription,
+          disciplineCount: disCounts.get(t.id) || 0,
+          createdAt: t.createdAt,
+          updatedAt: t.updatedAt,
+        })),
+      })
+    } catch (err) {
+      log.error('[platform] GET tenants failed:', err.message)
+      return next(new AppError('Failed to fetch tenants', 500, 'INTERNAL_ERROR'))
+    }
   })
 
   // GET /api/v1/platform/tenants/:id — Get tenant details
   // Any member can read tenant details
-  router.get('/tenants/:id', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res) => {
-    // SSI credentials are sensitive — only show to owner
-    const tenant = { ...req.tenant }
-    if (!hasRequiredRole(req.membership.roles, ['owner'])) {
-      tenant.ssiCredentials = tenant.ssiCredentials ? { configured: true } : null
+  router.get('/tenants/:id', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res, next) => {
+    try {
+      // SSI credentials are sensitive — only show to owner
+      const tenant = { ...req.tenant }
+      if (!hasRequiredRole(req.membership.roles, ['owner'])) {
+        tenant.ssiCredentials = tenant.ssiCredentials ? { configured: true } : null
+      }
+      res.json({ tenant })
+    } catch (err) {
+      log.error('[platform] GET tenant failed:', err.message)
+      return next(new AppError('Failed to fetch tenant', 500, 'INTERNAL_ERROR'))
     }
-    res.json({ tenant })
   })
 
   // PATCH /api/v1/platform/tenants/:id — Update tenant settings

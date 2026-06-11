@@ -5,6 +5,9 @@
 
 import { log } from '../../lib/logger.js'
 import { AppError } from '../../lib/errors/AppError.js'
+import { ssiGraphQL } from '../../lib/ssi-core/graphql.js'
+import { sendStaffingSignupConfirmation, sendStaffingWithdrawalNotice } from '../../lib/email.js'
+import { query } from '../../lib/db/postgres.js'
 import { ssiRegisterToTrainerSquad, ssiDeleteMatchParticipant, ssiSetParticipantSquad, ssiFindParticipantInEvent } from '../../lib/ssi-core/participants.js'
 import { ssiGetMatchGroupId, ssiAddToMatchManagement, ssiRemoveFromMatchManagement, ssiGetMatchOfficials } from '../../lib/ssi-core/management.js'
 import {
@@ -20,6 +23,7 @@ import {
   getScheduledEvent,
   updateStaffSignupSsiIds,
   getAccountSsiShooterId,
+  listTenantMembers,
   TENANT_ROLES,
 } from '../../lib/db/platform-store.js'
 
@@ -215,7 +219,6 @@ export function mountStaffingRoutes(router, { requirePlatformAuth, requireTenant
             let squadEmails = new Set()
             let squadMembers = []
             if (staffSquadName) {
-              const { ssiGraphQL } = await import('../../lib/ssi-core/graphql.js')
               const sqData = await ssiGraphQL(adminSess, `
                 query GetSquads($ct: Int!, $id: String!) {
                   event(content_type: $ct, id: $id) {
@@ -387,7 +390,7 @@ export function mountStaffingRoutes(router, { requirePlatformAuth, requireTenant
 
       // Phase 7.5 Trigger signup confirmation email
       try {
-        const { sendStaffingSignupConfirmation } = await import('../../lib/email.js')
+        // sendStaffingSignupConfirmation is imported at top of file
         const event = await getScheduledEvent(eventId)
         const dateStr = new Date(event.eventDate).toLocaleDateString('fi-FI')
         await sendStaffingSignupConfirmation(req.account.email, req.account.name, event.eventName, dateStr, signup.roleLabel)
@@ -421,7 +424,6 @@ export function mountStaffingRoutes(router, { requirePlatformAuth, requireTenant
             // See docs/design/shooter-identification-design.md
             if (staffSquadName) {
               try {
-                const { ssiGraphQL } = await import('../../lib/ssi-core/graphql.js')
                 const squadNum = parseInt(staffSquadName.match(/\d+/)?.[0])
 
                 // Helper: query all squad competitors with shooter.id via GraphQL
@@ -628,8 +630,8 @@ export function mountStaffingRoutes(router, { requirePlatformAuth, requireTenant
 
       // Phase 7.5 Trigger withdrawal notification to admins
       try {
-        const { sendStaffingWithdrawalNotice } = await import('../../lib/email.js')
-        const { listTenantMembers } = await import('../../lib/db/platform-store.js')
+        // sendStaffingWithdrawalNotice and listTenantMembers are imported at top of file
+        // (listTenantMembers is already in the platform-store import block above)
 
         // Find tenant admins to notify
         const members = await listTenantMembers(tenantId)
@@ -675,7 +677,7 @@ export function mountStaffingRoutes(router, { requirePlatformAuth, requireTenant
             // the user will need to re-register.
             try {
               // Try cached participant ID first (safe, no name matching)
-              const { query } = await import('../../lib/db/postgres.js')
+              // query is imported at top of file
               const signupRes = await query(`SELECT ssi_participant_id FROM staff_signups WHERE id = $1`, [req.params.signupId])
               const cachedParticipantId = signupRes.rows[0]?.ssi_participant_id
 
@@ -808,7 +810,6 @@ export function mountStaffingRoutes(router, { requirePlatformAuth, requireTenant
         const cookies = adminSess?.cookies
         if (!cookies) return res.status(503).json({ error: 'No admin session available' })
 
-        const { ssiGraphQL } = await import('../../lib/ssi-core/graphql.js')
         const sqData = await ssiGraphQL(adminSess, `
           query GetSquads($ct: Int!, $id: String!) {
             event(content_type: $ct, id: $id) {

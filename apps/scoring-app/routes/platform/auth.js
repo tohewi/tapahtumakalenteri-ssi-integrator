@@ -168,13 +168,18 @@ export function mountAuthRoutes(router, {
   // ============================================================
   // POST /api/v1/platform/logout — Destroy platform session
   // ============================================================
-  router.post('/logout', async (req, res) => {
-    const sessionId = req.cookies?.[PLATFORM_COOKIE]
-    if (sessionId) {
-      await deletePlatformSession(sessionId)
+  router.post('/logout', async (req, res, next) => {
+    try {
+      const sessionId = req.cookies?.[PLATFORM_COOKIE]
+      if (sessionId) {
+        await deletePlatformSession(sessionId)
+      }
+      res.clearCookie(PLATFORM_COOKIE, { path: '/' })
+      res.json({ success: true })
+    } catch (err) {
+      log.error('[platform] Logout failed:', err.message)
+      return next(new AppError('Logout failed', 500, 'INTERNAL_ERROR'))
     }
-    res.clearCookie(PLATFORM_COOKIE, { path: '/' })
-    res.json({ success: true })
   })
 
   // ============================================================
@@ -260,69 +265,79 @@ export function mountAuthRoutes(router, {
   // ============================================================
   // GET /api/v1/platform/status — Check platform session
   // ============================================================
-  router.get('/status', async (req, res) => {
-    const sessionId = req.cookies?.[PLATFORM_COOKIE]
-    if (!sessionId) {
-      return res.json({ authenticated: false })
+  router.get('/status', async (req, res, next) => {
+    try {
+      const sessionId = req.cookies?.[PLATFORM_COOKIE]
+      if (!sessionId) {
+        return res.json({ authenticated: false })
+      }
+
+      const session = await getPlatformSession(sessionId)
+      if (!session) {
+        return res.json({ authenticated: false })
+      }
+
+      // MFA-pending sessions are not fully authenticated
+      if (session.mfaPending) {
+        return res.json({ authenticated: false, mfaPending: true })
+      }
+
+      const account = await getAccount(session.accountId)
+      if (!account) {
+        return res.json({ authenticated: false })
+      }
+
+      const tenants = await listAccountTenants(session.accountId)
+      const disCounts = await countDisciplinesByTenant(tenants.map(t => t.id))
+
+      res.json({
+        authenticated: true,
+        account: {
+          id: account.id,
+          email: account.email,
+          name: account.name,
+          mfaEnabled: account.mfaEnabled || false,
+        },
+        tenants: tenants.map(t => ({
+          id: t.id,
+          name: t.name,
+          subscription: t.subscription,
+          disciplineCount: disCounts.get(t.id) || 0,
+          createdAt: t.createdAt,
+        })),
+      })
+    } catch (err) {
+      log.error('[platform] GET status failed:', err.message)
+      return next(new AppError('Failed to get platform status', 500, 'INTERNAL_ERROR'))
     }
-
-    const session = await getPlatformSession(sessionId)
-    if (!session) {
-      return res.json({ authenticated: false })
-    }
-
-    // MFA-pending sessions are not fully authenticated
-    if (session.mfaPending) {
-      return res.json({ authenticated: false, mfaPending: true })
-    }
-
-    const account = await getAccount(session.accountId)
-    if (!account) {
-      return res.json({ authenticated: false })
-    }
-
-    const tenants = await listAccountTenants(session.accountId)
-    const disCounts = await countDisciplinesByTenant(tenants.map(t => t.id))
-
-    res.json({
-      authenticated: true,
-      account: {
-        id: account.id,
-        email: account.email,
-        name: account.name,
-        mfaEnabled: account.mfaEnabled || false,
-      },
-      tenants: tenants.map(t => ({
-        id: t.id,
-        name: t.name,
-        subscription: t.subscription,
-        disciplineCount: disCounts.get(t.id) || 0,
-        createdAt: t.createdAt,
-      })),
-    })
   })
 
   // ============================================================
   // GET /api/v1/platform/me — Get current account profile
   // ============================================================
-  router.get('/me', requirePlatformAuth(), async (req, res) => {
-    const tenants = await listAccountTenants(req.account.id)
-    const disCounts = await countDisciplinesByTenant(tenants.map(t => t.id))
-    res.json({
-      account: {
-        id: req.account.id,
-        email: req.account.email,
-        name: req.account.name,
-        createdAt: req.account.createdAt,
-      },
-      tenants: tenants.map(t => ({
-        id: t.id,
-        name: t.name,
-        subscription: t.subscription,
-        disciplineCount: disCounts.get(t.id) || 0,
-        createdAt: t.createdAt,
-      })),
-    })
+  router.get('/me', requirePlatformAuth(), async (req, res, next) => {
+    try {
+      const tenants = await listAccountTenants(req.account.id)
+      const disCounts = await countDisciplinesByTenant(tenants.map(t => t.id))
+      res.json({
+        account: {
+          id: req.account.id,
+          email: req.account.email,
+          name: req.account.name,
+          createdAt: req.account.createdAt,
+        },
+        tenants: tenants.map(t => ({
+          id: t.id,
+          name: t.name,
+          subscription: t.subscription,
+          disciplineCount: disCounts.get(t.id) || 0,
+          createdAt: t.createdAt,
+        })),
+      })
+    } catch (err) {
+      log.error('[platform] GET me failed:', err.message)
+      return next(new AppError('Failed to get account profile', 500, 'INTERNAL_ERROR'))
+    }
   })
 
   // ============================================================

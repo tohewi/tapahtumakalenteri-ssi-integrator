@@ -113,12 +113,17 @@ export function mountInvitationRoutes(router, { requirePlatformAuth, requireTena
   // ============================================================
 
   // GET /api/v1/platform/invitations/:token
-  router.get('/invitations/:token', async (req, res) => {
-    const invite = await getInvitationByToken(req.params.token)
-    if (!invite) {
-      return res.status(404).json({ error: 'Invitation not found, already used, or expired' })
+  router.get('/invitations/:token', async (req, res, next) => {
+    try {
+      const invite = await getInvitationByToken(req.params.token)
+      if (!invite) {
+        return res.status(404).json({ error: 'Invitation not found, already used, or expired' })
+      }
+      res.json({ invitation: invite })
+    } catch (err) {
+      log.error('[platform] GET invitation failed:', err.message)
+      return next(new AppError('Failed to fetch invitation', 500, 'INTERNAL_ERROR'))
     }
-    res.json({ invitation: invite })
   })
 
   // POST /api/v1/platform/invitations/:token/accept

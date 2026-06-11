@@ -82,8 +82,19 @@ export { PLATFORM_COOKIE }
  *   - tenant_admin satisfies all except owner-only actions
  */
 export function requireTenantRole(...requiredRoles) {
+  // The last argument may optionally be an options object: { param: 'tenantId' }
+  // This lets callers be explicit about which route param holds the tenant ID,
+  // preventing silent misidentification when a route has multiple :id params.
+  let options = {}
+  if (requiredRoles.length > 0 && typeof requiredRoles[requiredRoles.length - 1] === 'object') {
+    options = requiredRoles.pop()
+  }
+
   return async (req, res, next) => {
-    const tenantId = req.params.tenantId || req.params.id
+    const paramName = options.param || null
+    const tenantId = paramName
+      ? req.params[paramName]
+      : (req.params.tenantId || req.params.id)
     const tenant = await getTenant(tenantId)
     if (!tenant) return res.status(404).json({ error: 'Tenant not found' })
 

@@ -5,6 +5,7 @@
 
 import { log } from '../../lib/logger.js'
 import { AppError } from '../../lib/errors/AppError.js'
+import { SSI_DISCIPLINE_REGISTRY } from '../../lib/ssi-core/discipline-registry.js'
 import {
   createDiscipline,
   getDiscipline,
@@ -20,10 +21,8 @@ export function mountDisciplineRoutes(router, { requirePlatformAuth, requireTena
 
   // GET /api/v1/platform/ssi-discipline-registry
   // Any authenticated user can read the registry (static + discovered)
-  router.get('/ssi-discipline-registry', requirePlatformAuth(), async (req, res) => {
+  router.get('/ssi-discipline-registry', requirePlatformAuth(), async (req, res, next) => {
     try {
-      const { SSI_DISCIPLINE_REGISTRY } = await import('../../lib/ssi-core/discipline-registry.js')
-
       const staticRegistry = [...SSI_DISCIPLINE_REGISTRY]
 
       let discovered = []
@@ -49,9 +48,14 @@ export function mountDisciplineRoutes(router, { requirePlatformAuth, requireTena
 
   // GET /api/v1/platform/tenants/:tenantId/disciplines
   // Any member can read disciplines
-  router.get('/tenants/:tenantId/disciplines', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res) => {
-    const disciplines = await listTenantDisciplines(req.params.tenantId)
-    res.json({ disciplines })
+  router.get('/tenants/:tenantId/disciplines', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res, next) => {
+    try {
+      const disciplines = await listTenantDisciplines(req.params.tenantId)
+      res.json({ disciplines })
+    } catch (err) {
+      log.error('[platform] GET disciplines failed:', err.message)
+      return next(new AppError('Failed to fetch disciplines', 500, 'INTERNAL_ERROR'))
+    }
   })
 
   // POST /api/v1/platform/tenants/:tenantId/disciplines
@@ -77,12 +81,17 @@ export function mountDisciplineRoutes(router, { requirePlatformAuth, requireTena
 
   // GET /api/v1/platform/tenants/:tenantId/disciplines/:id
   // Any member can read
-  router.get('/tenants/:tenantId/disciplines/:id', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res) => {
-    const discipline = await getDiscipline(req.params.id)
-    if (!discipline || discipline.tenantId !== req.params.tenantId) {
-      return res.status(404).json({ error: 'Discipline not found' })
+  router.get('/tenants/:tenantId/disciplines/:id', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res, next) => {
+    try {
+      const discipline = await getDiscipline(req.params.id)
+      if (!discipline || discipline.tenantId !== req.params.tenantId) {
+        return res.status(404).json({ error: 'Discipline not found' })
+      }
+      res.json({ discipline })
+    } catch (err) {
+      log.error('[platform] GET discipline failed:', err.message)
+      return next(new AppError('Failed to fetch discipline', 500, 'INTERNAL_ERROR'))
     }
-    res.json({ discipline })
   })
 
   // PATCH /api/v1/platform/tenants/:tenantId/disciplines/:id
@@ -114,29 +123,34 @@ export function mountDisciplineRoutes(router, { requirePlatformAuth, requireTena
 
   // DELETE /api/v1/platform/tenants/:tenantId/disciplines/:id
   // Requires: owner, tenant_admin, or discipline_admin
-  router.delete('/tenants/:tenantId/disciplines/:id', platformMutationLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'discipline_admin'), async (req, res) => {
-    const discipline = await getDiscipline(req.params.id)
-    if (!discipline || discipline.tenantId !== req.params.tenantId) {
-      return res.status(404).json({ error: 'Discipline not found' })
+  router.delete('/tenants/:tenantId/disciplines/:id', platformMutationLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'discipline_admin'), async (req, res, next) => {
+    try {
+      const discipline = await getDiscipline(req.params.id)
+      if (!discipline || discipline.tenantId !== req.params.tenantId) {
+        return res.status(404).json({ error: 'Discipline not found' })
+      }
+
+      const deleted = await deleteDiscipline(req.params.id)
+      if (!deleted) {
+        return res.status(404).json({ error: 'Discipline not found' })
+      }
+
+      // SEC-H4: Audit log
+      await createAuditLog({
+        tenantId: req.params.tenantId,
+        accountId: req.account.id,
+        action: 'delete_discipline',
+        targetType: 'discipline',
+        targetId: req.params.id,
+        metadata: { name: discipline.name },
+        ipAddress: req.ip
+      })
+
+      log.info(`[platform] Discipline deleted: ${req.params.id} from tenant ${req.params.tenantId}`)
+      res.json({ success: true })
+    } catch (err) {
+      log.error('[platform] Discipline delete failed:', err.message)
+      return next(new AppError('Failed to delete discipline', 500, 'INTERNAL_ERROR'))
     }
-
-    const deleted = await deleteDiscipline(req.params.id)
-    if (!deleted) {
-      return res.status(404).json({ error: 'Discipline not found' })
-    }
-
-    // SEC-H4: Audit log
-    await createAuditLog({
-      tenantId: req.params.tenantId,
-      accountId: req.account.id,
-      action: 'delete_discipline',
-      targetType: 'discipline',
-      targetId: req.params.id,
-      metadata: { name: discipline.name },
-      ipAddress: req.ip
-    })
-
-    log.info(`[platform] Discipline deleted: ${req.params.id} from tenant ${req.params.tenantId}`)
-    res.json({ success: true })
   })
 }

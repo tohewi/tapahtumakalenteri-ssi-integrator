@@ -19,11 +19,16 @@ import {
 export function mountMemberRoutes(router, { requirePlatformAuth, requireTenantRole }) {
 
   // GET /api/v1/platform/tenants/:tenantId/members
-  router.get('/tenants/:tenantId/members', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'instructor_admin'), async (req, res) => {
-    const members = await listTenantMembers(req.params.tenantId)
-    // Include the actor's assignable roles so frontend can filter role checkboxes
-    const assignableRoles = getAssignableRoles(req.membership.roles)
-    res.json({ members, assignableRoles })
+  router.get('/tenants/:tenantId/members', requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'instructor_admin'), async (req, res, next) => {
+    try {
+      const members = await listTenantMembers(req.params.tenantId)
+      // Include the actor's assignable roles so frontend can filter role checkboxes
+      const assignableRoles = getAssignableRoles(req.membership.roles)
+      res.json({ members, assignableRoles })
+    } catch (err) {
+      log.error('[platform] GET members failed:', err.message)
+      return next(new AppError('Failed to fetch members', 500, 'INTERNAL_ERROR'))
+    }
   })
 
   // POST /api/v1/platform/tenants/:tenantId/members — Add a member

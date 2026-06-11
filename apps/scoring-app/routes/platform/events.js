@@ -35,10 +35,15 @@ import {
 export function mountEventRoutes(router, { requirePlatformAuth, requireTenantRole, platformMutationLimiter, platformSsiLimiter }) {
 
   // GET /api/v1/platform/tenants/:tenantId/events
-  router.get('/tenants/:tenantId/events', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res) => {
-    const { templateId, status } = req.query
-    const events = await listScheduledEvents(req.params.tenantId, { templateId, status })
-    res.json({ events })
+  router.get('/tenants/:tenantId/events', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res, next) => {
+    try {
+      const { templateId, status } = req.query
+      const events = await listScheduledEvents(req.params.tenantId, { templateId, status })
+      res.json({ events })
+    } catch (err) {
+      log.error('[platform] GET events failed:', err.message)
+      return next(new AppError('Failed to fetch events', 500, 'INTERNAL_ERROR'))
+    }
   })
 
   // POST /api/v1/platform/tenants/:tenantId/events — Create event(s) for date(s)
@@ -101,12 +106,17 @@ export function mountEventRoutes(router, { requirePlatformAuth, requireTenantRol
   })
 
   // GET /api/v1/platform/tenants/:tenantId/events/:id
-  router.get('/tenants/:tenantId/events/:id', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res) => {
-    const event = await getScheduledEvent(req.params.id)
-    if (!event || event.tenantId !== req.params.tenantId) {
-      return res.status(404).json({ error: 'Event not found' })
+  router.get('/tenants/:tenantId/events/:id', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res, next) => {
+    try {
+      const event = await getScheduledEvent(req.params.id)
+      if (!event || event.tenantId !== req.params.tenantId) {
+        return res.status(404).json({ error: 'Event not found' })
+      }
+      res.json({ event })
+    } catch (err) {
+      log.error('[platform] GET event failed:', err.message)
+      return next(new AppError('Failed to fetch event', 500, 'INTERNAL_ERROR'))
     }
-    res.json({ event })
   })
 
   // PATCH /api/v1/platform/tenants/:tenantId/events/:id — Update event status/references

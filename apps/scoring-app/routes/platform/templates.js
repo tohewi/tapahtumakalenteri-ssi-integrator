@@ -18,17 +18,24 @@ import {
   TENANT_ROLES,
 } from '../../lib/db/platform-store.js'
 import { ssiFetchEventStructure } from '../../lib/ssi-core/seed-import.js'
+import { ssiGraphQL } from '../../lib/ssi-core/graphql.js'
+import { getSsiDisciplineByProperties, getSsiDisciplineByUrl } from '../../lib/ssi-core/discipline-registry.js'
 
 export function mountTemplateRoutes(router, { requirePlatformAuth, requireTenantRole, platformMutationLimiter }) {
 
   // GET /api/v1/platform/tenants/:tenantId/templates
   // Any member can read templates
-  router.get('/tenants/:tenantId/templates', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res) => {
-    const { disciplineId } = req.query
-    const templates = disciplineId
-      ? await listDisciplineTemplates(disciplineId)
-      : await listTenantTemplates(req.params.tenantId)
-    res.json({ templates })
+  router.get('/tenants/:tenantId/templates', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res, next) => {
+    try {
+      const { disciplineId } = req.query
+      const templates = disciplineId
+        ? await listDisciplineTemplates(disciplineId)
+        : await listTenantTemplates(req.params.tenantId)
+      res.json({ templates })
+    } catch (err) {
+      log.error('[platform] GET templates failed:', err.message)
+      return next(new AppError('Failed to fetch templates', 500, 'INTERNAL_ERROR'))
+    }
   })
 
   // POST /api/v1/platform/tenants/:tenantId/templates
@@ -64,12 +71,17 @@ export function mountTemplateRoutes(router, { requirePlatformAuth, requireTenant
 
   // GET /api/v1/platform/tenants/:tenantId/templates/:id
   // Any member can read
-  router.get('/tenants/:tenantId/templates/:id', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res) => {
-    const template = await getMatchTemplate(req.params.id)
-    if (!template || template.tenantId !== req.params.tenantId) {
-      return res.status(404).json({ error: 'Template not found' })
+  router.get('/tenants/:tenantId/templates/:id', requirePlatformAuth(), requireTenantRole(...TENANT_ROLES), async (req, res, next) => {
+    try {
+      const template = await getMatchTemplate(req.params.id)
+      if (!template || template.tenantId !== req.params.tenantId) {
+        return res.status(404).json({ error: 'Template not found' })
+      }
+      res.json({ template })
+    } catch (err) {
+      log.error('[platform] GET template failed:', err.message)
+      return next(new AppError('Failed to fetch template', 500, 'INTERNAL_ERROR'))
     }
-    res.json({ template })
   })
 
   // PATCH /api/v1/platform/tenants/:tenantId/templates/:id
@@ -101,30 +113,35 @@ export function mountTemplateRoutes(router, { requirePlatformAuth, requireTenant
 
   // DELETE /api/v1/platform/tenants/:tenantId/templates/:id
   // Requires: owner, tenant_admin, or match_admin
-  router.delete('/tenants/:tenantId/templates/:id', platformMutationLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res) => {
-    const template = await getMatchTemplate(req.params.id)
-    if (!template || template.tenantId !== req.params.tenantId) {
-      return res.status(404).json({ error: 'Template not found' })
+  router.delete('/tenants/:tenantId/templates/:id', platformMutationLimiter, requirePlatformAuth(), requireTenantRole('owner', 'tenant_admin', 'match_admin'), async (req, res, next) => {
+    try {
+      const template = await getMatchTemplate(req.params.id)
+      if (!template || template.tenantId !== req.params.tenantId) {
+        return res.status(404).json({ error: 'Template not found' })
+      }
+
+      const deleted = await deleteMatchTemplate(req.params.id)
+      if (!deleted) {
+        return res.status(404).json({ error: 'Template not found' })
+      }
+
+      // SEC-H4: Audit log
+      await createAuditLog({
+        tenantId: req.params.tenantId,
+        accountId: req.account.id,
+        action: 'delete_template',
+        targetType: 'template',
+        targetId: req.params.id,
+        metadata: { name: template.name },
+        ipAddress: req.ip
+      })
+
+      log.info(`[platform] Template deleted: ${req.params.id} from tenant ${req.params.tenantId}`)
+      res.json({ success: true })
+    } catch (err) {
+      log.error('[platform] Template delete failed:', err.message)
+      return next(new AppError('Failed to delete template', 500, 'INTERNAL_ERROR'))
     }
-
-    const deleted = await deleteMatchTemplate(req.params.id)
-    if (!deleted) {
-      return res.status(404).json({ error: 'Template not found' })
-    }
-
-    // SEC-H4: Audit log
-    await createAuditLog({
-      tenantId: req.params.tenantId,
-      accountId: req.account.id,
-      action: 'delete_template',
-      targetType: 'template',
-      targetId: req.params.id,
-      metadata: { name: template.name },
-      ipAddress: req.ip
-    })
-
-    log.info(`[platform] Template deleted: ${req.params.id} from tenant ${req.params.tenantId}`)
-    res.json({ success: true })
   })
 
   // POST /api/v1/platform/tenants/:tenantId/templates/:id/import-seed
@@ -166,7 +183,6 @@ export function mountTemplateRoutes(router, { requirePlatformAuth, requireTenant
       let validationWarning = null
       const discipline = await getDiscipline(template.disciplineId)
       if (discipline && discipline.ssiCreateUrl) {
-        const { getSsiDisciplineByProperties, getSsiDisciplineByUrl } = await import('../../lib/ssi-core/discipline-registry.js')
         const detectedType = getSsiDisciplineByProperties(snapshot.rule, snapshot.isCup, snapshot.eventTypeName)
         const expectedType = getSsiDisciplineByUrl(discipline.ssiCreateUrl)
 
@@ -200,8 +216,6 @@ export function mountTemplateRoutes(router, { requirePlatformAuth, requireTenant
     }
 
     try {
-      const { ssiGraphQL } = await import('../../lib/ssi-core/graphql.js')
-
       // Authenticate
       const authResult = await ssiGraphQL(null, `
         mutation Auth($email: String!, $password: String!) {

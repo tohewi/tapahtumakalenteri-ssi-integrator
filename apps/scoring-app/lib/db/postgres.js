@@ -157,6 +157,329 @@ CREATE INDEX IF NOT EXISTS idx_tenant_invitations_email ON tenant_invitations (e
 CREATE INDEX IF NOT EXISTS idx_tenant_invitations_token_hash ON tenant_invitations (token_hash);
 `
 
+// ---- Versioned Migrations ----
+//
+// Rules:
+//   1. Never edit or delete an existing migration — only append new ones.
+//   2. version must be a monotonically increasing integer.
+//   3. Each migration is wrapped in a transaction automatically by runMigrations.
+//   4. Migrations that use CREATE … IF NOT EXISTS / ALTER … IF NOT EXISTS are
+//      already idempotent at the SQL level; the version table prevents re-runs.
+
+const MIGRATIONS = [
+  {
+    version: 1,
+    description: 'Make scheduled_events.template_id nullable (for SSI imports without a template)',
+    async run(client) {
+      await client.query('ALTER TABLE scheduled_events ALTER COLUMN template_id DROP NOT NULL')
+    },
+  },
+  {
+    version: 2,
+    description: 'Add event_name column to scheduled_events',
+    async run(client) {
+      await client.query('ALTER TABLE scheduled_events ADD COLUMN IF NOT EXISTS event_name TEXT')
+    },
+  },
+  {
+    version: 3,
+    description: 'Replace scheduled_events unique index with partial index for template-based events only',
+    async run(client) {
+      await client.query('DROP INDEX IF EXISTS idx_scheduled_events_template_date')
+      await client.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_scheduled_events_template_date
+          ON scheduled_events (template_id, event_date) WHERE template_id IS NOT NULL
+      `)
+    },
+  },
+  {
+    version: 4,
+    description: 'Add MFA columns to accounts table',
+    async run(client) {
+      await client.query('ALTER TABLE accounts ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN DEFAULT FALSE')
+      await client.query('ALTER TABLE accounts ADD COLUMN IF NOT EXISTS mfa_secret TEXT')
+      await client.query('ALTER TABLE accounts ADD COLUMN IF NOT EXISTS mfa_recovery_codes TEXT[]')
+    },
+  },
+  {
+    version: 5,
+    description: 'Create password_reset_tokens table',
+    async run(client) {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+          id          TEXT PRIMARY KEY,
+          account_id  TEXT NOT NULL REFERENCES accounts(id),
+          token_hash  TEXT NOT NULL,
+          expires_at  TIMESTAMPTZ NOT NULL,
+          used_at     TIMESTAMPTZ,
+          created_at  TIMESTAMPTZ DEFAULT NOW()
+        )
+      `)
+      await client.query('CREATE INDEX IF NOT EXISTS idx_prt_account ON password_reset_tokens (account_id)')
+      await client.query('CREATE INDEX IF NOT EXISTS idx_prt_token ON password_reset_tokens (token_hash)')
+    },
+  },
+  {
+    version: 6,
+    description: 'Add discipline_id to scheduled_events',
+    async run(client) {
+      await client.query('ALTER TABLE scheduled_events ADD COLUMN IF NOT EXISTS discipline_id TEXT REFERENCES disciplines(id)')
+      await client.query('CREATE INDEX IF NOT EXISTS idx_scheduled_events_discipline ON scheduled_events (discipline_id)')
+    },
+  },
+  {
+    version: 7,
+    description: 'Create event_staffing_needs and staff_signups tables',
+    async run(client) {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS event_staffing_needs (
+          id          TEXT PRIMARY KEY,
+          event_id    TEXT NOT NULL REFERENCES scheduled_events(id) ON DELETE CASCADE,
+          role_key    TEXT NOT NULL,
+          role_label  TEXT NOT NULL,
+          min_count   INT NOT NULL DEFAULT 1,
+          max_count   INT NOT NULL DEFAULT 1,
+          created_at  TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE(event_id, role_key)
+        )
+      `)
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS staff_signups (
+          id           TEXT PRIMARY KEY,
+          event_id     TEXT NOT NULL REFERENCES scheduled_events(id) ON DELETE CASCADE,
+          need_id      TEXT NOT NULL REFERENCES event_staffing_needs(id) ON DELETE CASCADE,
+          account_id   TEXT NOT NULL REFERENCES accounts(id),
+          status       TEXT NOT NULL DEFAULT 'confirmed',
+          signed_up_at TIMESTAMPTZ DEFAULT NOW(),
+          withdrawn_at TIMESTAMPTZ,
+          notes        TEXT,
+          UNIQUE(need_id, account_id)
+        )
+      `)
+      await client.query('CREATE INDEX IF NOT EXISTS idx_staff_needs_event ON event_staffing_needs(event_id)')
+      await client.query('CREATE INDEX IF NOT EXISTS idx_staff_signups_event ON staff_signups(event_id)')
+      await client.query('CREATE INDEX IF NOT EXISTS idx_staff_signups_account ON staff_signups(account_id)')
+    },
+  },
+  {
+    version: 8,
+    description: 'Add ssi_create_url to disciplines',
+    async run(client) {
+      await client.query('ALTER TABLE disciplines ADD COLUMN IF NOT EXISTS ssi_create_url TEXT')
+    },
+  },
+  {
+    version: 9,
+    description: 'Add SSI identity columns to staff_signups (shooter + participant ID cache)',
+    async run(client) {
+      await client.query('ALTER TABLE staff_signups ADD COLUMN IF NOT EXISTS ssi_shooter_id TEXT')
+      await client.query('ALTER TABLE staff_signups ADD COLUMN IF NOT EXISTS ssi_participant_id TEXT')
+    },
+  },
+  {
+    version: 10,
+    description: 'Create audit_log table (SEC-H4)',
+    async run(client) {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS audit_log (
+          id          TEXT PRIMARY KEY,
+          tenant_id   TEXT REFERENCES tenants(id) ON DELETE CASCADE,
+          account_id  TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+          action      TEXT NOT NULL,
+          target_type TEXT,
+          target_id   TEXT,
+          metadata    JSONB,
+          ip_address  TEXT,
+          created_at  TIMESTAMPTZ DEFAULT NOW()
+        )
+      `)
+      await client.query('CREATE INDEX IF NOT EXISTS idx_audit_tenant ON audit_log(tenant_id)')
+      await client.query('CREATE INDEX IF NOT EXISTS idx_audit_account ON audit_log(account_id)')
+      await client.query('CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action)')
+    },
+  },
+  {
+    version: 11,
+    description: 'Create ssi_discovered_disciplines table (SSI-R3)',
+    async run(client) {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS ssi_discovered_disciplines (
+          id             TEXT PRIMARY KEY,
+          display_name   TEXT NOT NULL,
+          ssi_create_url TEXT,
+          is_cup         BOOLEAN NOT NULL,
+          rule_code      TEXT NOT NULL,
+          description    TEXT,
+          last_seen_at   TIMESTAMPTZ DEFAULT NOW()
+        )
+      `)
+    },
+  },
+  {
+    version: 12,
+    description: 'Add post_event_workflows column to match_templates (PEW-1)',
+    async run(client) {
+      await client.query("ALTER TABLE match_templates ADD COLUMN IF NOT EXISTS post_event_workflows JSONB DEFAULT '[]'")
+    },
+  },
+  {
+    version: 13,
+    description: 'Add regional settings columns to tenants (city, country, timezone, locale)',
+    async run(client) {
+      await client.query('ALTER TABLE tenants ADD COLUMN IF NOT EXISTS city TEXT')
+      await client.query('ALTER TABLE tenants ADD COLUMN IF NOT EXISTS country TEXT')
+      await client.query('ALTER TABLE tenants ADD COLUMN IF NOT EXISTS timezone TEXT')
+      await client.query('ALTER TABLE tenants ADD COLUMN IF NOT EXISTS locale TEXT')
+    },
+  },
+  {
+    version: 14,
+    description: 'Create tenant_logos table and add has_logo flag to tenants (MP9 Branding)',
+    async run(client) {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS tenant_logos (
+          tenant_id    TEXT PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+          content_type TEXT NOT NULL,
+          image_data   BYTEA NOT NULL,
+          file_size    INTEGER NOT NULL,
+          uploaded_at  TIMESTAMPTZ DEFAULT NOW()
+        )
+      `)
+      await client.query('ALTER TABLE tenants ADD COLUMN IF NOT EXISTS has_logo BOOLEAN DEFAULT FALSE')
+    },
+  },
+  {
+    version: 15,
+    description: 'Add slug column to tenants and backfill from name (TEN-1)',
+    async run(client) {
+      await client.query('ALTER TABLE tenants ADD COLUMN IF NOT EXISTS slug TEXT')
+      await client.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_slug ON tenants (slug)')
+
+      // Backfill slugs for existing tenants — runs only once thanks to version tracking
+      const { rows: noSlug } = await client.query('SELECT id, name FROM tenants WHERE slug IS NULL')
+      for (const row of noSlug) {
+        const base = row.name
+          .toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/-{2,}/g, '-')
+          .replace(/^-|-$/g, '')
+          .substring(0, 48)
+        let slug = base
+        let suffix = 2
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { rows: dup } = await client.query('SELECT id FROM tenants WHERE slug = $1 AND id != $2', [slug, row.id])
+          if (dup.length === 0) break
+          slug = `${base}-${suffix}`
+          suffix++
+        }
+        await client.query('UPDATE tenants SET slug = $1 WHERE id = $2', [slug, row.id])
+      }
+    },
+  },
+  {
+    version: 16,
+    description: 'Add integrations JSONB column to tenants (INT-1 Phase 3)',
+    async run(client) {
+      await client.query("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS integrations JSONB DEFAULT '{}'")
+    },
+  },
+  {
+    version: 17,
+    description: 'Make ssi_create_url nullable in ssi_discovered_disciplines (Y8)',
+    async run(client) {
+      await client.query('ALTER TABLE ssi_discovered_disciplines ALTER COLUMN ssi_create_url DROP NOT NULL')
+    },
+  },
+  {
+    version: 18,
+    description: 'Migrate legacy ssiCredentials + calendarConfig into integrations JSONB (INT-1 data migration)',
+    async run(client) {
+      const { rows: tenantsToMigrate } = await client.query(`
+        SELECT id, ssi_credentials, calendar_config, integrations FROM tenants
+        WHERE (integrations IS NULL OR integrations = '{}' OR integrations = 'null')
+          AND (ssi_credentials IS NOT NULL OR calendar_config IS NOT NULL)
+      `)
+      for (const t of tenantsToMigrate) {
+        const integrations = {}
+
+        // ssi_credentials is stored encrypted — record the type flag so the new UI
+        // knows which event system is active (credentials read from legacy column)
+        if (t.ssi_credentials) {
+          integrations.eventSystem = { type: 'ssi' }
+        }
+
+        if (t.calendar_config) {
+          try {
+            const cfg = typeof t.calendar_config === 'string' ? JSON.parse(t.calendar_config) : t.calendar_config
+            if (cfg && (cfg.wpBaseUrl || (cfg.iv && cfg.tag))) {
+              integrations.calendarSystem = { type: 'wordpress' }
+            }
+          } catch { /* ignore parse errors on malformed calendar_config */ }
+        }
+
+        if (Object.keys(integrations).length > 0) {
+          await client.query('UPDATE tenants SET integrations = $1 WHERE id = $2', [JSON.stringify(integrations), t.id])
+          log.info(`[postgres] M18: Migrated integrations for tenant ${t.id}: ${JSON.stringify(integrations)}`)
+        }
+      }
+    },
+  },
+  {
+    version: 19,
+    description: 'Create tenant name unique index (best-effort — may skip if duplicates exist)',
+    async run(client) {
+      // This migration is best-effort: if duplicate names exist in the database it will
+      // fail and the version will NOT be recorded, so it retries on next startup.
+      // App-level guards in createTenant prevent future duplicates regardless.
+      await client.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_name_unique ON tenants (LOWER(name))')
+    },
+  },
+]
+
+/**
+ * Run all pending versioned migrations.
+ * Creates schema_migrations tracking table if it doesn't exist.
+ * Each migration runs inside its own transaction and is recorded atomically.
+ */
+async function runMigrations(client) {
+  // Create the version-tracking table if it doesn't exist
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version     INTEGER PRIMARY KEY,
+      description TEXT NOT NULL,
+      applied_at  TIMESTAMPTZ DEFAULT NOW()
+    )
+  `)
+
+  // Fetch already-applied versions in one query
+  const { rows } = await client.query('SELECT version FROM schema_migrations')
+  const applied = new Set(rows.map(r => r.version))
+
+  for (const migration of MIGRATIONS) {
+    if (applied.has(migration.version)) continue
+
+    log.info(`[postgres] Running migration v${migration.version}: ${migration.description}`)
+    try {
+      await client.query('BEGIN')
+      await migration.run(client)
+      await client.query(
+        'INSERT INTO schema_migrations (version, description) VALUES ($1, $2)',
+        [migration.version, migration.description]
+      )
+      await client.query('COMMIT')
+      log.info(`[postgres] Migration v${migration.version} applied successfully`)
+    } catch (err) {
+      await client.query('ROLLBACK')
+      // Non-fatal: log and continue. Structural migrations (CREATE TABLE IF NOT EXISTS,
+      // ALTER … IF NOT EXISTS) are already idempotent, so these errors are typically
+      // "column already exists" races on first deployment.
+      log.warn(`[postgres] Migration v${migration.version} failed (skipping): ${err.message}`)
+    }
+  }
+}
+
 // ---- Initialization ----
 
 /**
@@ -234,279 +557,14 @@ export async function initPostgres() {
       await client.query('SELECT 1')
       log.info('[postgres] Connected to PostgreSQL')
 
-      // Run schema migrations
+      // Run base schema DDL (all CREATE TABLE IF NOT EXISTS — always safe to re-run)
       await client.query(SCHEMA_SQL)
       log.info('[postgres] Schema initialized')
 
-      // ---- Incremental migrations for existing databases ----
-
-      // M1: Make scheduled_events.template_id nullable (for SSI imports without a template)
-      try {
-        await client.query('ALTER TABLE scheduled_events ALTER COLUMN template_id DROP NOT NULL')
-      } catch { /* already nullable or table doesn't exist yet */ }
-
-      // M2: Add event_name column to scheduled_events (for imported SSI events)
-      try {
-        await client.query('ALTER TABLE scheduled_events ADD COLUMN IF NOT EXISTS event_name TEXT')
-      } catch { /* column already exists */ }
-
-      // M3: Replace old unique index with partial index (only for template-based events)
-      try {
-        await client.query('DROP INDEX IF EXISTS idx_scheduled_events_template_date')
-        await client.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_scheduled_events_template_date ON scheduled_events (template_id, event_date) WHERE template_id IS NOT NULL')
-      } catch (err) {
-        log.warn('[postgres] Could not update scheduled_events unique index:', err.message)
-      }
-
-      // M4: Add MFA columns to accounts table
-      try {
-        await client.query('ALTER TABLE accounts ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN DEFAULT FALSE')
-        await client.query('ALTER TABLE accounts ADD COLUMN IF NOT EXISTS mfa_secret TEXT')
-        await client.query('ALTER TABLE accounts ADD COLUMN IF NOT EXISTS mfa_recovery_codes TEXT[]')
-      } catch { /* columns already exist or table doesn't exist yet */ }
-
-      // M5: Add password_reset_tokens table
-      try {
-        await client.query(`
-          CREATE TABLE IF NOT EXISTS password_reset_tokens (
-            id          TEXT PRIMARY KEY,
-            account_id  TEXT NOT NULL REFERENCES accounts(id),
-            token_hash  TEXT NOT NULL,
-            expires_at  TIMESTAMPTZ NOT NULL,
-            used_at     TIMESTAMPTZ,
-            created_at  TIMESTAMPTZ DEFAULT NOW()
-          )
-        `)
-        await client.query('CREATE INDEX IF NOT EXISTS idx_prt_account ON password_reset_tokens (account_id)')
-        await client.query('CREATE INDEX IF NOT EXISTS idx_prt_token ON password_reset_tokens (token_hash)')
-      } catch { /* table already exists */ }
-
-      // M7: Add discipline_id to scheduled_events (direct link, not only via template)
-      try {
-        await client.query('ALTER TABLE scheduled_events ADD COLUMN IF NOT EXISTS discipline_id TEXT REFERENCES disciplines(id)')
-        await client.query('CREATE INDEX IF NOT EXISTS idx_scheduled_events_discipline ON scheduled_events (discipline_id)')
-      } catch { /* column already exists */ }
-
-      // M8: Staffing tables
-      try {
-        await client.query(`
-          CREATE TABLE IF NOT EXISTS event_staffing_needs (
-            id          TEXT PRIMARY KEY,
-            event_id    TEXT NOT NULL REFERENCES scheduled_events(id) ON DELETE CASCADE,
-            role_key    TEXT NOT NULL,
-            role_label  TEXT NOT NULL,
-            min_count   INT NOT NULL DEFAULT 1,
-            max_count   INT NOT NULL DEFAULT 1,
-            created_at  TIMESTAMPTZ DEFAULT NOW(),
-            UNIQUE(event_id, role_key)
-          )
-        `)
-        await client.query(`
-          CREATE TABLE IF NOT EXISTS staff_signups (
-            id           TEXT PRIMARY KEY,
-            event_id     TEXT NOT NULL REFERENCES scheduled_events(id) ON DELETE CASCADE,
-            need_id      TEXT NOT NULL REFERENCES event_staffing_needs(id) ON DELETE CASCADE,
-            account_id   TEXT NOT NULL REFERENCES accounts(id),
-            status       TEXT NOT NULL DEFAULT 'confirmed', -- confirmed, withdrawn, no_show
-            signed_up_at TIMESTAMPTZ DEFAULT NOW(),
-            withdrawn_at TIMESTAMPTZ,
-            notes        TEXT,
-            UNIQUE(need_id, account_id)
-          )
-        `)
-        await client.query('CREATE INDEX IF NOT EXISTS idx_staff_needs_event ON event_staffing_needs(event_id)')
-        await client.query('CREATE INDEX IF NOT EXISTS idx_staff_signups_event ON staff_signups(event_id)')
-        await client.query('CREATE INDEX IF NOT EXISTS idx_staff_signups_account ON staff_signups(account_id)')
-      } catch (err) {
-        log.warn('[postgres] Could not create staffing tables:', err.message)
-      }
-
-      // M10: Add SSI identity columns to staff_signups for safe participant identification
-      // SSI GraphQL returns email=null for IPSC/SRA competitors. These columns cache the
-      // SSI shooter.id (Relay global ID) and participant.id so we can identify the user
-      // reliably without name-based matching. See docs/design/shooter-identification-design.md
-      try {
-        await client.query(`ALTER TABLE staff_signups ADD COLUMN IF NOT EXISTS ssi_shooter_id TEXT`)
-        await client.query(`ALTER TABLE staff_signups ADD COLUMN IF NOT EXISTS ssi_participant_id TEXT`)
-      } catch (err) {
-        log.warn('[postgres] M10 migration (ssi identity columns):', err.message)
-      }
-
-      // M11: Create audit_log table for security-sensitive mutations (SEC-H4)
-      try {
-        await client.query(`
-          CREATE TABLE IF NOT EXISTS audit_log (
-            id          TEXT PRIMARY KEY,
-            tenant_id   TEXT REFERENCES tenants(id) ON DELETE CASCADE,
-            account_id  TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-            action      TEXT NOT NULL,
-            target_type TEXT,
-            target_id   TEXT,
-            metadata    JSONB,
-            ip_address  TEXT,
-            created_at  TIMESTAMPTZ DEFAULT NOW()
-          )
-        `)
-        await client.query('CREATE INDEX IF NOT EXISTS idx_audit_tenant ON audit_log(tenant_id)')
-        await client.query('CREATE INDEX IF NOT EXISTS idx_audit_account ON audit_log(account_id)')
-        await client.query('CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action)')
-      } catch (err) {
-        log.warn('[postgres] M11 migration (audit_log):', err.message)
-      }
-
-      // M9: Add ssi_create_url to disciplines (SSI event creation URL per discipline)
-      try {
-        await client.query('ALTER TABLE disciplines ADD COLUMN IF NOT EXISTS ssi_create_url TEXT')
-      } catch { /* column already exists */ }
-
-      // M12: Create ssi_discovered_disciplines table for SSI-R3
-      try {
-        await client.query(`
-          CREATE TABLE IF NOT EXISTS ssi_discovered_disciplines (
-            id            TEXT PRIMARY KEY,
-            display_name  TEXT NOT NULL,
-            ssi_create_url TEXT NOT NULL,
-            is_cup        BOOLEAN NOT NULL,
-            rule_code     TEXT NOT NULL,
-            description   TEXT,
-            last_seen_at  TIMESTAMPTZ DEFAULT NOW()
-          )
-        `)
-      } catch (err) {
-        log.warn('[postgres] M12 migration (ssi_discovered_disciplines):', err.message)
-      }
-
-      // M13: Add post_event_workflows column to match_templates (PEW-1)
-      try {
-        await client.query('ALTER TABLE match_templates ADD COLUMN IF NOT EXISTS post_event_workflows JSONB DEFAULT \'[]\'')
-      } catch (err) {
-        log.warn('[postgres] M13 migration (post_event_workflows):', err.message)
-      }
-
-      // M14: Add regional settings columns to tenants (MP8 Phase B)
-      try {
-        await client.query('ALTER TABLE tenants ADD COLUMN IF NOT EXISTS city TEXT')
-        await client.query('ALTER TABLE tenants ADD COLUMN IF NOT EXISTS country TEXT')
-        await client.query('ALTER TABLE tenants ADD COLUMN IF NOT EXISTS timezone TEXT')
-        await client.query('ALTER TABLE tenants ADD COLUMN IF NOT EXISTS locale TEXT')
-      } catch (err) {
-        log.warn('[postgres] M14 migration (tenant regional settings):', err.message)
-      }
-
-      // M15: Create tenant_logos table + has_logo flag on tenants (MP9 Branding)
-      try {
-        await client.query(`
-          CREATE TABLE IF NOT EXISTS tenant_logos (
-            tenant_id    TEXT PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
-            content_type TEXT NOT NULL,
-            image_data   BYTEA NOT NULL,
-            file_size    INTEGER NOT NULL,
-            uploaded_at  TIMESTAMPTZ DEFAULT NOW()
-          )
-        `)
-        await client.query('ALTER TABLE tenants ADD COLUMN IF NOT EXISTS has_logo BOOLEAN DEFAULT FALSE')
-      } catch (err) {
-        log.warn('[postgres] M15 migration (tenant_logos):', err.message)
-      }
-
-      // M16: Add slug column to tenants (TEN-1 Tenant URL Strategy)
-      try {
-        await client.query('ALTER TABLE tenants ADD COLUMN IF NOT EXISTS slug TEXT')
-        await client.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_slug ON tenants (slug)')
-        // Backfill slugs for existing tenants that don't have one
-        const { rows: noSlug } = await client.query('SELECT id, name FROM tenants WHERE slug IS NULL')
-        for (const row of noSlug) {
-          const base = row.name
-            .toLowerCase()
-            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/-{2,}/g, '-')
-            .replace(/^-|-$/g, '')
-            .substring(0, 48)
-          let slug = base
-          let suffix = 2
-          // eslint-disable-next-line no-constant-condition
-          while (true) {
-            const { rows: dup } = await client.query('SELECT id FROM tenants WHERE slug = $1 AND id != $2', [slug, row.id])
-            if (dup.length === 0) break
-            slug = `${base}-${suffix}`
-            suffix++
-          }
-          await client.query('UPDATE tenants SET slug = $1 WHERE id = $2', [slug, row.id])
-        }
-      } catch (err) {
-        log.warn('[postgres] M16 migration (tenant slugs):', err.message)
-      }
-
-      // M18: Make ssi_create_url nullable in ssi_discovered_disciplines
-      // Y8 fix changed sync to store null instead of guessed URLs.
-      try {
-        await client.query('ALTER TABLE ssi_discovered_disciplines ALTER COLUMN ssi_create_url DROP NOT NULL')
-      } catch (err) {
-        log.warn('[postgres] M18 migration (ssi_create_url nullable):', err.message)
-      }
-
-      // M17: Add integrations JSONB column to tenants (INT-1 Phase 3)
-      // Stores tenant-level integration configuration: { eventSystem: { type, credentials }, calendarSystem: { type, credentials } }
-      // Legacy ssi_credentials and calendar_config columns remain for backward compat during migration.
-      try {
-        await client.query("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS integrations JSONB DEFAULT '{}'")
-      } catch (err) {
-        log.warn('[postgres] M17 migration (integrations column):', err.message)
-      }
-
-      // M19: Migrate legacy ssiCredentials + calendarConfig into integrations JSONB
-      // Copies existing credential data into the new integrations column so the
-      // TenantIntegrationsTab UI can read/write from the unified model.
-      try {
-        const { rows: tenantsToMigrate } = await client.query(
-          `SELECT id, ssi_credentials, calendar_config, integrations FROM tenants
-           WHERE (integrations IS NULL OR integrations = '{}' OR integrations = 'null')
-             AND (ssi_credentials IS NOT NULL OR calendar_config IS NOT NULL)`
-        )
-        for (const t of tenantsToMigrate) {
-          const integrations = {}
-
-          // Migrate SSI credentials
-          if (t.ssi_credentials) {
-            try {
-              // ssi_credentials is stored encrypted — we store the reference, not re-encrypt
-              // The registry resolves from legacy ssiCredentials as fallback anyway,
-              // but this sets the type flag so the new UI knows which system is active
-              integrations.eventSystem = { type: 'ssi' }
-            } catch { /* ignore parse errors */ }
-          }
-
-          // Migrate calendar config
-          if (t.calendar_config) {
-            try {
-              const cfg = typeof t.calendar_config === 'string' ? JSON.parse(t.calendar_config) : t.calendar_config
-              // Check if it's encrypted (has iv/tag/data) or plain
-              if (cfg && (cfg.wpBaseUrl || (cfg.iv && cfg.tag))) {
-                integrations.calendarSystem = { type: 'wordpress' }
-              }
-            } catch { /* ignore parse errors */ }
-          }
-
-          if (Object.keys(integrations).length > 0) {
-            await client.query(
-              'UPDATE tenants SET integrations = $1 WHERE id = $2',
-              [JSON.stringify(integrations), t.id]
-            )
-            log.info(`[postgres] M19: Migrated integrations for tenant ${t.id}: ${JSON.stringify(integrations)}`)
-          }
-        }
-      } catch (err) {
-        log.warn('[postgres] M19 migration (integrations backfill):', err.message)
-      }
-
-      // Optional unique constraints — may fail on existing data with duplicates.
-      // App-level checks in createTenant/createAccountWithTenant still prevent new duplicates.
-      try {
-        await client.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_name_unique ON tenants (LOWER(name))')
-      } catch (err) {
-        log.warn('[postgres] Could not create tenant name unique index (duplicate names exist):', err.message)
-      }
+      // ---- Versioned migration system ----
+      // Each migration runs exactly once, tracked in schema_migrations.
+      // Add new migrations to the end of MIGRATIONS — never edit or remove existing ones.
+      await runMigrations(client)
     } finally {
       client.release()
     }
