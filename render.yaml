@@ -12,6 +12,14 @@ projects:
             plan: starter
             maxmemoryPolicy: allkeys-lru
             ipAllowList: []  # internal access only (private network)
+          # ── PostgreSQL (platform store for R8.0 multi-tenant) ──
+          # Stores accounts, tenants, disciplines, scheduled events, RBAC.
+          - type: pserv
+            name: turres-ssi-tools-db
+            region: frankfurt
+            plan: starter
+            databaseName: ssi_platform
+            databaseUser: ssi_app
           # ── Web service ──
           - type: web
             name: turres-ssi-tools
@@ -23,8 +31,8 @@ projects:
             repo: https://github.com/tohewi/tapahtumakalenteri-ssi-integrator
             # PR previews are managed by .github/workflows/pr-preview.yml
             # to support all Render plans and deterministic naming.
-            buildCommand: cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm ci --omit=dev
-            startCommand: cd scoring-proxy && node server.js
+            buildCommand: cd packages/ssi-core && npm install && cd ../../scoring-ui && npm install --include=dev && npm run build && cd ../apps/scoring-app && npm install --omit=dev
+            startCommand: cd apps/scoring-app && node server.js
             envVars:
               - key: NODE_ENV
                 value: production
@@ -36,6 +44,39 @@ projects:
                 value: "false"
               - key: SESSION_SECRET
                 generateValue: true
+              - key: REDIS_URL
+                fromService:
+                  name: turres-ssi-tools-redis
+                  type: keyvalue
+                  property: connectionString
+              - key: DATABASE_URL
+                fromService:
+                  name: turres-ssi-tools-db
+                  type: pserv
+                  property: connectionString
+          # ── Match Manager App (R8.x) ──
+          # Event-centric match management platform.
+          # Set MATCH_MANAGER_ENABLED=false to skip startup (sleep loop).
+          # Suspend service in Render dashboard to fully disable.
+          - type: web
+            name: turres-match-manager
+            runtime: node
+            region: frankfurt
+            plan: starter
+            branch: main
+            nodeVersion: "24"
+            repo: https://github.com/tohewi/tapahtumakalenteri-ssi-integrator
+            buildCommand: cd match-manager-ui && npm install --include=dev && npm run build && cd ../apps/match-manager-app && npm ci --omit=dev
+            startCommand: cd apps/match-manager-app && if [ "$MATCH_MANAGER_ENABLED" = "true" ]; then node server.js; else echo "Match Manager disabled (MATCH_MANAGER_ENABLED != true). Set env var to enable." && sleep 3600; fi
+            envVars:
+              - key: NODE_ENV
+                value: production
+              - key: LOG_LEVEL
+                value: info
+              - key: MATCH_MANAGER_ENABLED
+                value: "false"
+              - key: APP_URL
+                value: https://turres-match-manager.onrender.com
               - key: REDIS_URL
                 fromService:
                   name: turres-ssi-tools-redis

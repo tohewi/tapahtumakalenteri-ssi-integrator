@@ -20,7 +20,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: |
             scoring-ui/package-lock.json
-            scoring-proxy/package-lock.json
+            apps/scoring-app/package-lock.json
 
       # ── Install ──
       - name: Install UI dependencies
@@ -29,7 +29,7 @@ jobs:
 
       - name: Install proxy dependencies
         run: npm ci
-        working-directory: scoring-proxy
+        working-directory: apps/scoring-app
 
       # ── Test ──
       - name: Run UI tests
@@ -38,7 +38,7 @@ jobs:
 
       - name: Run proxy tests
         run: npm test
-        working-directory: scoring-proxy
+        working-directory: apps/scoring-app
 
       # ── Vulnerability scan ──
       - name: Audit UI dependencies
@@ -47,7 +47,7 @@ jobs:
 
       - name: Audit proxy dependencies
         run: npm audit --audit-level=high
-        working-directory: scoring-proxy
+        working-directory: apps/scoring-app
 
       # ── Build ──
       - name: Build UI
@@ -71,7 +71,7 @@ jobs:
           echo "| Project | Status |" >> scan-report.md
           echo "|---|---|" >> scan-report.md
           echo "| scoring-ui | ✅ Passed |" >> scan-report.md
-          echo "| scoring-proxy | ✅ Passed |" >> scan-report.md
+          echo "| apps/scoring-app | ✅ Passed |" >> scan-report.md
           echo "" >> scan-report.md
           echo "## Tests" >> scan-report.md
           echo "" >> scan-report.md

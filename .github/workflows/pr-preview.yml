@@ -28,8 +28,8 @@ name: PR Preview Environment
 # - Runtime: Node.js
 # - Plan: Starter
 # - Region: Frankfurt
-# - Build: cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm ci
-# - Start: cd scoring-proxy && node server.js
+# - Build: cd scoring-ui && npm install --include=dev && npm run build && cd ../apps/scoring-app && npm ci
+# - Start: cd apps/scoring-app && node server.js
 #
 # Documentation: docs/instructions/PR-PREVIEW-DEPLOYMENTS.md
 
@@ -109,7 +109,7 @@ jobs:
 
       - name: Delete service if build command is outdated
         id: delete-if-outdated
-        if: github.event.action != 'closed' && steps.check-service.outputs.exists == 'true' && (!contains(steps.check-service.outputs.build_command, 'npm ci') || !contains(steps.check-service.outputs.build_command, '--include=dev'))
+        if: github.event.action != 'closed' && steps.check-service.outputs.exists == 'true' && !contains(steps.check-service.outputs.build_command, 'packages/ssi-core')
         run: |
           SERVICE_ID="${{ steps.check-service.outputs.service_id }}"
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
@@ -197,8 +197,8 @@ jobs:
             --arg ownerId "${RENDER_OWNER_ID}" \
             --arg repoUrl "https://github.com/${{ github.repository }}" \
             --arg branchName "${BRANCH_NAME}" \
-            --arg buildCommand "cd scoring-ui && npm install --include=dev && npm run build && cd ../scoring-proxy && npm ci --omit=dev" \
-            --arg startCommand "cd scoring-proxy && node server.js" \
+            --arg buildCommand "cd packages/ssi-core && npm install && cd ../../scoring-ui && npm install --include=dev && npm run build && cd ../apps/scoring-app && npm install --omit=dev" \
+            --arg startCommand "cd apps/scoring-app && node server.js" \
             --argjson envVars "${ENV_VARS}" \
             '{
               "type": "web_service",

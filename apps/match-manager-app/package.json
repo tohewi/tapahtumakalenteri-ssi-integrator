@@ -1,0 +1,27 @@
+{
+  "name": "match-manager-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Match Management Platform backend (R8.x)",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "vitest run",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@ssi-tools/core": "file:../../packages/ssi-core",
+    "express": "^4.21.2",
+    "cors": "^2.8.5",
+    "helmet": "^8.0.0",
+    "cookie-parser": "^1.4.7",
+    "express-rate-limit": "^7.5.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.18",
+    "supertest": "^7.2.2"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

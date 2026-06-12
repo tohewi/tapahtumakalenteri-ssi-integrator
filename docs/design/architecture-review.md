@@ -1,33 +1,38 @@
 # Software Architecture Review
 
-**Date:** 2026-02-19 (updated 2026-02-23 for v7.5)
-**Scope:** `scoring-proxy/` (Express backend) and `scoring-ui/` (React frontend)
+**Date:** 2026-02-19 (updated 2026-06-11 for R81 platform layer)
+**Scope:** `apps/scoring-app/` (Express backend) and `scoring-ui/` (React frontend)
 **Target Architecture:** Modular Monolith with clear module boundaries
 
 ---
 
 ## 1. Codebase Snapshot
 
-### 1.1 Backend (`scoring-proxy/`)
+### 1.1 Backend (`apps/scoring-app/`)
 
 | File | Lines | Role |
 |------|------:|------|
 | `lib/ssi-core/client.js` | 1 474 | SSI API integration (GraphQL + web scraping) |
+| `routes/platform/staffing.js` | ~830 | Platform staffing routes (R8.1 multi-tenant) |
 | `routes/management.js` | 550 | Cup management endpoints (10 routes) |
-| `routes/staffing.js` | 438 | Staff signup/resign/sync |
-| `server.js` | 428 | Express bootstrap, middleware, route mounting |
+| `routes/staffing.js` | 438 | Staff signup/resign/sync (SSI-native) |
+| `server.js` | ~465 | Express bootstrap, middleware, route mounting |
 | `routes/registration.js` | 402 | Public self-registration |
 | `lib/services/cup-manage.js` | 356 | Cup management service (pure logic) |
+| `lib/db/postgres.js` | ~590 | PostgreSQL pool + versioned migration system |
 | `lib/services/scoring-service.js` | 284 | Scoring service (pure logic) |
 | `lib/staffing/engine.js` | 268 | Staffing business logic |
+| `routes/platform/auth.js` | ~340 | Platform authentication (register/login/MFA) |
 | `routes/reports.js` | 210 | Report generation |
-| `routes/auth-v7.js` | 192 | Authentication routes |
+| `routes/auth-v7.js` | 192 | Authentication routes (SSI sessions) |
 | `routes/scoring.js` | 183 | Score entry endpoints |
 | `middleware/errorHandler.js` | 169 | Centralized error handling |
 | `lib/session/store.js` | 168 | Session store (Redis/memory) |
+| `lib/db/platform-store/` | ~650 | Platform accounts, tenants, sessions, RBAC |
+| `lib/services/admin-session.js` | ~130 | Admin SSI session singleton (extracted) |
 | Other libs | ~800 | Logger, email, session, staffing helpers |
 
-**Total backend source:** ~6 100 lines across 36 files.
+**Total backend source:** ~9 500 lines across 55+ files.
 
 ### 1.2 Frontend (`scoring-ui/src/`)
 
@@ -52,12 +57,15 @@
 
 | Suite | Files | Tests | Runtime |
 |-------|------:|------:|--------:|
-| `scoring-proxy` (vitest) | 13 | 223 | ~11 s |
+| `scoring-app` (vitest) | 14 | 254 | ~12 s |
 | `scoring-ui` (vitest/jsdom) | 9 | 190 | ~23 s |
 | `proxy.test.js` (node:test, live SSI) | 1 | excluded | manual |
 | `session-timeout.test.js` (node:test, live SSI) | 1 | excluded | manual |
 
-**Total automated:** 413 tests, ~35 s combined.
+**Total automated:** 444 tests, ~35 s combined.
+
+New in R81 improvement batch:
+- `test/platform-routes/platform-auth.test.js`: 27 tests covering platform registration, login, MFA, logout, RBAC guards, tenant CRUD, SSI credential masking, error propagation.
 
 ---
 
@@ -180,6 +188,7 @@ All routes now import from domain-specific modules (v7.4, RFR3 complete). The `l
 | **Session security** | ✅ Good | 7 tests for cookie security, CSRF |
 | **Session compat** | ✅ Good | 4 tests for backward compatibility |
 | **Impersonation** | ✅ Good | 6 tests |
+| **Platform routes** | ✅ Good | 27 tests: auth, RBAC, tenant CRUD, credential masking (R81) |
 | **SSI core client** | ⚠️ Partial | 2 test files, ~28 tests (cookie parsing + fixture-based scraping) |
 | **Scoring routes** | ❌ None | No unit tests |
 | **Reports routes** | ❌ None | No unit tests |
@@ -191,7 +200,7 @@ All routes now import from domain-specific modules (v7.4, RFR3 complete). The `l
 | **UI: register-api** | ✅ Good | 10 tests |
 | **UI: crypto** | ✅ Good | 4 tests |
 
-**Estimated line coverage:** ~40-50% backend, ~30-40% frontend.
+**Estimated line coverage:** ~45-55% backend (platform layer now covered), ~30-40% frontend.
 
 ### 4.2 Coverage Gaps (Priority Order)
 
@@ -338,8 +347,17 @@ The following rules should be added to `AGENTS.md` and `.github/copilot-instruct
 | **Phase 8** | Split `App.jsx` and `TabletScoringView.jsx` | Pending | 2-3 h | Medium — reduces UI merge conflicts |
 | **Phase 9** | Fix time-dependent UI test | Pending | 0.5 h | Low — prevents CI flakiness |
 
-**Completed:** Phases 1-4 (~10 h of original plan).
-**Remaining estimated effort:** ~12 hours across 5 phases.
+**R81 Improvement Batch (completed June 2026):**
+- ✅ Async error boundaries: all bare async platform route handlers wrapped in try/catch
+- ✅ Static imports: 6 dynamic `import()` calls in `platform/staffing.js` converted
+- ✅ `requireTenantRole` param fragility fixed (explicit `{ param }` option)
+- ✅ Platform test suite: 27 new tests in `test/platform-routes/platform-auth.test.js`
+- ✅ Versioned migration system: replaced M1–M19 ad-hoc blocks with `schema_migrations` tracking table
+- ✅ Admin session extracted: `lib/services/admin-session.js` (singleton, testable, importable)
+- ✅ GitHub CodeQL workflow added: `.github/workflows/codeql.yml` (security-extended queries)
+
+**Completed:** Phases 1-4 + R81 improvements.
+**Remaining estimated effort:** ~12 hours across Phases 5–9.
 
 ---
 
@@ -475,13 +493,16 @@ async function searchCups(search, session, graphqlWithRefresh) {
 | Component | Status | Notes |
 |-----------|--------|-------|
 | SSI Core Domain Split | Partial (v7.4) | 5 re-export shims created; actual code still in `client.js` |
-| Service Layer | In Progress (v7.5) | `scoring-service.js` + `cup-manage.js` done |
-| Error Handling | Complete (v7.5) | Centralized middleware, all routes use `next(error)` |
+| Service Layer | In Progress (v7.5/R81) | `scoring-service.js` + `cup-manage.js` + `admin-session.js` done |
+| Error Handling | Complete (v7.5/R81) | All platform routes wrapped; centralized middleware |
 | API Versioning | Complete (v7.5) | `/api/v1/` paths active, legacy aliases with deprecation |
 | Route Logging | Complete (v7.5) | All routes use `log.*` instead of `console.*` |
 | Module Boundaries | Partial (v7.5) | Domain imports enforced; ESLint rules not yet configured |
 | UI Module Split | Partial (v7.4) | `ManagePage` sub-components + `useAuthenticatedPage` hook |
 | UI Hooks | Complete (v7.4) | `useAuthenticatedPage`, `useRememberMe` extracted |
+| Platform Layer (R8.1) | In Progress (R81) | Auth, tenants, RBAC, events, staffing routes; 27 tests |
+| Migration System | Complete (R81) | Versioned `schema_migrations` tracking table (19 migrations) |
+| Security Scanning | Complete (R81) | GitHub CodeQL workflow (`security-extended` query suite) |
 
 ### 8.8 Future Considerations
 

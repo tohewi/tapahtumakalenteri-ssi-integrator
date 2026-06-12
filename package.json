@@ -1,0 +1,13 @@
+{
+  "name": "ssi-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SSI Tools monorepo - scoring and match management platform",
+  "scripts": {
+    "test": "cd scoring-ui && npm test && cd ../apps/scoring-app && npm test",
+    "build": "cd scoring-ui && npm run build"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}
