@@ -31,7 +31,7 @@ projects:
             repo: https://github.com/tohewi/tapahtumakalenteri-ssi-integrator
             # PR previews are managed by .github/workflows/pr-preview.yml
             # to support all Render plans and deterministic naming.
-            buildCommand: cd scoring-ui && npm install --include=dev && npm run build && cd ../apps/scoring-app && npm install --omit=dev
+            buildCommand: cd packages/ssi-core && npm install && cd ../../scoring-ui && npm install --include=dev && npm run build && cd ../apps/scoring-app && npm install --omit=dev
             startCommand: cd apps/scoring-app && node server.js
             envVars:
               - key: NODE_ENV
