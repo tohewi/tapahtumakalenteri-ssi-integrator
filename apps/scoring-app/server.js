@@ -128,7 +128,7 @@ const loginLimiter = rateLimit({
 })
 
 // In production, serve the built UI
-const uiDist = path.join(__dirname, '..', 'scoring-ui', 'dist')
+const uiDist = path.join(__dirname, '..', '..', 'scoring-ui', 'dist')
 app.use(express.static(uiDist))
 
 // ============================================================
