@@ -5,6 +5,38 @@
 
 ---
 
+## Release 7.9.2 — SSI CSRF Compatibility Hotfix (2026-09-11)
+
+**Requirements:** GQL-HF7 — Implemented/Ready; not yet deployed.
+
+### Overview
+
+Follow-up in the existing Release 7.9.2 Cup management hotfix stream. SSI now issues CSRF cookies; participant-search POSTs omitted the corresponding request token and were rejected with HTTP 403. This fixes the shared path used by public registration, Add to Cup, and squad assignment.
+
+### New Features
+
+- None; compatibility repair only, with no dependency or architecture changes.
+
+### Bug Fixes
+
+- Send `X-CSRFToken` with participant search, confirmation, trainer registration, and squad/status form submissions.
+- Obtain a CSRF cookie from the search page when an older session has none; reject unsuccessful preflight responses before posting.
+- Carry updated response cookies through registration and edit flows using local copies, preserving shared session state and existing form fields.
+- Retain compatibility with SSI responses that do not issue CSRF cookies. Failed POSTs are not automatically retried.
+
+### Requirements Met
+
+- **GQL-HF7:** SSI participant CSRF compatibility, covered by mocked HTTP and HTML-fixture regressions.
+
+### Test Status
+
+- Backend: **237 passing**, including **10 CSRF regression tests** (9 failed before the fix).
+- Frontend: **193 passing** with `npm test -- --silent --maxWorkers=1`; default parallel execution encountered local worker-startup timeouts.
+- Frontend production build: **passed**; existing mixed static/dynamic import warning remains.
+- Live SSI registration: **not executed**; production data was not modified. Deployment verification remains required.
+
+---
+
 ## Release 7.6.1 — Compliance Hardening: Paid Tracking Disabled (2026-05-10)
 
 **Requirements:** R76-COM2 ✅
