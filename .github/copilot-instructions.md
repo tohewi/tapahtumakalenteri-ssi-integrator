@@ -397,7 +397,7 @@ export function createXxxRouter({ requireAuth, graphqlWithRefresh, ... }) {
 - **Bug fixes:** Must include a regression test that fails without the fix
 - **Refactors:** Must not reduce test count. Run `npm test` in both `scoring-proxy/` and `scoring-ui/` before committing
 - **Time-dependent tests:** Must use `vi.useFakeTimers()` to pin the clock. Never hardcode dates that will expire
-- **Windows test runner:** If Vitest reports fork-worker startup timeouts, rerun with `npm test -- --silent --maxWorkers=1` before treating the run as an application failure. This preserves all tests without changing repository configuration.
+- **Windows test runner:** If Vitest reports fork-worker startup timeouts, rerun with `npm test -- --silent --maxWorkers=1`; if forks still time out, add `--pool=threads` before treating the run as an application failure. This preserves all tests without changing repository configuration.
 
 ### Merge Conflict Prevention
 
