@@ -450,11 +450,14 @@ Migrate Cup creation and maintenance from web scraping to SSI GraphQL API. The l
 | GQL-HF2 | **Upstream diagnostics logging**: Failed transient upstream attempts log response header snapshot and body snippet for faster incident triage on Render. | ✅ Implemented |
 | GQL-HF3 | **Clean UI availability error**: Transient upstream incidents are mapped to HTTP `503` with user-safe message/code (`UPSTREAM_UNAVAILABLE`) instead of generic auth/internal failures. | ✅ Implemented |
 
-### Release 7.9.2 — Cup Competitor Count Hotfix
+### Release 7.9.2 — Cup Management Hotfixes
 
 | # | Fix | Status |
 |---|-----|--------|
 | GQL-HF4 | **Cup competitor count source hardening**: Cup registered competitor totals are calculated from CUP-level approved competitors first (`status` = `a/approved`) with match-squad fallback, so registration and management UI views keep accurate count badges even when squad competitor data is incomplete. | ✅ Implemented |
+| GQL-HF7 | **SSI CSRF compatibility**: Send the SSI CSRF cookie as a request token for participant search, registration confirmation, trainer registration, staff-removal participant lookup, and squad/status edits. Fetch the search page for sessions without a CSRF cookie, carry response cookies through each workflow without mutating shared session cookies, and retain legacy no-CSRF compatibility. | ✅ Implemented/Ready |
+
+GQL-HF7 validation (2026-09-11): 239 backend tests, including 12 CSRF regressions, and 193 frontend tests pass; frontend production build and sharp SVG-to-PNG smoke test pass. Approved dependency updates (including sharp 0.35.4) resolve the pre-existing CI audit blocker; both dependency audits report zero vulnerabilities. SSI began issuing CSRF cookies between September 5 and September 8; production search-and-add requests returned HTTP 403 from September 9. The production hotfix retains the current client layout by explicit exception; the R81 port belongs in its existing participant domain module. Deployment and live SSI registration verification remain pending.
 
 ### Release 7.9.3 — Competitor Number Sync Hardening
 
@@ -527,7 +530,7 @@ Vision: Transform the current "link collection" home page into a structured matc
 - **Release 7.5** (Architecture V2 Foundation): 5 requirements — 3 ✅, 2 📋 ➜ R7.6 (ARCH3, ARCH4)
 - **Release 7.6** (Consolidation & Completion): 21 requirements from R6.0/R7.0/R7.2/R7.5 plus compliance follow-up (Privacy Policy + Terms of Service, disable paid tracking, per-user SSI execution identity) — see `release-7.6.md`
 - **Release 7.7** (QR Code Login for Scoring): 6 requirements — 6 ✅ (QR1–QR6). Device token auth for tablets/phones at the range. **7.7.1 hotfix**: 4 fixes (cup list visibility, auto-restore, same-day filtering, squad audit logging)
-- **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes implemented (GQL-HF1–GQL-HF3). **7.9.2 hotfix**: 1 fix implemented (GQL-HF4). **7.9.3 hotfix**: 1 fix specified (GQL-HF5). **7.9.4**: 1 requirement specified (GQL-HF6 — iCal calendar attachment)
+- **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes implemented (GQL-HF1–GQL-HF3). **7.9.2 hotfix**: 2 fixes implemented (GQL-HF4, GQL-HF7). **7.9.3 hotfix**: 1 fix specified (GQL-HF5). **7.9.4**: 1 requirement specified (GQL-HF6 — iCal calendar attachment)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
 - **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
 

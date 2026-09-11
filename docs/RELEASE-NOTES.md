@@ -5,6 +5,41 @@
 
 ---
 
+## Release 7.9.2 — SSI CSRF Compatibility Hotfix (2026-09-11)
+
+**Requirements:** GQL-HF7 — Implemented/Ready; not yet deployed.
+
+### Overview
+
+Follow-up in the existing Release 7.9.2 Cup management hotfix stream. SSI now issues CSRF cookies; participant-search POSTs omitted the corresponding request token and were rejected with HTTP 403. This fixes the shared path used by public registration, Add to Cup, and squad assignment.
+
+### New Features
+
+- No new application features or architecture changes. Security dependency updates were approved to unblock the existing CI audit gate.
+
+### Bug Fixes
+
+- Send `X-CSRFToken` with participant search, confirmation, trainer registration, staff-removal participant lookup, and squad/status form submissions.
+- Update vulnerable dependency lockfile entries using a September 4 release cutoff; pin `sharp` to patched `0.35.4` (published August 26). No audit thresholds, security policies, or CI checks were relaxed.
+- Obtain a CSRF cookie from the search page when an older session has none; reject unsuccessful preflight responses before posting.
+- Carry updated response cookies through registration and edit flows using local copies, preserving shared session state and existing form fields.
+- Retain compatibility with SSI responses that do not issue CSRF cookies. Failed POSTs are not automatically retried.
+
+### Requirements Met
+
+- **GQL-HF7:** SSI participant CSRF compatibility, covered by mocked HTTP and HTML-fixture regressions.
+
+### Test Status
+
+- Backend: **239 passing**, including **12 CSRF regression tests** (the initial 9 failures plus 2 staff-removal failures were reproduced before their respective fixes).
+- Frontend: **193 passing** with `npm test -- --silent --maxWorkers=1 --pool=threads`; fork-worker startup timed out locally even with a single worker.
+- Dependency audits: **0 vulnerabilities** in both UI and backend after updates.
+- Sharp compatibility: SVG-to-PNG conversion at 180, 192, and 512 pixels passed an in-memory smoke test.
+- Frontend production build: **passed**; existing mixed static/dynamic import warning remains.
+- Live SSI registration: **not executed**; production data was not modified. Deployment verification remains required.
+
+---
+
 ## Release 7.6.1 — Compliance Hardening: Paid Tracking Disabled (2026-05-10)
 
 **Requirements:** R76-COM2 ✅

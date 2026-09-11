@@ -403,6 +403,31 @@ export async function ssiSubmitScore(competitorId, formData, cookies, csrfToken)
 // or it may redirect (302) on success.
 // ============================================================
 
+function _participantResponseCookies(cookies, response) {
+  return { ...cookies, ...parseCookies(response.headers?.getSetCookie?.() || []) }
+}
+
+function _participantFormHeaders(cookies, referer) {
+  return {
+    'Content-Type': 'application/x-www-form-urlencoded',
+    'Cookie': formatCookies(cookies),
+    'Referer': referer,
+    'Origin': SSI_BASE_URL,
+    ...(cookies.csrftoken ? { 'X-CSRFToken': cookies.csrftoken } : {}),
+  }
+}
+
+async function _participantSearchCookies(url, cookies) {
+  if (cookies.csrftoken) return { ...cookies }
+  const response = await fetch(url, {
+    headers: { 'Cookie': formatCookies(cookies) },
+    redirect: 'manual',
+  })
+  if (response.status !== 200) throw new Error(`Participant search page HTTP ${response.status}`)
+  await response.text()
+  return _participantResponseCookies(cookies, response)
+}
+
 async function _followRegisterLink(url, referer, cookies, debug) {
   if (debug) console.log(`[search-and-add] GET register link: ${url}`)
   const resp = await fetch(url, {
@@ -418,7 +443,7 @@ async function _followRegisterLink(url, referer, cookies, debug) {
   if (resp.status === 200) {
     const html = await resp.text()
     if (debug) console.log(`[search-and-add] Response: ${html.length} chars`)
-    return await _handleRegisterResponse(html, url, cookies, debug)
+    return await _handleRegisterResponse(html, url, _participantResponseCookies(cookies, resp), debug)
   }
 
   throw new Error(`Register participant failed HTTP ${resp.status}`)
@@ -499,12 +524,7 @@ async function _handleRegisterResponse(html, url, cookies, debug) {
     const fullAction = formAction.startsWith('http') ? formAction : `${SSI_BASE_URL}${formAction}`
     const confirmResp = await fetch(fullAction, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Cookie': formatCookies(cookies),
-        'Referer': url,
-        'Origin': SSI_BASE_URL,
-      },
+      headers: _participantFormHeaders(cookies, url),
       body: formData.toString(),
       redirect: 'manual',
     })
@@ -549,8 +569,9 @@ async function _handleRegisterResponse(html, url, cookies, debug) {
 export async function ssiSearchAndAddParticipant(eventContentType, eventId, email, cookies, { firstName, lastName } = {}) {
   const pageUrl = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/participant-search-and-add/`
   const debug = log.isEnabled('debug')
+  cookies = await _participantSearchCookies(pageUrl, cookies)
 
-  // SSI search-and-add is a two-step form (NO CSRF tokens — SSI doesn't use them):
+  // SSI search-and-add is a two-step form (CSRF cookie must accompany POSTs):
   // Step 1: POST search (last_name, first_name, email, submit=Search) → returns result table
   // Step 2: GET the "add" link for the matching user → redirects to participants page
 
@@ -565,12 +586,7 @@ export async function ssiSearchAndAddParticipant(eventContentType, eventId, emai
   if (debug) console.log(`[search-and-add] POST search ${searchDesc} to ${pageUrl}`)
   const searchResp = await fetch(pageUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Cookie': formatCookies(cookies),
-      'Referer': pageUrl,
-      'Origin': SSI_BASE_URL,
-    },
+    headers: _participantFormHeaders(cookies, pageUrl),
     body: formData.toString(),
     redirect: 'manual',
   })
@@ -585,6 +601,7 @@ export async function ssiSearchAndAddParticipant(eventContentType, eventId, emai
   }
 
   const searchHtml = await searchResp.text()
+  cookies = _participantResponseCookies(cookies, searchResp)
   if (debug) console.log(`[search-and-add] Response: ${searchHtml.length} chars`)
 
   // 2. Check for "no results" — SSI shows this in <ul class="list-unstyled text-danger">
@@ -931,6 +948,7 @@ export async function ssiSetParticipantSquad(participantId, squadNumber, cookies
   })
   if (!resp.ok) throw new Error(`Participant edit page HTTP ${resp.status}`)
   const html = await resp.text()
+  cookies = _participantResponseCookies(cookies, resp)
 
   // 2. Extract the form content
   const formMatch = html.match(/<form[^>]*method="post"[^>]*>([\s\S]*?)<\/form>/i)
@@ -974,12 +992,7 @@ export async function ssiSetParticipantSquad(participantId, squadNumber, cookies
   // 5. POST the edit form
   const editResp = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Cookie': formatCookies(cookies),
-      'Referer': url,
-      'Origin': SSI_BASE_URL,
-    },
+    headers: _participantFormHeaders(cookies, url),
     body: formData.toString(),
     redirect: 'manual',
   })
@@ -1022,6 +1035,7 @@ export async function ssiSetMatchParticipantStatus(participantId, status, cookie
   })
   if (!resp.ok) throw new Error(`Participant edit page HTTP ${resp.status}`)
   const html = await resp.text()
+  cookies = _participantResponseCookies(cookies, resp)
 
   // 2. Extract the form content
   const formMatch = html.match(/<form[^>]*method="post"[^>]*>([\s\S]*?)<\/form>/i)
@@ -1038,12 +1052,7 @@ export async function ssiSetMatchParticipantStatus(participantId, status, cookie
   // 5. POST the edit form
   const editResp = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Cookie': formatCookies(cookies),
-      'Referer': url,
-      'Origin': SSI_BASE_URL,
-    },
+    headers: _participantFormHeaders(cookies, url),
     body: formData.toString(),
     redirect: 'manual',
   })
@@ -1266,6 +1275,7 @@ export async function ssiRemoveFromMatchManagement(groupId, eventContentType, ev
   // Step 1: Try to get SSI user ID via participant-search-and-add
   // This works when user is still a participant (in trainer squad)
   const searchUrl = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/participant-search-and-add/`
+  cookies = await _participantSearchCookies(searchUrl, cookies)
   const searchData = new URLSearchParams()
   searchData.append('last_name', '')
   searchData.append('first_name', '')
@@ -1275,15 +1285,11 @@ export async function ssiRemoveFromMatchManagement(groupId, eventContentType, ev
   if (debug) console.log(`[mgmt-remove] POST search email=${email} to ${searchUrl}`)
   const searchResp = await fetch(searchUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Cookie': formatCookies(cookies),
-      'Referer': searchUrl,
-      'Origin': SSI_BASE_URL,
-    },
+    headers: _participantFormHeaders(cookies, searchUrl),
     body: searchData.toString(),
     redirect: 'follow',
   })
+  cookies = _participantResponseCookies(cookies, searchResp)
 
   // If participant search succeeds, extract user ID from the result
   if (searchResp.ok) {
@@ -1395,6 +1401,7 @@ export async function ssiRemoveFromMatchManagement(groupId, eventContentType, ev
 export async function ssiRegisterToTrainerSquad(eventContentType, eventId, email, trainerSquadName, cookies) {
   const debug = log.isEnabled('debug')
   const pageUrl = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/participant-search-and-add/`
+  cookies = await _participantSearchCookies(pageUrl, cookies)
 
   // Step 1: Search by email
   const searchData = new URLSearchParams()
@@ -1406,12 +1413,7 @@ export async function ssiRegisterToTrainerSquad(eventContentType, eventId, email
   if (debug) console.log(`[trainer-squad] POST search email=${email} to ${pageUrl}`)
   const searchResp = await fetch(pageUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Cookie': formatCookies(cookies),
-      'Referer': pageUrl,
-      'Origin': SSI_BASE_URL,
-    },
+    headers: _participantFormHeaders(cookies, pageUrl),
     body: searchData.toString(),
     redirect: 'manual',
   })
@@ -1424,6 +1426,7 @@ export async function ssiRegisterToTrainerSquad(eventContentType, eventId, email
   }
 
   const searchHtml = await searchResp.text()
+  cookies = _participantResponseCookies(cookies, searchResp)
 
   if (searchHtml.includes('no results') || searchHtml.includes('gave no results')) {
     return { success: false, message: 'User not found in SSI by email' }
@@ -1452,6 +1455,7 @@ export async function ssiRegisterToTrainerSquad(eventContentType, eventId, email
   })
   if (!regResp.ok) throw new Error(`Register page HTTP ${regResp.status}`)
   const regHtml = await regResp.text()
+  cookies = _participantResponseCookies(cookies, regResp)
 
   // Step 3: Find and fill confirmation form
   const formMatch = regHtml.match(/<form[^>]*method="post"[^>]*>([\s\S]*?)<\/form>/i)
@@ -1521,12 +1525,7 @@ export async function ssiRegisterToTrainerSquad(eventContentType, eventId, email
 
   const confirmResp = await fetch(fullAction, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Cookie': formatCookies(cookies),
-      'Referer': fullRegUrl,
-      'Origin': SSI_BASE_URL,
-    },
+    headers: _participantFormHeaders(cookies, fullRegUrl),
     body: formData.toString(),
     redirect: 'manual',
   })
