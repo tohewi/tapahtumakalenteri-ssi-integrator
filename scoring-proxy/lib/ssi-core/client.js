@@ -1275,6 +1275,7 @@ export async function ssiRemoveFromMatchManagement(groupId, eventContentType, ev
   // Step 1: Try to get SSI user ID via participant-search-and-add
   // This works when user is still a participant (in trainer squad)
   const searchUrl = `${SSI_BASE_URL}/event/${eventContentType}/${eventId}/participant-search-and-add/`
+  cookies = await _participantSearchCookies(searchUrl, cookies)
   const searchData = new URLSearchParams()
   searchData.append('last_name', '')
   searchData.append('first_name', '')
@@ -1284,15 +1285,11 @@ export async function ssiRemoveFromMatchManagement(groupId, eventContentType, ev
   if (debug) console.log(`[mgmt-remove] POST search email=${email} to ${searchUrl}`)
   const searchResp = await fetch(searchUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Cookie': formatCookies(cookies),
-      'Referer': searchUrl,
-      'Origin': SSI_BASE_URL,
-    },
+    headers: _participantFormHeaders(cookies, searchUrl),
     body: searchData.toString(),
     redirect: 'follow',
   })
+  cookies = _participantResponseCookies(cookies, searchResp)
 
   // If participant search succeeds, extract user ID from the result
   if (searchResp.ok) {

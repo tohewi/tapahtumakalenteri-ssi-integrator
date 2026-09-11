@@ -6,6 +6,7 @@ import {
   ssiSetMatchParticipantStatus,
   ssiRegisterToTrainerSquad,
 } from '../lib/ssi-core/participants.js'
+import { ssiRemoveFromMatchManagement } from '../lib/ssi-core/management.js'
 
 const formHtml = readFileSync(new URL('./fixtures/ssi-html/participant-csrf-form.html', import.meta.url), 'utf8')
 const searchHtml = '<table><tr><td>Test Shooter</td><td><a href="/event/136/999/register-participant/42/">Register</a></td></tr></table>'
@@ -35,6 +36,28 @@ afterEach(() => {
 })
 
 describe('SSI participant CSRF compatibility', () => {
+  it.each([true, false])('protects staff-removal participant lookup (existing CSRF cookie: %s)', async hasToken => {
+    const cookies = hasToken ? { ...sessionCookies } : { sessionid: 'test-session' }
+    const original = { ...cookies }
+    const fetchMock = vi.fn()
+    if (!hasToken) fetchMock.mockResolvedValueOnce(response(200, formHtml, ['csrftoken=login-token; Path=/']))
+    fetchMock
+      .mockResolvedValueOnce(response(200, searchHtml, ['csrftoken=search-token; Path=/']))
+      .mockResolvedValueOnce(response(200))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(ssiRemoveFromMatchManagement(10, 91, 999, 'test@example.com', cookies))
+      .resolves.toMatchObject({ success: true, usedFallback: false })
+    const lookup = fetchMock.mock.calls[hasToken ? 0 : 1][1]
+    expect(lookup.method).toBe('POST')
+    expect(lookup.headers['X-CSRFToken']).toBe('login-token')
+    expect(lookup.headers.Cookie).toContain('csrftoken=login-token')
+    const [removeUrl, removeOptions] = fetchMock.mock.calls.at(-1)
+    expect(removeUrl).toContain('/remove-invitation-role/42/')
+    expect(removeOptions.headers.Cookie).toContain('csrftoken=search-token')
+    expect(cookies).toEqual(original)
+  })
+
   it.each([136, 91])('sends the login CSRF cookie as a header for content type %s', async contentType => {
     const fetchMock = vi.fn(async (url, options) => {
       if (options.headers['X-CSRFToken'] !== 'login-token') return response(403)
