@@ -6,11 +6,20 @@ import LoginScreen from './LoginScreen'
 import { AppHeader, ErrorBanner, Spinner, CupList } from './shared'
 import { ActionButton, ShooterActions, SquadPickerSheet, SectionHeader, SquadCard } from './manage'
 import DeviceTokens from './DeviceTokens'
+import ManageSessionGate from './manage/ManageSessionGate'
 import fi from '../i18n'
 
 const LS_MANAGE_STATE = 'ssi_manage_state'
 
 export default function ManagePage() {
+  return (
+    <ManageSessionGate>
+      {authenticated => <ManagePageContent initialAuthenticated={authenticated} />}
+    </ManageSessionGate>
+  )
+}
+
+function ManagePageContent({ initialAuthenticated }) {
   // Cup selection
   const [cups, setCups] = useState([])
   const [selectedCup, setSelectedCup] = useState(null)
@@ -32,6 +41,7 @@ export default function ManagePage() {
     handleLogin, handleLogout, withSessionCheck,
   } = useAuthenticatedPage({
     scope: 'manage',
+    initialAuthenticated,
     credsKey: 'ssi_credentials_manage',
     stateKey: LS_MANAGE_STATE,
     defaultView: 'cups',

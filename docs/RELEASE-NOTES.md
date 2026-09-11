@@ -5,6 +5,42 @@
 
 ---
 
+## Release 7.4.1 — Manage Refresh Session Restoration (2026-09-11)
+
+**Requirements:** AUTH-UX1–AUTH-UX3 — Manage follow-up Implemented/Ready; not yet deployed.
+
+### Overview
+
+Browser refresh on Manage previously reset its local authentication state to login without checking the still-valid server session. Manage now verifies the existing session before choosing the Cup list or explicit login.
+
+### New Features
+
+- Manage-only session-check loading screen and retry action for temporary verification failures.
+
+### Bug Fixes
+
+- Restore authenticated `manage` sessions to a freshly loaded Cup list without creating another session or briefly showing login.
+- Require explicit login for missing sessions and non-Manage scopes; do not reuse a scoring session as a Manage session.
+- Keep network, HTTP, and malformed-response failures in a retryable state rather than incorrectly declaring logout.
+- Cancel in-flight checks on unmount and preserve explicit login, logout, and subsequent session-expiry behavior.
+
+### Requirements Met
+
+- **AUTH-UX1:** Manage checks the existing session on entry/refresh.
+- **AUTH-UX2:** Manage waits behind a loading screen until verification finishes.
+- **AUTH-UX3:** Refresh does not call login or logout.
+- Scoring login/session code, shared auth API helpers, remember-me behavior, and backend session handling are unchanged. Other shared-hook consumers retain their existing default behavior.
+
+### Test Status
+
+- Frontend: **212 tests passing**, including **19 new Manage regressions** and unchanged scoring reload/tablet persistence tests.
+- Before the fix: **15 of the 19 new regressions failed**.
+- Frontend production build and targeted lint: **passed**. Existing mixed static/dynamic API import build warning remains.
+- Diff boundary check: no changes to mobile/tablet scoring entry points, auth API helpers, LoginScreen, remember-me hook, or backend code.
+- Live browser/deployment verification: **pending**.
+
+---
+
 ## Release 7.9.2 — SSI CSRF Compatibility Hotfix (2026-09-11)
 
 **Requirements:** GQL-HF7 — Implemented/Ready; not yet deployed.
