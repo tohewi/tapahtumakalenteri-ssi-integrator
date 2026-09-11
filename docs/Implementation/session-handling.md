@@ -295,7 +295,8 @@ Required constraints:
 - It only reads existing session state from `/api/auth/status` and restores local UI state.
 - Scope must match the active domain.
 - While bootstrap is in progress, render a neutral **restoring/loading** screen (not login).
-- If status check fails or scope does not match, transition to login.
+- For the scoring implementation illustrated above, a failed status check or scope mismatch transitions to login. This scoring behavior is unchanged.
+- **Manage-only exception (AUTH-UX1–AUTH-UX3 follow-up, PR #167):** `ManageSessionGate` calls `/api/v1/auth/status` and restores only `authenticated: true` with `scope: 'manage'`. A missing session, HTTP 401, or another/missing scope shows explicit login. Network errors, other non-success HTTP responses, invalid JSON, and malformed status payloads instead show a retryable verification error; they do not imply logout. A valid session opens a freshly loaded Cup list, not a saved overview without data. The check is cancelled on unmount and never calls login or logout. Existing reporting behavior and all backend session handling remain unchanged.
 
 Scope mapping by protected domain:
 

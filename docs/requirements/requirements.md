@@ -364,7 +364,7 @@ Patch release focused on authentication UX consistency across protected feature 
 
 ### Manage-only refresh follow-up (AUTH-UX1–AUTH-UX3)
 
-Status: ✅ Implemented/Ready (2026-09-11; local verification, not deployed).
+Status: ✅ Implemented/Ready (2026-09-11; local verification and user-confirmed preview testing; deployment tracked in PR #167).
 
 - Manage checks `/api/v1/auth/status` with the existing cookie before rendering either the login form or management content. Only an authenticated `manage` scope resumes to the Cup list, which reloads fresh data rather than rendering a saved overview without data.
 - Missing sessions, HTTP 401, and other scopes require explicit Manage login. Network errors, non-success responses, and malformed status responses show a retryable error instead of treating the user as logged out.
