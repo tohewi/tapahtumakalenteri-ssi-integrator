@@ -362,6 +362,16 @@ Patch release focused on authentication UX consistency across protected feature 
 | AUTH-UX4 | **Architecture baseline update**: Session handling documentation must define Auth Bootstrap + Auth Gate as the default pattern for all protected domains (`scoring`, `manage`, `reporting`) | ✅ Implemented |
 | AUTH-UX5 | **Authentication UAT coverage**: Add a concise UAT test plan covering login, reload with/without session, expiry, scope mismatch, restore-after-login, and logout persistence | ✅ Implemented |
 
+### Manage-only refresh follow-up (AUTH-UX1–AUTH-UX3)
+
+Status: ✅ Implemented/Ready (2026-09-11; local verification and user-confirmed preview testing; deployment tracked in PR #167).
+
+- Manage checks `/api/v1/auth/status` with the existing cookie before rendering either the login form or management content. Only an authenticated `manage` scope resumes to the Cup list, which reloads fresh data rather than rendering a saved overview without data.
+- Missing sessions, HTTP 401, and other scopes require explicit Manage login. Network errors, non-success responses, and malformed status responses show a retryable error instead of treating the user as logged out.
+- Refresh never calls login or logout. In-flight checks are cancelled when leaving Manage, and existing explicit login, logout, and session-expiry behavior is retained.
+- Scope boundary: mobile/tablet scoring login and session code, `api.js`, `useRememberMe`, `LoginScreen`, and all backend session/auth code are unchanged. The shared page hook only adds an optional initial authenticated state, defaulting to its existing logged-out behavior; only Manage supplies it after server verification.
+- Verification: 19 new Manage regressions (15 failed before the fix); all 212 frontend tests pass, including unchanged scoring reload and tablet persistence tests. Frontend build and targeted lint pass.
+
 ## Release 7.2 — Kupittaa Cup Management
 
 | # | Requirement | Status |

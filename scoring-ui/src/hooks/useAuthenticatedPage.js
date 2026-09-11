@@ -25,14 +25,15 @@ export function useAuthenticatedPage({
   credsKey,
   stateKey,
   defaultView = 'search',
+  initialAuthenticated = false,
   onLogout,
   onSessionExpired,
   restoreState,
 }) {
   const { savedCreds, handleRememberMe } = useRememberMe(credsKey)
 
-  const [authed, setAuthed] = useState(false)
-  const [view, setView] = useState('login')
+  const [authed, setAuthed] = useState(initialAuthenticated)
+  const [view, setView] = useState(initialAuthenticated ? defaultView : 'login')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null)
