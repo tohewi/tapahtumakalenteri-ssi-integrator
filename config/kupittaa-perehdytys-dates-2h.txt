@@ -1,0 +1,11 @@
+# Kupittaa perehdytys dates for Autumn 2026
+# Format: d.M.yyyy (one date per line)
+# Lines starting with # are comments
+# Lines starting with ! are skipped (already created)
+
+!5.9.2026
+26.9.2026
+17.10.2026
+7.11.2026
+28.11.2026
+19.12.2026

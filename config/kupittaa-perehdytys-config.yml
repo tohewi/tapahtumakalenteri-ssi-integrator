@@ -1,0 +1,248 @@
+# Kupittaa Cup Configuration
+# This file contains all configuration for creating Kupittaa RESUL CUP events
+# Secrets (SessionId, API keys) should be stored separately in config.yml
+
+# Event Management
+management:
+  groupId: "25874"  # Group that manages both Cup and Matches (use "xxx" for self-administered)
+  organizerId: "1215"  # TurRes Kupittaa (TurResKu)
+
+# Cup Settings
+cup:
+  nameTemplate: "Kupittaa Perehdytys CUP {displayDate}"  # Max 40 chars total
+  # Visibility options: pub=Public, lim=Limited, res=Restricted, csd=Closed, clb=Club members only
+  # Note: "res" (Restricted) may require manual approval even with registration="op"
+  visibility: "pub"  # Public - searchable and details for all (enables auto-approve)
+  status: "on"
+  results: "cmp"  # Results shown only to participants
+  registration: "op"  # Open registration
+  maxCompetitors: 5
+  region: "FIN"
+  scoringMode: "pts"  # Series-points is same as component-match points
+  matchRegistrationMode: "all"  # Auto-register to all component matches
+  matchCount: 3  # Number of matches in the Cup
+  timezone: "Europe/Helsinki"
+  currency: "EUR"
+  venue: "Kupittaan urheiluhalli, Tahkonkuja 5, 20520 TURKU"  # Location/venue
+  url: "https://turun-reservialiupseerit-turun-reservilaiset.reservilaisliitto.fi/toiminta/ammunta/reservilaisammunta/"
+  urlDisplay: "Lisätietoa"
+  
+  # Default times (Finnish format: hh.mm)
+  startTime: "12.00"
+  endTime: "14.00"
+  
+  # Registration starts one week before the Cup
+  registrationDaysBeforeEvent: 7
+  registrationStartTime: "00.00"
+  
+  # Categories and divisions
+  weaponGroups:
+    - "STD"  # Standard division
+  categories:
+    - "Open"  # Open category only
+  competenceClasses:
+    - "1"
+    - "2"
+    - "3"
+    - "D1"
+    - "D2"
+    - "D3"
+    - "J1"
+    - "J2"
+    - "J3"
+    - "VY"
+    - "VO"
+  
+  # Max 300 characters for description (short summary)
+  description: "Perehdytysvuoro Kupittaan reserviläisammuntaan. Ohjattu ammunta sovelletuilla SAL ja RESUL lajeilla."
+  
+  # Max 800 characters for information (Yksityiskohtaiset tiedot / Detailed information)
+  information: |
+    Ohjattu pienoispistooliammunta sovelletulla ampumaohjelmalla:
+    - Tarkkuus- ja pikaosio (SAL 25m urheilupistooli)
+    - Pistoolipika-osio (RESUL pistoolipika-ammunta)
+    - Laukausmäärä yhteensä: 50
+
+    Tarkkuusosa ammutaan kiinteään tauluun, pikaosat kääntyviin Olympia-tauluihin.
+
+    
+    Harjoitusmaksut:
+    - Ratamaksu, harjoitusase ja 50 kpl patruunat       15 €
+    
+    Maksuväline: MobilePay 24130
+
+    Lisätietoja: ampumajaosto(at)turunreservilaiset.fi
+# Match Settings (common to all matches)
+match:
+  nameTemplate: "Kupittaa perehdytys {displayDate} {matchSuffix}"
+  createUrl: "/nordic/create-resul-25-kuvio-pistol/"
+  visibility: "pub"  # Public - enables auto-approve
+  status: "on"
+  results: "org"
+  registration: "op"
+  maxCompetitors: 5
+  region: "FIN"
+  level: "tr"  # Training
+  verifyUsing: "xxx"  # No verification (alternatives: sgn=Signature, pin=PIN code)
+  timezone: "Europe/Helsinki"
+  currency: "EUR"
+  venue: "Kupittaan urheiluhalli, Tahkonkuja 5, 20520 TURKU"  # Location/venue for the match
+  # Note: Coordinates (lat/lng) must be added manually via SSI map UI - cannot be set programmatically
+  
+  # 25m Pistooli Kuvio specific fields
+  layouts: "6+SO"
+  precisionStrings: "6"
+  precisionShotsPerString: "5"
+  stringScoringFormat: "110X"
+  numberOfTeamMembers: "3"
+  resultFromTeamMembers: "3"
+  prematch: "no"
+  maxPrematchCompetitors: "0"
+  
+  # Categories and divisions (same as Cup)
+  weaponGroups:
+    - "STD"
+  categories:
+    - "Open"
+  competenceClasses:
+    - "1"
+    - "2"
+    - "3"
+    - "D1"
+    - "D2"
+    - "D3"
+    - "J1"
+    - "J2"
+    - "J3"
+    - "VY"
+    - "VO"
+
+# Match Types (three matches per Cup)
+# Each match has:
+#   - description: max 300 chars (short summary shown in listings)
+#   - information: max 800 chars (detailed info shown on event page)
+matchTypes:
+  - suffix: "Tarkkuus"
+    # Short description (max 300 chars)
+    description: "SAL 25m pistooli tarkkuusosa. Yksi koesarja ja kaksi kilpasarjaa. Taulut näkyvillä 5 min/sarja."
+    # Detailed information (max 800 chars)
+    information: |
+      SAL 25m pistooli (https://www.ampumaurheiluliitto.fi/pistooli/25m-pistooli/)
+
+      Tarkkuusosa
+      Ammutaan yksi koesarja (5 laukausta) ja kaksi kilpasarjaa (5 laukausta per sarja).
+      Sarjan aikana taulut näkyvillä 5 minuuttia.
+
+  - suffix: "Pika"
+    description: "SAL 25m pistooli pikaosa. Yksi koesarja ja kaksi kilpasarjaa. Taulut piilossa 7s, näkyvissä 3s."
+    information: |
+      SAL 25m pistooli (https://www.ampumaurheiluliitto.fi/pistooli/25m-pistooli/)
+
+      Pikaosa
+      Ammutaan yksi koesarja (5 laukausta) ja kaksi kilpasarjaa (5 laukausta per sarja).
+      Kutakin sarjan laukausta kohden taulut ovat piilossa 7 sekuntia ja näkyvissä 3 sekuntia.
+
+  - suffix: "Kuvio"
+    description: "Lyhennetty RESUL Pistoolipika. 20 kilpalaukausta: 1-2×5 sarjaa (10s, 8s, 6s)."
+    information: |
+      Lyhennetty RESUL Pistoolipika-ammunta (https://resul.fi/pistoolipika-ammunta/)
+
+      Pika-ammunta käsittää 20 kilpalaukausta:
+
+      2×5 laukauksen sarja, aikaa 10 s/sarja
+      1×5 laukauksen sarja, aikaa 8 s/sarja
+      1×5 laukauksen sarja, aikaa 6 s/sarja
+
+# Tapahtumakalenteri (WordPress Event Calendar) Settings
+# This is SEPARATE content from SSI - used for the Turun Reservilaiset website calendar
+tapahtumakalenteri:
+  # WordPress site URL
+  baseUri: "https://turun-reservialiupseerit-turun-reservilaiset.reservilaisliitto.fi"
+  
+  # Event title template (date will be substituted)
+  titleTemplate: "Kupittaan Reserviläisammunnan perehdytys {displayDate}"
+  
+  # Location
+  location: "Kupittaan urheiluhallin ampumarata"
+  mapLink: "https://maps.app.goo.gl/SHDoPm8ZMFjhYGBk9"
+  
+  # Event format taxonomy IDs (checkboxes for activity type)
+  # These are WordPress taxonomy term IDs for the 'eventformat' taxonomy
+  eventFormatTaxonomyIds:
+    - 50  # 1.6 Pistooli
+    - 52  # 2 Prosenttiammunta
+  
+  # Short description (ingressi) - max ~300 chars
+  shortDescription: |
+    Kupittaan reserviläisammunnan perehdytys viidelle uudelle ampujalle.
+  
+  # Full content (HTML) - {ssiCupLink} will be replaced with the SSI Cup link
+  content: |
+    Perehdytyksessä käydään läpi toiminta lauantain reserviläisammunnassa.
+    <b>Ilmoittautuminen</b>
+    {ssiCupLink}
+
+    Tapaaminen: Ampumaradan aula.
+    <h3>Varusteet</h3>
+    <ol>
+      <li>Osallistumisen edellytykset
+        <ol>
+          <li>Voimassa oleva jäsenyys (TurRes, TRU, TSA)</li>
+          <li>Vakuutus (SAL, Toimintaturva, RULplus)</li>
+        </ol>
+      </li>
+      <li>Varusteet
+        <ol>
+          <li>kuulosuojaimet ja suojalasit</li>
+          <li>mustat ja valkoiset paikkatarrat</li>
+        </ol>
+      </li>
+    </ol>
+    <h3>Koulutuksen sisältö</h3>
+    <ol>
+      <li>Ilmoittautuminen
+        <ol>
+          <li>Tapahtumakalenteri, SSI-ilmoittautuminen ja squadit</li>
+        </ol>
+      </li>
+      <li>Ohjelma
+        <ol>
+          <li>Valmistelu- ja purkutehtävät</li>
+          <li>Ammunnan kulku</li>
+        </ol>
+      </li>
+      <li>Turvamääräykset
+        <ol>
+          <li>turvallinen aseen käsittely</li>
+          <li>harjoitusase ja patruunat</li>
+        </ol>
+      </li>
+      <li>Käytännön harjoitus
+        <ol>
+          <li>Radan valmistelu</li>
+          <li>Harjoitusaseen ja patruunoiden kuittaus</li>
+          <li>Aseisiin tutustuminen</li>
+          <li>Ammunta
+            <ol>
+              <li>SAL 25m pistooli-lajin tarkkuusosa sovellettuna osana TSA:n avointa ampumavuoroa</li>
+              <li>10 kilpasarjaa (tarkkuusosa) (50 lauk)</li>
+            </ol>
+          </li>
+        </ol>
+      </li>
+      <li>Siivoaminen, Taulujen paikkaus</li>
+      <li>Päiväkirjamerkinnät</li>
+    </ol>
+    Lisätietoja: <a href="mailto:ampumajaosto@turunreservilaiset.fi">ampumajaosto@turunreservilaiset.fi</a>
+    <h3>Maksu</h3>
+    <ul>
+      <li>Harjoitusmaksu sisältäen harjoitusaseen, ratamaksun ja 50 kpl patruunat 15 €</li>
+    </ul>
+    Maksuväline: <strong>MobilePay 24130</strong> ("TUTUSTUMIS")
+# Squad Configuration
+squads:
+  # URL format: /nordic/match/{eventId}/add-squads/ (uses EventId only, not TypeId)
+  addSquadsUrlTemplate: "/nordic/match/{eventId}/add-squads/"
+  definitions:
+    - name: "Laina-ase (iso puoli, oikea)"
+      maxShooters: 5
