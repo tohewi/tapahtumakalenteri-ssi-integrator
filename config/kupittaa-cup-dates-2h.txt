@@ -1,0 +1,18 @@
+# Kupittaa Cup dates for Spring 2026
+# Format: d.M.yyyy (one date per line)
+# Lines starting with # are comments
+# Lines starting with ! are skipped (already created)
+
+!5.9.2026 paikallaan
+!12.9.2026 paikallaan
+!19.9.2026 Ei valvojaa
+!26.9.2026
+!3.10.2026
+!10.10.2026
+!17.10.2026
+!7.11.2026
+!14.11.2026
+!21.11.2026
+!28.11.2026
+!5.12.2026
+!19.12.2026
