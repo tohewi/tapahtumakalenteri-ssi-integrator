@@ -132,8 +132,8 @@
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Extracted staffing-service.js, archived orphaned prototype files to archive/staffing-prototype/, and added unit tests in staffing.test.js."
     },
     {
       "id": "US-009",

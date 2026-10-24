@@ -52,3 +52,9 @@
 - Extracted registration input validation, competitor count calculation, captcha creation, and cup/squad payload formatting from `scoring-proxy/routes/registration.js` into `scoring-proxy/lib/services/registration-service.js`.
 - Reduced `routes/registration.js` from 487 lines to 305 lines and added unit tests in `scoring-proxy/test/registration-service.test.js`.
 ---
+
+## 2026-10-24 15:22 - US-008 (R76-ARCH3 / R76-TD3)
+- Extracted staffing business logic and SSI sync/signup/resign orchestration into `scoring-proxy/lib/services/staffing-service.js`, reducing `routes/staffing.js` from 489 lines to 112 lines.
+- Archived orphaned prototype files (`StaffStatusBoard.jsx`, `StaffSignupPanel.jsx`, `cron.js`, `notifier.js`, `role-assigner.js`, `squad-optimizer.js`, `IMMEDIATE-DEVELOPMENT-NEEDS.md`) to `archive/staffing-prototype/`.
+- Added unit tests in `scoring-proxy/test/staffing.test.js` and marked `ARCH3`, `R76-ARCH3`, and `R76-TD3` as `✅ Implemented`.
+---

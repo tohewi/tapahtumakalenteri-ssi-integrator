@@ -62,5 +62,17 @@
       }
     ],
     "contentType": 22
+  },
+  {
+    "eventId": "test-evt-999",
+    "eventName": "SRA Oldies Test",
+    "trainingType": "oldies",
+    "eventDate": "2027-06-01T10:00:00Z",
+    "shooterCount": 12,
+    "maxTrainers": 6,
+    "contentType": 22,
+    "leadInstructor": null,
+    "equipmentManager": null,
+    "staff": []
   }
 ]
