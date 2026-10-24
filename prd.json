@@ -279,8 +279,8 @@
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Replaced ▲/▼ buttons with a 44x44px drag handle supporting mouse/touch drag-and-drop and keyboard reordering in TabletShooterSidebar."
     },
     {
       "id": "US-018",

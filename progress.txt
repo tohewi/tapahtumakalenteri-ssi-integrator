@@ -102,3 +102,8 @@
 - Added SSI password field to `scoring-ui/src/components/RegisterPage.jsx` and regression test in `scoring-proxy/test/registration.test.js`.
 - Marked `AUTH10` and `R76-AUTH10` as `✅ Implemented`. All 16 stories in `prd.json` are now complete (`passes: true`).
 ---
+
+## 2026-10-24 18:05 - US-017 (TS13)
+- Replaced small `▲` / `▼` buttons in `TabletShooterSidebar` (`scoring-ui/src/components/TabletScoringPanels.jsx`) with a dedicated 44×44px grip drag handle supporting HTML5 drag-and-drop, touch drag-and-drop, and keyboard (`ArrowUp`/`ArrowDown`) reordering isolated from row selection.
+- Added component tests in `scoring-ui/src/test/components.test.jsx` and marked `TS13` as `✅ Implemented`.
+---

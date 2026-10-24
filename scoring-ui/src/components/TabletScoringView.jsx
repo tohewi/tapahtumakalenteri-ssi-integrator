@@ -295,15 +295,20 @@ export default function TabletScoringView({
     log.debug(`[tablet] Deleted score: ${zone} from string ${seriesIdx + 1}`)
   }
 
-  // Accessible reorder: move shooter up/down in list
-  const handleMoveShooter = (shooter, direction) => {
-    const idx = squad.shooters.findIndex(s => s.id === shooter.id)
-    if (idx < 0) return
-    const targetIdx = idx + direction
-    if (targetIdx < 0 || targetIdx >= squad.shooters.length) return
+  // Reorder shooter from drag-and-drop or keyboard handle
+  const handleReorderShooter = (fromIdx, toIdx) => {
+    if (
+      fromIdx < 0 ||
+      toIdx < 0 ||
+      fromIdx >= squad.shooters.length ||
+      toIdx >= squad.shooters.length ||
+      fromIdx === toIdx
+    ) {
+      return
+    }
     const newShooters = [...squad.shooters]
-    newShooters.splice(idx, 1)
-    newShooters.splice(targetIdx, 0, shooter)
+    const [moved] = newShooters.splice(fromIdx, 1)
+    newShooters.splice(toIdx, 0, moved)
     onShootersReorder(newShooters)
   }
 
@@ -364,7 +369,7 @@ export default function TabletScoringView({
           allScores={allScores}
           totalShotsInMatch={totalShotsInMatch}
           handleShooterSelect={handleShooterSelect}
-          handleMoveShooter={handleMoveShooter}
+          handleReorderShooter={handleReorderShooter}
         />
 
         {/* Center: Score track */}

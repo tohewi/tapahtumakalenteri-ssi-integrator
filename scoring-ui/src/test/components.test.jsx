@@ -10,6 +10,7 @@ import { CupList } from '../components/shared'
 import SquadPickerSheet from '../components/manage/SquadPickerSheet'
 import HomePage from '../components/HomePage'
 import LegalDocumentPage from '../components/LegalDocumentPage'
+import { TabletShooterSidebar } from '../components/TabletScoringPanels'
 
 // ============================================================
 // LoginScreen
@@ -327,5 +328,66 @@ describe('LegalDocumentPage & LegalFooterLinks', () => {
     rerender(<LegalDocumentPage type="terms" />)
     expect(screen.getByText(/Palvelun käyttö/i)).toBeInTheDocument()
     expect(screen.getByText(/Käyttäjän vastuu/i)).toBeInTheDocument()
+  })
+})
+
+// ============================================================
+// TabletShooterSidebar — Drag-and-Drop Reordering (TS13 / US-017)
+// ============================================================
+
+describe('TabletShooterSidebar drag-and-drop reordering (TS13)', () => {
+  const sampleSquad = {
+    name: 'Squad 1',
+    shooters: [
+      { id: 's1', number: 1, name: 'Matti Meikäläinen', division: 'RESUL' },
+      { id: 's2', number: 2, name: 'Teppo Testaaja', division: 'RESUL' },
+      { id: 's3', number: 3, name: 'Liisa Laukaus', division: 'RESUL' },
+    ],
+  }
+
+  it('removes tiny ▲/▼ arrows and selects shooter on row tap without reordering', async () => {
+    const onSelect = vi.fn()
+    const onReorder = vi.fn()
+    render(
+      <TabletShooterSidebar
+        squad={sampleSquad}
+        selectedShooter={sampleSquad.shooters[0]}
+        allScores={{}}
+        totalShotsInMatch={30}
+        handleShooterSelect={onSelect}
+        handleReorderShooter={onReorder}
+      />
+    )
+
+    expect(screen.queryByText('▲')).toBeNull()
+    expect(screen.queryByText('▼')).toBeNull()
+
+    await userEvent.click(screen.getByText('2. Teppo Testaaja'))
+    expect(onSelect).toHaveBeenCalledWith(sampleSquad.shooters[1])
+    expect(onReorder).not.toHaveBeenCalled()
+  })
+
+  it('reorders shooters via drag-and-drop handle and keyboard arrows without selecting shooter', async () => {
+    const onSelect = vi.fn()
+    const onReorder = vi.fn()
+    render(
+      <TabletShooterSidebar
+        squad={sampleSquad}
+        selectedShooter={sampleSquad.shooters[0]}
+        allScores={{}}
+        totalShotsInMatch={30}
+        handleShooterSelect={onSelect}
+        handleReorderShooter={onReorder}
+      />
+    )
+
+    const handle1 = screen.getByTestId('drag-handle-s1')
+    await userEvent.click(handle1)
+    expect(onSelect).not.toHaveBeenCalled()
+
+    handle1.focus()
+    await userEvent.keyboard('{ArrowDown}')
+    expect(onReorder).toHaveBeenCalledWith(0, 1)
+    expect(onSelect).not.toHaveBeenCalled()
   })
 })

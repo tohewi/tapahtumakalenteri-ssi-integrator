@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import t from '../i18n'
 import { SCORE_ZONES, getTotalHits, getTotalPoints } from '../lib/scoring-helpers'
 
@@ -99,8 +100,55 @@ export function TabletShooterSidebar({
   allScores,
   totalShotsInMatch,
   handleShooterSelect,
-  handleMoveShooter,
+  handleReorderShooter,
 }) {
+  const [armedIdx, setArmedIdx] = useState(null)
+  const [dragIdx, setDragIdx] = useState(null)
+  const [overIdx, setOverIdx] = useState(null)
+
+  const resetDragState = () => {
+    setArmedIdx(null)
+    setDragIdx(null)
+    setOverIdx(null)
+  }
+
+  const commitDrop = (fromIdx, toIdx) => {
+    if (
+      fromIdx !== null &&
+      toIdx !== null &&
+      fromIdx !== toIdx &&
+      typeof handleReorderShooter === 'function'
+    ) {
+      handleReorderShooter(fromIdx, toIdx)
+    }
+    resetDragState()
+  }
+
+  const handleHandleKeyDown = (e, shooterIdx) => {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      e.stopPropagation()
+      if (shooterIdx > 0) handleReorderShooter?.(shooterIdx, shooterIdx - 1)
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      e.stopPropagation()
+      if (shooterIdx < squad.shooters.length - 1) handleReorderShooter?.(shooterIdx, shooterIdx + 1)
+    }
+  }
+
+  const handlePointerMove = (e) => {
+    if (dragIdx === null) return
+    if (typeof document.elementFromPoint !== 'function') return
+    const el = document.elementFromPoint(e.clientX, e.clientY)
+    const rowEl = el?.closest?.('[data-shooter-idx]')
+    if (rowEl) {
+      const targetIdx = Number(rowEl.getAttribute('data-shooter-idx'))
+      if (Number.isInteger(targetIdx) && targetIdx !== overIdx) {
+        setOverIdx(targetIdx)
+      }
+    }
+  }
+
   return (
     <div className="w-full lg:w-56 xl:w-64 bg-white border-b lg:border-b-0 lg:border-r border-gray-200 flex-shrink-0 flex flex-col overflow-hidden">
       <div className="p-2 border-b border-gray-200 flex-shrink-0">
@@ -110,6 +158,8 @@ export function TabletShooterSidebar({
       <div role="listbox" aria-label={t.selectShooter} className="divide-y divide-gray-100 overflow-y-auto flex-1">
         {squad.shooters.map((shooter, shooterIdx) => {
           const isSelected = selectedShooter?.id === shooter.id
+          const isDragging = dragIdx === shooterIdx
+          const isDropTarget = overIdx === shooterIdx && dragIdx !== null && dragIdx !== shooterIdx
           const shooterScores = allScores[shooter.id]
           const shooterShots = shooterScores ? getTotalHits(shooterScores) : 0
           const shooterPoints = shooterScores ? getTotalPoints(shooterScores) : 0
@@ -117,33 +167,68 @@ export function TabletShooterSidebar({
           return (
             <div
               key={shooter.id}
+              data-shooter-idx={shooterIdx}
               role="option"
               aria-selected={isSelected}
               aria-label={`${shooter.number}. ${shooter.name}, ${shooterPoints} ${t.pts}, ${shooterShots}/${totalShotsInMatch}`}
               tabIndex={0}
+              draggable={armedIdx === shooterIdx}
+              onDragStart={(e) => {
+                if (armedIdx !== shooterIdx) {
+                  e.preventDefault()
+                  return
+                }
+                setDragIdx(shooterIdx)
+                setOverIdx(shooterIdx)
+                e.dataTransfer?.setData?.('text/plain', String(shooterIdx))
+              }}
+              onDragOver={(e) => {
+                if (dragIdx === null) return
+                e.preventDefault()
+                if (overIdx !== shooterIdx) setOverIdx(shooterIdx)
+              }}
+              onDrop={(e) => {
+                e.preventDefault()
+                const fromIdx = dragIdx ?? Number(e.dataTransfer?.getData?.('text/plain'))
+                if (Number.isInteger(fromIdx)) {
+                  commitDrop(fromIdx, shooterIdx)
+                } else {
+                  resetDragState()
+                }
+              }}
+              onDragEnd={resetDragState}
               onClick={() => handleShooterSelect(shooter)}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleShooterSelect(shooter) } }}
-              className={`p-2 cursor-pointer transition-colors ${
+              className={`p-1.5 cursor-pointer transition-colors ${
                 isSelected
                   ? 'bg-blue-50 border-l-4 border-blue-600'
                   : 'hover:bg-gray-50 border-l-4 border-transparent'
-              }`}
+              } ${isDragging ? 'opacity-50' : ''} ${isDropTarget ? 'ring-2 ring-inset ring-blue-500 bg-blue-50/70' : ''}`}
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    aria-label={`Move ${shooter.name} up`}
-                    disabled={shooterIdx === 0}
-                    onClick={(e) => { e.stopPropagation(); handleMoveShooter(shooter, -1) }}
-                    className="text-gray-400 hover:text-gray-600 disabled:opacity-20 text-xs p-0.5"
-                  >▲</button>
-                  <button
-                    aria-label={`Move ${shooter.name} down`}
-                    disabled={shooterIdx === squad.shooters.length - 1}
-                    onClick={(e) => { e.stopPropagation(); handleMoveShooter(shooter, 1) }}
-                    className="text-gray-400 hover:text-gray-600 disabled:opacity-20 text-xs p-0.5"
-                  >▼</button>
-                </div>
+                <button
+                  type="button"
+                  data-testid={`drag-handle-${shooter.id}`}
+                  aria-label={`Reorder ${shooter.name}`}
+                  title="Vedä järjestääksesi / Drag to reorder"
+                  onMouseDown={(e) => { e.stopPropagation(); setArmedIdx(shooterIdx) }}
+                  onMouseUp={(e) => { e.stopPropagation(); if (dragIdx === null) setArmedIdx(null) }}
+                  onTouchStart={(e) => { e.stopPropagation(); setArmedIdx(shooterIdx); setDragIdx(shooterIdx); setOverIdx(shooterIdx) }}
+                  onTouchMove={handlePointerMove}
+                  onTouchEnd={(e) => { e.stopPropagation(); commitDrop(dragIdx, overIdx) }}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => handleHandleKeyDown(e, shooterIdx)}
+                  className="w-11 h-11 flex items-center justify-center text-gray-400 hover:text-gray-600 active:text-blue-600 cursor-grab active:cursor-grabbing touch-none select-none shrink-0 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <circle cx="5" cy="3.5" r="1.3" />
+                    <circle cx="11" cy="3.5" r="1.3" />
+                    <circle cx="5" cy="8" r="1.3" />
+                    <circle cx="11" cy="8" r="1.3" />
+                    <circle cx="5" cy="12.5" r="1.3" />
+                    <circle cx="11" cy="12.5" r="1.3" />
+                  </svg>
+                </button>
                 <div className="flex-1 min-w-0 ml-1">
                   <div className={`text-xs font-medium truncate ${
                     isSelected ? 'text-blue-900' : 'text-gray-900'
@@ -152,7 +237,7 @@ export function TabletShooterSidebar({
                   </div>
                   <div className="text-xs text-gray-500 truncate">{shooter.division}</div>
                 </div>
-                <div className="ml-2 text-right">
+                <div className="ml-2 text-right pr-1">
                   <div className={`text-sm font-bold ${
                     isSelected ? 'text-blue-600' : 'text-gray-700'
                   }`}>
