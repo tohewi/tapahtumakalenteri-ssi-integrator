@@ -50,8 +50,8 @@
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Extracted http-helpers.js and graphql.js implementations from client.js."
     },
     {
       "id": "US-004",
