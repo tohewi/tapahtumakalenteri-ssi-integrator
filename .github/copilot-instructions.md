@@ -268,6 +268,7 @@ $values = [regex]::Matches($formPage.Content, '<input[^>]+name="weapon_groups"[^
 
 ### Common pitfalls
 
+- **`SquadInterface` requires concrete inline fragments (`... on NordicSquadNode`)** — In SSI's GraphQL schema, `match.squads` returns the abstract `SquadInterface` type, which only exposes `id`, `number`, and `comment` directly. Querying `competitors` or `max_competitors` directly on `squads { ... }` fails at runtime with `GraphQL Error: Cannot query field 'competitors' on type 'SquadInterface'`. Always wrap `max_competitors` and `competitors` in `... on NordicSquadNode { max_competitors competitors { ... } }` (or the discipline-specific squad node such as `IpscSquadNode` / `GenericSquadNode`).
 - **`count` not `match_count`** — the cup match count field is `count`
 - **`reg_start_date`/`reg_start_time`** — registration dates use `reg_start_*` prefix, not `registration_starts_*`
 - **Array fields** (`weapon_groups`, `categories`, `competence_classes`) must be present with valid enum values scraped from the form

@@ -17,6 +17,7 @@ The following GraphQL operations are **fully functional**:
 - `Get-SSIMe` (whoami) - Returns authenticated user info
 - `events(search: ...)` query - Search and read events
 - `event(content_type, id)` query - Read single event with full details
+  - **Important schema rule for `squads`:** `match.squads` returns `SquadInterface` (which only exposes `id`, `number`, `comment`). Selecting `competitors` or `max_competitors` directly on `squads` throws `GraphQL Error: Cannot query field 'competitors' on type 'SquadInterface'`. Always use an inline fragment such as `... on NordicSquadNode { max_competitors competitors { ... } }`.
 - `get_abstract_event` query - Returns form choices for rule/sub_rule/serie_type
 - Schema introspection - Full mutation/query schema is accessible
 
