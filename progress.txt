@@ -112,3 +112,7 @@
 - Created `scoring-proxy/test/e2e/mock-ssi-server.js` and `start-e2e-servers.js` serving deterministic GraphQL and HTML scraping fixtures at `SSI_BASE_URL`.
 - Configured `scoring-ui/playwright.config.js` (`mobile` 390×844 and `tablet` 1024×768 projects) and `scoring-ui/e2e/smoke.spec.js`.
 ---
+
+## 2026-10-24 18:27 - US-019 (R76-TD6)
+- Automated `AUTH-UAT-01..08` authentication & session lifecycle tests in `scoring-ui/e2e/auth-uat.spec.js` (fresh login, valid session reload without login flash, remember-me prefill without auto-login, scope isolation between `#/scoring` and `#/manage`, and explicit logout persistence).
+---

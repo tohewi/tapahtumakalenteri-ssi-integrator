@@ -310,8 +310,8 @@
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
       "priority": 19,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Automated AUTH-UAT-01..08 in scoring-ui/e2e/auth-uat.spec.js."
     },
     {
       "id": "US-020",
