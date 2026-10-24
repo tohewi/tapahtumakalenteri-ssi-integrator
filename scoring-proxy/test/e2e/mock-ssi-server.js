@@ -269,8 +269,8 @@ export function startMockSsiServer(port = 4101) {
       return res.end(`
         <table>
           <tr>
-            <td><a href="/event/participant/137/1371/">Matti Meikäläinen</a></td>
-            <td>matti@example.com</td>
+            <td><a href="/event/participant/137/1371/">Matti Meikalainen</a></td>
+            <td>matti.meikalainen@example.com</td>
             <td><a href="/event/participant/137/1371/toggle-status/"><abbr title="Approved">A</abbr></a></td>
             <td><a href="/event/participant/137/1371/toggle-paid/">all</a></td>
           </tr>
@@ -294,7 +294,7 @@ export function startMockSsiServer(port = 4101) {
       res.writeHead(200, { 'Content-Type': 'text/html' })
       return res.end(`
         <table>
-          <tr><td><a href="/event/participant/93/901/">Matti Meikäläinen</a> matti@example.com</td></tr>
+          <tr><td><a href="/event/participant/93/901/">Matti Meikalainen</a> matti.meikalainen@example.com</td></tr>
           <tr><td><a href="/event/participant/93/902/">Teppo Testaaja</a> teppo@example.com</td></tr>
           <tr><td><a href="/event/participant/93/903/">Outi Odottaja</a> outi@example.com</td></tr>
         </table>
@@ -314,15 +314,6 @@ export function startMockSsiServer(port = 4101) {
     }
 
     if (url.pathname.includes('/register/')) {
-      if (req.method === 'GET') {
-        res.writeHead(200, { 'Content-Type': 'text/html' })
-        return res.end(`
-          <form method="post" action="${url.pathname}">
-            <select name="shooter"><option value="777" selected>Matti Meikäläinen</option></select>
-            <input type="submit" name="submit" value="Register" />
-          </form>
-        `)
-      }
       res.writeHead(302, { Location: '/dashboard/' })
       return res.end()
     }

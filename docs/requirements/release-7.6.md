@@ -151,7 +151,7 @@ The following Release 7.2 requirement is **already implemented** and should be u
 | R76-TD3 | Code Review | **Orphaned SRA Staffing Prototype Cleanup & Staffing Tests**: Archived orphaned prototype modules (`StaffStatusBoard.jsx`, `StaffSignupPanel.jsx`, `lib/staffing/cron.js`, `notifier.js`, `role-assigner.js`, `squad-optimizer.js`, `IMMEDIATE-DEVELOPMENT-NEEDS.md`) to `archive/staffing-prototype/` and added unit tests in `scoring-proxy/test/staffing.test.js`. | MEDIUM | ✅ Implemented |
 | R76-TD4 | Code Review | **Backend ESLint Configuration & CI Lint Gate**: Migrated root `.eslintrc-architectural.js` to ESLint v9 flat config (`scoring-proxy/eslint.config.js`), added `npm run lint` to `scoring-proxy/package.json`, and added UI/proxy lint steps to `.github/workflows/ci-deploy.yml`. | MEDIUM | ✅ Implemented |
 | R76-TD5 | Branch Audit | **Unmerged Feature Branch Consolidation (`R7.8`, `R7.9`, `R10.0`)**: Reconcile and merge completed work sitting on unmerged feature branches: `copilot/vscode-mnw87b09-v5g9` (Release 7.8 Induction Wait List), `R79-hotfix-cup-count-status-sync` (7-day manage window + -1d lookback), and `R100-feature-registration-buffer-*` (Release 10.0 Registration Buffer). | HIGH | 📋 Backlog |
-| R76-TD6 | R7.0 TEST6 / UAT | **Playwright E2E UAT Suite Against Mock/Stubbed SSI Upstream (Fast CI Gate)**: Build a deterministic Playwright E2E test suite running against `scoring-proxy` + `scoring-ui` backed by a local mock SSI server (`SSI_BASE_URL` serving GraphQL & HTML fixtures). Automate `AUTH-UAT-01..08` (`docs/Implementation/authentication-uat-test-plan.md`), mobile & tablet scoring flows (`docs/design/tablet-scoring-uat-plan.md`), and registration/management squad capacity & DNS flows as a fast CI gate. | HIGH | 📋 Backlog |
+| R76-TD6 | R7.0 TEST6 / UAT | **Playwright E2E UAT Suite Against Mock/Stubbed SSI Upstream (Fast CI Gate)**: Built deterministic Playwright E2E suite (`scoring-ui/e2e/*.spec.js`) backed by `scoring-proxy/test/e2e/mock-ssi-server.js` and wired into `.github/workflows/ci-deploy.yml`. | HIGH | ✅ Implemented |
 
 ---
 
@@ -193,5 +193,5 @@ The following Release 7.2 requirement is **already implemented** and should be u
 ## Summary
 
 - **21 consolidated requirements + 6 technical debt backlog items (`R76-TD1`–`R76-TD6`)**
-- **25 completed (✅)**: All 21 R7.6 requirements (`R76-CUP1`, `R76-ARCH3`, `R76-ARCH4`, `R76-MG2`–`R76-MG5`, `R76-SEC1`, `R76-SEC7`, `R76-SES7`, `R76-AUTH10`, `R76-COM1`–`R76-COM3`, `R76-TEST1`–`R76-TEST5`, `R76-TEST7`, `R76-LOG1`) + 4 technical debt items (`R76-TD1`–`R76-TD4`)
-- **2 remaining backlog items (📋)**: `R76-TD5` (Unmerged feature branch consolidation: `R7.8`, `R7.9`, `R10.0`) and `R76-TD6` (Playwright E2E UAT Suite Against Mock/Stubbed SSI Upstream — Fast CI Gate)
+- **26 completed (✅)**: All 21 R7.6 requirements (`R76-CUP1`, `R76-ARCH3`, `R76-ARCH4`, `R76-MG2`–`R76-MG5`, `R76-SEC1`, `R76-SEC7`, `R76-SES7`, `R76-AUTH10`, `R76-COM1`–`R76-COM3`, `R76-TEST1`–`R76-TEST5`, `R76-TEST7`, `R76-LOG1`) + 5 technical debt items (`R76-TD1`–`R76-TD4`, `R76-TD6`)
+- **1 remaining backlog item (📋)**: `R76-TD5` (Unmerged feature branch consolidation: `R7.8`, `R7.9`, `R10.0`)

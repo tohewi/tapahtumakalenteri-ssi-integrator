@@ -120,3 +120,8 @@
 ## 2026-10-24 18:32 - US-020 (R76-TD6)
 - Automated Mobile Scoring (`scoring-ui/e2e/scoring-mobile.spec.js`) and Tablet Scoring (`scoring-ui/e2e/scoring-tablet.spec.js`) UAT flows including `TS13` drag-handle reordering, `2x` double-series toggle, score pad entry, double-tap shot deletion, and `TS9` completed match read-only lock.
 ---
+
+## 2026-10-24 18:38 - US-021 (R76-TD6 / TEST6)
+- Automated `#/register` and `#/manage` UAT flows in `scoring-ui/e2e/register-and-manage.spec.js` and wired the Playwright E2E gate into `.github/workflows/ci-deploy.yml`.
+- Marked `TEST6` and `R76-TD6` as `✅ Implemented`. All 21 stories in `prd.json` are now complete (`passes: true`).
+---

@@ -342,8 +342,8 @@
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Automated registration and management E2E flows in register-and-manage.spec.js and wired Playwright E2E gate into ci-deploy.yml."
     }
   ]
 }
