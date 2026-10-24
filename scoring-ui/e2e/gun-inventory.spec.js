@@ -48,8 +48,8 @@ test.describe('Gun Inventory, Laina-ase Checkout & Maintenance UAT E2E (R90 / US
     await page.getByPlaceholder(/Huomiot/i).fill('Puhdistus ja voitelu')
     await page.getByRole('button', { name: 'Kuittaa huolletuksi' }).click()
 
-    // Total usage remains 1 kertaa · 100 patr., while since-maintenance resets to 0 kertaa · 0 patr.
-    await expect(page.getByText('1 kertaa · 100 patr.')).toBeVisible()
+    // Wait for maintenance reset (0 kertaa · 0 patr.) first, then verify total usage remains 1 kertaa · 100 patr.
     await expect(page.getByText('0 kertaa · 0 patr.')).toBeVisible()
+    await expect(page.getByText('1 kertaa · 100 patr.')).toBeVisible()
   })
 })
