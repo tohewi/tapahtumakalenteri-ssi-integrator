@@ -107,3 +107,8 @@
 - Replaced small `▲` / `▼` buttons in `TabletShooterSidebar` (`scoring-ui/src/components/TabletScoringPanels.jsx`) with a dedicated 44×44px grip drag handle supporting HTML5 drag-and-drop, touch drag-and-drop, and keyboard (`ArrowUp`/`ArrowDown`) reordering isolated from row selection.
 - Added component tests in `scoring-ui/src/test/components.test.jsx` and marked `TS13` as `✅ Implemented`.
 ---
+
+## 2026-10-24 18:22 - US-018 (R76-TD6)
+- Created `scoring-proxy/test/e2e/mock-ssi-server.js` and `start-e2e-servers.js` serving deterministic GraphQL and HTML scraping fixtures at `SSI_BASE_URL`.
+- Configured `scoring-ui/playwright.config.js` (`mobile` 390×844 and `tablet` 1024×768 projects) and `scoring-ui/e2e/smoke.spec.js`.
+---
