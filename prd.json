@@ -115,8 +115,8 @@
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Extracted registration-service.js from routes/registration.js with unit tests in registration-service.test.js."
     },
     {
       "id": "US-008",
