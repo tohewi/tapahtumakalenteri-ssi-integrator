@@ -96,3 +96,9 @@
 - Wired `auditMutation` into state-changing management and scoring endpoints and verified with unit tests in `reliability-and-perf.test.js`.
 - Marked `R76-COM3` as `✅ Implemented`.
 ---
+
+## 2026-10-24 16:02 - US-016 (R76-AUTH10)
+- Added SSI session and passthrough password verification (`ssiLogin`) to `POST /api/v1/register/submit` in `scoring-proxy/routes/registration.js` (`FEATURE_REGISTRATION_AUTH_REQUIRED`) with `auditMutation` logging.
+- Added SSI password field to `scoring-ui/src/components/RegisterPage.jsx` and regression test in `scoring-proxy/test/registration.test.js`.
+- Marked `AUTH10` and `R76-AUTH10` as `✅ Implemented`. All 16 stories in `prd.json` are now complete (`passes: true`).
+---

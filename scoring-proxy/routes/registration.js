@@ -1,4 +1,5 @@
 import express from 'express'
+import { ssiLogin } from '../lib/ssi-core/graphql.js'
 import {
   ssiSearchAndAddParticipant,
   ssiFindAndApproveCupParticipant,
@@ -8,6 +9,7 @@ import {
 import { sendRegistrationConfirmation } from '../lib/email.js'
 import { log } from '../lib/logger.js'
 import { AppError } from '../lib/errors/AppError.js'
+import { getSession, sessionConfig, auditMutation } from '../lib/session/index.js'
 import {
   UUID_RE,
   validateRegistrationInput,
@@ -145,7 +147,7 @@ export function createRegistrationRouter({
   })
 
   router.post('/submit', registerBodyLimit, registerLimiter, async (req, res, next) => {
-    const { cupId, squadNumber, email, captchaId, captchaAnswer } = req.body || {}
+    const { cupId, squadNumber, email, password, captchaId, captchaAnswer } = req.body || {}
 
     const validationErrors = validateRegistrationInput({ cupId, squadNumber, email, captchaId, captchaAnswer })
     if (validationErrors.length > 0) {
@@ -162,6 +164,25 @@ export function createRegistrationRouter({
     }
     if (Number(captchaAnswer) !== challenge.answer) {
       return res.status(400).json({ error: 'Väärä vastaus. Yritä uudelleen.' })
+    }
+
+    // AUTH10 / R76-AUTH10: Verify authenticated SSI passthrough identity when session cookie,
+    // password, or FEATURE_REGISTRATION_AUTH_REQUIRED is active.
+    const requireRegAuth = String(process.env.FEATURE_REGISTRATION_AUTH_REQUIRED || '').toLowerCase() === 'true'
+    const sessionId = req.cookies?.[sessionConfig.session.cookieName]
+    const activeSession = sessionId ? await getSession(sessionId) : null
+    const sessionMatchesEmail = activeSession?.userId && activeSession.userId.toLowerCase() === email.trim().toLowerCase()
+
+    if (!sessionMatchesEmail) {
+      if (typeof password === 'string' && password.length > 0) {
+        try {
+          await ssiLogin(email.trim(), password)
+        } catch {
+          return res.status(401).json({ error: 'SSI-kirjautuminen epäonnistui. Tarkista sähköposti ja salasana.' })
+        }
+      } else if (requireRegAuth) {
+        return res.status(401).json({ error: 'SSI-tunnistautuminen vaaditaan ilmoittautumiseen.' })
+      }
     }
 
     try {
@@ -267,6 +288,14 @@ export function createRegistrationRouter({
       const allSuccess = squadResults.every(r => r.success)
       const squadded = squadResults.filter(r => r.success).length
       const total = squadResults.length
+
+      auditMutation({
+        endpoint: '/api/v1/register/submit',
+        operation: isReRegistration ? 'reregister_cup' : 'register_cup',
+        initiatingUserId: email.trim(),
+        targetEntity: { cupId, squadNumber },
+        result: allSuccess ? 'success' : 'failure',
+      })
 
       sendProgress({
         type: 'result',

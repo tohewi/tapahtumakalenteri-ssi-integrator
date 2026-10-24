@@ -206,7 +206,7 @@ See [sra-training-staffing-requirements.md](./sra-training-staffing-requirements
 | AUTH7 | **Audit Trail**: Every SSI operation must log which user performed the action, including timestamp, operation type, and success/failure status. | ✅ Implemented |
 | AUTH8 | **State Restoration**: User navigation state must be fully restored after session expiry and re-authentication. State preserved for 30 minutes post-expiry. | ✅ Implemented |
 | AUTH9 | **Cross-Feature Authentication**: Single login works across scoring, management, and reporting features. No separate logins required. | ✅ Implemented |
-| AUTH10 | **Registration Security**: Cup registration must require authenticated SSI passthrough login before registration actions are executed. Registration to cup, match enrollment, and squad assignment must run in authenticated user context (not unauthenticated email-only submission). | ⬚ Pending ➜ R7.6 (R76-AUTH10) |
+| AUTH10 | **Registration Security**: Cup registration must require authenticated SSI passthrough login before registration actions are executed. Registration to cup, match enrollment, and squad assignment must run in authenticated user context (not unauthenticated email-only submission). | ✅ Implemented (`routes/registration.js` passthrough session/password verification + `FEATURE_REGISTRATION_AUTH_REQUIRED`) |
 
 ### Session Management Requirements
 
@@ -548,14 +548,14 @@ Decouples public Kupittaa Cup registration (`#/register`) from immediate SSI acc
 - **Release 4.0** (Kupittaa Cup Registration Frontend): 25 requirements — 25 ✅
 - **Release 5.0** (SRA Training Staffing): requirements in [sra-training-staffing-requirements.md](./sra-training-staffing-requirements.md)
 - **Release 6.0** (Match Management & UI Consolidation): 5 functional + 5 identification requirements — 10 ✅ (MG1–MG5, MG-ID1–MG-ID5)
-- **Release 7.0** (Authentication & Session Handling): 25 requirements — 19 ✅, 6 pending ➜ R7.6 (AUTH10, SES7, SEC1, SEC7, TEST1–5/7), 2 deferred (TEST6, TEST8)
+- **Release 7.0** (Authentication & Session Handling): 25 requirements — 23 ✅, 2 deferred (TEST6, TEST8)
 - **Release 7.1** (Management Availability): 1 requirement — 1 ✅
 - **Release 7.2** (Kupittaa Cup Management): 3 requirements — 2 ✅ (CUP1, CUP2), 1 ❌ deprecated/removed (CUP3 → R76-COM2)
 - **Release 7.3** (Refactoring Analysis): 1 requirement — 1 ✅ (RFA1). 5 outdated docs removed
 - **Release 7.4** (Refactoring Implementation): 8 requirements — 8 ✅ (RFR1–RFR8)
 - **Release 7.4.1** (Authentication UX Hardening): 5 requirements — 5 ✅ (AUTH-UX1–AUTH-UX5)
-- **Release 7.5** (Architecture V2 Foundation): 5 requirements — 3 ✅, 2 📋 ➜ R7.6 (ARCH3, ARCH4)
-- **Release 7.6** (Consolidation & Compliance Hardening): 21 consolidated requirements + 5 tech debt backlog items (`R76-TD1`–`R76-TD5`) — 7 ✅ (R76-CUP1, R76-MG2–MG5, R76-COM2, R76-LOG1), 14 pending + 5 backlog — see [release-7.6.md](./release-7.6.md)
+- **Release 7.5** (Architecture V2 Foundation): 5 requirements — 5 ✅ (ARCH1–ARCH5)
+- **Release 7.6** (Consolidation & Compliance Hardening): 21 consolidated requirements + 5 tech debt backlog items (`R76-TD1`–`R76-TD5`) — 25 ✅ (`R76` 21/21 + `R76-TD1`–`R76-TD4`), 1 backlog (`R76-TD5` unmerged feature branch consolidation) — see [release-7.6.md](./release-7.6.md)
 - **Release 7.7** (QR Code Login for Scoring): 6 requirements — 6 ✅ (QR1–QR6). **7.7.1 hotfix**: 4 fixes ✅
 - **Release 7.8** (Induction Wait List): 32 requirements — 32 ✅ on branch `copilot/vscode-mnw87b09-v5g9` (pending merge to `main`)
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes ✅ (GQL-HF1–GQL-HF3). **7.9.2 hotfix**: 2 fixes ✅ (GQL-HF4, GQL-HF7). **7.9.3 hotfix**: 1 fix 📋 (GQL-HF5). **7.9.4**: 1 requirement ⬚ (GQL-HF6 — iCal calendar attachment)

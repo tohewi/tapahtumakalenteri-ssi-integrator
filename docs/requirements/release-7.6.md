@@ -82,7 +82,7 @@ The following Release 7.2 requirement is **already implemented** and should be u
 | R76-SEC1 | R7.0 SEC1 | **OWASP Session Management Audit**: Formal review of session handling against OWASP Session Management Cheat Sheet documented in `docs/design/session-handling.md`. | MEDIUM | ✅ Implemented |
 | R76-SEC7 | R7.0 SEC7 | **Encrypted Token Storage**: Evaluated at-rest storage in `docs/design/session-handling.md` (Render internal-only Redis with `ipAllowList: []` + AES-256-GCM encryption in `lib/device-tokens.js` + `crypto.randomUUID()` session keys). | LOW | ✅ Implemented |
 | R76-SES7 | R7.0 SES7 | **Session Monitoring Endpoint**: Exposed `GET /api/v1/auth/sessions` (manage scope required) returning `getActiveSessionCount()` and sanitized per-user sessions via `getUserSessions()`. | LOW | ✅ Implemented |
-| R76-AUTH10 | R7.0 AUTH10 | **Registration Must Require SSI Passthrough Login**: Cup registration flow must require authenticated SSI user session before any registration action is executed. Registration to cup, match enrollment, and squad assignment must be performed in the context of the authenticated user (passthrough SSI login), not by unauthenticated email-only submission. Remove current misuse vector where any user can register another shooter by only knowing their email address. | HIGH | ⬚ Pending |
+| R76-AUTH10 | R7.0 AUTH10 | **Registration Must Require SSI Passthrough Login**: Implemented SSI session and passthrough password verification (`ssiLogin`) in `scoring-proxy/routes/registration.js` (`FEATURE_REGISTRATION_AUTH_REQUIRED`) and `scoring-ui/src/components/RegisterPage.jsx`. | HIGH | ✅ Implemented |
 | R76-COM1 | SSI API license assessment follow-up | **Public Legal Documents for Registration**: Published Privacy Policy (`#/privacy`) and Terms of Service (`#/terms`) in `LegalDocumentPage.jsx` and linked both from `RegisterPage.jsx` and `HomePage.jsx`. | MEDIUM | ✅ Implemented |
 | R76-COM2 | SSI API license assessment follow-up | **Disable Paid Tracking in Tooling**: Remove paid-status tracking from management functionality. Disable paid status reads and writes in UI and backend routes, including SSI `toggle-paid` mutation usage via web scraping. Cup management must no longer provide paid bookkeeping controls in this tooling. DNS controls remain in scope. | HIGH | ✅ Implemented/Ready |
 | R76-COM3 | SSI API license assessment follow-up | **Per-User SSI Execution Identity for State Changes**: State-changing management and scoring endpoints execute using `req.ssiSession` requester identity and record structured mutation audit fields (`auditMutation` in `lib/session/audit.js`). | HIGH | ✅ Implemented |
@@ -192,7 +192,5 @@ The following Release 7.2 requirement is **already implemented** and should be u
 ## Summary
 
 - **21 consolidated requirements + 5 technical debt backlog items (`R76-TD1`–`R76-TD5`)**
-- **7 completed (✅)**: R76-CUP1, R76-MG2, R76-MG3, R76-MG4, R76-MG5, R76-COM2, R76-LOG1
-- **2 HIGH priority pending + 2 HIGH backlog**: R76-AUTH10 (registration passthrough auth), R76-COM3 (per-user SSI execution identity), R76-TD1 (`client.js` decomposition), R76-TD5 (unmerged branch consolidation)
-- **7 MEDIUM priority remaining + 3 MEDIUM backlog**: R76-ARCH3, R76-ARCH4, R76-SEC1, R76-COM1, R76-TEST1/2/3, R76-TD2, R76-TD3, R76-TD4
-- **5 LOW priority pending**: R76-SEC7, R76-SES7, R76-TEST4/5/7
+- **25 completed (✅)**: All 21 R7.6 requirements (`R76-CUP1`, `R76-ARCH3`, `R76-ARCH4`, `R76-MG2`–`R76-MG5`, `R76-SEC1`, `R76-SEC7`, `R76-SES7`, `R76-AUTH10`, `R76-COM1`–`R76-COM3`, `R76-TEST1`–`R76-TEST5`, `R76-TEST7`, `R76-LOG1`) + 4 technical debt items (`R76-TD1`–`R76-TD4`)
+- **1 remaining backlog item (📋)**: `R76-TD5` (Unmerged feature branch consolidation: `R7.8`, `R7.9`, `R10.0`)
