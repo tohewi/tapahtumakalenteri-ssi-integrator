@@ -552,6 +552,7 @@ Inventory, loaner-gun checkout (*laina-ase*), cartridge (*patruuna*) bookkeeping
 | GUN7 | **ManagePage (`#/manage`) Laina-ase Squad Integration**: In `SquaddingOverview` / `SquadCard`, allow selecting a shooter in the `"Laina-ase"` squad, picking an available gun + cartridge count (`100` / `0` / custom), displaying assigned gun badge on shooter row, and returning guns to safe at end of match. | ✅ Implemented (`R90-GUN7`) |
 | GUN8 | **Unit, Integration & Playwright E2E Verification**: Unit/route/component tests and Playwright E2E coverage for gun inventory, Laina-ase checkout/return, maintenance reset, and SSI Group `25874` admin access control. | ✅ Implemented (`R90-GUN8`) |
 | GUN9 | **Gun Inventory & Usage Privacy Notice (*Rekisteriseloste*, FI & EN)**: Simple, legally valid (GDPR Art. 13–14 & Finnish Firearms Act duty of care) bilingual privacy notice (`docs/privacy-notice-gun-inventory.md` & `#/privacy-guns`) explaining controller, purpose, data fields recorded on loan/maintenance, EU storage, access restriction (`25874` admin), retention, and data subject rights. | ✅ Implemented (`R90-GUN9`) |
+| GUN10 | **Persistent Disk Storage for Gun Inventory & Event Store**: Persist gun inventory, loan/maintenance event logs (`gun-inventory.json`), and staffing event store (`staffing-events.json`) on a cost-optimized 1 GB Render Persistent Disk (`turres-ssi-data` mounted at `/opt/render/project/src/scoring-proxy/data` in Frankfurt) so data survives redeploys and restarts without requiring a managed database. | ✅ Implemented (`R90-GUN10` in `render.yaml`) |
 
 ## Release 10.0 — Public Registration Buffer
 
@@ -580,7 +581,7 @@ Decouples public Kupittaa Cup registration (`#/register`) from immediate SSI acc
 - **Release 7.8** (Induction Wait List): 32 requirements — 32 ✅ on branch `copilot/vscode-mnw87b09-v5g9` (pending merge to `main`)
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes ✅ (GQL-HF1–GQL-HF3). **7.9.2 hotfix**: 2 fixes ✅ (GQL-HF4, GQL-HF7). **7.9.3 hotfix**: 1 fix 📋 (GQL-HF5). **7.9.4**: 1 requirement ⬚ (GQL-HF6 — iCal calendar attachment)
 - **Release 8.0** (Tablet Scoring UI): 13 requirements — 13 ✅ (TS1–TS13)
-- **Release 9.0** (Gun Inventory, Usage & Maintenance Tracking): 8 requirements — 8 ✅ (`GUN1`–`GUN8` / `R90-GUN1`–`R90-GUN8`) — see [release-9.0-gun-inventory.md](./release-9.0-gun-inventory.md)
+- **Release 9.0** (Gun Inventory, Usage & Maintenance Tracking): 10 requirements — 10 ✅ (`GUN1`–`GUN10` / `R90-GUN1`–`R90-GUN10`) — see [release-9.0-gun-inventory.md](./release-9.0-gun-inventory.md)
 - **Release 10.0** (Public Registration Buffer): 📋 Specified & Loop 1 store implemented on `origin/R100-feature-registration-buffer-*`
 
 > **Note:** The multi-tenant **Match Management Platform** (formerly listed as Release 8.0/8.1 roadmap `MP1–MP7`) has been moved to its own repository: `tohewi/match-manager`.
