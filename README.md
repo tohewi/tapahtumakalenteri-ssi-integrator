@@ -99,7 +99,7 @@ node --env-file=scoring-proxy/.env scoring-proxy/server.js
 ## Creating a Kupittaa Cup
 
 ```powershell
-.\archive\scripts-legacy\New-KupittaaCup.ps1 -Date "08-02-2026" -Username "user@example.com" -Password "pass"
+.\archive\scripts-legacy\New-KupittaaCup.ps1 -Date "08-02-2026" -Username "user@example.com" -Password "pass" -ConfigPath ".\config\kupittaa-cup-config.yml"
 ```
 
 Creates: 1 Cup + 3 Matches (Tarkkuus, Pika, Kuvio) + 3 squads per match. See `-TestMode` and `-CreateCalendarEvent` flags for test mode and WordPress integration.
