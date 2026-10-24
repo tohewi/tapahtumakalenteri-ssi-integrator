@@ -57,23 +57,23 @@ The following Release 7.2 requirement is **already implemented** and should be u
 
 | # | Origin | Requirement | Priority | Status |
 |---|--------|-------------|----------|--------|
-| R76-CUP1 | R7.2 CUP1 | **Move Squadded Shooter Between Squads**: In the "Squadit" section, add a `→ S?` squad move button for shooters already assigned to a squad. Backend `fix-squad` endpoint exists but UI only exposes it for inconsistent assignments. Need: add squad picker trigger to all squadded shooters in SquadCard, capacity enforcement (cannot move into full squad), same UX as "Ei Squadeissa" section. | HIGH | 📋 Specified |
+| R76-CUP1 | R7.2 CUP1 | **Move Squadded Shooter Between Squads**: In the "Squadit" section, allow moving a shooter to another squad only within the same match, and prevent moves into a full squad. The UI has a `→ S?` button in `SquadCard.jsx` (`ActionButton` with `onMoveSquad`) wired to `handleFixSquad` (`POST /api/v1/manage/cup/:id/fix-squad`), but the endpoint updates all included matches and the picker does not prevent selecting a full squad. | HIGH | 🟡 Partially Implemented |
 
 ### 7.6.2 — Architecture Completion (from R7.5)
 
 | # | Origin | Requirement | Priority | Status |
 |---|--------|-------------|----------|--------|
-| R76-ARCH3 | R7.5 ARCH3 | **Service Layer Completion**: Extract business logic from remaining routes into service modules. `scoring-service.js` and `cup-manage.js` are done. Remaining: `staffing.js` (438 lines) → `staffing-service.js`, `registration.js` (402 lines) → `registration-service.js`. Reports route (210 lines) is small enough to defer. | MEDIUM | 📋 Specified |
+| R76-ARCH3 | R7.5 ARCH3 | **Service Layer Completion**: Extract business logic from remaining routes into service modules. `cup-manage.js` is done. (`scoring-service.js` was removed in commit `45a2ee3` due to incompatible GraphQL queries.) Remaining: `scoring.js` (429 lines) → `scoring-service.js`, `staffing.js` (489 lines) → `staffing-service.js`, `registration.js` (487 lines) → `registration-service.js`. Reports route (206 lines) is small enough to defer. | MEDIUM | 📋 Specified |
 | R76-ARCH4 | R7.5 ARCH4 | **Module Boundary Enforcement via ESLint**: Configure ESLint rules to enforce the import hierarchy documented in AGENTS.md. Rules: routes may only import from their domain module + services + shared utils; domain modules may only import `http-helpers.js`; no barrel imports from `ssi-core/index.js`. Consider `eslint-plugin-import` with `no-restricted-imports`. | MEDIUM | 📋 Specified |
 
 ### 7.6.3 — UI Consolidation (from R6.0)
 
 | # | Origin | Requirement | Priority | Status |
 |---|--------|-------------|----------|--------|
-| R76-MG2 | R6.0 MG2 | **Cup List Sorting by Proximity**: Sort cups ascending by proximity to today (closest first). Apply consistently to all cup lists: register, manage, scoring. Currently each feature may sort differently. | LOW | ⬚ Pending |
-| R76-MG3 | R6.0 MG3 | **Front Page & Scoring Route Change**: Move scoring app from `#/` to `#/scoring`. Root URL (`#/`) becomes a front page with navigation to: Scoring, Registration, Management, Tablet Scoring, Reports. Currently `#/` is the scoring app directly. | LOW | ⬚ Pending |
-| R76-MG4 | R6.0 MG4 | **Shared UI Components**: Extract and share common components (LoginScreen, CupList, visual design) between scoring, registration, and management features. Currently each feature has its own login and cup selection implementation. | LOW | ⬚ Pending |
-| R76-MG5 | R6.0 MG5 | **Manage Cup List Reuse**: Reuse the same CUP list component as Registration. Only change text from "ilmoittautuminen" to "hallitse". Currently management has separate cup list logic. | LOW | ⬚ Pending |
+| R76-MG2 | R6.0 MG2 | **Cup List Sorting by Proximity**: Sort cups ascending by proximity to today (closest first). Implemented for registration and management in `scoring-ui/src/components/shared.jsx` (`CupList`); mobile/tablet scoring (`CupSearch`) still sorts by `starts` ascending in `scoring-proxy/routes/scoring.js`. | LOW | 🟡 Partially Implemented |
+| R76-MG3 | R6.0 MG3 | **Front Page & Scoring Route Change**: Move scoring app from `#/` to `#/scoring`. Root URL (`#/`) renders `HomePage.jsx` with navigation to Scoring, Registration, Management, Tablet Scoring, Reports, and Staffing (`main.jsx`). | LOW | ✅ Implemented |
+| R76-MG4 | R6.0 MG4 | **Shared UI Components**: Share `LoginScreen` from `scoring-ui/src/components/LoginScreen.jsx` and common UI components (`CupList`, `AppHeader`, `BackButton`, `ErrorBanner`, `Spinner`) from `scoring-ui/src/components/shared.jsx`. | LOW | ✅ Implemented |
+| R76-MG5 | R6.0 MG5 | **Manage Cup List Reuse**: Reuse the same `CupList` component as Registration in `ManagePage.jsx` with `openLabel="Hallitse cupia"` and `allClickable={true}`. | LOW | ✅ Implemented |
 
 ### 7.6.4 — Security & Compliance Hardening (from R7.0)
 
@@ -156,7 +156,7 @@ The following Release 7.2 requirement is **already implemented** and should be u
 | TEST6 | R7.0 | E2E Tests — deferred to when E2E framework is selected (Playwright recommended) |
 | TEST8 | R7.0 | Load Tests — deferred to pre-production scaling phase |
 | GQL1–6 | R7.9 | GraphQL Cup Management — separate release, different domain (PowerShell scripts) |
-| MP1–7 | R8.1 | Match Management Platform — roadmap/design phase, not implementation-ready |
+| MP1–7 | R8.1 | Match Management Platform — moved to separate repository (`tohewi/match-manager`) |
 
 ---
 
@@ -167,21 +167,23 @@ The following Release 7.2 requirement is **already implemented** and should be u
 | **Phase 1** | R76-COM3 (per-user SSI execution identity) | 3-5 h | High compliance risk reduction |
 | **Phase 2** | R76-COM2 (disable paid tracking) — ✅ completed | 1-2 h | Immediate compliance hardening |
 | **Phase 3** | R76-LOG1 (middleware logging) | 0.5 h | Quick win — completes logging discipline |
-| **Phase 4** | R76-CUP1 (squad move) | 2-3 h | High user value — completes cup management |
-| **Phase 5** | R76-ARCH3 (service layer) | 3-4 h | Architecture — reduces route file complexity |
+| **Phase 4** | R76-CUP1 (squad move) — 🟡 partially implemented | 2-3 h | High user value — completes cup management |
+| **Phase 5** | R76-ARCH3 (service layer: scoring, registration, staffing) | 3-4 h | Architecture — reduces route file complexity |
 | **Phase 6** | R76-TEST1/2/3 (test coverage) | 3-4 h | Quality — closes critical test gaps |
 | **Phase 7** | R76-ARCH4 (ESLint rules) | 1-2 h | Architecture — prevents drift |
 | **Phase 8** | R76-SEC1/SEC7/SES7/COM1 (security/compliance) | 2-3 h | Security + compliance documentation |
-| **Phase 9** | R76-MG2/3/4/5 (UI consolidation) | 4-6 h | UX — shared components, front page |
+| **Phase 9** | R76-MG2/3/4/5 (UI consolidation) — 🟡 MG3–MG5 completed, MG2 scoring sort remaining | 4-6 h | UX — shared components, front page |
 | **Phase 10** | R76-TEST4/5/7 (advanced testing) | 2-3 h | Quality — reliability and perf |
 
-**Total estimated effort:** ~24-32 hours across 10 phases.
+**Total estimated effort:** ~24-32 hours across 10 phases (~15-20 hours remaining).
 
 ---
 
 ## Summary
 
-- **21 requirements** consolidated from 5 previous releases (R6.0, R7.0, R7.2, R7.5) plus compliance follow-up
-- **5 HIGH priority**: R76-AUTH10 (registration passthrough auth), R76-COM2 (disable paid tracking), R76-COM3 (per-user SSI execution identity), R76-CUP1 (squad move), R76-LOG1 (middleware logging)
-- **7 MEDIUM priority**: R76-ARCH3, R76-ARCH4, R76-SEC1, R76-COM1, R76-TEST1/2/3
-- **9 LOW priority**: UI consolidation, security hardening, advanced testing
+- **21 requirements** consolidated from 4 previous releases (R6.0, R7.0, R7.2, R7.5) plus compliance follow-up
+- **4 completed (✅)**: R76-MG3, R76-MG4, R76-MG5, R76-COM2
+- **2 partially implemented (🟡)**: R76-CUP1 (squad move: same-match-only and target capacity criteria remain unmet), R76-MG2 (proximity sort implemented in `CupList` for register/manage; scoring `CupSearch` sort remaining)
+- **3 HIGH priority pending**: R76-AUTH10 (registration passthrough auth), R76-COM3 (per-user SSI execution identity), R76-LOG1 (middleware logging)
+- **7 MEDIUM priority remaining**: R76-ARCH3, R76-ARCH4, R76-SEC1, R76-COM1, R76-TEST1/2/3
+- **5 LOW priority pending**: R76-SEC7, R76-SES7, R76-TEST4/5/7

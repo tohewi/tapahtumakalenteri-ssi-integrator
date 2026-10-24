@@ -1,5 +1,7 @@
 # Requirements
 
+> **Product Scope:** This document specifies requirements for **TurRes SSI Tools** (Scoring Mobile & Tablet, Public Registration, Cup Management, and SRA Training Staffing). The multi-tenant **Match Manager** platform has been moved to its own repository (`tohewi/match-manager`).
+
 ## Release 1.0 - SSI Cup Automation (Complete)
 
 | # | Requirement | Status |
@@ -111,6 +113,13 @@
 | SEC10 | Health check endpoint (`GET /api/health`) | ✅ v1.1.0 |
 | SEC11 | Study: Google authentication support — SSI supports Google login; investigate if OAuth flow can be extended to scoring proxy so users who sign in to SSI with Google identity can also use this app without separate SSI credentials | ⬚ Pending |
 
+## Release 3.1 - Data Integrity (Planned)
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| 47 | **Data Integrity Check**: Modular integrity verification between SSI and WordPress. (1) List all Cups owned by SSI login and verify each has a corresponding Tapahtumakalenteri event. (2) Validate date list file against both systems - all dates should have SSI Cup and WordPress event. (3) Verify cross-references: WordPress permalink contains Cup ID, WordPress content links to SSI Cup URL. Configurable by event type (e.g., Kupittaa Cup) and date list file parameter. | ⬚ Pending |
+| 48 | Design automation architecture with following assumptions: Continue with web scraping (Tapahtumakalenteri and SSI API access will not happen shortly). It is going to be possible to programmatically access mailbox to read OTP. Automation architecture should utilize agents and workflows. Tech preference Azure and MS Foundry. Agentic workflows should keep up to date with Tapahtumakalenteri events and perform reporting and data integrity tasks when needed. i.e. after an event. Agentic workflow should handle a batch request for new events or updating existing events. If this requirement is too large, split it into smaller requirements and into multiple versions to achieve suitable increments of functionality. Always make sure documentation and test automation is in place and adds value to users and developers, agentic or human. | ⬚ Pending |
+
 ## Release 4.0 - Kupittaa Cup registration Frontend
 
 ### Functional Requirements
@@ -148,6 +157,10 @@
 | RSEC10 | **Helmet + CORS**: Registration endpoints inherit the same Helmet security headers and CORS policy as the scoring application. CSP disabled for Tailwind inline styles (accepted trade-off) | ✅ |
 | RSEC11 | **Rate limit logging**: When an IP is rate-limited (429), log the IP, limiter name, and timestamp. Dump all currently throttled IPs with first-throttled time. Auto-cleanup after 15 min. Applied to all 4 rate limiters | ✅ |
 
+## Release 5.0 - SRA Training Staffing
+
+See [sra-training-staffing-requirements.md](./sra-training-staffing-requirements.md) and [sra-staffing-design.md](../design/sra-staffing-design.md) for SRA Training Staffing requirements and architecture (`#/staffing`).
+
 ## Release 6.0 - Match Management & UI Consolidation
 
 ### Functional Requirements
@@ -155,10 +168,10 @@
 | # | Requirement | Status |
 |---|-------------|--------|
 | MG1 | **Match Management UI** (`#/manage`): Password-protected (SSI login). After login, pick an active Kupittaa cup. Shows consolidated squadding overview — per-squad cross-match table, unsquadded shooters, CUP/match membership mismatches | ✅ |
-| MG2 | **Cup list sorting**: Sort cups ascending by proximity to today (closest first). Applies to all cup lists (register, manage, scoring) | ⬚ Pending ➜ R7.6 (R76-MG2) |
-| MG3 | **Scoring route change**: Move scoring app from `#/` to `#/scoring`. Root URL (`#/`) becomes a front page with static links to the three main features: Scoring, Registration, Management | ⬚ Pending ➜ R7.6 (R76-MG3) |
-| MG4 | **Shared UI components**: Extract and share common components (LoginScreen, CupList, visual design) between scoring, registration, and management features | ⬚ Pending ➜ R7.6 (R76-MG4) |
-| MG5 | **Manage cup list**: Reuse the same CUP list component as Registration. Only change text from "ilmoittautuminen" to "hallitse" | ⬚ Pending ➜ R7.6 (R76-MG5) |
+| MG2 | **Cup list sorting**: Sort cups ascending by proximity to today (closest first). Applies to all cup lists (register, manage, scoring) | 🟡 Partially Implemented (`shared.jsx` `CupList` sorts by proximity for register/manage; `CupSearch` in scoring still sorts by `starts` ascending) ➜ R7.6 (R76-MG2) |
+| MG3 | **Scoring route change**: Move scoring app from `#/` to `#/scoring`. Root URL (`#/`) becomes a front page with static links to the main features: Scoring, Registration, Management | ✅ Implemented (`main.jsx` + `HomePage.jsx`) |
+| MG4 | **Shared UI components**: Extract and share common components (LoginScreen, CupList, visual design) between scoring, registration, and management features | ✅ Implemented (`shared.jsx`) |
+| MG5 | **Manage cup list**: Reuse the same CUP list component as Registration. Only change text from "ilmoittautuminen" to "hallitse" | ✅ Implemented (`ManagePage.jsx`) |
 
 ### Shooter Identification Requirements (Critical)
 
@@ -177,14 +190,6 @@
 **Fail Loudly:** Alert users immediately when exact match fails. Never guess.
 **Prevent Ambiguity:** Unique keys for missing emails prevent false positives.
 **Defensive Programming:** Validate inputs, log warnings, return clear errors.
-
-## Release 3.1 - Data Integrity (Planned)
-
-| # | Requirement | Status |
-|---|-------------|--------|
-| 47 | **Data Integrity Check**: Modular integrity verification between SSI and WordPress. (1) List all Cups owned by SSI login and verify each has a corresponding Tapahtumakalenteri event. (2) Validate date list file against both systems - all dates should have SSI Cup and WordPress event. (3) Verify cross-references: WordPress permalink contains Cup ID, WordPress content links to SSI Cup URL. Configurable by event type (e.g., Kupittaa Cup) and date list file parameter. | ⬚ Pending |
-| 48| Design automation architecture with following assumptions: Continue with web scraping (Tapahtumakalenteri and SSI API access will not happen shortly). It is going to be possible to programmatically access mailbox to read OTP. Automation architecture should utilize agents and workflows. Tech preference Azure and MS Foundry. Agentic workflows should keep up to date with Tapahtumakalenteri events and perform reporting and data integrity tasks when needed. i.e. after an event. Agentic workflow should handle a batch request for new events or updating existing events. If this requirement is too large, split it into smaller requirements and into multiple versions to achieve suitable increments of functionality. Always make sure documentation and test automation is in place and adds value to users and developers, agentig or human.| ⬚ Pending |
-||| ⬚ Pending |
 
 ## Release 7.0 - Authentication and Session Handling
 
@@ -245,6 +250,22 @@
 | # | Requirement | Status | Tokens (est.) |
 |---|-------------|--------|---------------|
 | MGMT1 | **Management Independent of Registration**: Kupittaa Cup Hallinta must keep cups available for management independent of registration status, once registration start date has passed and while the cup is still active. Management is available until 24h after the cup's end date (`ends + 24h` grace period), or `starts + 48h` fallback when `ends` is null. The grace period ensures cups remain manageable on event day regardless of timezone. Cups with no `registration_starts` are excluded. Uses dedicated `/api/manage/cups` endpoint. | ✅ Implemented | ~14,000 |
+
+## Release 7.2 — Kupittaa Cup Management
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| CUP1 | **Move Shooter Between Squads**: In the "Squadit" section, it must be possible to move a shooter from one squad to another. The UI must show the same `→ S?` button as in the "Ei Squadeissa" section and function identically (squad picker dialog, SSI sync). Move is only allowed within the same match via Squadit, and the target squad must not be full. | 🟡 Partially Implemented (`fix-squad` updates all included matches and does not enforce target squad capacity) |
+| CUP2 | **Set Shooter as DNS (Did Not Start)**: SSI calls this "Did Not Show". Setting DNS must be applied at the **cup level** and on **all matches** in the cup. The button must appear next to every shooter regardless of which section they are in. Clicking it shows a confirmation dialog: "Set N.N as DNS?" / "Aseta Etu Suku DNS?" (fi/en). It must be possible to **undo** (reverse) DNS if set by accident. SSI endpoints: `GET /event/participant/{ct}/{id}/set-did-not-show/` (set) and `GET /event/participant/{ct}/{id}/undo-did-not-show/` (undo), applied to cup + each match. | ✅ Implemented |
+| CUP3 | **Mark Payment Received**: Per-competitor paid toggle at the **cup level only**. UI shows a button next to each shooter. When paid, the button must be **solid green** (high contrast) so it is immediately obvious who has paid when scanning the list. When unpaid, the button is gray/muted. State is stored in SSI via `GET /event/participant/{ct}/{id}/toggle-paid/`. Must reflect current paid status from SSI and allow toggling. | ❌ Deprecated / Removed (`R76-COM2` — disabled for SSI license compliance in Release 7.6.1) |
+
+### Design Decisions (CUP1–CUP3)
+
+- **All features** are added to the existing **Hallinta** page (`SquadManagementPage` component). No new pages needed.
+- **CUP1**: Move is performed only within Squadit (not across matches). Strict capacity enforcement — cannot move into a full squad. Same `→ S?` button and squad picker as "Ei Squadeissa" section.
+- **CUP2**: DNS is set on cup **and** all matches in the cup in a single action. Reversible — undo removes DNS from cup and all matches. DNS status must be visually distinct (e.g., strikethrough or badge). Confirmation dialog is bilingual (fi/en).
+- **CUP3**: Paid status flow was deprecated and disabled in Release 7.6.1 (`R76-COM2`) for SSI license compliance.
+- **SSI integration**: CUP2 uses **web scraping** (admin cookies) for reading and writing state. SSI GraphQL does not support write operations reliably. Endpoints: `set-did-not-show`, `undo-did-not-show` via `GET /event/participant/{ct}/{id}/...`.
 
 ## Release 7.3 — Refactoring Analysis (Complete)
 
@@ -314,41 +335,7 @@ Analysis completed 2026-02-20. Reviewed `docs/design/architecture-review.md` (20
 - **No microservices**: The Feb 2026 refactoring plan evaluated microservices (Alternative 2) and rejected it — overkill for current scale, adds Docker/K8s complexity. Monolithic consolidation is the right approach.
 - **Barrel export for backward compat**: Keep `ssi-core/index.js` re-exporting all domain modules so existing imports don't break during migration. Remove compat shim (`lib/ssi-client.js`) only after all routes are migrated.
 - **Fixture-based testing**: SSI HTML parsing is the highest-risk untested code. HTML fixtures (saved SSI page snapshots) enable fast, deterministic tests that catch SSI UI changes immediately.
-- **No shared constants package**: Score zones are duplicated in UI and proxy but they're small (12 values). A shared NPM package adds build complexity. Keep them in sync manually until R8.1 restructures the app.
-
-## Release 8.0 — Tablet Scoring UI
-
-### Tablet Scoring Requirements
-
-| # | Requirement | Status |
-|---|-------------|--------|
-| TS1 | **Tablet UI Mode**: Tablet-optimized scoring interface with all elements visible simultaneously (shooters, score track, number pad) accessible via `#/scoring-tablet` route | ✅ Implemented |
-| TS2 | **Breadcrumb Navigation**: Clickable breadcrumb trail (Cup › Match › Squad) in header for navigating back to any level | ✅ Implemented |
-| TS3 | **User Identity Display**: Display logged-in SSI user name (first + last) and email in header, fetched from GraphQL `{ me { email first_name last_name } }` | ✅ Implemented |
-| TS4 | **Fixed-Height Score Bars**: Score track uses CSS Grid with fixed min-height (120px per string card) to prevent layout shifts when scores are added | ✅ Implemented |
-| TS5 | **Long-Press Score Deletion**: Single-gesture score removal via 750ms long-press with visual progress feedback (red border animation). Supports both touch and mouse input | ✅ Implemented |
-| TS6 | **Touch Target Compliance**: All interactive elements meet accessibility standards (56×56px score buttons, 88px number pad buttons, exceeding 44×44px minimum) | ✅ Implemented |
-| TS7 | **Viewport-Fitted Layout**: UI scales to fit within screen bounds (`h-screen` with `overflow-hidden`) without requiring page-level scrolling. Individual panels scroll internally as needed | ✅ Implemented |
-| TS8 | **Responsive Breakpoints**: Adaptive sizing for mobile (<1024px), tablet landscape (≥1024px), and desktop (≥1280px) using Tailwind breakpoints | ✅ Implemented |
-| TS9 | **Read-Only for Completed Matches**: When match status is 'cp' (completed), scoring UI becomes read-only: number pad buttons disabled, save button shows "Match Completed" (Finnish: "Ottelu valmis"), long-press deletion disabled, green "Completed" (Finnish: "Valmis") badge shown in header. Users can browse scores but cannot edit or save | ✅ Implemented |
-| TS10 | **Session Continuity for Long Competitions**: Scoring API authentication must refresh SSI user JWT before rejecting requests when token is expired or within refresh window, so active tablet sessions remain logged in during multi-hour matches | ✅ Implemented |
-| TS11 | **Preserve Unsaved Local Scores on Re-Login**: Tablet scoring view must not overwrite restored local `ssi_scores` state with SSI baseline data on mount. Local in-progress edits (including `M` misses) remain visible after forced re-login/remount | ✅ Implemented |
-| TS12 | **Long-Run Regression Coverage**: Automated tests must simulate long-duration scoring behavior (~3 hours) and verify no forced session drop / local-score overwrite regressions in middleware and tablet UI remount flow | ✅ Implemented |
-
-### Rationale for TS9 (Completed Match Protection)
-
-**Business Rule**: Completed matches ('cp' status) indicate scoring is finalized and approved by shooters with no protests. Once a match reaches 'cp' status, scores become official competition results that must be protected from accidental or unauthorized modification.
-
-**Finnish Translation**: "Completed" = "Valmis" (indicating scoring is completed and approved)
-
-**UI Behavior**:
-- Number pad buttons: Greyed out (`disabled` state) when match is completed
-- Save button: Shows "Ottelu valmis" / "Match Completed" instead of "Tallenna tulokset" / "Save Scores"
-- Long-press deletion: Disabled (event handlers return early if `isMatchCompleted`)
-- Header badge: Green "Valmis" / "Completed" badge appears next to match name in breadcrumb trail
-- Browsing: Users can still navigate, view scores, and switch between shooters
-
-**Implementation**: Check `match.status === 'cp'` and disable all score modification operations while preserving read-only browsing capability.
+- **No shared constants package**: Score zones are duplicated in UI and proxy but they're small (12 values). A shared NPM package adds build complexity. Keep them in sync manually.
 
 ## Release 7.4.1 — Authentication UX Hardening
 
@@ -372,22 +359,6 @@ Status: ✅ Implemented/Ready (2026-09-11; local verification and user-confirmed
 - Scope boundary: mobile/tablet scoring login and session code, `api.js`, `useRememberMe`, `LoginScreen`, and all backend session/auth code are unchanged. The shared page hook only adds an optional initial authenticated state, defaulting to its existing logged-out behavior; only Manage supplies it after server verification.
 - Verification: 19 new Manage regressions (15 failed before the fix); all 212 frontend tests pass, including unchanged scoring reload and tablet persistence tests. Frontend build and targeted lint pass.
 
-## Release 7.2 — Kupittaa Cup Management
-
-| # | Requirement | Status |
-|---|-------------|--------|
-| CUP1 | **Move Shooter Between Squads**: In the "Squadit" section, it must be possible to move a shooter from one squad to another. The UI must show the same `→ S?` button as in the "Ei Squadeissa" section and function identically (squad picker dialog, SSI sync). Move is only allowed within the same match via Squadit. | 📋 Specified ➜ R7.6 (R76-CUP1) |
-| CUP2 | **Set Shooter as DNS (Did Not Start)**: SSI calls this "Did Not Show". Setting DNS must be applied at the **cup level** and on **all matches** in the cup. The button must appear next to every shooter regardless of which section they are in. Clicking it shows a confirmation dialog: "Set N.N as DNS?" / "Aseta Etu Suku DNS?" (fi/en). It must be possible to **undo** (reverse) DNS if set by accident. SSI endpoints: `GET /event/participant/{ct}/{id}/set-did-not-show/` (set) and `GET /event/participant/{ct}/{id}/undo-did-not-show/` (undo), applied to cup + each match. | ✅ Implemented |
-| CUP3 | **Mark Payment Received**: Per-competitor paid toggle at the **cup level only**. UI shows a button next to each shooter. When paid, the button must be **solid green** (high contrast) so it is immediately obvious who has paid when scanning the list. When unpaid, the button is gray/muted. State is stored in SSI via `GET /event/participant/{ct}/{id}/toggle-paid/`. Must reflect current paid status from SSI and allow toggling. | ⚠️ Deprecated ➜ R7.6 (R76-COM2 disable due SSI license clause) |
-
-### Design Decisions (CUP1–CUP3)
-
-- **All features** are added to the existing **Hallinta** page (`SquadManagementPage` component). No new pages needed.
-- **CUP1**: Move is performed only within Squadit (not across matches). Strict capacity enforcement — cannot move into a full squad. Same `→ S?` button and squad picker as "Ei Squadeissa" section.
-- **CUP2**: DNS is set on cup **and** all matches in the cup in a single action. Reversible — undo removes DNS from cup and all matches. DNS status must be visually distinct (e.g., strikethrough or badge). Confirmation dialog is bilingual (fi/en).
-- **CUP3**: Paid status flow is deprecated for compliance and scheduled for removal under R7.6 `R76-COM2`.
-- **SSI integration**: CUP2 uses **web scraping** (admin cookies) for reading and writing state. SSI GraphQL does not support write operations reliably. Endpoints: `set-did-not-show`, `undo-did-not-show` via `GET /event/participant/{ct}/{id}/...`. Paid tracking endpoint usage (`toggle-paid`) is deprecated and will be removed under R7.6 `R76-COM2`.
-
 ## Release 7.5 — Architecture V2 Foundation
 
 Establish architectural patterns and foundations for future scalability while maintaining simplicity. This release focuses on modular monolith patterns, centralized error handling, API versioning preparation, and service layer completion.
@@ -396,7 +367,7 @@ Establish architectural patterns and foundations for future scalability while ma
 |---|-------------|--------|
 | ARCH1 | **Centralized Error Handling**: Implement Express error handling middleware with custom error classes. Consistent error responses across all endpoints with proper logging and operational vs. programming error distinction | ✅ Implemented |
 | ARCH2 | **API Versioning Structure**: Add `/api/v1/` base path for current endpoints. Prepare versioning strategy to support shooting disciplines (e.g., `/api/v2/sra/`, `/api/v2/resul/`). Update all frontend API calls to use versioned paths | ✅ Implemented |
-| ARCH3 | **Service Layer Completion**: Extract business logic from remaining routes into service modules: `scoring-service.js`, `registration-service.js`, `report-service.js`. Routes become thin dispatchers focusing on HTTP contract only | 📋 Specified ➜ R7.6 (R76-ARCH3) |
+| ARCH3 | **Service Layer Completion**: Extract business logic from remaining routes into service modules: `scoring-service.js`, `registration-service.js`, `staffing-service.js`. Routes become thin dispatchers focusing on HTTP contract only | 📋 Specified ➜ R7.6 (R76-ARCH3) |
 | ARCH4 | **Module Boundary Enforcement**: Add ESLint rules to prevent architectural drift. Define and document allowed import patterns: routes → domain modules → services, no cross-domain imports in ssi-core, no barrel imports that create hidden coupling | 📋 Specified ➜ R7.6 (R76-ARCH4) |
 | ARCH5 | **Architecture Documentation**: Update architecture-review.md with target modular monolith patterns, module boundaries, and migration progress. Document explicit import rules and anti-patterns to prevent | ✅ Implemented |
 
@@ -407,6 +378,16 @@ Establish architectural patterns and foundations for future scalability while ma
 - **Versioning Strategy**: URL-based versioning (`/api/v1/`) with discipline-specific paths in future versions. Maintain backward compatibility during transition
 - **Service Extraction**: Pure business logic functions without Express dependencies. Enables unit testing without HTTP mocking
 - **Import Rules**: Enforced via ESLint to prevent re-coupling. Domain modules in ssi-core/ may only import http-helpers; routes must import specific domain modules, not barrel exports
+
+## Release 7.6 — Consolidation & Compliance Hardening
+
+Consolidates pending requirements from Releases 6.0, 7.0, 7.2, and 7.5 along with SSI license compliance hardening. See [release-7.6.md](./release-7.6.md) for the full specification and technical acceptance checklists.
+
+### Release 7.6.1 — Compliance Hardening: Paid Tracking Disabled
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| R76-COM2 | **Disable Paid Tracking in Tooling**: Remove paid-status tracking from management UI and disable backend `toggle-paid` mutations by default (`FEATURE_PAID_TOGGLE_ENABLED=false`). | ✅ Implemented |
 
 ## Release 7.7 — QR Code Login for Scoring
 
@@ -429,6 +410,12 @@ Quick-login for scoring devices (tablets, smartphones) at the range via QR codes
 | QR-FIX2 | **Cup auto-restore on login**: localStorage manage state not cleared on logout — next login skipped cup selection. Now cleared on logout/session expiry. | ✅ Fixed |
 | QR-FIX3 | **Same-day cup filtering**: `filterManageableCups` compared `ends` (midnight UTC) against current time — cups disappeared by afternoon. Added 24h management grace period after `ends`. | ✅ Fixed |
 | QR-FIX4 | **Squad move audit logging**: `assign-squad` and `fix-squad` routes had only debug-level logging (suppressed in production). Added info-level audit trail: user, shooter, target squad, per-match results, summary. | ✅ Implemented |
+
+## Release 7.8 — Kupittaa Reservilaisammunta Induction Wait List
+
+> **Branch Status:** Implemented on branch `copilot/vscode-mnw87b09-v5g9` (32 requirements: `WL1–WL13`, `WL-SEC1–SEC7`, `WL-CFG1–CFG3`, `WL-OPS1–OPS3`, `WL-UX1–UX2`, `WL-TEST1–TEST4`); pending merge to `main`.
+
+Provides a public waiting list (`#/waitlist`) with math captcha and SSI email verification, token-based self-cancellation, allowlist-protected admin group planning (`#/waitlist-admin`), and bilingual notification emails via Resend API.
 
 ## Release 7.9 — GraphQL Cup Management
 
@@ -467,7 +454,7 @@ Migrate Cup creation and maintenance from web scraping to SSI GraphQL API. The l
 | GQL-HF4 | **Cup competitor count source hardening**: Cup registered competitor totals are calculated from CUP-level approved competitors first (`status` = `a/approved`) with match-squad fallback, so registration and management UI views keep accurate count badges even when squad competitor data is incomplete. | ✅ Implemented |
 | GQL-HF7 | **SSI CSRF compatibility**: Send the SSI CSRF cookie as a request token for participant search, registration confirmation, trainer registration, staff-removal participant lookup, and squad/status edits. Fetch the search page for sessions without a CSRF cookie, carry response cookies through each workflow without mutating shared session cookies, and retain legacy no-CSRF compatibility. | ✅ Implemented/Ready |
 
-GQL-HF7 validation (2026-09-11): 239 backend tests, including 12 CSRF regressions, and 193 frontend tests pass; frontend production build and sharp SVG-to-PNG smoke test pass. Approved dependency updates (including sharp 0.35.4) resolve the pre-existing CI audit blocker; both dependency audits report zero vulnerabilities. SSI began issuing CSRF cookies between September 5 and September 8; production search-and-add requests returned HTTP 403 from September 9. The production hotfix retains the current client layout by explicit exception; the R81 port belongs in its existing participant domain module. Deployment and live SSI registration verification remain pending.
+GQL-HF7 validation (2026-09-11): 239 backend tests, including 12 CSRF regressions, and 193 frontend tests pass; frontend production build and sharp SVG-to-PNG smoke test pass. Approved dependency updates (including sharp 0.35.4) resolve the pre-existing CI audit blocker; both dependency audits report zero vulnerabilities. SSI began issuing CSRF cookies between September 5 and September 8; production search-and-add requests returned HTTP 403 from September 9. The production hotfix retains the current client layout by explicit exception. Deployment and live SSI registration verification remain pending.
 
 ### Release 7.9.3 — Competitor Number Sync Hardening
 
@@ -501,26 +488,45 @@ GQL-HF7 validation (2026-09-11): 239 backend tests, including 12 CSRF regression
 - **No new npm dependency**: iCal content is simple enough to generate inline; avoids supply-chain risk.
 - **Fallback**: If `starts` is missing from the SSI response (older cups), omit the attachment silently and log a warning — email still sends.
 
-## Release 8.1 — Match Management Platform (Roadmap)
+## Release 8.0 — Tablet Scoring UI
 
-Vision: Transform the current "link collection" home page into a structured match management platform. This requires significant UI design and architecture work before implementation.
+### Tablet Scoring Requirements
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| MP1 | **UI Architecture Design**: Design the overall application navigation and information architecture. Replace the current static link collection with a structured app shell supporting the functional areas below. Mobile-first, responsive design. Define navigation patterns, page hierarchy, and user flows | ⬚ Design |
-| MP2 | **Training Type Definitions**: Define and manage training types (e.g., Kupittaa CUP, SRA Training) — how they map to SSI event structures (Cup/Match/Squad hierarchy) and to Tapahtumakalenteri calendar events. Configuration-driven, not hardcoded | ⬚ Design |
-| MP3 | **Match Personnel Management**: Extend the existing staffing MVP (SRA Training staffing) into a general-purpose match personnel system. Define roles per training type, manage availability, handle signup/resign workflows. Personnel assignments visible in match event context | ⬚ Design |
-| MP4 | **Match Event Management**: Unified interface for creating, viewing, and managing match events. Covers the full lifecycle: create Cup+Matches+Squads → open registration → manage registrations and squadding → run scoring → close and report. Integrates with SSI (GraphQL + web scraping) and Tapahtumakalenteri | ⬚ Design |
-| MP5 | **Registration Management**: Consolidate the existing registration helper (`#/register`) into the match event context. View registrations, manage squad assignments, handle re-registrations and withdrawals — all within the match event view | ⬚ Design |
-| MP6 | **Scoring Integration**: Integrate tablet scoring (`#/scoring-tablet`) and mobile scoring (`#/scoring`) into the match event context. Scoring is launched from within a match event, not as a separate top-level feature | ⬚ Design |
-| MP7 | **Reporting**: Post-match reporting — results summary, statistics (shots fired, participation), export for Tapahtumakalenteri update. Consolidate the existing summary report functionality | ⬚ Design |
+| TS1 | **Tablet UI Mode**: Tablet-optimized scoring interface with all elements visible simultaneously (shooters, score track, number pad) accessible via `#/scoring-tablet` route | ✅ Implemented |
+| TS2 | **Breadcrumb Navigation**: Clickable breadcrumb trail (Cup › Match › Squad) in header for navigating back to any level | ✅ Implemented |
+| TS3 | **User Identity Display**: Display logged-in SSI user name (first + last) and email in header, fetched from GraphQL `{ me { email first_name last_name } }` | ✅ Implemented |
+| TS4 | **Fixed-Height Score Bars**: Score track uses CSS Grid with fixed min-height (120px per string card) to prevent layout shifts when scores are added | ✅ Implemented |
+| TS5 | **Long-Press Score Deletion**: Single-gesture score removal via 750ms long-press with visual progress feedback (red border animation). Supports both touch and mouse input | ✅ Implemented |
+| TS6 | **Touch Target Compliance**: All interactive elements meet accessibility standards (56×56px score buttons, 88px number pad buttons, exceeding 44×44px minimum) | ✅ Implemented |
+| TS7 | **Viewport-Fitted Layout**: UI scales to fit within screen bounds (`h-screen` with `overflow-hidden`) without requiring page-level scrolling. Individual panels scroll internally as needed | ✅ Implemented |
+| TS8 | **Responsive Breakpoints**: Adaptive sizing for mobile (<1024px), tablet landscape (≥1024px), and desktop (≥1280px) using Tailwind breakpoints | ✅ Implemented |
+| TS9 | **Read-Only for Completed Matches**: When match status is 'cp' (completed), scoring UI becomes read-only: number pad buttons disabled, save button shows "Match Completed" (Finnish: "Ottelu valmis"), long-press deletion disabled, green "Completed" (Finnish: "Valmis") badge shown in header. Users can browse scores but cannot edit or save | ✅ Implemented |
+| TS10 | **Session Continuity for Long Competitions**: Scoring API authentication must refresh SSI user JWT before rejecting requests when token is expired or within refresh window, so active tablet sessions remain logged in during multi-hour matches | ✅ Implemented |
+| TS11 | **Preserve Unsaved Local Scores on Re-Login**: Tablet scoring view must not overwrite restored local `ssi_scores` state with SSI baseline data on mount. Local in-progress edits (including `M` misses) remain visible after forced re-login/remount | ✅ Implemented |
+| TS12 | **Long-Run Regression Coverage**: Automated tests must simulate long-duration scoring behavior (~3 hours) and verify no forced session drop / local-score overwrite regressions in middleware and tablet UI remount flow | ✅ Implemented |
 
-### Design Principles (v8.1)
+### Rationale for TS9 (Completed Match Protection)
 
-- **Event-centric navigation**: Everything revolves around match events. Users navigate to an event and access all related functions (personnel, registration, scoring, reporting) from there.
-- **Training type as template**: Training types define the structure (how many matches, what disciplines, squad configuration, personnel roles). Creating a new event from a training type pre-fills all settings.
-- **Progressive disclosure**: Show simple views by default, reveal complexity on demand. A range officer sees different things than an administrator.
-- **Offline-capable**: Design for intermittent connectivity at shooting ranges. Critical paths (scoring) must work offline with sync.
+**Business Rule**: Completed matches ('cp' status) indicate scoring is finalized and approved by shooters with no protests. Once a match reaches 'cp' status, scores become official competition results that must be protected from accidental or unauthorized modification.
+
+**Finnish Translation**: "Completed" = "Valmis" (indicating scoring is completed and approved)
+
+**UI Behavior**:
+- Number pad buttons: Greyed out (`disabled` state) when match is completed
+- Save button: Shows "Ottelu valmis" / "Match Completed" instead of "Tallenna tulokset" / "Save Scores"
+- Long-press deletion: Disabled (event handlers return early if `isMatchCompleted`)
+- Header badge: Green "Valmis" / "Completed" badge appears next to match name in breadcrumb trail
+- Browsing: Users can still navigate, view scores, and switch between shooters
+
+**Implementation**: Check `match.status === 'cp'` and disable all score modification operations while preserving read-only browsing capability.
+
+## Release 10.0 — Public Registration Buffer
+
+> **Branch Status:** Specified in `origin/R100-feature-registration-buffer-design` and Loop 1 storage implemented on `origin/R100-feature-registration-buffer-loop1-store`.
+
+Decouples public Kupittaa Cup registration (`#/register`) from immediate SSI account existence by persisting registrations in an application-owned buffer database and synchronizing with SSI asynchronously.
 
 ## Summary
 
@@ -529,50 +535,58 @@ Vision: Transform the current "link collection" home page into a structured matc
 - **Release 3.0** (Scoring Application): 21 requirements — 20 ✅, 1 pending (SEC11)
 - **Release 3.1** (Data Integrity): 2 requirements — 2 pending (47, 48)
 - **Release 4.0** (Kupittaa Cup Registration Frontend): 25 requirements — 25 ✅
-- **Release 5.0** (SRA Training Staffing) — requirements in `sra-training-staffing-requirements.md`
-- **Release 6.0** (Match Management & UI Consolidation): 5 requirements — 1 ✅, 4 pending ➜ R7.6 (MG2–MG5)
+- **Release 5.0** (SRA Training Staffing): requirements in [sra-training-staffing-requirements.md](./sra-training-staffing-requirements.md)
+- **Release 6.0** (Match Management & UI Consolidation): 5 functional + 5 identification requirements — 9 ✅ (MG1, MG3–MG5, MG-ID1–MG-ID5), 1 🟡 partially implemented ➜ R7.6 (MG2)
 - **Release 7.0** (Authentication & Session Handling): 25 requirements — 19 ✅, 6 pending ➜ R7.6 (AUTH10, SES7, SEC1, SEC7, TEST1–5/7), 2 deferred (TEST6, TEST8)
 - **Release 7.1** (Management Availability): 1 requirement — 1 ✅
-- **Release 7.2** (Kupittaa Cup Management): 3 requirements — 1 ✅ (CUP2), 1 📋 ➜ R7.6 (CUP1), 1 ⚠️ deprecated ➜ R7.6 (CUP3→R76-COM2)
+- **Release 7.2** (Kupittaa Cup Management): 3 requirements — 1 ✅ (CUP2), 1 🟡 partially implemented (CUP1), 1 ❌ deprecated/removed (CUP3 → R76-COM2)
 - **Release 7.3** (Refactoring Analysis): 1 requirement — 1 ✅ (RFA1). 5 outdated docs removed
 - **Release 7.4** (Refactoring Implementation): 8 requirements — 8 ✅ (RFR1–RFR8)
 - **Release 7.4.1** (Authentication UX Hardening): 5 requirements — 5 ✅ (AUTH-UX1–AUTH-UX5)
 - **Release 7.5** (Architecture V2 Foundation): 5 requirements — 3 ✅, 2 📋 ➜ R7.6 (ARCH3, ARCH4)
-- **Release 7.6** (Consolidation & Completion): 21 requirements from R6.0/R7.0/R7.2/R7.5 plus compliance follow-up (Privacy Policy + Terms of Service, disable paid tracking, per-user SSI execution identity) — see `release-7.6.md`
-- **Release 7.7** (QR Code Login for Scoring): 6 requirements — 6 ✅ (QR1–QR6). Device token auth for tablets/phones at the range. **7.7.1 hotfix**: 4 fixes (cup list visibility, auto-restore, same-day filtering, squad audit logging)
-- **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes implemented (GQL-HF1–GQL-HF3). **7.9.2 hotfix**: 2 fixes implemented (GQL-HF4, GQL-HF7). **7.9.3 hotfix**: 1 fix specified (GQL-HF5). **7.9.4**: 1 requirement specified (GQL-HF6 — iCal calendar attachment)
+- **Release 7.6** (Consolidation & Compliance Hardening): 21 requirements consolidated from R6.0/R7.0/R7.2/R7.5 + compliance — 4 ✅ (R76-MG3–MG5, R76-COM2), 2 🟡 partially implemented (R76-CUP1, R76-MG2), 15 pending — see [release-7.6.md](./release-7.6.md)
+- **Release 7.7** (QR Code Login for Scoring): 6 requirements — 6 ✅ (QR1–QR6). **7.7.1 hotfix**: 4 fixes ✅
+- **Release 7.8** (Induction Wait List): 32 requirements — 32 ✅ on branch `copilot/vscode-mnw87b09-v5g9` (pending merge to `main`)
+- **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes ✅ (GQL-HF1–GQL-HF3). **7.9.2 hotfix**: 2 fixes ✅ (GQL-HF4, GQL-HF7). **7.9.3 hotfix**: 1 fix 📋 (GQL-HF5). **7.9.4**: 1 requirement ⬚ (GQL-HF6 — iCal calendar attachment)
 - **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
-- **Release 8.1** (Match Management Platform): 7 requirements — 0 ✅, 7 design phase (MP1–MP7)
+- **Release 10.0** (Public Registration Buffer): 📋 Specified & Loop 1 store implemented on `origin/R100-feature-registration-buffer-*`
 
+> **Note:** The multi-tenant **Match Management Platform** (formerly listed as Release 8.0/8.1 roadmap `MP1–MP7`) has been moved to its own repository: `tohewi/match-manager`.
 
 ## Configuration Files
 
 | File | Purpose |
 |------|---------|
-| `config/kupittaa-cup-config.yml` | All SSI and WordPress settings |
+| `config/kupittaa-cup-config.yml` | Kupittaa Cup SSI and WordPress settings |
 | `config/kupittaa-cup-dates.txt` | Date list for batch creation |
+| `config/kupittaa-cup-dates-2h.txt` | 2H 2026 Kupittaa Cup date list |
+| `config/kupittaa-perehdytys-config.yml` | Kupittaa Perehdytys settings |
+| `config/kupittaa-perehdytys-dates-2h.txt` | 2H 2026 Perehdytys date list |
+| `config/sra-training-config.yml` | SRA training staffing roles, allowlist, and service accounts |
 
-## Scripts
+## Scripts (Legacy Archive)
 
 | Script | Purpose |
 |--------|---------|
-| `New-KupittaaCup.ps1` | Main script - creates Cup, Matches, Squads, Calendar Event |
-| `New-KupittaaCupBatch.ps1` | Batch creation from date list |
-| `Connect-SSI.ps1` | SSI authentication |
-| `Connect-WordPress.ps1` | WordPress authentication with 2FA |
-| `New-TapahtumakalenteriEvent.ps1` | Calendar event creation |
-| `Update-TapahtumakalenteriEvent.ps1` | Statistics update |
-| `Test-EventIntegrity.ps1` | Data integrity check between SSI and WordPress |
+| `archive/scripts-legacy/New-KupittaaCup.ps1` | Main script - creates Cup, Matches, Squads, Calendar Event |
+| `archive/scripts-legacy/New-KupittaaCupBatch.ps1` | Batch creation from date list |
+| `archive/scripts-legacy/Connect-SSI.ps1` | SSI web session authentication |
+| `archive/scripts-legacy/Connect-WordPress.ps1` | WordPress authentication with 2FA |
+| `archive/scripts-legacy/New-TapahtumakalenteriEvent.ps1` | Calendar event creation |
+| `archive/scripts-legacy/Update-TapahtumakalenteriEvent.ps1` | Statistics update |
+| `archive/scripts-legacy/Test-EventIntegrity.ps1` | Data integrity check between SSI and WordPress |
 
 ## Documentation
 
 | Document | Purpose |
 |----------|---------|
-| `docs/user-guide.md` | Scoring and registration app user guide |
-| `docs/installation-guide.md` | Render, Resend, and GitHub deployment guide |
+| `docs/instructions/user-guide.md` | Scoring and registration app user guide |
+| `docs/instructions/installation-guide.md` | Render, Resend, and GitHub deployment guide |
+| `docs/instructions/PR-PREVIEW-DEPLOYMENTS.md` | Automated PR preview environments on Render |
+| `docs/instructions/BRANCHING-STRATEGY.md` | GitHub Flow branching and release strategy |
 | `docs/RELEASE-NOTES.md` | Version history and changelog |
-| `docs/registration-flow.md` | Backend sequence diagrams and SSI state machine |
-| `docs/scoring-architecture.md` | Proxy architecture, session management, scoring flow |
-| `docs/ssi-admin-operations.md` | Web scraping endpoints and form field reference |
-| `docs/README.md` | Cup creation scripts reference (PowerShell) |
+| `docs/design/registration-flow.md` | Backend sequence diagrams and SSI state machine |
+| `docs/design/scoring-architecture.md` | Proxy architecture, session management, scoring flow |
+| `docs/design/ssi-admin-operations.md` | Web scraping endpoints and form field reference |
+| `docs/instructions/README.md` | Documentation index and PowerShell scripts reference |
 | `docs/developer-guide.md` | Cup creation process technical details |

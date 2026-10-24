@@ -83,24 +83,23 @@ node --env-file=scoring-proxy/.env scoring-proxy/server.js
 
 | Document | Description |
 |----------|-------------|
-| [User Guide](docs/user-guide.md) | How to use the scoring and registration apps |
-| [Installation Guide](docs/installation-guide.md) | Deploy to Render with Resend email and GitHub CI |
-| **[PR Preview Deployments](docs/PR-PREVIEW-DEPLOYMENTS.md)** | **Deploy PR branches to Render for testing** |
-| [Branching Strategy](docs/BRANCHING-STRATEGY.md) | GitHub Flow branching model and release process |
+| [User Guide](docs/instructions/user-guide.md) | How to use the scoring and registration apps |
+| [Installation Guide](docs/instructions/installation-guide.md) | Deploy to Render with Resend email and GitHub CI |
+| **[PR Preview Deployments](docs/instructions/PR-PREVIEW-DEPLOYMENTS.md)** | **Deploy PR branches to Render for testing** |
+| [Branching Strategy](docs/instructions/BRANCHING-STRATEGY.md) | GitHub Flow branching model and release process |
 | [Release Notes](docs/RELEASE-NOTES.md) | Version history and changelog |
-| [Requirements](docs/requirements.md) | Full requirements traceability matrix |
-| [Registration Flow](docs/registration-flow.md) | Backend sequence diagrams and SSI state machine |
-| [Scoring Architecture](docs/scoring-architecture.md) | Proxy architecture, session management, scoring flow |
-| [SSI Admin Operations](docs/ssi-admin-operations.md) | Web scraping endpoints and form field reference |
+| [Requirements](docs/requirements/requirements.md) | Full requirements traceability matrix |
+| [Registration Flow](docs/design/registration-flow.md) | Backend sequence diagrams and SSI state machine |
+| [Scoring Architecture](docs/design/scoring-architecture.md) | Proxy architecture, session management, scoring flow |
+| [SSI Admin Operations](docs/design/ssi-admin-operations.md) | Web scraping endpoints and form field reference |
 | **[Render Services](docs/render-services.md)** | **Render MCP server integration and available services** |
-| **[Refactoring Plan](docs/refactoring-plan.md)** | **Software architecture analysis and refactoring strategy** |
-| [Refactoring Visual Summary](docs/refactoring-visual-summary.md) | Quick reference with diagrams and comparisons |
+| **[Architecture Review](docs/design/architecture-review.md)** | **Software architecture analysis and modular monolith roadmap** |
 | [AI Agent Guidelines](docs/ai-agent-guidelines.md) | Token-efficient development with AI assistants |
 
 ## Creating a Kupittaa Cup
 
 ```powershell
-.\scripts\New-KupittaaCup.ps1 -Date "08-02-2026" -Username "user@example.com" -Password "pass"
+.\archive\scripts-legacy\New-KupittaaCup.ps1 -Date "08-02-2026" -Username "user@example.com" -Password "pass" -ConfigPath ".\config\kupittaa-cup-config.yml"
 ```
 
 Creates: 1 Cup + 3 Matches (Tarkkuus, Pika, Kuvio) + 3 squads per match. See `-TestMode` and `-CreateCalendarEvent` flags for test mode and WordPress integration.

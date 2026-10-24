@@ -155,9 +155,9 @@ function validateScore(score) {
     └── kupittaa-cup-config.yml  # Cup templates and defaults
 ```
 
-### Planned Structure (after refactoring)
+### Historical Proposal (superseded by modular monolith)
 
-See `docs/refactoring-plan.md` for complete details. Summary:
+> **Historical note:** The multi-package layout below is a superseded early proposal. For the active single-deployment modular monolith architecture and roadmap, see `docs/design/architecture-review.md`. Summary of the historical proposal:
 
 ```
 ├── packages/
@@ -602,9 +602,9 @@ AI agents cache context between requests. Optimize by:
 
 ---
 
-## Migration Guide
+## Historical Migration Examples (superseded)
 
-As the codebase is refactored (see `docs/refactoring-plan.md`), update your prompts:
+> **Historical note:** The Shared SDK and Microservices phases below were rejected in favor of the single-deployment modular monolith documented in `docs/design/architecture-review.md`. Kept as historical prompt-migration examples only:
 
 ### Phase 1: Shared SDK (Current)
 
