@@ -535,6 +535,23 @@ GQL-HF7 validation (2026-09-11): 239 backend tests, including 12 CSRF regression
 
 **Implementation**: Check `match.status === 'cp'` and disable all score modification operations while preserving read-only browsing capability.
 
+## Release 9.0 — Gun Inventory, Usage & Maintenance Tracking
+
+> **Detailed Specification:** [release-9.0-gun-inventory.md](./release-9.0-gun-inventory.md)
+
+Inventory, loaner-gun checkout (*laina-ase*), cartridge (*patruuna*) bookkeeping, end-of-match return to gun safe, and cleaning/maintenance tracking for club firearms, restricted to admins of the configured SSI group (default Group `25874` — `https://shootnscoreit.com/groups/25874/`).
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| GUN1 | **Configurable SSI Group Admin Access Control**: Restrict all gun inventory and loaner-gun management endpoints to authenticated users with role `"admin"` in the configured SSI group (default Group ID `25874`, configurable in `config/gun-inventory-config.yml` and `SSI_GUN_INVENTORY_GROUP_ID`). | 📋 Specified (`R90-GUN1`) |
+| GUN2 | **JSON File Gun Inventory Store & CRUD API**: Persist gun inventory (`make`, `model`, `serialNumber`, `acquisitionYear`, `state`: `in_gun_safe` \| `in_range_use` \| `retired`, usage/cartridge counters, maintenance & usage history) in `scoring-proxy/data/gun-inventory.json` with full CRUD endpoints (`/api/v1/guns`). | 📋 Specified (`R90-GUN2`) |
+| GUN3 | **Laina-ase Checkout & Cartridge Tracking (`patruunamäärä`)**: Allow picking a shooter from the `"Laina-ase"` squad, selecting an available gun from `in_gun_safe`, and entering cartridges given (`patruunamäärä` / `cartridgesGiven`, typically `100` rounds or `0` if shooter has ammunition permit). Marks gun `in_range_use` and increments usage & cartridge counters (`timesUsedTotal`, `timesUsedSinceMaintenance`, `cartridgesIssuedTotal`, `cartridgesSinceMaintenance`). | 📋 Specified (`R90-GUN3`) |
+| GUN4 | **End-of-Match Return to Gun Safe**: Support returning checked-out `"Laina-ase"` guns from `in_range_use` back to `in_gun_safe` individually (`POST /api/v1/guns/:id/return`) or all at once (`POST /api/v1/guns/return-all`). | 📋 Specified (`R90-GUN4`) |
+| GUN5 | **Cleaning & Maintenance Recording**: Support recording cleaning/maintenance (`POST /api/v1/guns/:id/maintenance`), appending to maintenance history and resetting `timesUsedSinceMaintenance = 0` and `cartridgesSinceMaintenance = 0` while preserving lifetime totals. | 📋 Specified (`R90-GUN5`) |
+| GUN6 | **Gun Inventory & Maintenance Web UI (`#/guns`)**: Dedicated page displaying inventory state (`Asekaapissa` / `Radalla käytössä`), total & since-maintenance usage and cartridge counts, Add/Edit/Retire gun dialog, Record Cleaning/Maintenance action, and Return to Safe action. | 📋 Specified (`R90-GUN6`) |
+| GUN7 | **ManagePage (`#/manage`) Laina-ase Squad Integration**: In `SquaddingOverview` / `SquadCard`, allow selecting a shooter in the `"Laina-ase"` squad, picking an available gun + cartridge count (`100` / `0` / custom), displaying assigned gun badge on shooter row, and returning guns to safe at end of match. | 📋 Specified (`R90-GUN7`) |
+| GUN8 | **Unit, Integration & Playwright E2E Verification**: Unit/route/component tests and Playwright E2E coverage for gun inventory, Laina-ase checkout/return, maintenance reset, and SSI Group `25874` admin access control. | 📋 Specified (`R90-GUN8`) |
+
 ## Release 10.0 — Public Registration Buffer
 
 > **Branch Status:** Specified in `origin/R100-feature-registration-buffer-design` and Loop 1 storage implemented on `origin/R100-feature-registration-buffer-loop1-store`.
@@ -550,18 +567,19 @@ Decouples public Kupittaa Cup registration (`#/register`) from immediate SSI acc
 - **Release 4.0** (Kupittaa Cup Registration Frontend): 25 requirements — 25 ✅
 - **Release 5.0** (SRA Training Staffing): requirements in [sra-training-staffing-requirements.md](./sra-training-staffing-requirements.md)
 - **Release 6.0** (Match Management & UI Consolidation): 5 functional + 5 identification requirements — 10 ✅ (MG1–MG5, MG-ID1–MG-ID5)
-- **Release 7.0** (Authentication & Session Handling): 25 requirements — 23 ✅, 2 deferred (TEST6, TEST8)
+- **Release 7.0** (Authentication & Session Handling): 25 requirements — 24 ✅ (including TEST6), 1 deferred (TEST8)
 - **Release 7.1** (Management Availability): 1 requirement — 1 ✅
 - **Release 7.2** (Kupittaa Cup Management): 3 requirements — 2 ✅ (CUP1, CUP2), 1 ❌ deprecated/removed (CUP3 → R76-COM2)
 - **Release 7.3** (Refactoring Analysis): 1 requirement — 1 ✅ (RFA1). 5 outdated docs removed
 - **Release 7.4** (Refactoring Implementation): 8 requirements — 8 ✅ (RFR1–RFR8)
 - **Release 7.4.1** (Authentication UX Hardening): 5 requirements — 5 ✅ (AUTH-UX1–AUTH-UX5)
 - **Release 7.5** (Architecture V2 Foundation): 5 requirements — 5 ✅ (ARCH1–ARCH5)
-- **Release 7.6** (Consolidation & Compliance Hardening): 21 consolidated requirements + 6 tech debt backlog items (`R76-TD1`–`R76-TD6`) — 25 ✅ (`R76` 21/21 + `R76-TD1`–`R76-TD4`), 2 backlog (`R76-TD5` unmerged branch consolidation, `R76-TD6` Playwright E2E UAT suite) — see [release-7.6.md](./release-7.6.md)
+- **Release 7.6** (Consolidation & Compliance Hardening): 21 consolidated requirements + 6 tech debt backlog items (`R76-TD1`–`R76-TD6`) — 26 ✅ (`R76` 21/21 + `R76-TD1`–`R76-TD4`, `R76-TD6`), 1 backlog (`R76-TD5` unmerged branch consolidation) — see [release-7.6.md](./release-7.6.md)
 - **Release 7.7** (QR Code Login for Scoring): 6 requirements — 6 ✅ (QR1–QR6). **7.7.1 hotfix**: 4 fixes ✅
 - **Release 7.8** (Induction Wait List): 32 requirements — 32 ✅ on branch `copilot/vscode-mnw87b09-v5g9` (pending merge to `main`)
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes ✅ (GQL-HF1–GQL-HF3). **7.9.2 hotfix**: 2 fixes ✅ (GQL-HF4, GQL-HF7). **7.9.3 hotfix**: 1 fix 📋 (GQL-HF5). **7.9.4**: 1 requirement ⬚ (GQL-HF6 — iCal calendar attachment)
-- **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
+- **Release 8.0** (Tablet Scoring UI): 13 requirements — 13 ✅ (TS1–TS13)
+- **Release 9.0** (Gun Inventory, Usage & Maintenance Tracking): 8 requirements — 📋 Specified (`GUN1`–`GUN8` / `R90-GUN1`–`R90-GUN8`) — see [release-9.0-gun-inventory.md](./release-9.0-gun-inventory.md)
 - **Release 10.0** (Public Registration Buffer): 📋 Specified & Loop 1 store implemented on `origin/R100-feature-registration-buffer-*`
 
 > **Note:** The multi-tenant **Match Management Platform** (formerly listed as Release 8.0/8.1 roadmap `MP1–MP7`) has been moved to its own repository: `tohewi/match-manager`.
