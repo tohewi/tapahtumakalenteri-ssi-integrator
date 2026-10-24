@@ -137,12 +137,32 @@ describe('Manage session bootstrap', () => {
   })
 
   it('returns to login if the server rejects the restored session while loading cups', async () => {
-    mockRequests(response({ authenticated: true, scope: 'manage' }), response({ sessionExpired: true, error: 'Session expired' }, 401))
+    let cupLoads = 0
+    const fetchMock = mockRequests(response({ authenticated: true, scope: 'manage' }), response({ sessionExpired: true, error: 'Session expired' }, 401))
+    fetchMock.mockImplementation(async url => {
+      if (url === '/api/v1/auth/status') return response({ authenticated: true, scope: 'manage' })
+      if (url === '/api/manage/cups' && cupLoads++ === 0) {
+        return response({ sessionExpired: true, error: 'Session expired' }, 401)
+      }
+      if (url === '/api/manage/cups') return response({ cups: [] })
+      throw new Error(`Unexpected request: ${url}`)
+    })
     render(<ManagePage />)
 
     expect(await screen.findByPlaceholderText('your@email.com')).toBeInTheDocument()
+    expect(screen.getByText('Session expired. Please login again.')).toBeInTheDocument()
     expect(localStorage.getItem('ssi_manage_state')).toBeNull()
     expect(api.login).not.toHaveBeenCalled()
+
+    fireEvent.change(screen.getByPlaceholderText('your@email.com'), { target: { value: 'manager@example.com' } })
+    fireEvent.change(screen.getByPlaceholderText('SSI password'), { target: { value: 'test-password' } })
+    fireEvent.click(screen.getByRole('button', { name: /login/i }))
+
+    expect(await screen.findByText('Ei cupeja')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Kirjaudu ulos' }))
+    expect(await screen.findByPlaceholderText('your@email.com')).toBeInTheDocument()
+    expect(screen.queryByText('Session expired. Please login again.')).not.toBeInTheDocument()
+    expect(api.login).toHaveBeenCalledWith('manager@example.com', 'test-password', '', 'manage')
   })
 
   it('ignores an in-flight status response after leaving Manage', async () => {
