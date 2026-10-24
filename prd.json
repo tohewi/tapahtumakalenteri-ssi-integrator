@@ -33,8 +33,8 @@
         "scoring-proxy tests and lint pass (npm run lint && npm test)"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented JSON gun inventory store, CRUD, checkout with cartridge tracking, single/bulk return, and maintenance reset in gun-inventory-service.js."
     },
     {
       "id": "US-003",

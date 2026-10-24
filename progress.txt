@@ -22,3 +22,9 @@
 - Added unit tests in `scoring-proxy/test/gun-inventory.test.js`.
 ---
 
+## 2026-10-24 21:16 - US-002 (R90-GUN2..GUN5)
+- Implemented JSON file gun inventory persistence (`scoring-proxy/data/gun-inventory.json`) and service functions (`listGuns`, `createGun`, `updateGun`, `retireGun`, `checkoutGun`, `returnGun`, `returnAllGuns`, `recordGunMaintenance`) in `scoring-proxy/lib/services/gun-inventory-service.js`.
+- Added unit tests in `scoring-proxy/test/gun-inventory.test.js` covering CRUD, `100` and `0` cartridge checkouts, single/bulk return to safe, and maintenance counter reset.
+---
+
+

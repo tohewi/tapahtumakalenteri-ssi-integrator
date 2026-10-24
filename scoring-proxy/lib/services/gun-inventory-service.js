@@ -2,15 +2,18 @@
 // Gun Inventory Service — Access Control & Inventory Management
 // ============================================================
 
-import { existsSync, readFileSync } from 'node:fs'
+import crypto from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse } from 'yaml'
 import { ssiGetGroupMembers } from '../ssi-core/management.js'
 import { log } from '../logger.js'
+import { AppError } from '../errors/AppError.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const CONFIG_PATH = path.resolve(__dirname, '..', '..', '..', 'config', 'gun-inventory-config.yml')
+const DEFAULT_DATA_PATH = path.resolve(__dirname, '..', '..', 'data', 'gun-inventory.json')
 
 const DEFAULT_CONFIG = {
   accessControl: {
@@ -25,6 +28,33 @@ const DEFAULT_CONFIG = {
 
 const accessCache = new Map()
 const ACCESS_CACHE_TTL_MS = 10 * 60 * 1000
+
+function getDataFilePath() {
+  return process.env.GUN_INVENTORY_FILE_PATH || DEFAULT_DATA_PATH
+}
+
+function readInventoryData() {
+  const filePath = getDataFilePath()
+  if (!existsSync(filePath)) {
+    return { guns: [] }
+  }
+  try {
+    const parsed = JSON.parse(readFileSync(filePath, 'utf8'))
+    return Array.isArray(parsed?.guns) ? parsed : { guns: [] }
+  } catch (err) {
+    log.warn('[guns] Failed to read gun-inventory.json, starting empty:', err.message)
+    return { guns: [] }
+  }
+}
+
+function writeInventoryData(data) {
+  const filePath = getDataFilePath()
+  const dir = path.dirname(filePath)
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true })
+  }
+  writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8')
+}
 
 export function loadGunInventoryConfig() {
   let fileConfig = {}
@@ -112,4 +142,245 @@ export async function verifyGunInventoryAdminAccess({
 
   accessCache.set(cacheKey, { checkedAt: Date.now(), result })
   return result
+}
+
+// ============================================================
+// Gun Inventory CRUD, Checkout, Return & Maintenance Logic
+// ============================================================
+
+export function listGuns({ includeRetired = false } = {}) {
+  const { guns } = readInventoryData()
+  return includeRetired ? guns : guns.filter(g => g.state !== 'retired')
+}
+
+export function createGun({ make, model, serialNumber, acquisitionYear }) {
+  const cleanMake = String(make || '').trim()
+  const cleanModel = String(model || '').trim()
+  const cleanSerial = String(serialNumber || '').trim()
+  const yearNum = Number(acquisitionYear)
+
+  if (!cleanMake || !cleanModel || !cleanSerial) {
+    throw new AppError('make, model, and serialNumber are required', 400, 'VALIDATION_ERROR')
+  }
+  if (!Number.isInteger(yearNum) || yearNum < 1900 || yearNum > 2100) {
+    throw new AppError('acquisitionYear must be a valid year (1900-2100)', 400, 'VALIDATION_ERROR')
+  }
+
+  const data = readInventoryData()
+  if (data.guns.some(g => g.state !== 'retired' && g.serialNumber.toLowerCase() === cleanSerial.toLowerCase())) {
+    throw new AppError(`Gun with serial number "${cleanSerial}" already exists`, 409, 'CONFLICT')
+  }
+
+  const gun = {
+    id: crypto.randomUUID(),
+    make: cleanMake,
+    model: cleanModel,
+    serialNumber: cleanSerial,
+    acquisitionYear: yearNum,
+    state: 'in_gun_safe',
+    timesUsedTotal: 0,
+    timesUsedSinceMaintenance: 0,
+    cartridgesIssuedTotal: 0,
+    cartridgesSinceMaintenance: 0,
+    lastMaintenanceAt: null,
+    lastMaintenanceBy: null,
+    currentCheckout: null,
+    maintenanceHistory: [],
+    usageHistory: [],
+    createdAt: new Date().toISOString(),
+  }
+
+  data.guns.push(gun)
+  writeInventoryData(data)
+  return gun
+}
+
+export function updateGun(gunId, { make, model, serialNumber, acquisitionYear }) {
+  const data = readInventoryData()
+  const gun = data.guns.find(g => g.id === gunId)
+  if (!gun) {
+    throw new AppError('Gun not found', 404, 'NOT_FOUND')
+  }
+
+  if (make !== undefined) {
+    const cleanMake = String(make).trim()
+    if (!cleanMake) throw new AppError('make cannot be empty', 400, 'VALIDATION_ERROR')
+    gun.make = cleanMake
+  }
+  if (model !== undefined) {
+    const cleanModel = String(model).trim()
+    if (!cleanModel) throw new AppError('model cannot be empty', 400, 'VALIDATION_ERROR')
+    gun.model = cleanModel
+  }
+  if (serialNumber !== undefined) {
+    const cleanSerial = String(serialNumber).trim()
+    if (!cleanSerial) throw new AppError('serialNumber cannot be empty', 400, 'VALIDATION_ERROR')
+    if (data.guns.some(g => g.id !== gunId && g.state !== 'retired' && g.serialNumber.toLowerCase() === cleanSerial.toLowerCase())) {
+      throw new AppError(`Gun with serial number "${cleanSerial}" already exists`, 409, 'CONFLICT')
+    }
+    gun.serialNumber = cleanSerial
+  }
+  if (acquisitionYear !== undefined) {
+    const yearNum = Number(acquisitionYear)
+    if (!Number.isInteger(yearNum) || yearNum < 1900 || yearNum > 2100) {
+      throw new AppError('acquisitionYear must be a valid year (1900-2100)', 400, 'VALIDATION_ERROR')
+    }
+    gun.acquisitionYear = yearNum
+  }
+
+  writeInventoryData(data)
+  return gun
+}
+
+export function retireGun(gunId) {
+  const data = readInventoryData()
+  const gun = data.guns.find(g => g.id === gunId)
+  if (!gun) {
+    throw new AppError('Gun not found', 404, 'NOT_FOUND')
+  }
+  if (gun.state === 'in_range_use') {
+    throw new AppError('Cannot retire a gun while it is in range use', 409, 'CONFLICT')
+  }
+
+  gun.state = 'retired'
+  gun.currentCheckout = null
+  writeInventoryData(data)
+  return gun
+}
+
+export function checkoutGun({
+  gunId,
+  shooterName,
+  shooterEmail = '',
+  cupId = null,
+  cupName = '',
+  cartridgesGiven,
+  checkedOutBy = 'unknown',
+}) {
+  const cleanShooter = String(shooterName || '').trim()
+  if (!cleanShooter) {
+    throw new AppError('shooterName is required', 400, 'VALIDATION_ERROR')
+  }
+
+  const cfg = loadGunInventoryConfig()
+  const rounds = cartridgesGiven === undefined || cartridgesGiven === null
+    ? cfg.defaults.cartridgesGiven
+    : Number(cartridgesGiven)
+
+  if (!Number.isInteger(rounds) || rounds < 0 || rounds > 5000) {
+    throw new AppError('cartridgesGiven must be an integer between 0 and 5000', 400, 'VALIDATION_ERROR')
+  }
+
+  const data = readInventoryData()
+  const gun = data.guns.find(g => g.id === gunId)
+  if (!gun) {
+    throw new AppError('Gun not found', 404, 'NOT_FOUND')
+  }
+  if (gun.state !== 'in_gun_safe') {
+    throw new AppError(`Gun is not available in gun safe (current state: ${gun.state})`, 409, 'CONFLICT')
+  }
+
+  const nowIso = new Date().toISOString()
+  const checkoutRecord = {
+    id: crypto.randomUUID(),
+    checkedOutAt: nowIso,
+    returnedAt: null,
+    shooterName: cleanShooter,
+    shooterEmail: String(shooterEmail || '').trim(),
+    cupId: cupId != null ? String(cupId) : null,
+    cupName: String(cupName || '').trim(),
+    cartridgesGiven: rounds,
+    checkedOutBy,
+  }
+
+  gun.state = 'in_range_use'
+  gun.timesUsedTotal = (gun.timesUsedTotal || 0) + 1
+  gun.timesUsedSinceMaintenance = (gun.timesUsedSinceMaintenance || 0) + 1
+  gun.cartridgesIssuedTotal = (gun.cartridgesIssuedTotal || 0) + rounds
+  gun.cartridgesSinceMaintenance = (gun.cartridgesSinceMaintenance || 0) + rounds
+  gun.currentCheckout = checkoutRecord
+  gun.usageHistory = [checkoutRecord, ...(gun.usageHistory || [])]
+
+  writeInventoryData(data)
+  return gun
+}
+
+export function returnGun({ gunId, returnedBy = 'unknown' }) {
+  const data = readInventoryData()
+  const gun = data.guns.find(g => g.id === gunId)
+  if (!gun) {
+    throw new AppError('Gun not found', 404, 'NOT_FOUND')
+  }
+  if (gun.state !== 'in_range_use') {
+    throw new AppError('Gun is not currently in range use', 409, 'CONFLICT')
+  }
+
+  const nowIso = new Date().toISOString()
+  if (gun.currentCheckout && Array.isArray(gun.usageHistory)) {
+    const histEntry = gun.usageHistory.find(h => h.id === gun.currentCheckout.id)
+    if (histEntry) {
+      histEntry.returnedAt = nowIso
+      histEntry.returnedBy = returnedBy
+    }
+  }
+
+  gun.state = 'in_gun_safe'
+  gun.currentCheckout = null
+  writeInventoryData(data)
+  return gun
+}
+
+export function returnAllGuns({ cupId = null, returnedBy = 'unknown' } = {}) {
+  const data = readInventoryData()
+  const nowIso = new Date().toISOString()
+  const returnedGuns = []
+
+  for (const gun of data.guns) {
+    if (gun.state !== 'in_range_use') continue
+    if (cupId != null && String(gun.currentCheckout?.cupId || '') !== String(cupId)) {
+      continue
+    }
+
+    if (gun.currentCheckout && Array.isArray(gun.usageHistory)) {
+      const histEntry = gun.usageHistory.find(h => h.id === gun.currentCheckout.id)
+      if (histEntry) {
+        histEntry.returnedAt = nowIso
+        histEntry.returnedBy = returnedBy
+      }
+    }
+
+    gun.state = 'in_gun_safe'
+    gun.currentCheckout = null
+    returnedGuns.push(gun)
+  }
+
+  writeInventoryData(data)
+  return { returnedCount: returnedGuns.length, guns: returnedGuns }
+}
+
+export function recordGunMaintenance({ gunId, notes = '', performedBy = 'unknown' }) {
+  const data = readInventoryData()
+  const gun = data.guns.find(g => g.id === gunId)
+  if (!gun) {
+    throw new AppError('Gun not found', 404, 'NOT_FOUND')
+  }
+
+  const nowIso = new Date().toISOString()
+  const entry = {
+    id: crypto.randomUUID(),
+    timestamp: nowIso,
+    performedBy,
+    notes: String(notes || '').trim(),
+    timesUsedBeforeReset: gun.timesUsedSinceMaintenance || 0,
+    cartridgesBeforeReset: gun.cartridgesSinceMaintenance || 0,
+  }
+
+  gun.timesUsedSinceMaintenance = 0
+  gun.cartridgesSinceMaintenance = 0
+  gun.lastMaintenanceAt = nowIso
+  gun.lastMaintenanceBy = performedBy
+  gun.maintenanceHistory = [entry, ...(gun.maintenanceHistory || [])]
+
+  writeInventoryData(data)
+  return gun
 }

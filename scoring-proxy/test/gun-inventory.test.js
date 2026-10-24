@@ -1,10 +1,24 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { rmSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { ssiGetGroupMembers } from '../lib/ssi-core/management.js'
 import {
   loadGunInventoryConfig,
   verifyGunInventoryAdminAccess,
   clearGunAdminAccessCache,
+  listGuns,
+  createGun,
+  updateGun,
+  retireGun,
+  checkoutGun,
+  returnGun,
+  returnAllGuns,
+  recordGunMaintenance,
 } from '../lib/services/gun-inventory-service.js'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const TEST_INVENTORY_FILE = path.resolve(__dirname, '../data/test-gun-inventory.json')
 
 const SAMPLE_GROUP_HTML = `
   <table>
@@ -35,9 +49,13 @@ const SAMPLE_GROUP_HTML = `
 beforeEach(() => {
   clearGunAdminAccessCache()
   delete process.env.SSI_GUN_INVENTORY_GROUP_ID
+  process.env.GUN_INVENTORY_FILE_PATH = TEST_INVENTORY_FILE
+  rmSync(TEST_INVENTORY_FILE, { force: true })
 })
 
 afterEach(() => {
+  rmSync(TEST_INVENTORY_FILE, { force: true })
+  delete process.env.GUN_INVENTORY_FILE_PATH
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
@@ -104,5 +122,92 @@ describe('R90-GUN1: SSI Group 25874 Admin Access Control', () => {
     })
     expect(outsiderRes.allowed).toBe(false)
     expect(outsiderRes.reason).toBe('not_in_group')
+  })
+})
+
+describe('R90-GUN2..GUN5: Gun Inventory CRUD, Checkout + Cartridges, Return & Maintenance', () => {
+  it('creates, updates, lists, and retires guns in JSON store', () => {
+    const gun = createGun({
+      make: 'CZ',
+      model: 'Shadow 2',
+      serialNumber: 'CZ-1001',
+      acquisitionYear: 2024,
+    })
+    expect(gun.state).toBe('in_gun_safe')
+    expect(gun.timesUsedTotal).toBe(0)
+    expect(gun.cartridgesIssuedTotal).toBe(0)
+
+    const updated = updateGun(gun.id, { model: 'Shadow 2 OR' })
+    expect(updated.model).toBe('Shadow 2 OR')
+    expect(listGuns()).toHaveLength(1)
+
+    retireGun(gun.id)
+    expect(listGuns()).toHaveLength(0)
+    expect(listGuns({ includeRetired: true })).toHaveLength(1)
+  })
+
+  it('tracks Laina-ase checkouts with 100 and 0 cartridges, returns to safe, and resets since-maintenance counters', () => {
+    const g1 = createGun({ make: 'Glock', model: '17 Gen5', serialNumber: 'GL-01', acquisitionYear: 2022 })
+    const g2 = createGun({ make: 'CZ', model: 'P-10F', serialNumber: 'CZ-02', acquisitionYear: 2023 })
+
+    // Checkout g1 with 100 cartridges (standard Kupittaa Laina-ase)
+    const afterCheckout1 = checkoutGun({
+      gunId: g1.id,
+      shooterName: 'Matti Meikäläinen',
+      shooterEmail: 'matti@example.com',
+      cupId: '160',
+      cupName: 'TurRes Kupittaa CUP',
+      cartridgesGiven: 100,
+      checkedOutBy: 'tommi@example.com',
+    })
+    expect(afterCheckout1.state).toBe('in_range_use')
+    expect(afterCheckout1.timesUsedTotal).toBe(1)
+    expect(afterCheckout1.timesUsedSinceMaintenance).toBe(1)
+    expect(afterCheckout1.cartridgesIssuedTotal).toBe(100)
+    expect(afterCheckout1.cartridgesSinceMaintenance).toBe(100)
+    expect(afterCheckout1.currentCheckout.shooterName).toBe('Matti Meikäläinen')
+
+    // Return g1 and check out again with 0 cartridges (shooter has ammo purchase permit)
+    const afterReturn1 = returnGun({ gunId: g1.id, returnedBy: 'tommi@example.com' })
+    expect(afterReturn1.state).toBe('in_gun_safe')
+    expect(afterReturn1.currentCheckout).toBeNull()
+
+    const afterCheckout2 = checkoutGun({
+      gunId: g1.id,
+      shooterName: 'Teppo Testaaja',
+      cupId: '160',
+      cartridgesGiven: 0,
+      checkedOutBy: 'tommi@example.com',
+    })
+    expect(afterCheckout2.timesUsedTotal).toBe(2)
+    expect(afterCheckout2.timesUsedSinceMaintenance).toBe(2)
+    expect(afterCheckout2.cartridgesIssuedTotal).toBe(100)
+    expect(afterCheckout2.cartridgesSinceMaintenance).toBe(100)
+
+    // Checkout g2 as well, then bulk return all guns for cup 160
+    checkoutGun({
+      gunId: g2.id,
+      shooterName: 'Outi Odottaja',
+      cupId: '160',
+      cartridgesGiven: 100,
+      checkedOutBy: 'tommi@example.com',
+    })
+    const bulk = returnAllGuns({ cupId: '160', returnedBy: 'tommi@example.com' })
+    expect(bulk.returnedCount).toBe(2)
+    expect(listGuns().every(g => g.state === 'in_gun_safe')).toBe(true)
+
+    // Record cleaning/maintenance on g1 -> resets since-maintenance counters while keeping totals
+    const afterMaint = recordGunMaintenance({
+      gunId: g1.id,
+      notes: 'Puhdistettu ja öljytty',
+      performedBy: 'tommi@example.com',
+    })
+    expect(afterMaint.timesUsedTotal).toBe(2)
+    expect(afterMaint.cartridgesIssuedTotal).toBe(100)
+    expect(afterMaint.timesUsedSinceMaintenance).toBe(0)
+    expect(afterMaint.cartridgesSinceMaintenance).toBe(0)
+    expect(afterMaint.maintenanceHistory).toHaveLength(1)
+    expect(afterMaint.maintenanceHistory[0].timesUsedBeforeReset).toBe(2)
+    expect(afterMaint.maintenanceHistory[0].cartridgesBeforeReset).toBe(100)
   })
 })
