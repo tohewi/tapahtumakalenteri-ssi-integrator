@@ -43,6 +43,13 @@
 - Added component tests in `scoring-ui/src/test/components.test.jsx`.
 ---
 
+## 2026-10-24 21:38 - US-006 (R90-GUN8)
+- Updated `scoring-proxy/test/e2e/mock-ssi-server.js` to serve `/groups/25874/` with `admin` role for `manager@example.com` and `admin@example.com`.
+- Added `scoring-ui/e2e/gun-inventory.spec.js` testing end-to-end Gun Inventory CRUD (`#/guns`), Laina-ase checkout with `100 patr.` in `#/manage`, bulk return to gun safe, and cleaning/maintenance counter reset.
+- Marked `GUN1–GUN8` (`R90-GUN1`–`R90-GUN8`) as `✅ Implemented` in `docs/requirements/requirements.md`, `docs/requirements/release-9.0-gun-inventory.md`, and `docs/RELEASE-NOTES.md`.
+---
+
+
 
 
 

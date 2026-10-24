@@ -5,6 +5,29 @@
 
 ---
 
+## Release 9.0 — Gun Inventory, Usage & Maintenance Tracking (2026-10-24)
+
+**Requirements:** GUN1–GUN8 (`R90-GUN1`–`R90-GUN8`) — ✅ Implemented
+
+### Overview
+
+Adds club firearm inventory management, Laina-ase checkout with cartridge (*patruunamäärä*) bookkeeping, end-of-match return to gun safe, and cleaning/maintenance tracking, restricted to admins of the configured SSI group (default Group ID `25874` — `https://shootnscoreit.com/groups/25874/`).
+
+### New Features
+
+- **SSI Group `25874` Admin Access Control (`GUN1`)**: Configurable via `config/gun-inventory-config.yml` and `SSI_GUN_INVENTORY_GROUP_ID`. Scrapes `/groups/{groupId}/` and caches authorization per session.
+- **JSON File Gun Inventory Store & CRUD API (`GUN2`)**: Cost-free JSON persistence (`scoring-proxy/data/gun-inventory.json`) and `/api/v1/guns` CRUD endpoints tracking `make`, `model`, `serialNumber`, `acquisitionYear`, `state` (`in_gun_safe` | `in_range_use` | `retired`), and usage/maintenance history.
+- **Laina-ase Checkout & Cartridge Tracking (`GUN3`, `GUN7`)**: In `#/manage`, shooters in the `"Laina-ase"` squad can be assigned an available gun from `in_gun_safe` with cartridge count (`100 patr.` standard, `0 patr.` for shooters with an ammunition permit, or custom integer).
+- **Single & Bulk Return to Gun Safe (`GUN4`)**: Individual `"Palauta kaappiin"` and cup-level `"Palauta kaikki laina-aseet kaappiin"` actions return range firearms to `in_gun_safe`.
+- **Cleaning & Maintenance Tracking (`GUN5`, `GUN6`)**: Standalone `#/guns` page displays total vs. since-maintenance usage and cartridge counts, and allows recording cleaning/maintenance (resetting since-maintenance counters to `0`).
+
+### Test Status
+
+- Backend (`scoring-proxy`): **18 test suites, 269 tests passing** + `npm run lint` (`0` errors).
+- Frontend (`scoring-ui`): **10 test suites, 217 tests passing** + **9 Playwright E2E UAT tests passing** + `npm run lint` (`0` errors).
+
+---
+
 ## Release 7.9.2 — SSI CSRF Compatibility Hotfix (2026-09-11)
 
 **Requirements:** GQL-HF7 — Implemented/Ready; not yet deployed.

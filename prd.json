@@ -95,8 +95,8 @@
         "All Playwright E2E tests, scoring-proxy tests, and scoring-ui tests pass"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added gun-inventory.spec.js Playwright E2E test and updated requirements.md, release-9.0-gun-inventory.md, and RELEASE-NOTES.md."
     }
   ]
 }

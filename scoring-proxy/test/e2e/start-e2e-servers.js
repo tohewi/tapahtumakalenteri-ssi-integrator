@@ -3,12 +3,15 @@
 // ============================================================
 
 import { spawn } from 'node:child_process'
+import { rmSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { startMockSsiServer } from './mock-ssi-server.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const proxyDir = resolve(__dirname, '../..')
+const e2eGunFile = resolve(proxyDir, 'data', 'e2e-gun-inventory.json')
+rmSync(e2eGunFile, { force: true })
 
 const mockPort = Number(process.env.MOCK_SSI_PORT || 4101)
 const proxyPort = Number(process.env.E2E_PROXY_PORT || 3099)
@@ -28,6 +31,7 @@ const child = spawn(process.execPath, ['server.js'], {
     SSI_ADMIN_PASSWORD: 'admin-password',
     SSI_ADMIN_API_KEY: 'mock-admin-api-key',
     SESSION_SECRET: 'e2e-test-session-secret-key-0123456789',
+    GUN_INVENTORY_FILE_PATH: e2eGunFile,
   },
 })
 

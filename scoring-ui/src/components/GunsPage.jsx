@@ -1,10 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuthenticatedPage } from '../hooks/useAuthenticatedPage'
 import LoginScreen from './LoginScreen'
+import ManageSessionGate from './manage/ManageSessionGate'
 import { AppHeader, ErrorBanner, Spinner } from './shared'
 import * as gunsApi from '../guns-api'
 
 export default function GunsPage() {
+  return (
+    <ManageSessionGate>
+      {authenticated => <GunsPageContent initialAuthenticated={authenticated} />}
+    </ManageSessionGate>
+  )
+}
+
+function GunsPageContent({ initialAuthenticated }) {
   const [guns, setGuns] = useState([])
   const [config, setConfig] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -38,6 +47,7 @@ export default function GunsPage() {
     scope: 'manage',
     credsKey: 'ssi_credentials_manage',
     onClearState: clearPageState,
+    initialAuthenticated,
   })
 
   const loadInventory = useCallback(async () => {
