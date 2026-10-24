@@ -433,6 +433,7 @@ export default function RegisterPage() {
             </button>
           </div>
         )}
+        <LegalFooterLinks />
       </div>
     </div>
   )

@@ -196,8 +196,8 @@
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added LegalDocumentPage.jsx (#/privacy and #/terms) and LegalFooterLinks on RegisterPage and HomePage with component tests."
     },
     {
       "id": "US-013",

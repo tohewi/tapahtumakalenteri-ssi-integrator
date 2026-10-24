@@ -1,4 +1,5 @@
 import { AppHeader } from './shared'
+import { LegalFooterLinks } from './LegalDocumentPage'
 import t from '../i18n'
 
 const features = [
@@ -120,6 +121,7 @@ export default function HomePage() {
           )
         })}
       </div>
+      <LegalFooterLinks />
     </div>
   )
 }

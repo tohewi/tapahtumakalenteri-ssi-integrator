@@ -8,6 +8,8 @@ import ShooterPicker from '../components/ShooterPicker'
 import CupSearch from '../components/CupSearch'
 import { CupList } from '../components/shared'
 import SquadPickerSheet from '../components/manage/SquadPickerSheet'
+import HomePage from '../components/HomePage'
+import LegalDocumentPage from '../components/LegalDocumentPage'
 
 // ============================================================
 // LoginScreen
@@ -303,5 +305,27 @@ describe('SquadPickerSheet', () => {
 
     await userEvent.click(sq3Btn)
     expect(onSelect).toHaveBeenCalledWith(3)
+  })
+})
+
+// ============================================================
+// Legal Documents & Links (R76-COM1)
+// ============================================================
+
+describe('LegalDocumentPage & LegalFooterLinks', () => {
+  it('renders Privacy Policy and Terms of Service links on HomePage', () => {
+    render(<HomePage />)
+    expect(screen.getByRole('link', { name: /tietosuojaseloste/i })).toHaveAttribute('href', '#/privacy')
+    expect(screen.getByRole('link', { name: /käyttöehdot/i })).toHaveAttribute('href', '#/terms')
+  })
+
+  it('renders Privacy Policy and Terms of Service content', () => {
+    const { rerender } = render(<LegalDocumentPage type="privacy" />)
+    expect(screen.getByText(/Rekisterinpitäjä ja tarkoitus/i)).toBeInTheDocument()
+    expect(screen.getByText(/Resend/i)).toBeInTheDocument()
+
+    rerender(<LegalDocumentPage type="terms" />)
+    expect(screen.getByText(/Palvelun käyttö/i)).toBeInTheDocument()
+    expect(screen.getByText(/Käyttäjän vastuu/i)).toBeInTheDocument()
   })
 })

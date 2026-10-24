@@ -74,3 +74,8 @@
 - Extracted shared scoring constants/helpers into `scoring-ui/src/lib/scoring-helpers.js`, mobile sub-views into `scoring-ui/src/components/MobileScoringViews.jsx`, and tablet panels into `scoring-ui/src/components/TabletScoringPanels.jsx`.
 - Reduced `App.jsx` and `TabletScoringView.jsx` below 500 lines and marked `R76-TD2` as `✅ Implemented`.
 ---
+
+## 2026-10-24 15:44 - US-012 (R76-COM1)
+- Created `scoring-ui/src/components/LegalDocumentPage.jsx` (`#/privacy` and `#/terms`) and linked both from `HomePage.jsx` and `RegisterPage.jsx`.
+- Added component tests in `scoring-ui/src/test/components.test.jsx` and marked `R76-COM1` as `✅ Implemented`.
+---
