@@ -42,9 +42,13 @@ describe('filterManageableCups', () => {
   })
 
   it('excludes cups before the manage window (more than 1 day ago)', () => {
-    // baseCup starts 2026-02-18; now is 2026-02-10 — 8 days before start, well outside window
+    const pastCup = {
+      ...baseCup,
+      starts: '2026-02-01T10:00:00Z',
+      ends: '2026-02-01T18:00:00Z',
+    }
     const now = new Date('2026-02-10T12:00:00Z')
-    const cups = filterManageableCups([baseCup], now)
+    const cups = filterManageableCups([pastCup], now)
     expect(cups).toHaveLength(0)
   })
 
@@ -82,16 +86,35 @@ describe('filterManageableCups', () => {
     expect(cups).toHaveLength(1)
   })
 
-  it('excludes cups beyond seven days from today', () => {
-    const farCup = {
+  it('excludes cups beyond seven days from today when registration is not open', () => {
+    const farClosedCup = {
       ...baseCup,
       starts: '2026-02-25T10:00:00Z', // 10 days ahead
       ends: '2026-02-25T18:00:00Z',
+      registration: 'cl',
     }
 
     const now = new Date('2026-02-15T12:00:00Z')
-    const cups = filterManageableCups([farCup], now)
+    const cups = filterManageableCups([farClosedCup], now)
     expect(cups).toHaveLength(0)
+  })
+
+  it('includes cups beyond seven days from today when registration is open', () => {
+    const farOpenCup = {
+      ...baseCup,
+      id: 'far-open',
+      starts: '2026-03-15T10:00:00Z', // 28 days ahead
+      ends: '2026-03-15T18:00:00Z',
+      registration: 'op',
+      registration_starts: '2026-02-10T00:00:00Z',
+      registration_closes: '2026-03-14T23:59:59Z',
+    }
+
+    const now = new Date('2026-02-15T12:00:00Z')
+    const cups = filterManageableCups([farOpenCup], now)
+    expect(cups).toHaveLength(1)
+    expect(cups[0].id).toBe('far-open')
+    expect(cups[0].registrationOpen).toBe(true)
   })
 
   it('excludes non-cup events (wrong content type)', () => {

@@ -106,12 +106,14 @@ export function createManagementRouter({
   router.get('/cups', requireAuth('manage'), async (_req, res, next) => {
     try {
       const now = new Date()
-      const { windowStart, windowEndExclusive } = getManageWindowBounds(now)
+      const { windowStart } = getManageWindowBounds(now)
+      const queryHorizonEnd = new Date(windowStart)
+      queryHorizonEnd.setUTCDate(queryHorizonEnd.getUTCDate() + 365)
 
       const result = await adminGraphQL(MANAGE_CUPS_LIST_QUERY, {
         search: 'Kupittaa CUP',
         startsAfter: windowStart.toISOString(),
-        startsBefore: windowEndExclusive.toISOString(),
+        startsBefore: queryHorizonEnd.toISOString(),
       })
 
       const listEvents = result.events || []
