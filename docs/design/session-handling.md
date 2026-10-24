@@ -250,7 +250,7 @@ useEffect(() => {
 
 ### Mount-Time Session Bootstrap + Auth Gate (RELOAD UX, DEFAULT)
 
-This is now the **default behavior for all protected feature domains**.
+This is the **architecture default for new protected feature domains**, currently implemented by mobile/tablet scoring and Manage. Reporting is an existing exception to the bootstrap sequence described here and in the happy-path flow below: `ReportPage.jsx` and `SummaryReportPage.jsx` show explicit login on mount and do not check for an existing session.
 
 Known architecture names for this pattern:
 
