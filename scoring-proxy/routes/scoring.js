@@ -224,15 +224,28 @@ export function createScoringRouter({ requireAuth, graphqlWithRefresh }) {
       return res.status(400).json({ error: 'scores object required' })
     }
 
-    const payload = await submitCompetitorScore({
-      competitorId: req.params.id,
-      scores,
-      warning,
-      dqReason,
-      comment,
-      session,
-      graphqlWithRefresh,
-    })
+    let payload
+    try {
+      payload = await submitCompetitorScore({
+        competitorId: req.params.id,
+        scores,
+        warning,
+        dqReason,
+        comment,
+        session,
+        graphqlWithRefresh,
+      })
+    } catch (err) {
+      auditMutation({
+        endpoint: `/api/v1/scoring/competitor/${req.params.id}/score`,
+        operation: 'submit_score',
+        initiatingUserId: session._userId || 'unknown',
+        targetEntity: { competitorId: req.params.id },
+        result: 'failure',
+        errorCode: err.code || 'SSI_OPERATION_FAILED',
+      })
+      throw err
+    }
 
     auditMutation({
       endpoint: `/api/v1/scoring/competitor/${req.params.id}/score`,
