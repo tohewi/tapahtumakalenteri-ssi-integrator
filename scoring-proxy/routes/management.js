@@ -20,6 +20,7 @@ import {
 } from '../lib/services/cup-manage.js'
 import { log } from '../lib/logger.js'
 import { AppError } from '../lib/errors/AppError.js'
+import { auditMutation } from '../lib/session/index.js'
 
 function internalError(message) {
   return new AppError(message, 500, 'INTERNAL_ERROR')
@@ -249,6 +250,13 @@ export function createManagementRouter({
       }
 
       const allOk = results.every(r => r.success)
+      auditMutation({
+        endpoint: `/api/v1/manage/cup/${req.params.id}/assign-squad`,
+        operation: 'assign_squad',
+        initiatingUserId: user,
+        targetEntity: { cupId: req.params.id, shooterName, squadNumber },
+        result: allOk ? 'success' : 'failure',
+      })
       res.json({ success: allOk, results })
     } catch (err) {
       log.error(`[manage] assign-squad: FAILED user=${user} shooter="${shooterName}" → squad ${squadNumber}: ${err.message}`)
@@ -338,6 +346,13 @@ export function createManagementRouter({
       }
 
       const allOk = results.every(r => r.success)
+      auditMutation({
+        endpoint: `/api/v1/manage/cup/${req.params.id}/fix-squad`,
+        operation: 'fix_squad',
+        initiatingUserId: user,
+        targetEntity: { cupId: req.params.id, shooterName, targetSquad, matchId: singleMatchId || null },
+        result: allOk ? 'success' : 'failure',
+      })
       res.json({ success: allOk, results })
     } catch (err) {
       log.error(`[manage] fix-squad: FAILED user=${user} shooter="${shooterName}" → squad ${targetSquad}: ${err.message}`)

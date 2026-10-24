@@ -1,6 +1,7 @@
 import express from 'express'
 import { asyncHandler } from '../middleware/errorHandler.js'
 import { log } from '../lib/logger.js'
+import { auditMutation } from '../lib/session/index.js'
 import {
   isDebugModeEnabled,
   getTodayStart,
@@ -231,6 +232,14 @@ export function createScoringRouter({ requireAuth, graphqlWithRefresh }) {
       comment,
       session,
       graphqlWithRefresh,
+    })
+
+    auditMutation({
+      endpoint: `/api/v1/scoring/competitor/${req.params.id}/score`,
+      operation: 'submit_score',
+      initiatingUserId: session.userId || 'unknown',
+      targetEntity: { competitorId: req.params.id },
+      result: payload.success === false ? 'failure' : 'success',
     })
 
     res.json(payload)

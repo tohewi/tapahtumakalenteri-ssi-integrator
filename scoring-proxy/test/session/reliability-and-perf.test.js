@@ -16,6 +16,7 @@ import {
   getActiveSessionCount,
 } from '../../lib/session/store.js'
 import { createMockSessionInput, createExpiredUserSSI } from '../fixtures/sessions.js'
+import { auditMutation } from '../../lib/session/index.js'
 
 beforeEach(async () => {
   delete process.env.REDIS_URL
@@ -104,5 +105,23 @@ describe('Session Performance Benchmark (R76-TEST5)', () => {
     const p95Index = Math.floor(latencies.length * 0.95) - 1
     const p95Ms = latencies[Math.max(0, p95Index)]
     expect(p95Ms).toBeLessThan(50)
+  })
+})
+
+describe('Structured Mutation Audit Logging (R76-COM3)', () => {
+  it('logs initiatingUser and executionIdentity fields for state-changing mutations', () => {
+    const entry = auditMutation({
+      endpoint: '/api/v1/manage/cup/123/fix-squad',
+      operation: 'fix_squad',
+      initiatingUserId: 'manager@example.com',
+      targetEntity: { cupId: '123', shooterName: 'Matti M', targetSquad: 2 },
+      result: 'success',
+    })
+
+    expect(entry.eventType).toBe('SSI_OPERATION')
+    expect(entry.details.initiatingUserId).toBe('manager@example.com')
+    expect(entry.details.executionIdentityUserId).toBe('manager@example.com')
+    expect(entry.details.endpoint).toBe('/api/v1/manage/cup/123/fix-squad')
+    expect(entry.details.result).toBe('success')
   })
 })

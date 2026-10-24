@@ -245,8 +245,8 @@
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added structured auditMutation logging across state-changing endpoints with unit tests."
     },
     {
       "id": "US-016",
