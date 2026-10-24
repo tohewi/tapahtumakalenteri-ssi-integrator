@@ -193,6 +193,38 @@ describe('Registration API client', () => {
       expect(err.message).toContain('Liian monta yritystä')
     })
 
+    it('forwards optional password in submitRegistration request body (R76-AUTH10)', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: () => 'application/json' },
+        json: () => Promise.resolve({ success: true }),
+      })
+
+      await submitRegistration({
+        cupId: '160',
+        squadNumber: 2,
+        email: 'shooter@example.com',
+        password: 'secret-ssi-password',
+        captchaId: 'cap-1',
+        captchaAnswer: '12',
+      })
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/v1/register/submit',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            cupId: '160',
+            squadNumber: 2,
+            email: 'shooter@example.com',
+            password: 'secret-ssi-password',
+            captchaId: 'cap-1',
+            captchaAnswer: 12,
+          }),
+        })
+      )
+    })
+
     it('handles streaming NDJSON success response', async () => {
       const lines = [
         JSON.stringify({ type: 'progress', step: 1, message: 'Adding to CUP...' }),

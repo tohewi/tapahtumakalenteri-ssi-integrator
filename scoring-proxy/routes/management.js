@@ -226,7 +226,7 @@ export function createManagementRouter({
     const cookies = req.ssiSession.ssiCookies
     if (!cookies) return res.status(401).json({ error: 'No SSI session cookies' })
 
-    const user = req.ssiSession.userId || 'unknown'
+    const user = req.ssiSession.userId || req.ssiSession._userId || 'unknown'
     log.info(`[manage] assign-squad: user=${user} cup=${req.params.id} shooter="${shooterName}" email=${email || 'none'} → squad ${squadNumber}`)
 
     try {
@@ -254,6 +254,7 @@ export function createManagementRouter({
         endpoint: `/api/v1/manage/cup/${req.params.id}/assign-squad`,
         operation: 'assign_squad',
         initiatingUserId: user,
+        executionIdentityUserId: user,
         targetEntity: { cupId: req.params.id, shooterName, squadNumber },
         result: allOk ? 'success' : 'failure',
       })
@@ -273,7 +274,7 @@ export function createManagementRouter({
     const cookies = req.ssiSession.ssiCookies
     if (!cookies) return res.status(401).json({ error: 'No SSI session cookies' })
 
-    const user = req.ssiSession.userId || 'unknown'
+    const user = req.ssiSession.userId || req.ssiSession._userId || 'unknown'
     log.info(`[manage] fix-squad: user=${user} cup=${req.params.id} shooter="${shooterName}" email=${email || 'none'} → squad ${targetSquad}`)
 
     try {
@@ -350,6 +351,7 @@ export function createManagementRouter({
         endpoint: `/api/v1/manage/cup/${req.params.id}/fix-squad`,
         operation: 'fix_squad',
         initiatingUserId: user,
+        executionIdentityUserId: user,
         targetEntity: { cupId: req.params.id, shooterName, targetSquad, matchId: singleMatchId || null },
         result: allOk ? 'success' : 'failure',
       })

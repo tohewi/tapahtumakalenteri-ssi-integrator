@@ -293,6 +293,7 @@ export function createRegistrationRouter({
         endpoint: '/api/v1/register/submit',
         operation: isReRegistration ? 'reregister_cup' : 'register_cup',
         initiatingUserId: email.trim(),
+        executionIdentityUserId: process.env.SSI_ADMIN_EMAIL || 'admin-service-account',
         targetEntity: { cupId, squadNumber },
         result: allSuccess ? 'success' : 'failure',
       })

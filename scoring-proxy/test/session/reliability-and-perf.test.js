@@ -75,8 +75,8 @@ describe('Session Security & Impersonation Hardening (R76-TEST3)', () => {
       userId: 'expired@example.com',
       userSSI: createExpiredUserSSI(),
     })
-    const { session } = await createSession(expiredInput)
-    expect(getImpersonationContext(session)).toBeNull()
+    const { sessionData } = await createSession(expiredInput)
+    expect(getImpersonationContext(sessionData)).toBeNull()
   })
 })
 
@@ -114,6 +114,7 @@ describe('Structured Mutation Audit Logging (R76-COM3)', () => {
       endpoint: '/api/v1/manage/cup/123/fix-squad',
       operation: 'fix_squad',
       initiatingUserId: 'manager@example.com',
+      executionIdentityUserId: 'manager@example.com',
       targetEntity: { cupId: '123', shooterName: 'Matti M', targetSquad: 2 },
       result: 'success',
     })
@@ -123,5 +124,16 @@ describe('Structured Mutation Audit Logging (R76-COM3)', () => {
     expect(entry.details.executionIdentityUserId).toBe('manager@example.com')
     expect(entry.details.endpoint).toBe('/api/v1/manage/cup/123/fix-squad')
     expect(entry.details.result).toBe('success')
+
+    const delegated = auditMutation({
+      endpoint: '/api/v1/register/submit',
+      operation: 'register_cup',
+      initiatingUserId: 'shooter@example.com',
+      executionIdentityUserId: 'admin-service-account',
+      targetEntity: { cupId: '123', squadNumber: 1 },
+      result: 'success',
+    })
+    expect(delegated.details.initiatingUserId).toBe('shooter@example.com')
+    expect(delegated.details.executionIdentityUserId).toBe('admin-service-account')
   })
 })

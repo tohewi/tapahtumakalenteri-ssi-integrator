@@ -256,7 +256,7 @@ export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth,
       return res.status(403).json({ error: 'Manage session required' })
     }
     try {
-      const userId = req.ssiSession.userId
+      const userId = req._v7Session?.userId || req.ssiSession?.userId || req.ssiSession?._userId
       const [activeSessionCount, rawSessions] = await Promise.all([
         getActiveSessionCount(),
         getUserSessions(userId),

@@ -236,10 +236,12 @@ export function createScoringRouter({ requireAuth, graphqlWithRefresh }) {
         graphqlWithRefresh,
       })
     } catch (err) {
+      const actorId = session.userId || session._userId || 'unknown'
       auditMutation({
         endpoint: `/api/v1/scoring/competitor/${req.params.id}/score`,
         operation: 'submit_score',
-        initiatingUserId: session._userId || 'unknown',
+        initiatingUserId: actorId,
+        executionIdentityUserId: actorId,
         targetEntity: { competitorId: req.params.id },
         result: 'failure',
         errorCode: err.code || 'SSI_OPERATION_FAILED',
@@ -247,10 +249,12 @@ export function createScoringRouter({ requireAuth, graphqlWithRefresh }) {
       throw err
     }
 
+    const actorId = session.userId || session._userId || 'unknown'
     auditMutation({
       endpoint: `/api/v1/scoring/competitor/${req.params.id}/score`,
       operation: 'submit_score',
-      initiatingUserId: session.userId || 'unknown',
+      initiatingUserId: actorId,
+      executionIdentityUserId: actorId,
       targetEntity: { competitorId: req.params.id },
       result: payload.success === false ? 'failure' : 'success',
     })

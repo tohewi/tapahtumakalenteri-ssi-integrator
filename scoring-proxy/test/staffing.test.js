@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from 'vitest'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -15,10 +15,15 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const staffingDataFile = resolve(__dirname, '../data/staffing-events.json')
-const originalStaffingData = readFileSync(staffingDataFile, 'utf8')
+const hadOriginalStaffingData = existsSync(staffingDataFile)
+const originalStaffingData = hadOriginalStaffingData ? readFileSync(staffingDataFile, 'utf8') : null
 
 afterAll(() => {
-  writeFileSync(staffingDataFile, originalStaffingData, 'utf8')
+  if (hadOriginalStaffingData && originalStaffingData !== null) {
+    writeFileSync(staffingDataFile, originalStaffingData, 'utf8')
+  } else {
+    rmSync(staffingDataFile, { force: true })
+  }
 })
 
 describe('staffing-service & engine unit tests', () => {
