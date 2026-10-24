@@ -37,6 +37,13 @@
 - Wired `#/guns` in `scoring-ui/src/main.jsx` and `scoring-ui/src/components/HomePage.jsx`.
 ---
 
+## 2026-10-24 21:31 - US-005 (R90-GUN7)
+- Created `scoring-ui/src/components/manage/LoanerGunPickerSheet.jsx` with `100 patr.` and `0 patr.` quick buttons and numeric input.
+- Updated `SquadCard.jsx` and `SquaddingOverview.jsx` to allow picking a gun for shooters in the `"Laina-ase"` squad, display checked-out gun + cartridge badges, and return guns individually or via "Palauta kaikki laina-aseet kaappiin".
+- Added component tests in `scoring-ui/src/test/components.test.jsx`.
+---
+
+
 
 
 

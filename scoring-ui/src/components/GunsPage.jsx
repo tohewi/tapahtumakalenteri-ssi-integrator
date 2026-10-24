@@ -59,10 +59,27 @@ export default function GunsPage() {
   }, [setLoading, setError, withSessionCheck])
 
   useEffect(() => {
-    if (authed) {
-      void loadInventory()
-    }
-  }, [authed, loadInventory])
+    if (!authed) return
+    let active = true
+    setLoading(true)
+    setError(null)
+    withSessionCheck(async () => {
+      const res = await gunsApi.getGuns()
+      if (!active) return
+      setGuns(res.guns || [])
+      setConfig(res.config || null)
+    })
+      .catch(err => {
+        if (!active) return
+        if (!err.sessionExpired && !err.scopeMismatch) {
+          setError(err.message)
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => { active = false }
+  }, [authed, setLoading, setError, withSessionCheck])
 
   const handleLogin = async (email, password, apiKey, rememberMe) => {
     await baseLogin(email, password, apiKey, rememberMe)

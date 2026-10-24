@@ -80,8 +80,8 @@
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test -- --maxWorkers=1 --pool=threads)"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Integrated LoanerGunPickerSheet, SquadCard loaner gun badges/actions, and SquaddingOverview bulk return into #/manage."
     },
     {
       "id": "US-006",

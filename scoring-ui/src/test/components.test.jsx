@@ -8,6 +8,7 @@ import ShooterPicker from '../components/ShooterPicker'
 import CupSearch from '../components/CupSearch'
 import { CupList } from '../components/shared'
 import SquadPickerSheet from '../components/manage/SquadPickerSheet'
+import LoanerGunPickerSheet from '../components/manage/LoanerGunPickerSheet'
 import HomePage from '../components/HomePage'
 import LegalDocumentPage from '../components/LegalDocumentPage'
 import { TabletShooterSidebar } from '../components/TabletScoringPanels'
@@ -389,5 +390,38 @@ describe('TabletShooterSidebar drag-and-drop reordering (TS13)', () => {
     await userEvent.keyboard('{ArrowDown}')
     expect(onReorder).toHaveBeenCalledWith(0, 1)
     expect(onSelect).not.toHaveBeenCalled()
+  })
+})
+
+// ============================================================
+// LoanerGunPickerSheet — Laina-ase & Cartridge Picker (R90)
+// ============================================================
+
+describe('LoanerGunPickerSheet (R90-GUN7)', () => {
+  it('selects an available gun from in_gun_safe and submits cartridge count (100 or 0)', async () => {
+    const onConfirm = vi.fn()
+    const onClose = vi.fn()
+    const guns = [
+      { id: 'g1', make: 'CZ', model: 'Shadow 2', serialNumber: 'CZ-101', acquisitionYear: 2024, state: 'in_gun_safe', timesUsedSinceMaintenance: 2, cartridgesSinceMaintenance: 200 },
+      { id: 'g2', make: 'Glock', model: '17', serialNumber: 'GL-202', acquisitionYear: 2023, state: 'in_range_use', timesUsedSinceMaintenance: 1, cartridgesSinceMaintenance: 100 },
+    ]
+
+    render(
+      <LoanerGunPickerSheet
+        shooter={{ name: 'Matti Meikäläinen', email: 'matti@example.com' }}
+        guns={guns}
+        onConfirm={onConfirm}
+        onClose={onClose}
+      />
+    )
+
+    // Only in_gun_safe gun should be listed
+    expect(screen.getByText(/CZ Shadow 2/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Glock 17/i)).toBeNull()
+
+    // Select 0 cartridges (own permit) and submit
+    await userEvent.click(screen.getByRole('button', { name: /^0 patr\./i }))
+    await userEvent.click(screen.getByRole('button', { name: /Merkitse käyttöön/i }))
+    expect(onConfirm).toHaveBeenCalledWith({ gunId: 'g1', cartridgesGiven: 0 })
   })
 })
