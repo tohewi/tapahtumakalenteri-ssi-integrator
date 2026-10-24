@@ -46,7 +46,8 @@ function GunsPageContent({ initialAuthenticated }) {
   } = useAuthenticatedPage({
     scope: 'manage',
     credsKey: 'ssi_credentials_manage',
-    onClearState: clearPageState,
+    onLogout: clearPageState,
+    onSessionExpired: clearPageState,
     initialAuthenticated,
   })
 

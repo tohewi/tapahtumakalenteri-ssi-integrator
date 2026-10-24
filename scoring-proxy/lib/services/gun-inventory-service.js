@@ -38,13 +38,18 @@ function readInventoryData() {
   if (!existsSync(filePath)) {
     return { guns: [] }
   }
+  let parsed
   try {
-    const parsed = JSON.parse(readFileSync(filePath, 'utf8'))
-    return Array.isArray(parsed?.guns) ? parsed : { guns: [] }
+    parsed = JSON.parse(readFileSync(filePath, 'utf8'))
   } catch (err) {
-    log.warn('[guns] Failed to read gun-inventory.json, starting empty:', err.message)
-    return { guns: [] }
+    log.error('[guns] Failed to read or parse existing gun-inventory.json:', err.message)
+    throw new AppError('Gun inventory storage is unreadable', 500, 'STORAGE_READ_ERROR')
   }
+  if (!Array.isArray(parsed?.guns)) {
+    log.error('[guns] Malformed gun-inventory.json: missing guns array')
+    throw new AppError('Gun inventory storage is malformed', 500, 'STORAGE_READ_ERROR')
+  }
+  return parsed
 }
 
 function writeInventoryData(data) {
@@ -123,11 +128,8 @@ export async function verifyGunInventoryAdminAccess({
 
   const members = await ssiGetGroupMembers(groupId, cookies)
   const matchingMember = members.find(m => {
-    const emailMatches = normalizedEmail && (
-      m.email === normalizedEmail ||
-      String(m.contact || '').toLowerCase().includes(normalizedEmail)
-    )
-    const nameMatches = normalizedName && String(m.name || '').trim().toLowerCase() === normalizedName
+    const emailMatches = Boolean(normalizedEmail && m.email && m.email === normalizedEmail)
+    const nameMatches = Boolean(!normalizedEmail && normalizedName && String(m.name || '').trim().toLowerCase() === normalizedName)
     return emailMatches || nameMatches
   })
 

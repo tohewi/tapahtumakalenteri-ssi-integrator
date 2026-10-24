@@ -125,6 +125,14 @@ describe('R90-GUN1: SSI Group 25874 Admin Access Control', () => {
     })
     expect(outsiderRes.allowed).toBe(false)
     expect(outsiderRes.reason).toBe('not_in_group')
+
+    // Regression: substring email (e.g. "mmi@example.com" inside "tommi@example.com") must NOT match
+    const substringRes = await verifyGunInventoryAdminAccess({
+      userEmail: 'mmi@example.com',
+      cookies: { sessionid: 'abc' },
+    })
+    expect(substringRes.allowed).toBe(false)
+    expect(substringRes.reason).toBe('not_in_group')
   })
 })
 

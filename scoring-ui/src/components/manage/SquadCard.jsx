@@ -22,12 +22,15 @@ export default function SquadCard({
 
   const findAssignedGun = (shooter) => {
     if (!isLoanerSquad || !Array.isArray(guns)) return null
-    return guns.find(g =>
-      g.state === 'in_range_use' &&
-      g.currentCheckout &&
-      ((shooter.email && g.currentCheckout.shooterEmail && g.currentCheckout.shooterEmail.toLowerCase() === shooter.email.toLowerCase()) ||
-        String(g.currentCheckout.shooterName || '').toLowerCase() === String(shooter.name || '').toLowerCase())
-    )
+    return guns.find(g => {
+      if (g.state !== 'in_range_use' || !g.currentCheckout) return false
+      const shooterEmail = String(shooter.email || '').trim().toLowerCase()
+      const checkoutEmail = String(g.currentCheckout.shooterEmail || '').trim().toLowerCase()
+      if (shooterEmail && checkoutEmail) {
+        return shooterEmail === checkoutEmail
+      }
+      return String(g.currentCheckout.shooterName || '').trim().toLowerCase() === String(shooter.name || '').trim().toLowerCase()
+    })
   }
 
   return (

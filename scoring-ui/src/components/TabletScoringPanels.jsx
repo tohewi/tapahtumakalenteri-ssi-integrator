@@ -139,7 +139,9 @@ export function TabletShooterSidebar({
   const handlePointerMove = (e) => {
     if (dragIdx === null) return
     if (typeof document.elementFromPoint !== 'function') return
-    const el = document.elementFromPoint(e.clientX, e.clientY)
+    const point = e.touches?.[0] || e.changedTouches?.[0] || e
+    if (typeof point?.clientX !== 'number' || typeof point?.clientY !== 'number') return
+    const el = document.elementFromPoint(point.clientX, point.clientY)
     const rowEl = el?.closest?.('[data-shooter-idx]')
     if (rowEl) {
       const targetIdx = Number(rowEl.getAttribute('data-shooter-idx'))

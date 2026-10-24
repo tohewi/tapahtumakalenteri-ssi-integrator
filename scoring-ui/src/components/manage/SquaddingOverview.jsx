@@ -248,7 +248,10 @@ export default function SquaddingOverview({ data, cupId, onRefresh, onPatchShoot
     }
   }
 
-  const inRangeGunsCount = guns.filter(g => g.state === 'in_range_use').length
+  const cupScopedGuns = useMemo(() =>
+    guns.filter(g => g.state !== 'in_range_use' || !g.currentCheckout?.cupId || String(g.currentCheckout.cupId) === String(cupId)),
+  [guns, cupId])
+  const inRangeGunsCount = cupScopedGuns.filter(g => g.state === 'in_range_use').length
 
   return (
     <div className="pb-6">
@@ -542,7 +545,7 @@ export default function SquaddingOverview({ data, cupId, onRefresh, onPatchShoot
               onSetDns={handleSetDns}
               onUndoDns={handleUndoDns}
               isLoanerSquad={loanerGunsAllowed && (group.number === 1 || /laina/i.test(group.name))}
-              guns={guns}
+              guns={cupScopedGuns}
               onSelectLoanerGun={loanerGunsAllowed ? (s) => setLoanerPickerShooter(s) : undefined}
               onReturnLoanerGun={loanerGunsAllowed ? handleReturnLoanerGun : undefined}
               expanded={expandedSquads.has(group.number)}
