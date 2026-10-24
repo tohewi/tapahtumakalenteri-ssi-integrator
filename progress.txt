@@ -32,5 +32,11 @@
 - Mounted `/api/v1/guns` and `/api/guns` in `scoring-proxy/server.js` and added route integration tests in `scoring-proxy/test/gun-inventory.test.js`.
 ---
 
+## 2026-10-24 21:26 - US-004 (R90-GUN6)
+- Created `scoring-ui/src/guns-api.js`, added bilingual (`fi`/`en`) strings in `scoring-ui/src/i18n.js`, and created `scoring-ui/src/components/GunsPage.jsx` (`#/guns`).
+- Wired `#/guns` in `scoring-ui/src/main.jsx` and `scoring-ui/src/components/HomePage.jsx`.
+---
+
+
 
 

@@ -156,6 +156,8 @@ export const fi = {
   saveToSSI: 'Tallenna SSI:hin',
   completed: 'Valmis',
   matchCompleted: 'Ottelu valmis',
+  gunInventoryTitle: 'Laina-aseet ja huolto',
+  gunInventoryDescription: 'Asekaapin inventaario, käyttökerrat, patruunat ja puhdistukset',
 }
 
 // English UI strings
@@ -316,6 +318,8 @@ export const en = {
   saveToSSI: 'Save to SSI',
   completed: 'Completed',
   matchCompleted: 'Match Completed',
+  gunInventoryTitle: 'Gun Inventory & Maintenance',
+  gunInventoryDescription: 'Loaner firearms inventory, usage counters, cartridges, and maintenance',
 }
 
 // Detect browser language and return appropriate translations

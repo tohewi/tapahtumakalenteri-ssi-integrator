@@ -65,8 +65,8 @@
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test -- --maxWorkers=1 --pool=threads)"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created guns-api.js, added i18n strings, and created GunsPage.jsx (#/guns) wired in main.jsx and HomePage.jsx."
     },
     {
       "id": "US-005",
