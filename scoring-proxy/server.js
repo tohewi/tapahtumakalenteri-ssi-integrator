@@ -14,6 +14,7 @@ import { createRegistrationRouter } from './routes/registration.js'
 import { createReportsRouter } from './routes/reports.js'
 import { createManagementRouter } from './routes/management.js'
 import { createStaffingRouter } from './routes/staffing.js'
+import { createGunsRouter } from './routes/guns.js'
 import { initRedis, getActiveSessionCount, isUsingRedis, touchSession } from './lib/session/index.js'
 import { requireAuthV7 } from './middleware/auth-v7.js'
 import { createAuthV7Router } from './routes/auth-v7.js'
@@ -437,6 +438,14 @@ const staffingRouter = createStaffingRouter({
 })
 app.use(`${API_V1_BASE}/staffing`, staffingRouter)
 app.use(`${API_LEGACY_BASE}/staffing`, legacyApiAlias, staffingRouter)
+
+// Gun inventory routes (R90 — Group 25874 admin restricted)
+const gunsRouter = createGunsRouter({
+  requireAuth,
+  getAdminSession,
+})
+app.use(`${API_V1_BASE}/guns`, gunsRouter)
+app.use(`${API_LEGACY_BASE}/guns`, legacyApiAlias, gunsRouter)
 
 // ============================================================
 // SPA fallback — serve index.html for non-API routes (production)

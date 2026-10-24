@@ -27,4 +27,10 @@
 - Added unit tests in `scoring-proxy/test/gun-inventory.test.js` covering CRUD, `100` and `0` cartridge checkouts, single/bulk return to safe, and maintenance counter reset.
 ---
 
+## 2026-10-24 21:21 - US-003 (R90-GUN3..GUN5)
+- Created `scoring-proxy/routes/guns.js` enforcing `requireAuth` and SSI Group 25874 admin access (`requireGunGroupAdmin`) with `auditMutation` logging across all state-changing endpoints.
+- Mounted `/api/v1/guns` and `/api/guns` in `scoring-proxy/server.js` and added route integration tests in `scoring-proxy/test/gun-inventory.test.js`.
+---
+
+
 

@@ -1,8 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import express from 'express'
 import { rmSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ssiGetGroupMembers } from '../lib/ssi-core/management.js'
+import { errorHandler } from '../middleware/errorHandler.js'
+import { createGunsRouter } from '../routes/guns.js'
 import {
   loadGunInventoryConfig,
   verifyGunInventoryAdminAccess,
@@ -209,5 +212,94 @@ describe('R90-GUN2..GUN5: Gun Inventory CRUD, Checkout + Cartridges, Return & Ma
     expect(afterMaint.maintenanceHistory).toHaveLength(1)
     expect(afterMaint.maintenanceHistory[0].timesUsedBeforeReset).toBe(2)
     expect(afterMaint.maintenanceHistory[0].cartridgesBeforeReset).toBe(100)
+  })
+})
+
+describe('R90-GUN3..GUN5: /api/v1/guns Express Route Integration', () => {
+  function buildApp(userEmail = 'tommi@example.com') {
+    const app = express()
+    app.use(express.json())
+    const requireAuth = () => (req, _res, next) => {
+      req.ssiSession = {
+        userId: userEmail,
+        _userId: userEmail,
+        ssiCookies: { sessionid: 'mock-session' },
+      }
+      next()
+    }
+    app.use('/api/v1/guns', createGunsRouter({ requireAuth }))
+    app.use(errorHandler)
+    return app
+  }
+
+  async function callApp(app, method, urlPath, body = null) {
+    return new Promise((resolve, reject) => {
+      const server = app.listen(0, '127.0.0.1', async () => {
+        try {
+          const { port } = server.address()
+          const resp = await originalFetch(`http://127.0.0.1:${port}${urlPath}`, {
+            method,
+            headers: body ? { 'Content-Type': 'application/json' } : {},
+            body: body ? JSON.stringify(body) : undefined,
+          })
+          const data = await resp.json()
+          server.close(() => resolve({ status: resp.status, data }))
+        } catch (err) {
+          server.close(() => reject(err))
+        }
+      })
+    })
+  }
+
+  const originalFetch = globalThis.fetch
+
+  it('blocks non-admin group members with 403 and allows group 25874 admins to perform full lifecycle', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url, opts) => {
+      if (String(url).startsWith('http://127.0.0.1:')) {
+        return originalFetch(url, opts)
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () => SAMPLE_GROUP_HTML,
+      }
+    }))
+
+    // Non-admin (role=staff in group 25874) -> 403
+    const staffApp = buildApp('matti.staff@example.com')
+    const denied = await callApp(staffApp, 'GET', '/api/v1/guns')
+    expect(denied.status).toBe(403)
+    expect(denied.data.groupId).toBe('25874')
+
+    // Admin (role=admin in group 25874) -> 201 create -> checkout -> maintenance -> return
+    const adminApp = buildApp('tommi@example.com')
+    const created = await callApp(adminApp, 'POST', '/api/v1/guns', {
+      make: 'Walther',
+      model: 'PDP',
+      serialNumber: 'WP-555',
+      acquisitionYear: 2024,
+    })
+    expect(created.status).toBe(201)
+    const gunId = created.data.gun.id
+
+    const checkedOut = await callApp(adminApp, 'POST', `/api/v1/guns/${gunId}/checkout`, {
+      shooterName: 'Matti Meikäläinen',
+      cupId: '160',
+      cartridgesGiven: 100,
+    })
+    expect(checkedOut.status).toBe(200)
+    expect(checkedOut.data.gun.state).toBe('in_range_use')
+    expect(checkedOut.data.gun.cartridgesIssuedTotal).toBe(100)
+
+    const returned = await callApp(adminApp, 'POST', '/api/v1/guns/return-all', { cupId: '160' })
+    expect(returned.status).toBe(200)
+    expect(returned.data.returnedCount).toBe(1)
+
+    const maint = await callApp(adminApp, 'POST', `/api/v1/guns/${gunId}/maintenance`, {
+      notes: 'Puhdistettu',
+    })
+    expect(maint.status).toBe(200)
+    expect(maint.data.gun.timesUsedSinceMaintenance).toBe(0)
+    expect(maint.data.gun.cartridgesSinceMaintenance).toBe(0)
   })
 })

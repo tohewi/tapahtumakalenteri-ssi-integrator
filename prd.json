@@ -49,8 +49,8 @@
         "scoring-proxy tests and lint pass (npm run lint && npm test)"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created scoring-proxy/routes/guns.js, mounted at /api/v1/guns and /api/guns in server.js, and verified with route integration tests."
     },
     {
       "id": "US-004",
