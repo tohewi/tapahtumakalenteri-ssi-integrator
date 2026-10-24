@@ -329,6 +329,10 @@ describe('LegalDocumentPage & LegalFooterLinks', () => {
     rerender(<LegalDocumentPage type="terms" />)
     expect(screen.getByText(/Palvelun käyttö/i)).toBeInTheDocument()
     expect(screen.getByText(/Käyttäjän vastuu/i)).toBeInTheDocument()
+
+    rerender(<LegalDocumentPage type="privacy-guns" />)
+    expect(screen.getByText(/Laina-aseiden käytönseuranta/i)).toBeInTheDocument()
+    expect(screen.getByText(/Club Loaner Firearm Inventory/i)).toBeInTheDocument()
   })
 })
 

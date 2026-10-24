@@ -551,6 +551,7 @@ Inventory, loaner-gun checkout (*laina-ase*), cartridge (*patruuna*) bookkeeping
 | GUN6 | **Gun Inventory & Maintenance Web UI (`#/guns`)**: Dedicated page displaying inventory state (`Asekaapissa` / `Radalla käytössä`), total & since-maintenance usage and cartridge counts, Add/Edit/Retire gun dialog, Record Cleaning/Maintenance action, and Return to Safe action. | ✅ Implemented (`R90-GUN6`) |
 | GUN7 | **ManagePage (`#/manage`) Laina-ase Squad Integration**: In `SquaddingOverview` / `SquadCard`, allow selecting a shooter in the `"Laina-ase"` squad, picking an available gun + cartridge count (`100` / `0` / custom), displaying assigned gun badge on shooter row, and returning guns to safe at end of match. | ✅ Implemented (`R90-GUN7`) |
 | GUN8 | **Unit, Integration & Playwright E2E Verification**: Unit/route/component tests and Playwright E2E coverage for gun inventory, Laina-ase checkout/return, maintenance reset, and SSI Group `25874` admin access control. | ✅ Implemented (`R90-GUN8`) |
+| GUN9 | **Gun Inventory & Usage Privacy Notice (*Rekisteriseloste*, FI & EN)**: Simple, legally valid (GDPR Art. 13–14 & Finnish Firearms Act duty of care) bilingual privacy notice (`docs/privacy-notice-gun-inventory.md` & `#/privacy-guns`) explaining controller, purpose, data fields recorded on loan/maintenance, EU storage, access restriction (`25874` admin), retention, and data subject rights. | ✅ Implemented (`R90-GUN9`) |
 
 ## Release 10.0 — Public Registration Buffer
 

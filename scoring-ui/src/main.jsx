@@ -86,6 +86,9 @@ function Router() {
   if (path === '#/privacy') {
     return <LegalDocumentPage type="privacy" />
   }
+  if (path === '#/privacy-guns') {
+    return <LegalDocumentPage type="privacy-guns" />
+  }
   if (path === '#/terms') {
     return <LegalDocumentPage type="terms" />
   }

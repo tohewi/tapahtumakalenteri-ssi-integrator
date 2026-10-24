@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuthenticatedPage } from '../hooks/useAuthenticatedPage'
 import LoginScreen from './LoginScreen'
 import ManageSessionGate from './manage/ManageSessionGate'
+import { LegalFooterLinks } from './LegalDocumentPage'
 import { AppHeader, ErrorBanner, Spinner } from './shared'
 import * as gunsApi from '../guns-api'
 
@@ -441,6 +442,7 @@ function GunsPageContent({ initialAuthenticated }) {
           </form>
         </div>
       )}
+      <LegalFooterLinks />
     </div>
   )
 }
