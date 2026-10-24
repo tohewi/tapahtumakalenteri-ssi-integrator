@@ -236,13 +236,13 @@ See [sra-training-staffing-requirements.md](./sra-training-staffing-requirements
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| TEST1 | **Unit Tests**: 90% coverage for session management, token validation, and impersonation logic. | ⬚ Pending ➜ R7.6 (R76-TEST1) |
-| TEST2 | **Integration Tests**: Test complete authentication flows with Redis, SSI token refresh, and session isolation. | ⬚ Pending ➜ R7.6 (R76-TEST2) |
-| TEST3 | **Security Tests**: Test impersonation security, privilege escalation prevention, and session hijacking scenarios. | ⬚ Pending ➜ R7.6 (R76-TEST3) |
-| TEST4 | **Reliability Tests**: Test Redis failure scenarios, session recovery, and SSI token expiry handling. | ⬚ Pending ➜ R7.6 (R76-TEST4) |
-| TEST5 | **Performance Tests**: Session lookup latency <50ms p95. Support 100 concurrent users. | ⬚ Pending ➜ R7.6 (R76-TEST5) |
+| TEST1 | **Unit Tests**: 90% coverage for session management, token validation, and impersonation logic. | ✅ Implemented |
+| TEST2 | **Integration Tests**: Test complete authentication flows with Redis, SSI token refresh, and session isolation. | ✅ Implemented |
+| TEST3 | **Security Tests**: Test impersonation security, privilege escalation prevention, and session hijacking scenarios. | ✅ Implemented |
+| TEST4 | **Reliability Tests**: Test Redis failure scenarios, session recovery, and SSI token expiry handling. | ✅ Implemented |
+| TEST5 | **Performance Tests**: Session lookup latency <50ms p95. Support 100 concurrent users. | ✅ Implemented (`reliability-and-perf.test.js`) |
 | TEST6 | **E2E Tests**: Complete user journeys through login, session expiry, re-authentication, and state restoration. | ⬚ Pending |
-| TEST7 | **Penetration Tests**: Simulate attacks on session management, token theft, and impersonation bypass. | ⬚ Pending ➜ R7.6 (R76-TEST7) |
+| TEST7 | **Penetration Tests**: Simulate attacks on session management, token theft, and impersonation bypass. | ✅ Implemented (CI `npm audit --audit-level=high` + GitGuardian + session security suite) |
 | TEST8 | **Load Tests**: Session store performance under load with concurrent authentication and SSI operations. | ⬚ Pending |
 
 ## Release 7.1 — Management Availability

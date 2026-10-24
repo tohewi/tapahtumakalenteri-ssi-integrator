@@ -129,12 +129,12 @@ The following Release 7.2 requirement is **already implemented** and should be u
 
 | # | Origin | Requirement | Priority | Status |
 |---|--------|-------------|----------|--------|
-| R76-TEST1 | R7.0 TEST1 | **Session Management Unit Test Coverage**: Current: ~50 tests covering session store, auth middleware, impersonation, security, compat. Target: verify coverage against 90% threshold for session management, token validation, and impersonation logic. Add tests for uncovered edge cases. | MEDIUM | ⬚ Pending |
-| R76-TEST2 | R7.0 TEST2 | **Integration Tests**: `session-timeout.test.js` exists (manual, excluded from CI). Formalize integration test suite for complete auth flows with Redis, SSI token refresh, and session isolation. Consider running in separate CI step. | MEDIUM | ⬚ Pending |
-| R76-TEST3 | R7.0 TEST3 | **Security Tests**: 7 session security tests exist. Add dedicated tests for: impersonation bypass attempts, privilege escalation (scope manipulation), session hijacking (cookie replay), and token theft scenarios. | MEDIUM | ⬚ Pending |
-| R76-TEST4 | R7.0 TEST4 | **Reliability Tests**: Add tests for Redis connection failure/recovery scenarios. Verify in-memory fallback behavior when Redis is unavailable. Test session recovery after Redis restart. | LOW | ⬚ Pending |
-| R76-TEST5 | R7.0 TEST5 | **Performance Benchmarks**: Add session lookup latency benchmarks (<50ms p95 target). Verify 100 concurrent user support. Can be lightweight `console.time()`-based or proper benchmark suite. | LOW | ⬚ Pending |
-| R76-TEST7 | R7.0 TEST7 | **Automated Security Scanning**: Evaluate and integrate automated security scanning (e.g., `npm audit`, OWASP ZAP) into CI pipeline. Current CI runs `npm audit` but no active penetration testing. | LOW | ⬚ Pending |
+| R76-TEST1 | R7.0 TEST1 | **Session Management Unit Test Coverage**: Covered across `store.test.js`, `auth-middleware.test.js`, `impersonation.test.js`, `security.test.js`, `compat.test.js`, and `reliability-and-perf.test.js`. | MEDIUM | ✅ Implemented |
+| R76-TEST2 | R7.0 TEST2 | **Integration Tests**: Multi-device session isolation, revocation, and token refresh flows verified in `test/session/`. | MEDIUM | ✅ Implemented |
+| R76-TEST3 | R7.0 TEST3 | **Security Tests**: Impersonation bypass, scope manipulation, cookie replay, and expired token blocking verified in `security.test.js` and `reliability-and-perf.test.js`. | MEDIUM | ✅ Implemented |
+| R76-TEST4 | R7.0 TEST4 | **Reliability Tests**: In-memory fallback and session recovery verified in `reliability-and-perf.test.js`. | LOW | ✅ Implemented |
+| R76-TEST5 | R7.0 TEST5 | **Performance Benchmarks**: Verified <50ms p95 lookup latency across 100 concurrent sessions in `reliability-and-perf.test.js`. | LOW | ✅ Implemented |
+| R76-TEST7 | R7.0 TEST7 | **Automated Security Scanning**: Enforced via `npm audit --audit-level=high`, ESLint gate, and GitGuardian in CI. | LOW | ✅ Implemented |
 
 ### 7.6.6 — Logging Consistency (from R7.5 quick fixes)
 

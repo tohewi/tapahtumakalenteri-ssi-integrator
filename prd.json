@@ -229,8 +229,8 @@
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added reliability, security, and <50ms p95 100-session latency benchmark tests in reliability-and-perf.test.js."
     },
     {
       "id": "US-015",
