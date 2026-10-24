@@ -36,3 +36,9 @@
 - Extracted `ssiGetScoringPage` and `ssiSubmitScore` implementations into `scoring-proxy/lib/ssi-core/scoring.js`.
 - Extracted `ssiGetMatchGroupId`, `ssiGetMatchOfficials`, `ssiAddToMatchManagement`, `ssiRemoveFromMatchManagement`, and `ssiGetEventStaff` implementations into `scoring-proxy/lib/ssi-core/management.js`.
 ---
+
+## 2026-10-24 15:10 - US-005 (R76-TD1)
+- Extracted all participant scraping functions into `scoring-proxy/lib/ssi-core/participants.js` and reduced `client.js` from 1,898 lines to a 31-line compatibility barrel.
+- Deleted unused `scoring-proxy/lib/ssi-client.js` shim and updated test imports in `ssi-core-scraping.test.js` and `ssi-core-client.test.js`.
+- Updated `AGENTS.md` and `.github/copilot-instructions.md` in sync, and marked `R76-TD1` as `✅ Implemented`.
+---

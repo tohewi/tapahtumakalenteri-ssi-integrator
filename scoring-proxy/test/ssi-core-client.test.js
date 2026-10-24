@@ -3,7 +3,8 @@
 // ============================================================
 
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { ssiFindCompetitorInMatch, ssiGraphQL } from '../lib/ssi-core/client.js'
+import { ssiGraphQL } from '../lib/ssi-core/graphql.js'
+import { ssiFindCompetitorInMatch } from '../lib/ssi-core/participants.js'
 
 afterEach(() => {
   delete process.env.SSI_GRAPHQL_MAX_RETRIES

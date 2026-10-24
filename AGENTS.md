@@ -64,12 +64,11 @@ This is a **shooting competition management system** to help setting up events i
 │   │   └── errorHandler.js  # Centralized error handling + asyncHandler
 │   ├── lib/
 │   │   ├── ssi-core/        # SSI API integration (split by domain)
-│   │   │   ├── client.js    # Monolithic SSI client (code move pending)
-│   │   │   ├── graphql.js   # Auth, JWT, login (re-export shim)
-│   │   │   ├── scoring.js   # Scoring pages (re-export shim)
-│   │   │   ├── participants.js # Participant management (re-export shim)
-│   │   │   ├── management.js   # Match management (re-export shim)
-│   │   │   └── http-helpers.js # Cookie/fetch helpers (re-export shim)
+│   │   │   ├── graphql.js   # Auth, JWT, login
+│   │   │   ├── scoring.js   # Scoring pages
+│   │   │   ├── participants.js # Participant management
+│   │   │   ├── management.js   # Match management & staffing
+│   │   │   └── http-helpers.js # Cookie/fetch/form helpers
 │   │   ├── services/        # Business logic (pure functions)
 │   │   │   └── cup-manage.js       # Cup management operations
 │   │   ├── errors/          # Custom error classes
