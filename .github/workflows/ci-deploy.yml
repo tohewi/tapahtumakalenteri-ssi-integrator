@@ -31,6 +31,15 @@ jobs:
         run: npm ci
         working-directory: scoring-proxy
 
+      # ── Lint ──
+      - name: Lint UI
+        run: npm run lint
+        working-directory: scoring-ui
+
+      - name: Lint proxy
+        run: npm run lint
+        working-directory: scoring-proxy
+
       # ── Test ──
       - name: Run UI tests
         run: npm test

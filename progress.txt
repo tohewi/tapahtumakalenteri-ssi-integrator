@@ -58,3 +58,9 @@
 - Archived orphaned prototype files (`StaffStatusBoard.jsx`, `StaffSignupPanel.jsx`, `cron.js`, `notifier.js`, `role-assigner.js`, `squad-optimizer.js`, `IMMEDIATE-DEVELOPMENT-NEEDS.md`) to `archive/staffing-prototype/`.
 - Added unit tests in `scoring-proxy/test/staffing.test.js` and marked `ARCH3`, `R76-ARCH3`, and `R76-TD3` as `✅ Implemented`.
 ---
+
+## 2026-10-24 15:28 - US-009 (R76-ARCH4 / R76-TD4)
+- Migrated root `.eslintrc-architectural.js` to ESLint v9 flat config in `scoring-proxy/eslint.config.js` enforcing `architecture/no-cross-domain-imports` and `architecture/no-barrel-imports`.
+- Added `"lint": "eslint ."` to `scoring-proxy/package.json`, fixed 9 unused-var errors across `scoring-proxy`, and added UI/proxy lint steps to `.github/workflows/ci-deploy.yml`.
+- Marked `ARCH4`, `R76-ARCH4`, and `R76-TD4` as `✅ Implemented`.
+---

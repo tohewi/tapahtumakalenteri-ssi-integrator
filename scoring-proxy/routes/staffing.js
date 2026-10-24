@@ -100,7 +100,7 @@ export function createStaffingRouter({ requireAuth, graphqlWithRefresh, getAdmin
         trainingTypes: config.trainingTypes,
         roles: config.roles,
       })
-    } catch (err) {
+    } catch {
       return next(internalError('Failed to load staffing config'))
     }
   })

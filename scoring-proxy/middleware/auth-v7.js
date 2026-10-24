@@ -16,7 +16,6 @@ import {
   adminTokenNeedsRefresh,
   getImpersonationContext,
   sessionConfig,
-  auditSecurityViolation,
   toLegacySession,
 } from '../lib/session/index.js'
 import { log } from '../lib/logger.js'

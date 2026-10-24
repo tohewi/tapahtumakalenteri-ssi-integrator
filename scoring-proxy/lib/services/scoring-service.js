@@ -3,7 +3,6 @@
 // ============================================================
 
 import { ssiGetScoringPage, ssiSubmitScore } from '../ssi-core/scoring.js'
-import { log } from '../logger.js'
 
 export const ZONES = ['X', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'M']
 export const ZONE_KEYS = ['xxx', 'ten', 'nine', 'eight', 'seven', 'six', 'five', 'four', 'three', 'two', 'one', 'miss']

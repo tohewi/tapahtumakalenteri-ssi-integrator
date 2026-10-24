@@ -19,9 +19,6 @@ import {
 } from '../../lib/session/store.js'
 import {
   createMockSessionInput,
-  createExpiredUserSSI,
-  createExpiringUserSSI,
-  createExpiringAdminSSI,
 } from '../fixtures/sessions.js'
 
 // Use in-memory fallback (no REDIS_URL set in test env)

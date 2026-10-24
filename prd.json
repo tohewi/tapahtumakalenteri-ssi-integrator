@@ -149,8 +149,8 @@
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Configured scoring-proxy/eslint.config.js with architecture rules, added CI lint gates, and verified 0 errors."
     },
     {
       "id": "US-010",

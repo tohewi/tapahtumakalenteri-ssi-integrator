@@ -1,4 +1,7 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterAll } from 'vitest'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   matchTrainingType,
   calculateShooterCount,
@@ -9,6 +12,14 @@ import {
   upsertEvent,
   getEventStatus,
 } from '../lib/staffing/engine.js'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const staffingDataFile = resolve(__dirname, '../data/staffing-events.json')
+const originalStaffingData = readFileSync(staffingDataFile, 'utf8')
+
+afterAll(() => {
+  writeFileSync(staffingDataFile, originalStaffingData, 'utf8')
+})
 
 describe('staffing-service & engine unit tests', () => {
   it('matches training type from event name patterns', () => {
