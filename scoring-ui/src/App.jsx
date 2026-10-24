@@ -134,6 +134,11 @@ export function App() {
     const nav = lsGet(LS_KEYS.NAV)
     const savedCup = lsGet(LS_KEYS.CUP)
 
+    if (!nav || nav.view === 'cup') {
+      setView('cup')
+      return
+    }
+
     // Restore cup + matches
     let cupData = null
     if (savedCup) {
@@ -144,8 +149,8 @@ export function App() {
       } catch { /* cup load failed */ }
     }
 
-    if (!nav || !cupData) {
-      setView(cupData ? 'match' : 'cup')
+    if (!cupData) {
+      setView('cup')
       return
     }
 
@@ -237,6 +242,8 @@ export function App() {
           return
         }
 
+        lsRemove(LS_KEYS.CUP)
+        lsRemove(LS_KEYS.NAV)
         setView('login')
       } catch {
         // Ignore bootstrap errors and keep explicit login as the fallback.

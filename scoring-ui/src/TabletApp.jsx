@@ -141,6 +141,12 @@ export function TabletApp() {
     const savedCup = lsGet(LS_KEYS.CUP)
     log.debug('[TabletApp] restoreNavState: nav=', nav, 'savedCup=', savedCup?.id)
 
+    if (!nav || nav.view === 'cup') {
+      log.debug('[TabletApp] restoreNavState: no active nav state, navigating to cup search')
+      setView('cup')
+      return
+    }
+
     // Restore cup + matches
     let cupData = null
     if (savedCup) {
@@ -154,10 +160,9 @@ export function TabletApp() {
       }
     }
 
-    if (!nav || !cupData) {
-      const target = cupData ? 'match' : 'cup'
-      log.debug('[TabletApp] restoreNavState: navigating to', target)
-      setView(target)
+    if (!cupData) {
+      log.debug('[TabletApp] restoreNavState: navigating to cup')
+      setView('cup')
       return
     }
 
@@ -243,6 +248,8 @@ export function TabletApp() {
 
         const canRestoreScoring = status?.authenticated && (!status.scope || status.scope === 'scoring')
         if (!canRestoreScoring) {
+          lsRemove(LS_KEYS.CUP)
+          lsRemove(LS_KEYS.NAV)
           setView('login')
           return
         }
@@ -264,11 +271,13 @@ export function TabletApp() {
   }, [restoreNavState, fetchAndSetUserInfo])
 
   const handleLogout = async () => {
-    await api.logout()
+    try { await api.logout() } catch { /* ignore */ }
     setUserEmail(null) // Clear user email on logout
     setUserName('') // Clear user name
+    lsRemove(LS_KEYS.CUP)
     lsRemove(LS_KEYS.NAV)
     lsRemove(LS_KEYS.SCORES)
+    lsRemove(LS_KEYS.SHOOTER_ORDER)
     setView('login')
     setSelectedCup(null)
     setMatches([])

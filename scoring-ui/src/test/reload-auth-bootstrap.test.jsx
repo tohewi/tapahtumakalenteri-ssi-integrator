@@ -57,11 +57,16 @@ describe('Auth bootstrap on page reload', () => {
     })
   })
 
-  it('tablet app stays on login when there is no active session', async () => {
+  it('tablet app stays on login when there is no active session and clears stale cup/nav localStorage', async () => {
+    localStorage.setItem('ssi_last_cup', JSON.stringify({ id: 141, name: 'Old Cup' }))
+    localStorage.setItem('ssi_tablet_nav_state', JSON.stringify({ view: 'match', cupId: 141 }))
+
     render(<TabletApp />)
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText('your@email.com')).toBeInTheDocument()
     })
+    expect(localStorage.getItem('ssi_last_cup')).toBeNull()
+    expect(localStorage.getItem('ssi_tablet_nav_state')).toBeNull()
   })
 })
