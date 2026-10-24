@@ -326,8 +326,8 @@
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Automated mobile and tablet scoring UAT flows in scoring-mobile.spec.js and scoring-tablet.spec.js."
     },
     {
       "id": "US-021",
