@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { parseDateLocal, isToday, isFuture } from '../components/shared'
 
 // ============================================================
@@ -70,18 +70,7 @@ describe('parseDateLocal', () => {
   it('handles date-only strings without adding UTC offset', () => {
     // This is the critical test - date-only should be local time, not UTC
     const result = parseDateLocal('2026-02-15')
-    
-    // Get the timezone offset in minutes
-    const offsetMinutes = result.getTimezoneOffset()
-    
-    // When we convert to ISO string, it converts to UTC
-    // So the date portion should be adjusted based on local timezone
-    const isoString = result.toISOString()
-    
-    // For local midnight, the UTC representation depends on timezone
-    // Example: if timezone is UTC+2 (120 minutes ahead), local midnight is 22:00 UTC previous day
-    // Example: if timezone is UTC-5 (300 minutes behind), local midnight is 05:00 UTC same day
-    
+
     // Verify that the constructed date is indeed local midnight
     expect(result.getHours()).toBe(0)
     expect(result.getMinutes()).toBe(0)

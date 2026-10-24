@@ -40,13 +40,13 @@ Follow-up in the existing Release 7.9.2 Cup management hotfix stream. SSI now is
 
 ---
 
-## Release 7.6.1 — Compliance Hardening: Paid Tracking Disabled (2026-05-10)
+## Release 7.6.1 — Compliance & Code Quality Hardening (2026-05-10 / 2026-10-24)
 
-**Requirements:** R76-COM2 ✅
+**Requirements:** R76-COM2 ✅, R76-LOG1 ✅
 
 ### Overview
 
-Compliance hardening release to remove paid-status bookkeeping controls from Kupittaa Cup management tooling. The UI no longer exposes paid toggle controls, and backend guardrails keep paid toggle writes disabled by default.
+Compliance and code quality hardening release to remove paid-status bookkeeping controls from Kupittaa Cup management tooling, complete middleware structured logging discipline (`R76-LOG1`), align `staffing-api.js` to `/api/v1/staffing`, resolve all 92 frontend ESLint errors/warnings, and synchronize repository documentation and technical debt backlog (`R76-TD1`–`R76-TD5`).
 
 ### New Features
 
@@ -56,6 +56,10 @@ Compliance hardening release to remove paid-status bookkeeping controls from Kup
 
 ### Bug Fixes
 
+- **Middleware logging discipline (`R76-LOG1`)**: Replaced remaining `console.warn` / `console.error` calls in `scoring-proxy/middleware/auth-v7.js` with structured `log.warn` / `log.error`.
+- **Session-expired banner restoration**: Rendered the `sessionExpiredMessage` warning banner on login screens in `ManagePage.jsx`, `ReportPage.jsx`, and `SummaryReportPage.jsx`.
+- **Versioned staffing API path (`ARCH2`)**: Updated `scoring-ui/src/staffing-api.js` base path from `/api/staffing` to `/api/v1/staffing`.
+- **Frontend ESLint & i18n cleanup**: Removed duplicate `saveFailed` keys in `scoring-ui/src/i18n.js`, fixed React 19 hook/purity violations across `CupList` and `RegisterPage`, and configured Vite/Node test globals in `scoring-ui/eslint.config.js` (92 problems → 0).
 - **Dead UI paths removed**: Removed paid toggle action plumbing from management UI components, avoiding hidden but still-callable client paths.
 - **Unused API client cleanup**: Removed `manageTogglePaid` client helper from frontend API layer.
 - **Unused translation cleanup**: Removed obsolete paid/unpaid management i18n keys after UI removal.
@@ -63,13 +67,14 @@ Compliance hardening release to remove paid-status bookkeeping controls from Kup
 ### Requirements Met
 
 - **R76-COM2:** Paid tracking is disabled in management tooling, with no paid toggle controls in UI and backend writes blocked by default.
+- **R76-LOG1:** Auth middleware uses structured logger across all warning and error paths.
 
 ### Test Status
 
 | Suite | Passing | Notes |
 |-------|--------:|-------|
-| Backend (scoring-proxy) | 21 | Targeted `management.test.js` suite green, including `toggle-paid` disabled-path assertions |
-| Frontend (scoring-ui) | — | Production build passes after UI/API cleanup |
+| Backend (scoring-proxy) | 239 | Full suite green, 0 npm audit vulnerabilities |
+| Frontend (scoring-ui) | 212 | Full suite green, 0 ESLint errors/warnings, production build passes |
 
 ---
 

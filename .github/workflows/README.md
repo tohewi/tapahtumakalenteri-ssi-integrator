@@ -217,8 +217,8 @@ Render Dashboard → Services → Select service → Logs tab
 
 For detailed documentation, see:
 
-- **[PR Preview Deployments](../../docs/PR-PREVIEW-DEPLOYMENTS.md)** - Complete preview environment guide
-- **[Branching Strategy](../../docs/BRANCHING-STRATEGY.md)** - GitHub Flow and release process
+- **[PR Preview Deployments](../../docs/instructions/PR-PREVIEW-DEPLOYMENTS.md)** - Complete preview environment guide
+- **[Branching Strategy](../../docs/instructions/BRANCHING-STRATEGY.md)** - GitHub Flow and release process
 - **[Render API Docs](https://api-docs.render.com/)** - Render API reference
 
 ## Maintenance

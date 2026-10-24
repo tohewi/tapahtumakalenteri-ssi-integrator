@@ -98,7 +98,7 @@ Invoke-Pester -Path .\scripts-graphql\tests\SSI-GraphQL.Tests.ps1 -Output Detail
 
 - **Always mention** the GraphQL limitation
 - **Recommend** web scraping for write operations
-- **Reference** `docs/ssi-graphql-findings.md` for detailed technical information
+- **Reference** `docs/design/ssi-graphql-findings.md` for detailed technical information
 - **Note** that this is a server-side issue requiring SSI team action
 
 ## Dependencies
@@ -126,7 +126,7 @@ This **does not** affect:
 
 ## References
 
-- Detailed technical analysis: `docs/ssi-graphql-findings.md`
+- Detailed technical analysis: `docs/design/ssi-graphql-findings.md`
 - Working web scraping scripts: `archive/scripts-legacy/New-KupittaaCup.ps1`
 - GraphQL test suite: `scripts-graphql/tests/SSI-GraphQL.Tests.ps1`
 - SSI client implementation: `scoring-proxy/lib/ssi-core/client.js`

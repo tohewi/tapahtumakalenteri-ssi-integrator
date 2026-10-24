@@ -475,7 +475,7 @@ Frontend tests (`scoring-ui/src/test/`):
 
 ## Complete Session Lifecycle
 
-See `docs/session-lifecycle.md` for detailed state charts and analysis.
+See `docs/design/session-lifecycle.md` for detailed state charts and analysis.
 
 ### Normal Flow (Happy Path)
 

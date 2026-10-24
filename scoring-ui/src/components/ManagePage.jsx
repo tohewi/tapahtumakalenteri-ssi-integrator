@@ -137,7 +137,7 @@ function ManagePageContent({ initialAuthenticated }) {
       }
     }
     setLoading(false)
-  }, [withSessionCheck]) // withSessionCheck is stable, but included for clarity
+  }, [withSessionCheck, setError, setLoading, setView])
 
   // Patch CUP shooter status in local state so CUP2/CUP3 can update UI
   // without forcing a full overview reload.
@@ -177,6 +177,11 @@ function ManagePageContent({ initialAuthenticated }) {
             </a>
           </div>
         </div>
+        {sessionExpiredMessage && (
+          <div className="mx-4 mt-4 bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-center">
+            <p className="text-yellow-800 text-sm font-medium">{sessionExpiredMessage}</p>
+          </div>
+        )}
         <LoginScreen 
           onLogin={handleLogin} 
           initialEmail={savedCreds?.email}

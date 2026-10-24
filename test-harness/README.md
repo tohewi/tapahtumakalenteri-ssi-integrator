@@ -62,12 +62,12 @@ Review the output and `debug-*.html` files to identify form fields and URLs.
 
 ## Architecture
 
-All write operations use **web scraping** (form POST). SSI GraphQL write mutations are broken (see `docs/ssi-graphql-findings.md`). Read operations use GraphQL where available.
+All write operations use **web scraping** (form POST). SSI GraphQL write mutations are broken (see `docs/design/ssi-graphql-findings.md`). Read operations use GraphQL where available.
 
 ### Technology
 
 - **PowerShell 7+** with `PowerShell-Yaml` module
-- Web scraping via `Invoke-WebRequest` (same pattern as `scripts/Connect-SSI.ps1`)
+- Web scraping via `Invoke-WebRequest` (same pattern as `archive/scripts-legacy/Connect-SSI.ps1`)
 - Credentials stored in `config/test-users.yml` (gitignored)
 
 ### Folder Structure
@@ -150,7 +150,7 @@ Each account has a unique token discoverable from the settings page. `Remove-Tes
 
 ### Known limitations
 
-- SSI GraphQL write mutations are broken (see `docs/ssi-graphql-findings.md`)
+- SSI GraphQL write mutations are broken (see `docs/design/ssi-graphql-findings.md`)
 - Account deactivation is **irreversible** — use `Remove-TestUsers.ps1 -Deactivate` with care
 - Email verification is required and must be done manually
 - Match enrollment URL pattern is not yet discovered (Phase 2)

@@ -11,7 +11,7 @@ This repository has established **modularity guidelines** to minimize merge conf
 Before modifying any shared files, read these documents:
 
 1. **Quick Reference:** `docs/SHARED-COMPONENT-PROCESS.md` (5-step process)
-2. **Full Guidelines:** `docs/DEVELOPMENT-MODULARITY-GUIDELINES.md` (comprehensive guide)
+2. **Full Guidelines:** `docs/design/DEVELOPMENT-MODULARITY-GUIDELINES.md` (comprehensive guide)
 
 These documents are located in the `docs/` directory at the repository root.
 
@@ -329,7 +329,7 @@ This document works together with:
 
 - **SSI API Limitations:** `.github/agents/ssi-api-limitations.md` - What works/doesn't work in SSI GraphQL
 - **Main Copilot Instructions:** `.github/copilot-instructions.md` - General project guidelines
-- **Branching Strategy:** `docs/BRANCHING-STRATEGY.md` - Git workflow and PR process
+- **Branching Strategy:** `docs/instructions/BRANCHING-STRATEGY.md` - Git workflow and PR process
 - **AI Agent Guidelines:** `docs/ai-agent-guidelines.md` - Token optimization for AI development
 
 ## Quick Decision Tree
@@ -382,7 +382,7 @@ Track these metrics to ensure guidelines are working:
 
 - **Date:** 2026-02-11
 - **Related Documents:**
-  - `docs/DEVELOPMENT-MODULARITY-GUIDELINES.md`
+  - `docs/design/DEVELOPMENT-MODULARITY-GUIDELINES.md`
   - `docs/SHARED-COMPONENT-PROCESS.md`
 - **Next Review:** When modularity metrics improve or team grows
 

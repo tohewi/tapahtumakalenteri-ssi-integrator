@@ -276,7 +276,7 @@ export function parseStringScore(ssiString, options = {}) {
   // Prefer comma format, but tolerate slash-separated debug/export variants.
   const rawScore = String(ssiString)
   const parts = rawScore
-    .split(/[\s,\/]+/)
+    .split(/[\s,/]+/)
     .filter(Boolean)
     .map(Number)
 

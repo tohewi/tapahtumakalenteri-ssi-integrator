@@ -140,7 +140,17 @@ The following Release 7.2 requirement is **already implemented** and should be u
 
 | # | Origin | Requirement | Priority | Status |
 |---|--------|-------------|----------|--------|
-| R76-LOG1 | R7.5 | **Middleware Logging Consistency**: `middleware/auth-v7.js` still uses `console.warn` and `console.error` (3 occurrences). Route files are clean (v7.5 ARCH1/ARCH2 work), but middleware was not included in the sweep. Replace with `log.warn`/`log.error` to complete logging discipline. | HIGH | ⬚ Pending |
+| R76-LOG1 | R7.5 | **Middleware Logging Consistency**: Replaced 3 `console.warn` / `console.error` calls in `scoring-proxy/middleware/auth-v7.js` with structured `log.warn` / `log.error` from `lib/logger.js`. | HIGH | ✅ Implemented |
+
+### 7.6.7 — Technical Debt Backlog (Code Quality Review Findings)
+
+| # | Origin | Requirement | Priority | Status |
+|---|--------|-------------|----------|--------|
+| R76-TD1 | Code Review | **Monolithic SSI Client Decomposition (`scoring-proxy/lib/ssi-core/client.js`, 1,898 lines)**: Move domain implementations out of `client.js` into `graphql.js`, `scoring.js`, `participants.js`, `management.js`, and `http-helpers.js` (currently 6-line re-export shims) and remove unused `lib/ssi-client.js` compat shim. | HIGH | 📋 Backlog |
+| R76-TD2 | Code Review | **Oversized UI & Route Files (>500-Line Guideline Violations)**: Decompose `scoring-ui/src/App.jsx` (890 lines), `scoring-ui/src/components/ManagePage.jsx` (767 lines), `scoring-proxy/routes/management.js` (742 lines), and `scoring-ui/src/components/TabletScoringView.jsx` (648 lines) into focused sub-components and service functions to satisfy the ~500-line modularity limit. | MEDIUM | 📋 Backlog |
+| R76-TD3 | Code Review | **Orphaned SRA Staffing Prototype Cleanup & Staffing Tests**: Clean up or integrate orphaned prototype modules (`scoring-ui/src/components/StaffStatusBoard.jsx`, `StaffSignupPanel.jsx`, `scoring-proxy/lib/staffing/cron.js`, `notifier.js`, `role-assigner.js`, `squad-optimizer.js` referencing unimplemented `getEventsDueForFinalization`/`finalizeEvent` exports), archive obsolete root `IMMEDIATE-DEVELOPMENT-NEEDS.md`, and add unit tests for `routes/staffing.js` and `lib/staffing/engine.js`. | MEDIUM | 📋 Backlog |
+| R76-TD4 | Code Review | **Backend ESLint Configuration & CI Lint Gate**: Migrate root `.eslintrc-architectural.js` (legacy CommonJS ESLint v8 format) to ESLint v9 flat config, add `npm run lint` to `scoring-proxy/package.json`, and add a `npm run lint` step for both `scoring-ui` and `scoring-proxy` in `.github/workflows/ci-deploy.yml`. | MEDIUM | 📋 Backlog |
+| R76-TD5 | Branch Audit | **Unmerged Feature Branch Consolidation (`R7.8`, `R7.9`, `R10.0`)**: Reconcile and merge completed work sitting on unmerged feature branches: `copilot/vscode-mnw87b09-v5g9` (Release 7.8 Induction Wait List), `R79-hotfix-cup-count-status-sync` (7-day manage window + -1d lookback), and `R100-feature-registration-buffer-*` (Release 10.0 Registration Buffer). | HIGH | 📋 Backlog |
 
 ---
 
@@ -166,24 +176,24 @@ The following Release 7.2 requirement is **already implemented** and should be u
 |-------|-------------|--------|--------|
 | **Phase 1** | R76-COM3 (per-user SSI execution identity) | 3-5 h | High compliance risk reduction |
 | **Phase 2** | R76-COM2 (disable paid tracking) — ✅ completed | 1-2 h | Immediate compliance hardening |
-| **Phase 3** | R76-LOG1 (middleware logging) | 0.5 h | Quick win — completes logging discipline |
+| **Phase 3** | R76-LOG1 (middleware logging) — ✅ completed | 0.5 h | Quick win — completes logging discipline |
 | **Phase 4** | R76-CUP1 (squad move) — 🟡 partially implemented | 2-3 h | High user value — completes cup management |
-| **Phase 5** | R76-ARCH3 (service layer: scoring, registration, staffing) | 3-4 h | Architecture — reduces route file complexity |
-| **Phase 6** | R76-TEST1/2/3 (test coverage) | 3-4 h | Quality — closes critical test gaps |
-| **Phase 7** | R76-ARCH4 (ESLint rules) | 1-2 h | Architecture — prevents drift |
+| **Phase 5** | R76-ARCH3 + R76-TD1/TD2 (service layer & file decomposition) | 5-8 h | Architecture — reduces monolith & route complexity |
+| **Phase 6** | R76-TEST1/2/3 + R76-TD3 (test coverage & staffing cleanup) | 4-6 h | Quality — closes critical test gaps |
+| **Phase 7** | R76-ARCH4 + R76-TD4 (ESLint rules & CI lint gate) | 1-2 h | Architecture — prevents drift |
 | **Phase 8** | R76-SEC1/SEC7/SES7/COM1 (security/compliance) | 2-3 h | Security + compliance documentation |
 | **Phase 9** | R76-MG2/3/4/5 (UI consolidation) — 🟡 MG3–MG5 completed, MG2 scoring sort remaining | 4-6 h | UX — shared components, front page |
 | **Phase 10** | R76-TEST4/5/7 (advanced testing) | 2-3 h | Quality — reliability and perf |
 
-**Total estimated effort:** ~24-32 hours across 10 phases (~15-20 hours remaining).
+**Total estimated effort:** ~26-38 hours across 10 phases (~18-26 hours remaining).
 
 ---
 
 ## Summary
 
-- **21 requirements** consolidated from 4 previous releases (R6.0, R7.0, R7.2, R7.5) plus compliance follow-up
-- **4 completed (✅)**: R76-MG3, R76-MG4, R76-MG5, R76-COM2
+- **21 consolidated requirements + 5 technical debt backlog items (`R76-TD1`–`R76-TD5`)**
+- **5 completed (✅)**: R76-MG3, R76-MG4, R76-MG5, R76-COM2, R76-LOG1
 - **2 partially implemented (🟡)**: R76-CUP1 (squad move: same-match-only and target capacity criteria remain unmet), R76-MG2 (proximity sort implemented in `CupList` for register/manage; scoring `CupSearch` sort remaining)
-- **3 HIGH priority pending**: R76-AUTH10 (registration passthrough auth), R76-COM3 (per-user SSI execution identity), R76-LOG1 (middleware logging)
-- **7 MEDIUM priority remaining**: R76-ARCH3, R76-ARCH4, R76-SEC1, R76-COM1, R76-TEST1/2/3
+- **2 HIGH priority pending + 2 HIGH backlog**: R76-AUTH10 (registration passthrough auth), R76-COM3 (per-user SSI execution identity), R76-TD1 (`client.js` decomposition), R76-TD5 (unmerged branch consolidation)
+- **7 MEDIUM priority remaining + 3 MEDIUM backlog**: R76-ARCH3, R76-ARCH4, R76-SEC1, R76-COM1, R76-TEST1/2/3, R76-TD2, R76-TD3, R76-TD4
 - **5 LOW priority pending**: R76-SEC7, R76-SES7, R76-TEST4/5/7

@@ -23,17 +23,6 @@ function createEmptySeriesScore() {
   return Object.fromEntries(SCORE_ZONES.map(z => [z, 0]))
 }
 
-function createEmptyAllScores(shooters) {
-  const all = {}
-  for (const s of shooters) {
-    all[s.id] = {}
-    for (let i = 0; i < SERIES_COUNT; i++) {
-      all[s.id][i] = createEmptySeriesScore()
-    }
-  }
-  return all
-}
-
 function hitsInSeries(seriesScores) {
   return SCORE_ZONES.reduce((sum, z) => sum + seriesScores[z], 0)
 }
@@ -506,16 +495,6 @@ export function App() {
     const s1 = isSeriesScored(allScores[shooterId][activeSeries])
     if (!doubleSeries) return s1
     return s1 && isSeriesScored(allScores[shooterId][pairedSeries])
-  }
-
-  // Combined hits for active group
-  const groupHits = (shooterId) => {
-    if (!allScores[shooterId]) return 0
-    let h = hitsInSeries(allScores[shooterId][activeSeries])
-    if (doubleSeries && allScores[shooterId][pairedSeries]) {
-      h += hitsInSeries(allScores[shooterId][pairedSeries])
-    }
-    return h
   }
 
   // Combined points for active group
