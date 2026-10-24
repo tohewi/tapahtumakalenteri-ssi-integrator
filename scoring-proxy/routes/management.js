@@ -315,11 +315,11 @@ export function createManagementRouter({
 
   // ============================================================
   // POST /api/manage/cup/:id/fix-squad
-  // Fix inconsistent squad assignment across matches.
-  // Body: { shooterName, targetSquad, email }
+  // Fix inconsistent squad assignment across matches or move shooter within a match.
+  // Body: { shooterName, targetSquad, email, matchId? }
   // ============================================================
   router.post('/cup/:id/fix-squad', requireAuth('manage'), async (req, res, next) => {
-    const { shooterName, targetSquad, email } = req.body
+    const { shooterName, targetSquad, email, matchId: singleMatchId } = req.body
     if (!shooterName || !targetSquad) {
       return res.status(400).json({ error: 'shooterName and targetSquad required' })
     }
@@ -334,7 +334,7 @@ export function createManagementRouter({
     log.info(`[manage] fix-squad: user=${user} cup=${req.params.id} shooter="${shooterName}" email=${email || 'none'} → squad ${targetSquad}`)
 
     try {
-      // 1. Get cup component matches
+      // 1. Get cup component matches (including optional squad capacity metadata)
       const cupData = await graphqlWithRefresh(req.ssiSession, `
         query ManageCup($id: String!) {
           event(content_type: 136, id: $id) {
@@ -342,7 +342,15 @@ export function createManagementRouter({
             ... on NordicSerieNode {
               component_matches {
                 number included
-                match { id name }
+                match {
+                  id name
+                  ... on NordicMatchNode {
+                    squads {
+                      number max_competitors
+                      competitors { id status first_name last_name email }
+                    }
+                  }
+                }
               }
             }
           }
@@ -351,7 +359,33 @@ export function createManagementRouter({
 
       if (!cupData.event) return res.status(404).json({ error: 'Cup not found' })
 
-      const matchIds = getIncludedMatchIds(cupData.event).map(m => m.id)
+      const includedMatches = (cupData.event.component_matches || [])
+        .filter(cm => cm.included && cm.match)
+        .map(cm => cm.match)
+      const targetMatches = singleMatchId
+        ? includedMatches.filter(m => String(m.id) === String(singleMatchId))
+        : includedMatches
+
+      if (singleMatchId && targetMatches.length === 0) {
+        return res.status(400).json({ error: 'Match not found in cup' })
+      }
+
+      // Enforce capacity when squad metadata is available on match nodes
+      for (const m of targetMatches) {
+        const sq = (m.squads || []).find(s => Number(s.number) === Number(targetSquad))
+        if (sq && sq.max_competitors > 0) {
+          const activeCompetitors = (sq.competitors || []).filter(c => !c.status || c.status === 'a')
+          const alreadyInSquad = activeCompetitors.some(c =>
+            (email && c.email && c.email.toLowerCase() === email.toLowerCase()) ||
+            `${c.first_name || ''} ${c.last_name || ''}`.trim().toLowerCase() === shooterName.trim().toLowerCase()
+          )
+          if (!alreadyInSquad && activeCompetitors.length >= sq.max_competitors) {
+            return res.status(400).json({ error: `Target squad ${targetSquad} is full (${activeCompetitors.length}/${sq.max_competitors})` })
+          }
+        }
+      }
+
+      const matchIds = targetMatches.map(m => m.id)
 
       const nameParts = shooterName.trim().split(/\s+/)
       const firstName = nameParts[0] || ''

@@ -20,3 +20,9 @@
 - **Learnings for future iterations:**
   - `scoring.test.js` debug-mode test asserts exact cup ordering across past and future cups; proximity sorting places `+1d` ahead of `-2d` and `+2d`.
 ---
+
+## 2026-10-24 14:58 - US-002 (R76-CUP1)
+- Updated `scoring-ui/src/components/manage/SquadPickerSheet.jsx` to disable full squads (`count >= max`) and the shooter's current squad.
+- Enhanced `POST /api/manage/cup/:id/fix-squad` in `scoring-proxy/routes/management.js` to validate target squad capacity when squad metadata is present and support optional single-match scoping (`matchId`).
+- Added unit tests in `scoring-proxy/test/management.test.js` and component test in `scoring-ui/src/test/components.test.jsx`.
+---

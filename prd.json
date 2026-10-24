@@ -34,8 +34,8 @@
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Enforced capacity in SquadPickerSheet.jsx and POST /api/manage/cup/:id/fix-squad with unit and component tests."
     },
     {
       "id": "US-003",

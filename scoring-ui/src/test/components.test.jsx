@@ -7,6 +7,7 @@ import SquadPicker from '../components/SquadPicker'
 import ShooterPicker from '../components/ShooterPicker'
 import CupSearch from '../components/CupSearch'
 import { CupList } from '../components/shared'
+import SquadPickerSheet from '../components/manage/SquadPickerSheet'
 
 // ============================================================
 // LoginScreen
@@ -264,5 +265,43 @@ describe('ShooterPicker', () => {
     render(<ShooterPicker shooters={shooters} onSelect={onSelect} currentShooterId={null} />)
     await userEvent.click(screen.getByText('Matti M'))
     expect(onSelect).toHaveBeenCalledWith(shooters[0])
+  })
+})
+
+// ============================================================
+// SquadPickerSheet (CUP1 / R76-CUP1)
+// ============================================================
+
+describe('SquadPickerSheet', () => {
+  const squads = [
+    { number: 1, name: 'Squad 1 (Laina-ase)', count: 4, max: 9 },
+    { number: 2, name: 'Squad 2 (Oma ase 1)', count: 9, max: 9 },
+    { number: 3, name: 'Squad 3 (Oma ase 2)', count: 5, max: 7 },
+  ]
+
+  it('disables full squads and current squad while allowing available squads', async () => {
+    const onSelect = vi.fn()
+    render(
+      <SquadPickerSheet
+        shooter={{ name: 'Matti Meikäläinen', email: 'matti@ex.com', squad: 1 }}
+        squads={squads}
+        onSelect={onSelect}
+        onClose={vi.fn()}
+      />
+    )
+
+    const sq1Btn = screen.getByText('Squad 1 (Laina-ase)').closest('button')
+    const sq2Btn = screen.getByText('Squad 2 (Oma ase 1)').closest('button')
+    const sq3Btn = screen.getByText('Squad 3 (Oma ase 2)').closest('button')
+
+    expect(sq1Btn).toBeDisabled() // shooter's current squad
+    expect(sq2Btn).toBeDisabled() // full squad (9/9)
+    expect(sq3Btn).not.toBeDisabled()
+
+    await userEvent.click(sq2Btn)
+    expect(onSelect).not.toHaveBeenCalled()
+
+    await userEvent.click(sq3Btn)
+    expect(onSelect).toHaveBeenCalledWith(3)
   })
 })

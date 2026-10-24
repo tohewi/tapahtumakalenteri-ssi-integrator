@@ -912,3 +912,80 @@ describe('POST /api/manage/cup/:id/toggle-paid', () => {
     expect(ssiClientMocks.ssiTogglePaid).not.toHaveBeenCalled()
   })
 })
+
+// ============================================================
+// POST /api/manage/cup/:id/fix-squad
+// ============================================================
+
+describe('POST /api/manage/cup/:id/fix-squad', () => {
+  it('moves shooter to target squad when capacity is available', async () => {
+    const ip = uniqueIp()
+    const cookies = await createManageSessionCookie()
+
+    app.setGraphqlResponse({
+      event: {
+        id: '123',
+        component_matches: [
+          {
+            number: 1,
+            included: true,
+            match: {
+              id: 'm1',
+              name: 'Match One',
+              squads: [{ number: 2, max_competitors: 9, competitors: [{ id: 'c1', status: 'a', first_name: 'Other', last_name: 'One', email: 'other@ex.com' }] }],
+            },
+          },
+        ],
+      },
+    })
+
+    ssiClientMocks.ssiFindCompetitorInMatch.mockResolvedValueOnce('mp-1')
+    ssiClientMocks.ssiSetParticipantSquad.mockResolvedValueOnce({ success: true, message: 'Moved' })
+
+    const res = await request('POST', '/api/manage/cup/123/fix-squad', {
+      shooterName: 'Test Shooter',
+      targetSquad: 2,
+      email: 'test@example.com',
+    }, ip, cookies)
+
+    expect(res.status).toBe(200)
+    expect(res.data.success).toBe(true)
+    expect(ssiClientMocks.ssiSetParticipantSquad).toHaveBeenCalledWith('mp-1', 2, expect.any(Object))
+  })
+
+  it('rejects move with 400 when target squad is at max capacity', async () => {
+    const ip = uniqueIp()
+    const cookies = await createManageSessionCookie()
+
+    app.setGraphqlResponse({
+      event: {
+        id: '123',
+        component_matches: [
+          {
+            number: 1,
+            included: true,
+            match: {
+              id: 'm1',
+              name: 'Match One',
+              squads: [{
+                number: 2,
+                max_competitors: 1,
+                competitors: [{ id: 'c1', status: 'a', first_name: 'Existing', last_name: 'Shooter', email: 'existing@ex.com' }],
+              }],
+            },
+          },
+        ],
+      },
+    })
+
+    const res = await request('POST', '/api/manage/cup/123/fix-squad', {
+      shooterName: 'New Shooter',
+      targetSquad: 2,
+      email: 'new@example.com',
+    }, ip, cookies)
+
+    expect(res.status).toBe(400)
+    expect(res.data.error).toContain('Target squad 2 is full')
+    expect(ssiClientMocks.ssiSetParticipantSquad).not.toHaveBeenCalled()
+  })
+})
