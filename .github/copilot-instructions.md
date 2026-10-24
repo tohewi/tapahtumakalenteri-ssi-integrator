@@ -70,6 +70,7 @@ This is a **shooting competition management system** to help setting up events i
 │   │   │   ├── management.js   # Match management & staffing
 │   │   │   └── http-helpers.js # Cookie/fetch/form helpers
 │   │   ├── services/        # Business logic (pure functions)
+│   │   │   ├── scoring-service.js  # Scoring operations
 │   │   │   └── cup-manage.js       # Cup management operations
 │   │   ├── errors/          # Custom error classes
 │   │   │   └── AppError.js  # AppError hierarchy (9 error types)
@@ -219,7 +220,7 @@ Use these to check deploy status, view logs, monitor service performance, and ma
 | Modify SSI integration | `scoring-proxy/lib/ssi-core/*.js` (domain module, NOT `client.js`) |
 | Update home navigation | `scoring-ui/src/components/HomePage.jsx` |
 | Change deploy config | `render.yaml` |
-| Modify scoring logic | `scoring-proxy/routes/scoring.js`, `scoring-proxy/lib/ssi-core/scoring.js` |
+| Modify scoring logic | `scoring-proxy/lib/services/scoring-service.js`, `scoring-proxy/routes/scoring.js` |
 | Modify management logic | `scoring-proxy/lib/services/cup-manage.js`, `scoring-proxy/routes/management.js` |
 | Modify staffing logic | `scoring-proxy/lib/staffing/engine.js`, `scoring-proxy/routes/staffing.js` |
 | Modify staffing config | `config/sra-training-config.yml`, `scoring-proxy/lib/staffing/config-loader.js` |

@@ -42,3 +42,8 @@
 - Deleted unused `scoring-proxy/lib/ssi-client.js` shim and updated test imports in `ssi-core-scraping.test.js` and `ssi-core-client.test.js`.
 - Updated `AGENTS.md` and `.github/copilot-instructions.md` in sync, and marked `R76-TD1` as `✅ Implemented`.
 ---
+
+## 2026-10-24 15:14 - US-006 (R76-ARCH3)
+- Extracted scoring helpers, Django formset builder, match search window builder, and score submission orchestration from `scoring-proxy/routes/scoring.js` into `scoring-proxy/lib/services/scoring-service.js`.
+- Reduced `routes/scoring.js` from 434 lines to 285 lines and added 6 unit tests in `scoring-proxy/test/scoring-service.test.js`.
+---

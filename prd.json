@@ -99,8 +99,8 @@
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Ensure the actual working GraphQL queries from routes/scoring.js are preserved."
+      "passes": true,
+      "notes": "Extracted scoring-service.js from routes/scoring.js with 6 unit tests in scoring-service.test.js."
     },
     {
       "id": "US-007",
