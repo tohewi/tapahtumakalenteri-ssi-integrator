@@ -120,7 +120,7 @@ export async function verifyGunInventoryAdminAccess({
     return { allowed: false, groupId, requiredRole, reason: 'missing_ssi_cookies' }
   }
 
-  const cacheKey = `${groupId}:${requiredRole}:${normalizedEmail || normalizedName}`
+  const cacheKey = `${groupId}:${requiredRole}:${normalizedEmail}:${normalizedName}`
   const cached = accessCache.get(cacheKey)
   if (cached && Date.now() - cached.checkedAt < ACCESS_CACHE_TTL_MS) {
     return cached.result
@@ -128,9 +128,13 @@ export async function verifyGunInventoryAdminAccess({
 
   const members = await ssiGetGroupMembers(groupId, cookies)
   const matchingMember = members.find(m => {
-    const emailMatches = Boolean(normalizedEmail && m.email && m.email === normalizedEmail)
-    const nameMatches = Boolean(!normalizedEmail && normalizedName && String(m.name || '').trim().toLowerCase() === normalizedName)
-    return emailMatches || nameMatches
+    if (normalizedEmail && m.email) {
+      return m.email === normalizedEmail
+    }
+    if (normalizedName) {
+      return String(m.name || '').trim().toLowerCase() === normalizedName
+    }
+    return false
   })
 
   const allowed = Boolean(matchingMember && matchingMember.role === requiredRole)

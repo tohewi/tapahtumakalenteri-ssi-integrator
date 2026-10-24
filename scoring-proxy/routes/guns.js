@@ -19,13 +19,26 @@ import {
   recordGunMaintenance,
 } from '../lib/services/gun-inventory-service.js'
 
-export function createGunsRouter({ requireAuth, getAdminSession }) {
+export function createGunsRouter({ requireAuth, getAdminSession, graphqlWithRefresh }) {
   const router = express.Router()
 
   async function requireGunGroupAdmin(req, res, next) {
     try {
       const session = req.ssiSession
       const userEmail = req._v7Session?.userId || session?.userId || session?._userId || ''
+      let userName = req._v7Session?.userName || ''
+      if (!userName && graphqlWithRefresh && session) {
+        try {
+          const meData = await graphqlWithRefresh(session, '{ me { first_name last_name } }')
+          if (meData?.me) {
+            userName = `${meData.me.first_name || ''} ${meData.me.last_name || ''}`.trim()
+            if (req._v7Session) req._v7Session.userName = userName
+          }
+        } catch (err) {
+          log.debug('[guns] Could not fetch user full name from GraphQL me:', err.message)
+        }
+      }
+
       let cookies = session?.ssiCookies
       if ((!cookies || Object.keys(cookies).length === 0) && getAdminSession) {
         const adminSess = await getAdminSession().catch(() => null)
@@ -34,6 +47,7 @@ export function createGunsRouter({ requireAuth, getAdminSession }) {
 
       const access = await verifyGunInventoryAdminAccess({
         userEmail,
+        userName,
         cookies,
       })
 

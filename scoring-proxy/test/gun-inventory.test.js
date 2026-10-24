@@ -45,6 +45,14 @@ const SAMPLE_GROUP_HTML = `
         <td>RO</td>
         <td>staff</td>
       </tr>
+      <tr>
+        <td><input type="checkbox" value="503" /></td>
+        <td>Edit</td>
+        <td>TurRes Bot</td>
+        <td>- | -</td>
+        <td>- | -</td>
+        <td>admin</td>
+      </tr>
     </tbody>
   </table>
 `
@@ -83,7 +91,7 @@ describe('R90-GUN1: SSI Group 25874 Admin Access Control', () => {
     }))
 
     const members = await ssiGetGroupMembers('25874', { sessionid: 'abc' })
-    expect(members).toHaveLength(2)
+    expect(members).toHaveLength(3)
     expect(members[0]).toMatchObject({
       userId: '501',
       name: 'Tommi Wiren',
@@ -96,9 +104,15 @@ describe('R90-GUN1: SSI Group 25874 Admin Access Control', () => {
       email: 'matti.staff@example.com',
       role: 'staff',
     })
+    expect(members[2]).toMatchObject({
+      userId: '503',
+      name: 'TurRes Bot',
+      email: null,
+      role: 'admin',
+    })
   })
 
-  it('grants access only to group members with role admin', async () => {
+  it('grants access to group admins matched by email or by full name when SSI masks contact as - | -', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -111,6 +125,15 @@ describe('R90-GUN1: SSI Group 25874 Admin Access Control', () => {
     })
     expect(adminRes.allowed).toBe(true)
     expect(adminRes.userRole).toBe('admin')
+
+    // Masked contact (- | -) on SSI /groups/25874/ matched via userName from GraphQL { me { first_name last_name } }
+    const maskedContactAdminRes = await verifyGunInventoryAdminAccess({
+      userEmail: 'bot@turres.fi',
+      userName: 'TurRes Bot',
+      cookies: { sessionid: 'abc' },
+    })
+    expect(maskedContactAdminRes.allowed).toBe(true)
+    expect(maskedContactAdminRes.userRole).toBe('admin')
 
     const staffRes = await verifyGunInventoryAdminAccess({
       userEmail: 'matti.staff@example.com',

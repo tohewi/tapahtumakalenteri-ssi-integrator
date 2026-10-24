@@ -443,6 +443,7 @@ app.use(`${API_LEGACY_BASE}/staffing`, legacyApiAlias, staffingRouter)
 const gunsRouter = createGunsRouter({
   requireAuth,
   getAdminSession,
+  graphqlWithRefresh,
 })
 app.use(`${API_V1_BASE}/guns`, gunsRouter)
 app.use(`${API_LEGACY_BASE}/guns`, legacyApiAlias, gunsRouter)

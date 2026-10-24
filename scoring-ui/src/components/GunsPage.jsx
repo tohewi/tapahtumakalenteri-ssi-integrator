@@ -16,6 +16,7 @@ export default function GunsPage() {
 function GunsPageContent({ initialAuthenticated }) {
   const [guns, setGuns] = useState([])
   const [config, setConfig] = useState(null)
+  const [accessDenied, setAccessDenied] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingGun, setEditingGun] = useState(null)
   const [maintGun, setMaintGun] = useState(null)
@@ -30,6 +31,7 @@ function GunsPageContent({ initialAuthenticated }) {
   const clearPageState = useCallback(() => {
     setGuns([])
     setConfig(null)
+    setAccessDenied(false)
   }, [])
 
   const {
@@ -59,8 +61,12 @@ function GunsPageContent({ initialAuthenticated }) {
         const res = await gunsApi.getGuns()
         setGuns(res.guns || [])
         setConfig(res.config || null)
+        setAccessDenied(false)
       })
     } catch (err) {
+      if (err.status === 403) {
+        setAccessDenied(true)
+      }
       if (!err.sessionExpired && !err.scopeMismatch) {
         setError(err.message)
       }
@@ -79,9 +85,13 @@ function GunsPageContent({ initialAuthenticated }) {
       if (!active) return
       setGuns(res.guns || [])
       setConfig(res.config || null)
+      setAccessDenied(false)
     })
       .catch(err => {
         if (!active) return
+        if (err.status === 403) {
+          setAccessDenied(true)
+        }
         if (!err.sessionExpired && !err.scopeMismatch) {
           setError(err.message)
         }
@@ -211,9 +221,10 @@ function GunsPageContent({ initialAuthenticated }) {
         onLogout={handleLogout}
       />
 
-      <ErrorBanner error={error} onDismiss={() => setError(null)} />
+      <ErrorBanner error={error} onClose={() => setError(null)} />
       {loading && <Spinner />}
 
+      {!accessDenied && (
       <div className="p-3 max-w-2xl mx-auto space-y-3">
         <div className="flex items-center justify-between gap-2">
           <button
@@ -324,6 +335,7 @@ function GunsPageContent({ initialAuthenticated }) {
           })}
         </div>
       </div>
+      )}
 
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
