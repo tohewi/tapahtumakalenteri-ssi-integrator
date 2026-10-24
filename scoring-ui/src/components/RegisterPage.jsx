@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import * as regApi from '../register-api'
 import { formatDate, BackButton, CupList } from './shared'
+import { LegalFooterLinks } from './LegalDocumentPage'
 import fi from '../i18n'
 
 // Steps: captcha → cups → squads → email → submitting → result
@@ -22,8 +23,9 @@ export default function RegisterPage() {
   // Squad selection
   const [selectedSquad, setSelectedSquad] = useState(null)
 
-  // Email
+  // Email & optional SSI password (R76-AUTH10)
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
 
   // Result
   const [result, setResult] = useState(null)
@@ -126,6 +128,7 @@ export default function RegisterPage() {
         cupId: selectedCup.id,
         squadNumber: selectedSquad.number,
         email: email.trim(),
+        ...(password ? { password } : {}),
         captchaId: captcha.id,
         captchaAnswer: Number(captchaAnswer),
       }, (evt) => {
@@ -152,7 +155,7 @@ export default function RegisterPage() {
         setStep('email')
       }
     }
-  }, [email, selectedCup, selectedSquad, captcha, captchaAnswer, loadCaptcha])
+  }, [email, password, selectedCup, selectedSquad, captcha, captchaAnswer, loadCaptcha])
 
   // Reset everything
   const handleReset = () => {
@@ -163,6 +166,7 @@ export default function RegisterPage() {
     setCupDetail(null)
     setSelectedSquad(null)
     setEmail('')
+    setPassword('')
     setResult(null)
     loadCaptcha()
   }
@@ -343,6 +347,15 @@ export default function RegisterPage() {
                 required
               />
 
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="SSI-salasana (valinnainen / vaadittaessa)"
+                autoComplete="current-password"
+                className="w-full mt-3 border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+
               <button
                 type="submit"
                 disabled={!email.trim()}
@@ -433,6 +446,7 @@ export default function RegisterPage() {
             </button>
           </div>
         )}
+        <LegalFooterLinks />
       </div>
     </div>
   )

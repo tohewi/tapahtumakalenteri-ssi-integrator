@@ -23,7 +23,7 @@ import {
   ssiGetMatchGroupId,
   ssiGetMatchOfficials,
   ssiGetEventStaff,
-} from '../lib/ssi-core/client.js'
+} from '../lib/ssi-core/management.js'
 
 import {
   ssiFindCompetitorInMatch,
@@ -32,12 +32,12 @@ import {
   ssiSetDidNotShow,
   ssiUndoDidNotShow,
   ssiTogglePaid,
-} from '../lib/ssi-core/client.js'
+} from '../lib/ssi-core/participants.js'
 
 import {
   ssiGetScoringPage,
   ssiSubmitScore,
-} from '../lib/ssi-core/client.js'
+} from '../lib/ssi-core/scoring.js'
 
 // Helper: mock fetch to return HTML fixture with 200 OK
 function mockFetchOk(html) {

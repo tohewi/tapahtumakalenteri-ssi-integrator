@@ -9,6 +9,7 @@ import ManagePage from './components/ManagePage.jsx'
 import ReportPage from './components/ReportPage.jsx'
 import SummaryReportPage from './components/SummaryReportPage.jsx'
 import StaffingPage from './components/StaffingPage.jsx'
+import LegalDocumentPage from './components/LegalDocumentPage.jsx'
 
 // Error boundary to catch runtime crashes and display a useful error instead of a blank page
 class ErrorBoundary extends Component {
@@ -77,6 +78,12 @@ function Router() {
   }
   if (path === '#/staffing') {
     return <StaffingPage />
+  }
+  if (path === '#/privacy') {
+    return <LegalDocumentPage type="privacy" />
+  }
+  if (path === '#/terms') {
+    return <LegalDocumentPage type="terms" />
   }
   return <HomePage />
 }

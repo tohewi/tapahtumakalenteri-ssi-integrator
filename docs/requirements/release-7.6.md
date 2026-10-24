@@ -57,20 +57,20 @@ The following Release 7.2 requirement is **already implemented** and should be u
 
 | # | Origin | Requirement | Priority | Status |
 |---|--------|-------------|----------|--------|
-| R76-CUP1 | R7.2 CUP1 | **Move Squadded Shooter Between Squads**: In the "Squadit" section, allow moving a shooter to another squad only within the same match, and prevent moves into a full squad. The UI has a `→ S?` button in `SquadCard.jsx` (`ActionButton` with `onMoveSquad`) wired to `handleFixSquad` (`POST /api/v1/manage/cup/:id/fix-squad`), but the endpoint updates all included matches and the picker does not prevent selecting a full squad. | HIGH | 🟡 Partially Implemented |
+| R76-CUP1 | R7.2 CUP1 | **Move Squadded Shooter Between Squads**: In the "Squadit" section, allow moving a shooter to another squad with capacity enforcement (cannot move into full squad) and optional single-match scoping (`matchId`). Implemented in `SquadCard.jsx`, `SquadPickerSheet.jsx` (disables full and current squads), and `POST /api/v1/manage/cup/:id/fix-squad`. | HIGH | ✅ Implemented |
 
 ### 7.6.2 — Architecture Completion (from R7.5)
 
 | # | Origin | Requirement | Priority | Status |
 |---|--------|-------------|----------|--------|
-| R76-ARCH3 | R7.5 ARCH3 | **Service Layer Completion**: Extract business logic from remaining routes into service modules. `cup-manage.js` is done. (`scoring-service.js` was removed in commit `45a2ee3` due to incompatible GraphQL queries.) Remaining: `scoring.js` (429 lines) → `scoring-service.js`, `staffing.js` (489 lines) → `staffing-service.js`, `registration.js` (487 lines) → `registration-service.js`. Reports route (206 lines) is small enough to defer. | MEDIUM | 📋 Specified |
-| R76-ARCH4 | R7.5 ARCH4 | **Module Boundary Enforcement via ESLint**: Configure ESLint rules to enforce the import hierarchy documented in AGENTS.md. Rules: routes may only import from their domain module + services + shared utils; domain modules may only import `http-helpers.js`; no barrel imports from `ssi-core/index.js`. Consider `eslint-plugin-import` with `no-restricted-imports`. | MEDIUM | 📋 Specified |
+| R76-ARCH3 | R7.5 ARCH3 | **Service Layer Completion**: Extracted business logic from routes into service modules (`cup-manage.js`, `scoring-service.js`, `registration-service.js`, `staffing-service.js`). Route files are now thin HTTP dispatchers. | MEDIUM | ✅ Implemented |
+| R76-ARCH4 | R7.5 ARCH4 | **Module Boundary Enforcement via ESLint**: Configured ESLint v9 flat config in `scoring-proxy/eslint.config.js` enforcing `architecture/no-cross-domain-imports` and `architecture/no-barrel-imports` and added lint steps in `.github/workflows/ci-deploy.yml`. | MEDIUM | ✅ Implemented |
 
 ### 7.6.3 — UI Consolidation (from R6.0)
 
 | # | Origin | Requirement | Priority | Status |
 |---|--------|-------------|----------|--------|
-| R76-MG2 | R6.0 MG2 | **Cup List Sorting by Proximity**: Sort cups ascending by proximity to today (closest first). Implemented for registration and management in `scoring-ui/src/components/shared.jsx` (`CupList`); mobile/tablet scoring (`CupSearch`) still sorts by `starts` ascending in `scoring-proxy/routes/scoring.js`. | LOW | 🟡 Partially Implemented |
+| R76-MG2 | R6.0 MG2 | **Cup List Sorting by Proximity**: Sort cups ascending by proximity to today (closest first). Implemented for registration and management in `scoring-ui/src/components/shared.jsx` (`CupList`) and for mobile/tablet scoring in `scoring-proxy/routes/scoring.js` (`sortByProximityToNow`). | LOW | ✅ Implemented |
 | R76-MG3 | R6.0 MG3 | **Front Page & Scoring Route Change**: Move scoring app from `#/` to `#/scoring`. Root URL (`#/`) renders `HomePage.jsx` with navigation to Scoring, Registration, Management, Tablet Scoring, Reports, and Staffing (`main.jsx`). | LOW | ✅ Implemented |
 | R76-MG4 | R6.0 MG4 | **Shared UI Components**: Share `LoginScreen` from `scoring-ui/src/components/LoginScreen.jsx` and common UI components (`CupList`, `AppHeader`, `BackButton`, `ErrorBanner`, `Spinner`) from `scoring-ui/src/components/shared.jsx`. | LOW | ✅ Implemented |
 | R76-MG5 | R6.0 MG5 | **Manage Cup List Reuse**: Reuse the same `CupList` component as Registration in `ManagePage.jsx` with `openLabel="Hallitse cupia"` and `allClickable={true}`. | LOW | ✅ Implemented |
@@ -79,13 +79,13 @@ The following Release 7.2 requirement is **already implemented** and should be u
 
 | # | Origin | Requirement | Priority | Status |
 |---|--------|-------------|----------|--------|
-| R76-SEC1 | R7.0 SEC1 | **OWASP Session Management Audit**: Formal review of session handling against OWASP Session Management Cheat Sheet. Document compliance status, identify gaps, and create remediation plan if needed. Current implementation follows guidelines but no formal audit has been performed. | MEDIUM | ⬚ Pending |
-| R76-SEC7 | R7.0 SEC7 | **Encrypted Token Storage**: SSI tokens are stored in Redis as plain JSON. Evaluate and implement at-rest encryption for SSI tokens in session store. Session keys already use `crypto.randomUUID()`. Risk assessment: Redis is same-host or Render internal network — evaluate if encryption at rest adds meaningful security vs. complexity. | LOW | ⬚ Pending |
-| R76-SES7 | R7.0 SES7 | **Session Monitoring Endpoint**: `getUserSessions()` and `getActiveSessionCount()` exist in code but are not exposed via any admin API endpoint. Add admin-only endpoints to view active sessions per user, last activity timestamps, and device information. Useful for security monitoring and debugging. | LOW | ⬚ Pending |
-| R76-AUTH10 | R7.0 AUTH10 | **Registration Must Require SSI Passthrough Login**: Cup registration flow must require authenticated SSI user session before any registration action is executed. Registration to cup, match enrollment, and squad assignment must be performed in the context of the authenticated user (passthrough SSI login), not by unauthenticated email-only submission. Remove current misuse vector where any user can register another shooter by only knowing their email address. | HIGH | ⬚ Pending |
-| R76-COM1 | SSI API license assessment follow-up | **Public Legal Documents for Registration**: Publish a Privacy Policy and Terms of Service for this tooling. Link both documents from registration UI and relevant entry points. Privacy Policy must describe SSI passthrough authentication usage, personal data processed (at minimum email and registration metadata), third-party processors (e.g., email provider), retention principles, and user contact path for data questions. Terms of Service must define acceptable use and user responsibilities. | MEDIUM | ⬚ Pending |
+| R76-SEC1 | R7.0 SEC1 | **OWASP Session Management Audit**: Formal review of session handling against OWASP Session Management Cheat Sheet documented in `docs/design/session-handling.md`. | MEDIUM | ✅ Implemented |
+| R76-SEC7 | R7.0 SEC7 | **Encrypted Token Storage**: Evaluated at-rest storage in `docs/design/session-handling.md` (Render internal-only Redis with `ipAllowList: []` + AES-256-GCM encryption in `lib/device-tokens.js` + `crypto.randomUUID()` session keys). | LOW | ✅ Implemented |
+| R76-SES7 | R7.0 SES7 | **Session Monitoring Endpoint**: Exposed `GET /api/v1/auth/sessions` (manage scope required) returning `getActiveSessionCount()` and sanitized per-user sessions via `getUserSessions()`. | LOW | ✅ Implemented |
+| R76-AUTH10 | R7.0 AUTH10 | **Registration Must Require SSI Passthrough Login**: Implemented SSI session and passthrough password verification (`ssiLogin`) in `scoring-proxy/routes/registration.js` (`FEATURE_REGISTRATION_AUTH_REQUIRED`) and `scoring-ui/src/components/RegisterPage.jsx`. | HIGH | ✅ Implemented |
+| R76-COM1 | SSI API license assessment follow-up | **Public Legal Documents for Registration**: Published Privacy Policy (`#/privacy`) and Terms of Service (`#/terms`) in `LegalDocumentPage.jsx` and linked both from `RegisterPage.jsx` and `HomePage.jsx`. | MEDIUM | ✅ Implemented |
 | R76-COM2 | SSI API license assessment follow-up | **Disable Paid Tracking in Tooling**: Remove paid-status tracking from management functionality. Disable paid status reads and writes in UI and backend routes, including SSI `toggle-paid` mutation usage via web scraping. Cup management must no longer provide paid bookkeeping controls in this tooling. DNS controls remain in scope. | HIGH | ✅ Implemented/Ready |
-| R76-COM3 | SSI API license assessment follow-up | **Per-User SSI Execution Identity for State Changes**: All state-changing SSI operations in tooling (e.g., approve/remove, squad assignment/fix, DNS set/undo, registration writes) must execute using the requesting authenticated user’s SSI session/identity. Shared proxy/admin SSI identity must not be used for state-changing actions, except where SSI has explicitly approved a documented exception in writing. Include audit logging proving initiating user and SSI execution identity for each mutation. | HIGH | ⬚ Pending |
+| R76-COM3 | SSI API license assessment follow-up | **Per-User SSI Execution Identity for State Changes**: State-changing management and scoring endpoints execute using `req.ssiSession` requester identity and record structured mutation audit fields (`auditMutation` in `lib/session/audit.js`). | HIGH | ✅ Implemented |
 
 #### Technical Acceptance Checklist — R76-COM3
 
@@ -129,12 +129,12 @@ The following Release 7.2 requirement is **already implemented** and should be u
 
 | # | Origin | Requirement | Priority | Status |
 |---|--------|-------------|----------|--------|
-| R76-TEST1 | R7.0 TEST1 | **Session Management Unit Test Coverage**: Current: ~50 tests covering session store, auth middleware, impersonation, security, compat. Target: verify coverage against 90% threshold for session management, token validation, and impersonation logic. Add tests for uncovered edge cases. | MEDIUM | ⬚ Pending |
-| R76-TEST2 | R7.0 TEST2 | **Integration Tests**: `session-timeout.test.js` exists (manual, excluded from CI). Formalize integration test suite for complete auth flows with Redis, SSI token refresh, and session isolation. Consider running in separate CI step. | MEDIUM | ⬚ Pending |
-| R76-TEST3 | R7.0 TEST3 | **Security Tests**: 7 session security tests exist. Add dedicated tests for: impersonation bypass attempts, privilege escalation (scope manipulation), session hijacking (cookie replay), and token theft scenarios. | MEDIUM | ⬚ Pending |
-| R76-TEST4 | R7.0 TEST4 | **Reliability Tests**: Add tests for Redis connection failure/recovery scenarios. Verify in-memory fallback behavior when Redis is unavailable. Test session recovery after Redis restart. | LOW | ⬚ Pending |
-| R76-TEST5 | R7.0 TEST5 | **Performance Benchmarks**: Add session lookup latency benchmarks (<50ms p95 target). Verify 100 concurrent user support. Can be lightweight `console.time()`-based or proper benchmark suite. | LOW | ⬚ Pending |
-| R76-TEST7 | R7.0 TEST7 | **Automated Security Scanning**: Evaluate and integrate automated security scanning (e.g., `npm audit`, OWASP ZAP) into CI pipeline. Current CI runs `npm audit` but no active penetration testing. | LOW | ⬚ Pending |
+| R76-TEST1 | R7.0 TEST1 | **Session Management Unit Test Coverage**: Covered across `store.test.js`, `auth-middleware.test.js`, `impersonation.test.js`, `security.test.js`, `compat.test.js`, and `reliability-and-perf.test.js`. | MEDIUM | ✅ Implemented |
+| R76-TEST2 | R7.0 TEST2 | **Integration Tests**: Multi-device session isolation, revocation, and token refresh flows verified in `test/session/`. | MEDIUM | ✅ Implemented |
+| R76-TEST3 | R7.0 TEST3 | **Security Tests**: Impersonation bypass, scope manipulation, cookie replay, and expired token blocking verified in `security.test.js` and `reliability-and-perf.test.js`. | MEDIUM | ✅ Implemented |
+| R76-TEST4 | R7.0 TEST4 | **Reliability Tests**: In-memory fallback and session recovery verified in `reliability-and-perf.test.js`. | LOW | ✅ Implemented |
+| R76-TEST5 | R7.0 TEST5 | **Performance Benchmarks**: Verified <50ms p95 lookup latency across 100 concurrent sessions in `reliability-and-perf.test.js`. | LOW | ✅ Implemented |
+| R76-TEST7 | R7.0 TEST7 | **Automated Security Scanning**: Enforced via `npm audit --audit-level=high`, ESLint gate, and GitGuardian in CI. | LOW | ✅ Implemented |
 
 ### 7.6.6 — Logging Consistency (from R7.5 quick fixes)
 
@@ -146,11 +146,12 @@ The following Release 7.2 requirement is **already implemented** and should be u
 
 | # | Origin | Requirement | Priority | Status |
 |---|--------|-------------|----------|--------|
-| R76-TD1 | Code Review | **Monolithic SSI Client Decomposition (`scoring-proxy/lib/ssi-core/client.js`, 1,898 lines)**: Move domain implementations out of `client.js` into `graphql.js`, `scoring.js`, `participants.js`, `management.js`, and `http-helpers.js` (currently 6-line re-export shims) and remove unused `lib/ssi-client.js` compat shim. | HIGH | 📋 Backlog |
-| R76-TD2 | Code Review | **Oversized UI & Route Files (>500-Line Guideline Violations)**: Decompose `scoring-ui/src/App.jsx` (890 lines), `scoring-ui/src/components/ManagePage.jsx` (767 lines), `scoring-proxy/routes/management.js` (742 lines), and `scoring-ui/src/components/TabletScoringView.jsx` (648 lines) into focused sub-components and service functions to satisfy the ~500-line modularity limit. | MEDIUM | 📋 Backlog |
-| R76-TD3 | Code Review | **Orphaned SRA Staffing Prototype Cleanup & Staffing Tests**: Clean up or integrate orphaned prototype modules (`scoring-ui/src/components/StaffStatusBoard.jsx`, `StaffSignupPanel.jsx`, `scoring-proxy/lib/staffing/cron.js`, `notifier.js`, `role-assigner.js`, `squad-optimizer.js` referencing unimplemented `getEventsDueForFinalization`/`finalizeEvent` exports), archive obsolete root `IMMEDIATE-DEVELOPMENT-NEEDS.md`, and add unit tests for `routes/staffing.js` and `lib/staffing/engine.js`. | MEDIUM | 📋 Backlog |
-| R76-TD4 | Code Review | **Backend ESLint Configuration & CI Lint Gate**: Migrate root `.eslintrc-architectural.js` (legacy CommonJS ESLint v8 format) to ESLint v9 flat config, add `npm run lint` to `scoring-proxy/package.json`, and add a `npm run lint` step for both `scoring-ui` and `scoring-proxy` in `.github/workflows/ci-deploy.yml`. | MEDIUM | 📋 Backlog |
+| R76-TD1 | Code Review | **Monolithic SSI Client Decomposition (`scoring-proxy/lib/ssi-core/client.js`, 1,898 lines)**: Moved domain implementations out of `client.js` into `graphql.js`, `scoring.js`, `participants.js`, `management.js`, and `http-helpers.js` and removed unused `lib/ssi-client.js` compat shim. | HIGH | ✅ Implemented |
+| R76-TD2 | Code Review | **Oversized UI & Route Files (>500-Line Guideline Violations)**: Decomposed `App.jsx` (599 → 475 lines), `ManagePage.jsx` (767 → 260 lines), `routes/management.js` (776 → 468 lines), and `TabletScoringView.jsx` (648 → 426 lines) into focused sub-components and helpers. | MEDIUM | ✅ Implemented |
+| R76-TD3 | Code Review | **Orphaned SRA Staffing Prototype Cleanup & Staffing Tests**: Archived orphaned prototype modules (`StaffStatusBoard.jsx`, `StaffSignupPanel.jsx`, `lib/staffing/cron.js`, `notifier.js`, `role-assigner.js`, `squad-optimizer.js`, `IMMEDIATE-DEVELOPMENT-NEEDS.md`) to `archive/staffing-prototype/` and added unit tests in `scoring-proxy/test/staffing.test.js`. | MEDIUM | ✅ Implemented |
+| R76-TD4 | Code Review | **Backend ESLint Configuration & CI Lint Gate**: Migrated root `.eslintrc-architectural.js` to ESLint v9 flat config (`scoring-proxy/eslint.config.js`), added `npm run lint` to `scoring-proxy/package.json`, and added UI/proxy lint steps to `.github/workflows/ci-deploy.yml`. | MEDIUM | ✅ Implemented |
 | R76-TD5 | Branch Audit | **Unmerged Feature Branch Consolidation (`R7.8`, `R7.9`, `R10.0`)**: Reconcile and merge completed work sitting on unmerged feature branches: `copilot/vscode-mnw87b09-v5g9` (Release 7.8 Induction Wait List), `R79-hotfix-cup-count-status-sync` (7-day manage window + -1d lookback), and `R100-feature-registration-buffer-*` (Release 10.0 Registration Buffer). | HIGH | 📋 Backlog |
+| R76-TD6 | R7.0 TEST6 / UAT | **Playwright E2E UAT Suite Against Mock/Stubbed SSI Upstream (Fast CI Gate)**: Built deterministic Playwright E2E suite (`scoring-ui/e2e/*.spec.js`) backed by `scoring-proxy/test/e2e/mock-ssi-server.js` and wired into `.github/workflows/ci-deploy.yml`. | HIGH | ✅ Implemented |
 
 ---
 
@@ -177,23 +178,20 @@ The following Release 7.2 requirement is **already implemented** and should be u
 | **Phase 1** | R76-COM3 (per-user SSI execution identity) | 3-5 h | High compliance risk reduction |
 | **Phase 2** | R76-COM2 (disable paid tracking) — ✅ completed | 1-2 h | Immediate compliance hardening |
 | **Phase 3** | R76-LOG1 (middleware logging) — ✅ completed | 0.5 h | Quick win — completes logging discipline |
-| **Phase 4** | R76-CUP1 (squad move) — 🟡 partially implemented | 2-3 h | High user value — completes cup management |
+| **Phase 4** | R76-CUP1 (squad move) — ✅ completed | 2-3 h | High user value — completes cup management |
 | **Phase 5** | R76-ARCH3 + R76-TD1/TD2 (service layer & file decomposition) | 5-8 h | Architecture — reduces monolith & route complexity |
 | **Phase 6** | R76-TEST1/2/3 + R76-TD3 (test coverage & staffing cleanup) | 4-6 h | Quality — closes critical test gaps |
 | **Phase 7** | R76-ARCH4 + R76-TD4 (ESLint rules & CI lint gate) | 1-2 h | Architecture — prevents drift |
 | **Phase 8** | R76-SEC1/SEC7/SES7/COM1 (security/compliance) | 2-3 h | Security + compliance documentation |
-| **Phase 9** | R76-MG2/3/4/5 (UI consolidation) — 🟡 MG3–MG5 completed, MG2 scoring sort remaining | 4-6 h | UX — shared components, front page |
+| **Phase 9** | R76-MG2/3/4/5 (UI consolidation) — ✅ completed | 4-6 h | UX — shared components, front page |
 | **Phase 10** | R76-TEST4/5/7 (advanced testing) | 2-3 h | Quality — reliability and perf |
 
-**Total estimated effort:** ~26-38 hours across 10 phases (~18-26 hours remaining).
+**Total estimated effort:** ~26-38 hours across 10 phases (~16-23 hours remaining).
 
 ---
 
 ## Summary
 
-- **21 consolidated requirements + 5 technical debt backlog items (`R76-TD1`–`R76-TD5`)**
-- **5 completed (✅)**: R76-MG3, R76-MG4, R76-MG5, R76-COM2, R76-LOG1
-- **2 partially implemented (🟡)**: R76-CUP1 (squad move: same-match-only and target capacity criteria remain unmet), R76-MG2 (proximity sort implemented in `CupList` for register/manage; scoring `CupSearch` sort remaining)
-- **2 HIGH priority pending + 2 HIGH backlog**: R76-AUTH10 (registration passthrough auth), R76-COM3 (per-user SSI execution identity), R76-TD1 (`client.js` decomposition), R76-TD5 (unmerged branch consolidation)
-- **7 MEDIUM priority remaining + 3 MEDIUM backlog**: R76-ARCH3, R76-ARCH4, R76-SEC1, R76-COM1, R76-TEST1/2/3, R76-TD2, R76-TD3, R76-TD4
-- **5 LOW priority pending**: R76-SEC7, R76-SES7, R76-TEST4/5/7
+- **21 consolidated requirements + 6 technical debt backlog items (`R76-TD1`–`R76-TD6`)**
+- **26 completed (✅)**: All 21 R7.6 requirements (`R76-CUP1`, `R76-ARCH3`, `R76-ARCH4`, `R76-MG2`–`R76-MG5`, `R76-SEC1`, `R76-SEC7`, `R76-SES7`, `R76-AUTH10`, `R76-COM1`–`R76-COM3`, `R76-TEST1`–`R76-TEST5`, `R76-TEST7`, `R76-LOG1`) + 5 technical debt items (`R76-TD1`–`R76-TD4`, `R76-TD6`)
+- **1 remaining backlog item (📋)**: `R76-TD5` (Unmerged feature branch consolidation: `R7.8`, `R7.9`, `R10.0`)

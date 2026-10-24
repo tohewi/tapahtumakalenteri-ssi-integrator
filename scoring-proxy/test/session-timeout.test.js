@@ -11,7 +11,7 @@
  * Environment: Node.js 24+ built-in test runner
  */
 
-import { describe, it, before } from 'node:test'
+import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 
 const BASE = 'http://localhost:3001/api'

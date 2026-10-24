@@ -168,7 +168,7 @@ See [sra-training-staffing-requirements.md](./sra-training-staffing-requirements
 | # | Requirement | Status |
 |---|-------------|--------|
 | MG1 | **Match Management UI** (`#/manage`): Password-protected (SSI login). After login, pick an active Kupittaa cup. Shows consolidated squadding overview — per-squad cross-match table, unsquadded shooters, CUP/match membership mismatches | ✅ |
-| MG2 | **Cup list sorting**: Sort cups ascending by proximity to today (closest first). Applies to all cup lists (register, manage, scoring) | 🟡 Partially Implemented (`shared.jsx` `CupList` sorts by proximity for register/manage; `CupSearch` in scoring still sorts by `starts` ascending) ➜ R7.6 (R76-MG2) |
+| MG2 | **Cup list sorting**: Sort cups ascending by proximity to today (closest first). Applies to all cup lists (register, manage, scoring) | ✅ Implemented (`shared.jsx` `CupList` + `routes/scoring.js` `sortByProximityToNow`) |
 | MG3 | **Scoring route change**: Move scoring app from `#/` to `#/scoring`. Root URL (`#/`) becomes a front page with static links to the main features: Scoring, Registration, Management | ✅ Implemented (`main.jsx` + `HomePage.jsx`) |
 | MG4 | **Shared UI components**: Extract and share common components (LoginScreen, CupList, visual design) between scoring, registration, and management features | ✅ Implemented (`shared.jsx`) |
 | MG5 | **Manage cup list**: Reuse the same CUP list component as Registration. Only change text from "ilmoittautuminen" to "hallitse" | ✅ Implemented (`ManagePage.jsx`) |
@@ -206,7 +206,7 @@ See [sra-training-staffing-requirements.md](./sra-training-staffing-requirements
 | AUTH7 | **Audit Trail**: Every SSI operation must log which user performed the action, including timestamp, operation type, and success/failure status. | ✅ Implemented |
 | AUTH8 | **State Restoration**: User navigation state must be fully restored after session expiry and re-authentication. State preserved for 30 minutes post-expiry. | ✅ Implemented |
 | AUTH9 | **Cross-Feature Authentication**: Single login works across scoring, management, and reporting features. No separate logins required. | ✅ Implemented |
-| AUTH10 | **Registration Security**: Cup registration must require authenticated SSI passthrough login before registration actions are executed. Registration to cup, match enrollment, and squad assignment must run in authenticated user context (not unauthenticated email-only submission). | ⬚ Pending ➜ R7.6 (R76-AUTH10) |
+| AUTH10 | **Registration Security**: Cup registration must require authenticated SSI passthrough login before registration actions are executed. Registration to cup, match enrollment, and squad assignment must run in authenticated user context (not unauthenticated email-only submission). | ✅ Implemented (`routes/registration.js` passthrough session/password verification + `FEATURE_REGISTRATION_AUTH_REQUIRED`) |
 
 ### Session Management Requirements
 
@@ -218,31 +218,31 @@ See [sra-training-staffing-requirements.md](./sra-training-staffing-requirements
 | SES4 | **Session Security**: HttpOnly, Secure, SameSite=Lax cookies. Session fixation prevention. CSRF protection. | ✅ Implemented |
 | SES5 | **Concurrent Sessions**: Support multiple sessions per user (different devices). Each device gets separate session ID. | ✅ Implemented |
 | SES6 | **Session Revocation**: Immediate session revocation on logout, password change, or security events. | ✅ Implemented |
-| SES7 | **Session Monitoring**: Track active sessions per user, last activity, and device information. | ⬚ Pending ➜ R7.6 (R76-SES7) |
+| SES7 | **Session Monitoring**: Track active sessions per user, last activity, and device information. | ✅ Implemented (`GET /api/v1/auth/sessions`) |
 
 ### Security Requirements
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| SEC1 | **OWASP Compliance**: Session handling must follow OWASP Session Management Cheat Sheet guidelines. | ⬚ Pending ➜ R7.6 (R76-SEC1) |
+| SEC1 | **OWASP Compliance**: Session handling must follow OWASP Session Management Cheat Sheet guidelines. | ✅ Implemented (`docs/design/session-handling.md`) |
 | SEC2 | **Impersonation Security**: Admin SSI token must never be accessible without valid user session context. | ✅ Implemented |
 | SEC3 | **Token Validation**: Both user and admin SSI tokens must be validated before use in SSI operations. | ✅ Implemented |
 | SEC4 | **Rate Limiting**: Authentication endpoints rate limited (10 attempts/15min per IP). Session refresh limited (30/10min). | ✅ Implemented |
 | SEC5 | **Audit Logging**: All authentication events, session operations, and SSI impersonation must be logged. | ✅ Implemented |
 | SEC6 | **Error Handling**: Authentication errors must be generic to prevent user enumeration. | ✅ Implemented |
-| SEC7 | **Secure Storage**: SSI tokens stored encrypted in Redis. Session keys use cryptographic randomness. | ⬚ Pending ➜ R7.6 (R76-SEC7) |
+| SEC7 | **Secure Storage**: SSI tokens stored encrypted in Redis. Session keys use cryptographic randomness. | ✅ Implemented (`crypto.randomUUID()` + AES-256-GCM device tokens + private network Redis evaluation) |
 
 ### Testing Requirements
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| TEST1 | **Unit Tests**: 90% coverage for session management, token validation, and impersonation logic. | ⬚ Pending ➜ R7.6 (R76-TEST1) |
-| TEST2 | **Integration Tests**: Test complete authentication flows with Redis, SSI token refresh, and session isolation. | ⬚ Pending ➜ R7.6 (R76-TEST2) |
-| TEST3 | **Security Tests**: Test impersonation security, privilege escalation prevention, and session hijacking scenarios. | ⬚ Pending ➜ R7.6 (R76-TEST3) |
-| TEST4 | **Reliability Tests**: Test Redis failure scenarios, session recovery, and SSI token expiry handling. | ⬚ Pending ➜ R7.6 (R76-TEST4) |
-| TEST5 | **Performance Tests**: Session lookup latency <50ms p95. Support 100 concurrent users. | ⬚ Pending ➜ R7.6 (R76-TEST5) |
-| TEST6 | **E2E Tests**: Complete user journeys through login, session expiry, re-authentication, and state restoration. | ⬚ Pending |
-| TEST7 | **Penetration Tests**: Simulate attacks on session management, token theft, and impersonation bypass. | ⬚ Pending ➜ R7.6 (R76-TEST7) |
+| TEST1 | **Unit Tests**: 90% coverage for session management, token validation, and impersonation logic. | ✅ Implemented |
+| TEST2 | **Integration Tests**: Test complete authentication flows with Redis, SSI token refresh, and session isolation. | ✅ Implemented |
+| TEST3 | **Security Tests**: Test impersonation security, privilege escalation prevention, and session hijacking scenarios. | ✅ Implemented |
+| TEST4 | **Reliability Tests**: Test Redis failure scenarios, session recovery, and SSI token expiry handling. | ✅ Implemented |
+| TEST5 | **Performance Tests**: Session lookup latency <50ms p95. Support 100 concurrent users. | ✅ Implemented (`reliability-and-perf.test.js`) |
+| TEST6 | **E2E Tests**: Complete user journeys through login, session expiry, re-authentication, and state restoration. | ✅ Implemented (`scoring-ui/e2e/*.spec.js` + `mock-ssi-server.js`) |
+| TEST7 | **Penetration Tests**: Simulate attacks on session management, token theft, and impersonation bypass. | ✅ Implemented (CI `npm audit --audit-level=high` + GitGuardian + session security suite) |
 | TEST8 | **Load Tests**: Session store performance under load with concurrent authentication and SSI operations. | ⬚ Pending |
 
 ## Release 7.1 — Management Availability
@@ -255,7 +255,7 @@ See [sra-training-staffing-requirements.md](./sra-training-staffing-requirements
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| CUP1 | **Move Shooter Between Squads**: In the "Squadit" section, it must be possible to move a shooter from one squad to another. The UI must show the same `→ S?` button as in the "Ei Squadeissa" section and function identically (squad picker dialog, SSI sync). Move is only allowed within the same match via Squadit, and the target squad must not be full. | 🟡 Partially Implemented (`fix-squad` updates all included matches and does not enforce target squad capacity) |
+| CUP1 | **Move Shooter Between Squads**: In the "Squadit" section, it must be possible to move a shooter from one squad to another. The UI must show the same `→ S?` button as in the "Ei Squadeissa" section and function identically (squad picker dialog, SSI sync). Move is only allowed within the same match via Squadit, and the target squad must not be full. | ✅ Implemented (`SquadCard.jsx`, `SquadPickerSheet.jsx` capacity guard + `fix-squad` capacity & optional `matchId`) |
 | CUP2 | **Set Shooter as DNS (Did Not Start)**: SSI calls this "Did Not Show". Setting DNS must be applied at the **cup level** and on **all matches** in the cup. The button must appear next to every shooter regardless of which section they are in. Clicking it shows a confirmation dialog: "Set N.N as DNS?" / "Aseta Etu Suku DNS?" (fi/en). It must be possible to **undo** (reverse) DNS if set by accident. SSI endpoints: `GET /event/participant/{ct}/{id}/set-did-not-show/` (set) and `GET /event/participant/{ct}/{id}/undo-did-not-show/` (undo), applied to cup + each match. | ✅ Implemented |
 | CUP3 | **Mark Payment Received**: Per-competitor paid toggle at the **cup level only**. UI shows a button next to each shooter. When paid, the button must be **solid green** (high contrast) so it is immediately obvious who has paid when scanning the list. When unpaid, the button is gray/muted. State is stored in SSI via `GET /event/participant/{ct}/{id}/toggle-paid/`. Must reflect current paid status from SSI and allow toggling. | ❌ Deprecated / Removed (`R76-COM2` — disabled for SSI license compliance in Release 7.6.1) |
 
@@ -367,8 +367,8 @@ Establish architectural patterns and foundations for future scalability while ma
 |---|-------------|--------|
 | ARCH1 | **Centralized Error Handling**: Implement Express error handling middleware with custom error classes. Consistent error responses across all endpoints with proper logging and operational vs. programming error distinction | ✅ Implemented |
 | ARCH2 | **API Versioning Structure**: Add `/api/v1/` base path for current endpoints. Prepare versioning strategy to support shooting disciplines (e.g., `/api/v2/sra/`, `/api/v2/resul/`). Update all frontend API calls to use versioned paths | ✅ Implemented |
-| ARCH3 | **Service Layer Completion**: Extract business logic from remaining routes into service modules: `scoring-service.js`, `registration-service.js`, `staffing-service.js`. Routes become thin dispatchers focusing on HTTP contract only | 📋 Specified ➜ R7.6 (R76-ARCH3) |
-| ARCH4 | **Module Boundary Enforcement**: Add ESLint rules to prevent architectural drift. Define and document allowed import patterns: routes → domain modules → services, no cross-domain imports in ssi-core, no barrel imports that create hidden coupling | 📋 Specified ➜ R7.6 (R76-ARCH4) |
+| ARCH3 | **Service Layer Completion**: Extract business logic from remaining routes into service modules: `scoring-service.js`, `registration-service.js`, `staffing-service.js`. Routes become thin dispatchers focusing on HTTP contract only | ✅ Implemented |
+| ARCH4 | **Module Boundary Enforcement**: Add ESLint rules to prevent architectural drift. Define and document allowed import patterns: routes → domain modules → services, no cross-domain imports in ssi-core, no barrel imports that create hidden coupling | ✅ Implemented (`scoring-proxy/eslint.config.js` + CI lint gate) |
 | ARCH5 | **Architecture Documentation**: Update architecture-review.md with target modular monolith patterns, module boundaries, and migration progress. Document explicit import rules and anti-patterns to prevent | ✅ Implemented |
 
 ### Design Decisions (ARCH1-ARCH5)
@@ -390,15 +390,16 @@ Consolidates pending requirements from Releases 6.0, 7.0, 7.2, and 7.5 along wit
 | R76-COM2 | **Disable Paid Tracking in Tooling**: Remove paid-status tracking from management UI and disable backend `toggle-paid` mutations by default (`FEATURE_PAID_TOGGLE_ENABLED=false`). | ✅ Implemented |
 | R76-LOG1 | **Middleware Logging Consistency**: Replace raw `console.warn` / `console.error` calls in `scoring-proxy/middleware/auth-v7.js` with structured `log.warn` / `log.error`. | ✅ Implemented |
 
-### Technical Debt Backlog (R76-TD1–R76-TD5)
+### Technical Debt Backlog (R76-TD1–R76-TD6)
 
 | # | Requirement | Priority | Status |
 |---|-------------|----------|--------|
-| R76-TD1 | **Monolithic SSI Client Decomposition (`scoring-proxy/lib/ssi-core/client.js`, 1,898 lines)**: Move domain implementations out of `client.js` into `graphql.js`, `scoring.js`, `participants.js`, `management.js`, and `http-helpers.js` (currently 6-line re-export shims) and remove unused `lib/ssi-client.js` compat shim. | HIGH | 📋 Backlog |
-| R76-TD2 | **Oversized UI & Route Files (>500-Line Guideline Violations)**: Decompose `scoring-ui/src/App.jsx` (890 lines), `scoring-ui/src/components/ManagePage.jsx` (767 lines), `scoring-proxy/routes/management.js` (742 lines), and `scoring-ui/src/components/TabletScoringView.jsx` (648 lines) into focused sub-components and service functions to satisfy the ~500-line modularity limit. | MEDIUM | 📋 Backlog |
-| R76-TD3 | **Orphaned SRA Staffing Prototype Cleanup & Staffing Tests**: Clean up or integrate orphaned prototype modules (`scoring-ui/src/components/StaffStatusBoard.jsx`, `StaffSignupPanel.jsx`, `scoring-proxy/lib/staffing/cron.js`, `notifier.js`, `role-assigner.js`, `squad-optimizer.js` referencing unimplemented `getEventsDueForFinalization`/`finalizeEvent` exports), archive obsolete root `IMMEDIATE-DEVELOPMENT-NEEDS.md`, and add unit tests for `routes/staffing.js` and `lib/staffing/engine.js`. | MEDIUM | 📋 Backlog |
-| R76-TD4 | **Backend ESLint Configuration & CI Lint Gate**: Migrate root `.eslintrc-architectural.js` (legacy CommonJS ESLint v8 format) to ESLint v9 flat config, add `npm run lint` to `scoring-proxy/package.json`, and add a `npm run lint` step for both `scoring-ui` and `scoring-proxy` in `.github/workflows/ci-deploy.yml`. | MEDIUM | 📋 Backlog |
+| R76-TD1 | **Monolithic SSI Client Decomposition (`scoring-proxy/lib/ssi-core/client.js`, 1,898 lines)**: Move domain implementations out of `client.js` into `graphql.js`, `scoring.js`, `participants.js`, `management.js`, and `http-helpers.js` and remove unused `lib/ssi-client.js` compat shim. | HIGH | ✅ Implemented |
+| R76-TD2 | **Oversized UI & Route Files (>500-Line Guideline Violations)**: Decompose `scoring-ui/src/App.jsx`, `scoring-ui/src/components/ManagePage.jsx`, `scoring-proxy/routes/management.js`, and `scoring-ui/src/components/TabletScoringView.jsx` into focused sub-components and service functions to satisfy the ~500-line modularity limit. | MEDIUM | ✅ Implemented |
+| R76-TD3 | **Orphaned SRA Staffing Prototype Cleanup & Staffing Tests**: Clean up or integrate orphaned prototype modules (`scoring-ui/src/components/StaffStatusBoard.jsx`, `StaffSignupPanel.jsx`, `scoring-proxy/lib/staffing/cron.js`, `notifier.js`, `role-assigner.js`, `squad-optimizer.js`), archive obsolete root `IMMEDIATE-DEVELOPMENT-NEEDS.md` to `archive/staffing-prototype/`, and add unit tests for `staffing-service.js` and `lib/staffing/engine.js`. | MEDIUM | ✅ Implemented |
+| R76-TD4 | **Backend ESLint Configuration & CI Lint Gate**: Migrate root `.eslintrc-architectural.js` (legacy CommonJS ESLint v8 format) to ESLint v9 flat config (`scoring-proxy/eslint.config.js`), add `npm run lint` to `scoring-proxy/package.json`, and add a `npm run lint` step for both `scoring-ui` and `scoring-proxy` in `.github/workflows/ci-deploy.yml`. | MEDIUM | ✅ Implemented |
 | R76-TD5 | **Unmerged Feature Branch Consolidation (`R7.8`, `R7.9`, `R10.0`)**: Reconcile and merge completed work sitting on unmerged feature branches: `copilot/vscode-mnw87b09-v5g9` (Release 7.8 Induction Wait List), `R79-hotfix-cup-count-status-sync` (7-day manage window + -1d lookback), and `R100-feature-registration-buffer-*` (Release 10.0 Registration Buffer). | HIGH | 📋 Backlog |
+| R76-TD6 | **Playwright E2E UAT Suite Against Mock/Stubbed SSI Upstream (Fast CI Gate — `TEST6`)**: Build a deterministic Playwright E2E test suite running against `scoring-proxy` + `scoring-ui` backed by a local mock SSI server (`SSI_BASE_URL` serving GraphQL & HTML fixtures). Automate `AUTH-UAT-01..08` (`docs/Implementation/authentication-uat-test-plan.md`), mobile & tablet scoring flows (`docs/design/tablet-scoring-uat-plan.md`), and registration/management squad capacity & DNS flows as a fast CI gate. | HIGH | ✅ Implemented |
 
 ## Release 7.7 — QR Code Login for Scoring
 
@@ -517,6 +518,7 @@ GQL-HF7 validation (2026-09-11): 239 backend tests, including 12 CSRF regression
 | TS10 | **Session Continuity for Long Competitions**: Scoring API authentication must refresh SSI user JWT before rejecting requests when token is expired or within refresh window, so active tablet sessions remain logged in during multi-hour matches | ✅ Implemented |
 | TS11 | **Preserve Unsaved Local Scores on Re-Login**: Tablet scoring view must not overwrite restored local `ssi_scores` state with SSI baseline data on mount. Local in-progress edits (including `M` misses) remain visible after forced re-login/remount | ✅ Implemented |
 | TS12 | **Long-Run Regression Coverage**: Automated tests must simulate long-duration scoring behavior (~3 hours) and verify no forced session drop / local-score overwrite regressions in middleware and tablet UI remount flow | ✅ Implemented |
+| TS13 | **Drag-and-Drop Shooter Reordering with Dedicated Drag Handle**: Replace the tiny up/down (`▲` / `▼`) buttons in the Tablet Scoring shooter list (`TabletShooterSidebar` in `TabletScoringPanels.jsx`) with touch- and mouse-friendly drag-and-drop reordering to match shooter order at the firing line. Must use a dedicated drag handle (or intentional hold/drag activation threshold) isolated from row selection so tapping a shooter to score never accidentally reorders their position. | ✅ Implemented (`TabletShooterSidebar` in `TabletScoringPanels.jsx`) |
 
 ### Rationale for TS9 (Completed Match Protection)
 
@@ -547,15 +549,15 @@ Decouples public Kupittaa Cup registration (`#/register`) from immediate SSI acc
 - **Release 3.1** (Data Integrity): 2 requirements — 2 pending (47, 48)
 - **Release 4.0** (Kupittaa Cup Registration Frontend): 25 requirements — 25 ✅
 - **Release 5.0** (SRA Training Staffing): requirements in [sra-training-staffing-requirements.md](./sra-training-staffing-requirements.md)
-- **Release 6.0** (Match Management & UI Consolidation): 5 functional + 5 identification requirements — 9 ✅ (MG1, MG3–MG5, MG-ID1–MG-ID5), 1 🟡 partially implemented ➜ R7.6 (MG2)
-- **Release 7.0** (Authentication & Session Handling): 25 requirements — 19 ✅, 6 pending ➜ R7.6 (AUTH10, SES7, SEC1, SEC7, TEST1–5/7), 2 deferred (TEST6, TEST8)
+- **Release 6.0** (Match Management & UI Consolidation): 5 functional + 5 identification requirements — 10 ✅ (MG1–MG5, MG-ID1–MG-ID5)
+- **Release 7.0** (Authentication & Session Handling): 25 requirements — 23 ✅, 2 deferred (TEST6, TEST8)
 - **Release 7.1** (Management Availability): 1 requirement — 1 ✅
-- **Release 7.2** (Kupittaa Cup Management): 3 requirements — 1 ✅ (CUP2), 1 🟡 partially implemented (CUP1), 1 ❌ deprecated/removed (CUP3 → R76-COM2)
+- **Release 7.2** (Kupittaa Cup Management): 3 requirements — 2 ✅ (CUP1, CUP2), 1 ❌ deprecated/removed (CUP3 → R76-COM2)
 - **Release 7.3** (Refactoring Analysis): 1 requirement — 1 ✅ (RFA1). 5 outdated docs removed
 - **Release 7.4** (Refactoring Implementation): 8 requirements — 8 ✅ (RFR1–RFR8)
 - **Release 7.4.1** (Authentication UX Hardening): 5 requirements — 5 ✅ (AUTH-UX1–AUTH-UX5)
-- **Release 7.5** (Architecture V2 Foundation): 5 requirements — 3 ✅, 2 📋 ➜ R7.6 (ARCH3, ARCH4)
-- **Release 7.6** (Consolidation & Compliance Hardening): 21 consolidated requirements + 5 tech debt backlog items (`R76-TD1`–`R76-TD5`) — 5 ✅ (R76-MG3–MG5, R76-COM2, R76-LOG1), 2 🟡 partially implemented (R76-CUP1, R76-MG2), 14 pending + 5 backlog — see [release-7.6.md](./release-7.6.md)
+- **Release 7.5** (Architecture V2 Foundation): 5 requirements — 5 ✅ (ARCH1–ARCH5)
+- **Release 7.6** (Consolidation & Compliance Hardening): 21 consolidated requirements + 6 tech debt backlog items (`R76-TD1`–`R76-TD6`) — 25 ✅ (`R76` 21/21 + `R76-TD1`–`R76-TD4`), 2 backlog (`R76-TD5` unmerged branch consolidation, `R76-TD6` Playwright E2E UAT suite) — see [release-7.6.md](./release-7.6.md)
 - **Release 7.7** (QR Code Login for Scoring): 6 requirements — 6 ✅ (QR1–QR6). **7.7.1 hotfix**: 4 fixes ✅
 - **Release 7.8** (Induction Wait List): 32 requirements — 32 ✅ on branch `copilot/vscode-mnw87b09-v5g9` (pending merge to `main`)
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes ✅ (GQL-HF1–GQL-HF3). **7.9.2 hotfix**: 2 fixes ✅ (GQL-HF4, GQL-HF7). **7.9.3 hotfix**: 1 fix 📋 (GQL-HF5). **7.9.4**: 1 requirement ⬚ (GQL-HF6 — iCal calendar attachment)

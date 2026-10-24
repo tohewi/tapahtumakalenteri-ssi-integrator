@@ -25,6 +25,7 @@ export {
   auditSSIOperation,
   auditTokenRefresh,
   auditSecurityViolation,
+  auditMutation,
 } from './audit.js'
 export {
   executeSSI,

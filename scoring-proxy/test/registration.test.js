@@ -286,6 +286,25 @@ describe('Registration endpoints', () => {
       // Express global body parser returns 413 for > 10KB
       expect(res.status).toBe(413)
     })
+
+    it('rejects unauthenticated submit with 401 when FEATURE_REGISTRATION_AUTH_REQUIRED is enabled (R76-AUTH10)', async () => {
+      process.env.FEATURE_REGISTRATION_AUTH_REQUIRED = 'true'
+      try {
+        const ip = uniqueIp()
+        const cap = await getFreshCaptcha(ip)
+        const res = await request('POST', '/api/register/submit', {
+          cupId: '160',
+          squadNumber: 1,
+          email: 'test@test.com',
+          captchaId: cap.id,
+          captchaAnswer: cap.correctAnswer,
+        }, ip)
+        expect(res.status).toBe(401)
+        expect(res.data.error).toContain('SSI-tunnistautuminen vaaditaan')
+      } finally {
+        delete process.env.FEATURE_REGISTRATION_AUTH_REQUIRED
+      }
+    })
   })
 
   // ============================================================

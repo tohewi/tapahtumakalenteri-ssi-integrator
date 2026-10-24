@@ -32,7 +32,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['scripts/**/*.js', 'src/test/**/*.{js,jsx}'],
+    files: ['playwright.config.js', 'e2e/**/*.{js,jsx}', 'scripts/**/*.js', 'src/test/**/*.{js,jsx}'],
     languageOptions: {
       globals: {
         ...globals.node,

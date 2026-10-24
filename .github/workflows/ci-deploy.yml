@@ -31,6 +31,15 @@ jobs:
         run: npm ci
         working-directory: scoring-proxy
 
+      # ── Lint ──
+      - name: Lint UI
+        run: npm run lint
+        working-directory: scoring-ui
+
+      - name: Lint proxy
+        run: npm run lint
+        working-directory: scoring-proxy
+
       # ── Test ──
       - name: Run UI tests
         run: npm test
@@ -52,6 +61,15 @@ jobs:
       # ── Build ──
       - name: Build UI
         run: npm run build
+        working-directory: scoring-ui
+
+      # ── Playwright E2E UAT Gate (R76-TD6) ──
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: scoring-ui
+
+      - name: Run Playwright E2E UAT suite
+        run: npm run test:e2e
         working-directory: scoring-ui
 
       # ── Scan report artifact ──

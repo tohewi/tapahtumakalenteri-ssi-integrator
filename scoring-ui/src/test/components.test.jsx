@@ -7,6 +7,10 @@ import SquadPicker from '../components/SquadPicker'
 import ShooterPicker from '../components/ShooterPicker'
 import CupSearch from '../components/CupSearch'
 import { CupList } from '../components/shared'
+import SquadPickerSheet from '../components/manage/SquadPickerSheet'
+import HomePage from '../components/HomePage'
+import LegalDocumentPage from '../components/LegalDocumentPage'
+import { TabletShooterSidebar } from '../components/TabletScoringPanels'
 
 // ============================================================
 // LoginScreen
@@ -264,5 +268,126 @@ describe('ShooterPicker', () => {
     render(<ShooterPicker shooters={shooters} onSelect={onSelect} currentShooterId={null} />)
     await userEvent.click(screen.getByText('Matti M'))
     expect(onSelect).toHaveBeenCalledWith(shooters[0])
+  })
+})
+
+// ============================================================
+// SquadPickerSheet (CUP1 / R76-CUP1)
+// ============================================================
+
+describe('SquadPickerSheet', () => {
+  const squads = [
+    { number: 1, name: 'Squad 1 (Laina-ase)', count: 4, max: 9 },
+    { number: 2, name: 'Squad 2 (Oma ase 1)', count: 9, max: 9 },
+    { number: 3, name: 'Squad 3 (Oma ase 2)', count: 5, max: 7 },
+  ]
+
+  it('disables full squads and current squad while allowing available squads', async () => {
+    const onSelect = vi.fn()
+    render(
+      <SquadPickerSheet
+        shooter={{ name: 'Matti Meikäläinen', email: 'matti@ex.com', squad: 1 }}
+        squads={squads}
+        onSelect={onSelect}
+        onClose={vi.fn()}
+      />
+    )
+
+    const sq1Btn = screen.getByText('Squad 1 (Laina-ase)').closest('button')
+    const sq2Btn = screen.getByText('Squad 2 (Oma ase 1)').closest('button')
+    const sq3Btn = screen.getByText('Squad 3 (Oma ase 2)').closest('button')
+
+    expect(sq1Btn).toBeDisabled() // shooter's current squad
+    expect(sq2Btn).toBeDisabled() // full squad (9/9)
+    expect(sq3Btn).not.toBeDisabled()
+
+    await userEvent.click(sq2Btn)
+    expect(onSelect).not.toHaveBeenCalled()
+
+    await userEvent.click(sq3Btn)
+    expect(onSelect).toHaveBeenCalledWith(3)
+  })
+})
+
+// ============================================================
+// Legal Documents & Links (R76-COM1)
+// ============================================================
+
+describe('LegalDocumentPage & LegalFooterLinks', () => {
+  it('renders Privacy Policy and Terms of Service links on HomePage', () => {
+    render(<HomePage />)
+    expect(screen.getByRole('link', { name: /tietosuojaseloste/i })).toHaveAttribute('href', '#/privacy')
+    expect(screen.getByRole('link', { name: /käyttöehdot/i })).toHaveAttribute('href', '#/terms')
+  })
+
+  it('renders Privacy Policy and Terms of Service content', () => {
+    const { rerender } = render(<LegalDocumentPage type="privacy" />)
+    expect(screen.getByText(/Rekisterinpitäjä ja tarkoitus/i)).toBeInTheDocument()
+    expect(screen.getByText(/Resend/i)).toBeInTheDocument()
+
+    rerender(<LegalDocumentPage type="terms" />)
+    expect(screen.getByText(/Palvelun käyttö/i)).toBeInTheDocument()
+    expect(screen.getByText(/Käyttäjän vastuu/i)).toBeInTheDocument()
+  })
+})
+
+// ============================================================
+// TabletShooterSidebar — Drag-and-Drop Reordering (TS13 / US-017)
+// ============================================================
+
+describe('TabletShooterSidebar drag-and-drop reordering (TS13)', () => {
+  const sampleSquad = {
+    name: 'Squad 1',
+    shooters: [
+      { id: 's1', number: 1, name: 'Matti Meikäläinen', division: 'RESUL' },
+      { id: 's2', number: 2, name: 'Teppo Testaaja', division: 'RESUL' },
+      { id: 's3', number: 3, name: 'Liisa Laukaus', division: 'RESUL' },
+    ],
+  }
+
+  it('removes tiny ▲/▼ arrows and selects shooter on row tap without reordering', async () => {
+    const onSelect = vi.fn()
+    const onReorder = vi.fn()
+    render(
+      <TabletShooterSidebar
+        squad={sampleSquad}
+        selectedShooter={sampleSquad.shooters[0]}
+        allScores={{}}
+        totalShotsInMatch={30}
+        handleShooterSelect={onSelect}
+        handleReorderShooter={onReorder}
+      />
+    )
+
+    expect(screen.queryByText('▲')).toBeNull()
+    expect(screen.queryByText('▼')).toBeNull()
+
+    await userEvent.click(screen.getByText('2. Teppo Testaaja'))
+    expect(onSelect).toHaveBeenCalledWith(sampleSquad.shooters[1])
+    expect(onReorder).not.toHaveBeenCalled()
+  })
+
+  it('reorders shooters via drag-and-drop handle and keyboard arrows without selecting shooter', async () => {
+    const onSelect = vi.fn()
+    const onReorder = vi.fn()
+    render(
+      <TabletShooterSidebar
+        squad={sampleSquad}
+        selectedShooter={sampleSquad.shooters[0]}
+        allScores={{}}
+        totalShotsInMatch={30}
+        handleShooterSelect={onSelect}
+        handleReorderShooter={onReorder}
+      />
+    )
+
+    const handle1 = screen.getByTestId('drag-handle-s1')
+    await userEvent.click(handle1)
+    expect(onSelect).not.toHaveBeenCalled()
+
+    handle1.focus()
+    await userEvent.keyboard('{ArrowDown}')
+    expect(onReorder).toHaveBeenCalledWith(0, 1)
+    expect(onSelect).not.toHaveBeenCalled()
   })
 })

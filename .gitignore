@@ -35,3 +35,7 @@ infra/*.json
 node_modules/
 scoring-ui/dist/
 scoring-proxy/data/
+
+scoring-ui/test-results/
+scoring-ui/playwright-report/
+

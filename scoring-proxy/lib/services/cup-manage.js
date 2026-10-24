@@ -327,7 +327,6 @@ export function filterManageableCups(events, now = new Date(), windowDays = MANA
   return (events || [])
     .filter(e => e.get_content_type_key === 136)
     .filter(e => e.status === 'on')
-    .filter(e => isWithinManageWindow(e.starts, windowStart, windowEndExclusive))
     .map(c => {
       const registered = countRegisteredCupCompetitors(c)
       const maxCompetitors = c.max_competitors || 25
@@ -338,17 +337,25 @@ export function filterManageableCups(events, now = new Date(), windowDays = MANA
         && (!regStarts || now >= regStarts)
         && (!regCloses || now <= regCloses)
         && !full
+      const startsAt = c.starts ? new Date(c.starts) : null
+      const notExpired = Boolean(startsAt && !Number.isNaN(startsAt.getTime()) && startsAt >= windowStart)
+      const inWindow = isWithinManageWindow(c.starts, windowStart, windowEndExclusive)
       return {
-        id: c.id,
-        name: c.name,
-        starts: c.starts,
-        ends: c.ends || null,
-        maxCompetitors,
-        registered,
-        full,
-        registrationOpen,
+        _manageable: notExpired && (inWindow || registrationOpen),
+        cup: {
+          id: c.id,
+          name: c.name,
+          starts: c.starts,
+          ends: c.ends || null,
+          maxCompetitors,
+          registered,
+          full,
+          registrationOpen,
+        },
       }
     })
+    .filter(item => item._manageable)
+    .map(item => item.cup)
     .sort((a, b) => new Date(a.starts) - new Date(b.starts))
 }
 

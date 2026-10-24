@@ -590,3 +590,18 @@ Potential improvements for production:
 5. **Rate Limiting by Session**
    - Prevent abuse by limiting requests per session
    - Currently only IP-based rate limiting exists
+
+---
+
+## OWASP Session Management Compliance Matrix (R76-SEC1 & R76-SEC7)
+
+| OWASP Guideline | Status | Implementation in TurRes SSI Tools |
+|---|---|---|
+| **Session ID Entropy & Length** | ✅ Compliant | Uses `crypto.randomUUID()` (128-bit CSPRNG v4 UUID) in `scoring-proxy/lib/session/store.js`. |
+| **Session Fixation Prevention** | ✅ Compliant | Every `POST /api/v1/auth/login` and `POST /api/v1/auth/token-login` generates a brand-new session ID; existing session IDs are never reused. |
+| **Cookie Attributes** | ✅ Compliant | `HttpOnly: true`, `SameSite: 'lax'`, `Secure: true` (in production), `Path: '/'`. |
+| **Idle & Absolute Timeout** | ✅ Compliant | Scope-aware TTL (default 8h) enforced in Redis and in-memory store; upstream SSI user JWT validated on every request (`isUserTokenValid`). |
+| **Explicit Logout & Revocation** | ✅ Compliant | `POST /api/v1/auth/logout` deletes the session from Redis/memory and clears the cookie (`deleteSession`, `revokeAllUserSessions`). |
+| **Scope Isolation** | ✅ Compliant | Sessions bind `scope` (`scoring`, `manage`, `reporting`, `staffing`) at creation time; `touchSession` cannot mutate scope. |
+| **At-Rest Token Storage Assessment (`R76-SEC7`)** | ✅ Evaluated | Redis is deployed on Render's isolated private internal network (`ipAllowList: []` in `render.yaml`) with 8-hour ephemeral TTL, while long-lived QR device tokens (`lib/device-tokens.js`) use AES-256-GCM encryption at rest. |
+

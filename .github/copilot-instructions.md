@@ -64,13 +64,13 @@ This is a **shooting competition management system** to help setting up events i
 │   │   └── errorHandler.js  # Centralized error handling + asyncHandler
 │   ├── lib/
 │   │   ├── ssi-core/        # SSI API integration (split by domain)
-│   │   │   ├── client.js    # Monolithic SSI client (code move pending)
-│   │   │   ├── graphql.js   # Auth, JWT, login (re-export shim)
-│   │   │   ├── scoring.js   # Scoring pages (re-export shim)
-│   │   │   ├── participants.js # Participant management (re-export shim)
-│   │   │   ├── management.js   # Match management (re-export shim)
-│   │   │   └── http-helpers.js # Cookie/fetch helpers (re-export shim)
+│   │   │   ├── graphql.js   # Auth, JWT, login
+│   │   │   ├── scoring.js   # Scoring pages
+│   │   │   ├── participants.js # Participant management
+│   │   │   ├── management.js   # Match management & staffing
+│   │   │   └── http-helpers.js # Cookie/fetch/form helpers
 │   │   ├── services/        # Business logic (pure functions)
+│   │   │   ├── scoring-service.js  # Scoring operations
 │   │   │   └── cup-manage.js       # Cup management operations
 │   │   ├── errors/          # Custom error classes
 │   │   │   └── AppError.js  # AppError hierarchy (9 error types)
@@ -220,7 +220,7 @@ Use these to check deploy status, view logs, monitor service performance, and ma
 | Modify SSI integration | `scoring-proxy/lib/ssi-core/*.js` (domain module, NOT `client.js`) |
 | Update home navigation | `scoring-ui/src/components/HomePage.jsx` |
 | Change deploy config | `render.yaml` |
-| Modify scoring logic | `scoring-proxy/routes/scoring.js`, `scoring-proxy/lib/ssi-core/scoring.js` |
+| Modify scoring logic | `scoring-proxy/lib/services/scoring-service.js`, `scoring-proxy/routes/scoring.js` |
 | Modify management logic | `scoring-proxy/lib/services/cup-manage.js`, `scoring-proxy/routes/management.js` |
 | Modify staffing logic | `scoring-proxy/lib/staffing/engine.js`, `scoring-proxy/routes/staffing.js` |
 | Modify staffing config | `config/sra-training-config.yml`, `scoring-proxy/lib/staffing/config-loader.js` |
@@ -268,6 +268,7 @@ $values = [regex]::Matches($formPage.Content, '<input[^>]+name="weapon_groups"[^
 
 ### Common pitfalls
 
+- **`SquadInterface` requires concrete inline fragments (`... on NordicSquadNode`)** — In SSI's GraphQL schema, `match.squads` returns the abstract `SquadInterface` type, which only exposes `id`, `number`, and `comment` directly. Querying `competitors` or `max_competitors` directly on `squads { ... }` fails at runtime with `GraphQL Error: Cannot query field 'competitors' on type 'SquadInterface'`. Always wrap `max_competitors` and `competitors` in `... on NordicSquadNode { max_competitors competitors { ... } }` (or the discipline-specific squad node such as `IpscSquadNode` / `GenericSquadNode`).
 - **`count` not `match_count`** — the cup match count field is `count`
 - **`reg_start_date`/`reg_start_time`** — registration dates use `reg_start_*` prefix, not `registration_starts_*`
 - **Array fields** (`weapon_groups`, `categories`, `competence_classes`) must be present with valid enum values scraped from the form

@@ -33,6 +33,7 @@ export function toLegacySession(v7Session) {
     get _userSSI() { return v7Session.userSSI },
     get _adminSSI() { return v7Session.adminSSI },
     get _userId() { return v7Session.userId },
+    get userId() { return v7Session.userId },
   }
 
   return legacy

@@ -86,3 +86,39 @@ export function auditSecurityViolation(details, ip, user = null) {
     user, ip, success: false, details,
   })
 }
+
+export function auditMutation({
+  requestId = crypto.randomUUID(),
+  endpoint,
+  operation,
+  initiatingUserId,
+  initiatingUserEmail = initiatingUserId,
+  executionIdentityUserId = null,
+  executionIdentityEmail = executionIdentityUserId,
+  targetEntity = {},
+  result = 'success',
+  errorCode = null,
+}) {
+  const details = {
+    requestId,
+    endpoint,
+    operation,
+    initiatingUserId: initiatingUserId || null,
+    initiatingUserEmail: initiatingUserEmail || null,
+    executionIdentityUserId: executionIdentityUserId || null,
+    executionIdentityEmail: executionIdentityEmail || null,
+    targetEntity,
+    result,
+    errorCode,
+  }
+  return logAudit(
+    result === 'success' ? AuditEvent.SSI_OPERATION : AuditEvent.SSI_OPERATION_FAILURE,
+    {
+      user: initiatingUserEmail || initiatingUserId || null,
+      operation: `${operation}:${endpoint}`,
+      success: result === 'success',
+      error: errorCode,
+      details,
+    }
+  )
+}

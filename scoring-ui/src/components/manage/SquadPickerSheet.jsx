@@ -18,22 +18,33 @@ export default function SquadPickerSheet({ shooter, squads, onSelect, onClose })
           )}
         </div>
         <div className="px-4 pb-4 space-y-2 max-h-[50vh] overflow-y-auto">
-          {squads.map(sq => (
-            <button
-              key={sq.number}
-              onClick={() => onSelect(sq.number)}
-              className="w-full flex items-center justify-between p-3 rounded-xl border border-gray-200 active:bg-blue-50 active:border-blue-300 transition-colors"
-            >
-              <div>
-                <div className="font-medium text-gray-800 text-sm">{sq.name}</div>
-              </div>
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                sq.count >= sq.max && sq.max > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-              }`}>
-                {sq.count}/{sq.max}
-              </span>
-            </button>
-          ))}
+          {squads.map(sq => {
+            const isFull = sq.max > 0 && sq.count >= sq.max
+            const isCurrent = shooter?.squad === sq.number
+            const isDisabled = isFull || isCurrent
+            return (
+              <button
+                key={sq.number}
+                type="button"
+                disabled={isDisabled}
+                onClick={() => !isDisabled && onSelect(sq.number)}
+                className={`w-full flex items-center justify-between p-3 rounded-xl border transition-colors ${
+                  isDisabled
+                    ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                    : 'border-gray-200 active:bg-blue-50 active:border-blue-300'
+                }`}
+              >
+                <div>
+                  <div className="font-medium text-gray-800 text-sm">{sq.name}</div>
+                </div>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                  isFull ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                }`}>
+                  {sq.count}/{sq.max}
+                </span>
+              </button>
+            )
+          })}
         </div>
         <div className="px-4 pb-6">
           <button

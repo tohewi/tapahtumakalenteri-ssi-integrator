@@ -30,7 +30,7 @@ function mockRes() {
     status(code) { res.statusCode = code; return res },
     json(data) { res.body = data; return res },
     cookie(name, value, opts) { res.cookies[name] = { value, opts }; return res },
-    clearCookie(name, opts) { delete res.cookies[name]; return res },
+    clearCookie(name, _opts) { delete res.cookies[name]; return res },
   }
   return res
 }
