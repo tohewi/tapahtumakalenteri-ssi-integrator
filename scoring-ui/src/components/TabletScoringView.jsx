@@ -1,53 +1,21 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { AppHeader } from './shared'
 import * as api from '../api'
 import t from '../i18n'
 import { log } from '../log.js'
-
-// ============================================================
-// Constants
-// ============================================================
-
-const SCORE_ZONES = ['X', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'M']
-const ZONE_POINTS = { X: 10, '10': 10, '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2, '1': 1, M: 0 }
-const SERIES_COUNT = 6
-const MAX_HITS_PER_SERIES = 5
-
-// ============================================================
-// Helper functions
-// ============================================================
-
-function hitsInSeries(seriesScores) {
-  return SCORE_ZONES.reduce((sum, z) => sum + seriesScores[z], 0)
-}
-
-function pointsInSeries(seriesScores) {
-  return SCORE_ZONES.reduce((sum, z) => sum + seriesScores[z] * ZONE_POINTS[z], 0)
-}
-
-function getTotalHits(allSeriesScores) {
-  let total = 0
-  for (let i = 0; i < SERIES_COUNT; i++) {
-    total += hitsInSeries(allSeriesScores[i])
-  }
-  return total
-}
-
-function getTotalPoints(allSeriesScores) {
-  let total = 0
-  for (let i = 0; i < SERIES_COUNT; i++) {
-    total += pointsInSeries(allSeriesScores[i])
-  }
-  return total
-}
-
-function getXCount(allSeriesScores) {
-  let total = 0
-  for (let i = 0; i < SERIES_COUNT; i++) {
-    total += allSeriesScores[i].X || 0
-  }
-  return total
-}
+import {
+  SCORE_ZONES,
+  SERIES_COUNT,
+  MAX_HITS_PER_SERIES,
+  hitsInSeries,
+  getTotalHits,
+  getTotalPoints,
+  getXCount,
+} from '../lib/scoring-helpers'
+import {
+  TabletHeaderAndStats,
+  TabletShooterSidebar,
+  TabletNumberPad,
+} from './TabletScoringPanels'
 
 // String color scheme (rotates between strings)
 const STRING_COLORS = [
@@ -371,151 +339,33 @@ export default function TabletScoringView({
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
-      {/* Breadcrumb Navigation Header - Compact */}
-      <div className="bg-blue-600 text-white px-3 py-2 shadow-md flex-shrink-0">
-        <div className="flex items-center justify-between">
-          {/* Breadcrumb Trail */}
-          <div className="flex items-center gap-2 text-xs">
-            <button
-              onClick={onBackToCup}
-              aria-label={`${t.back}: ${cup?.name || t.cups}`}
-              className="hover:underline focus:outline-none focus:ring-2 focus:ring-white/50 focus:ring-offset-1 focus:ring-offset-blue-600 rounded"
-            >
-              {cup?.name || t.cups}
-            </button>
-            <span className="opacity-70">›</span>
-            <button
-              onClick={onBackToMatch}
-              aria-label={`${t.back}: ${match.name}`}
-              className="hover:underline focus:outline-none focus:ring-2 focus:ring-white/50 focus:ring-offset-1 focus:ring-offset-blue-600 rounded"
-            >
-              {match.name}
-            </button>
-            {isMatchCompleted && (
-              <span className="ml-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded">
-                {t.completed}
-              </span>
-            )}
-            <span className="opacity-70">›</span>
-            <button
-              onClick={onBack}
-              aria-label={`${t.back}: ${squad.name}`}
-              className="hover:underline focus:outline-none focus:ring-2 focus:ring-white/50 focus:ring-offset-1 focus:ring-offset-blue-600 rounded font-semibold"
-            >
-              {squad.name}
-            </button>
-          </div>
-
-          {/* User Info & Logout */}
-          <div className="flex items-center gap-3 text-xs">
-            {userEmail && (
-              <div className="opacity-90">
-                Kirjautunut: <span className="font-medium">{userName || userEmail.split('@')[0]}</span>
-              </div>
-            )}
-            <button
-              onClick={onLogout}
-              className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-xs font-medium transition-colors"
-            >
-              {t.logout}
-            </button>
-          </div>
-        </div>
-
-        {/* Match Date */}
-        <div className="mt-1 text-xs opacity-80">
-          {match.date}
-        </div>
-      </div>
-
-      {/* Top bar with scoring stats - Compact */}
-      <div className="bg-white border-b border-gray-200 px-3 py-1.5 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-3 text-xs">
-          <div>
-            <span className="text-gray-500">{t.shotsFired}: </span>
-            <span className="font-bold text-blue-600">{totalShots}</span>
-            <span className="text-gray-400"> / {totalShotsInMatch}</span>
-          </div>
-          <div>
-            <span className="text-gray-500">{t.total}: </span>
-            <span className="font-bold text-green-600">{totalPoints} {t.pts}</span>
-          </div>
-          <div>
-            <span className="text-gray-500">{t.xCount}: </span>
-            <span className="font-bold text-purple-600">{xCount}</span>
-          </div>
-        </div>
-      </div>
+      <TabletHeaderAndStats
+        cup={cup}
+        match={match}
+        squad={squad}
+        isMatchCompleted={isMatchCompleted}
+        userEmail={userEmail}
+        userName={userName}
+        totalShots={totalShots}
+        totalShotsInMatch={totalShotsInMatch}
+        totalPoints={totalPoints}
+        xCount={xCount}
+        onBack={onBack}
+        onBackToCup={onBackToCup}
+        onBackToMatch={onBackToMatch}
+        onLogout={onLogout}
+      />
 
       {/* Main content area - 3 columns on desktop, stacked on mobile */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
-        {/* Left: Shooter list */}
-        <div className="w-full lg:w-56 xl:w-64 bg-white border-b lg:border-b-0 lg:border-r border-gray-200 flex-shrink-0 flex flex-col overflow-hidden">
-          <div className="p-2 border-b border-gray-200 flex-shrink-0">
-            <h3 className="font-semibold text-gray-700 text-xs">{squad.name}</h3>
-            <p className="text-xs text-gray-500">{squad.shooters.length} {t.shooters}</p>
-          </div>
-          <div role="listbox" aria-label={t.selectShooter} className="divide-y divide-gray-100 overflow-y-auto flex-1">
-            {squad.shooters.map((shooter, shooterIdx) => {
-              const isSelected = selectedShooter?.id === shooter.id
-              const shooterScores = allScores[shooter.id]
-              const shooterShots = shooterScores ? getTotalHits(shooterScores) : 0
-              const shooterPoints = shooterScores ? getTotalPoints(shooterScores) : 0
-              
-              return (
-                <div
-                  key={shooter.id}
-                  role="option"
-                  aria-selected={isSelected}
-                  aria-label={`${shooter.number}. ${shooter.name}, ${shooterPoints} ${t.pts}, ${shooterShots}/${totalShotsInMatch}`}
-                  tabIndex={0}
-                  onClick={() => handleShooterSelect(shooter)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleShooterSelect(shooter) } }}
-                  className={`p-2 cursor-pointer transition-colors ${
-                    isSelected
-                      ? 'bg-blue-50 border-l-4 border-blue-600'
-                      : 'hover:bg-gray-50 border-l-4 border-transparent'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        aria-label={`Move ${shooter.name} up`}
-                        disabled={shooterIdx === 0}
-                        onClick={(e) => { e.stopPropagation(); handleMoveShooter(shooter, -1) }}
-                        className="text-gray-400 hover:text-gray-600 disabled:opacity-20 text-xs p-0.5"
-                      >▲</button>
-                      <button
-                        aria-label={`Move ${shooter.name} down`}
-                        disabled={shooterIdx === squad.shooters.length - 1}
-                        onClick={(e) => { e.stopPropagation(); handleMoveShooter(shooter, 1) }}
-                        className="text-gray-400 hover:text-gray-600 disabled:opacity-20 text-xs p-0.5"
-                      >▼</button>
-                    </div>
-                    <div className="flex-1 min-w-0 ml-1">
-                      <div className={`text-xs font-medium truncate ${
-                        isSelected ? 'text-blue-900' : 'text-gray-900'
-                      }`}>
-                        {shooter.number}. {shooter.name}
-                      </div>
-                      <div className="text-xs text-gray-500 truncate">{shooter.division}</div>
-                    </div>
-                    <div className="ml-2 text-right">
-                      <div className={`text-sm font-bold ${
-                        isSelected ? 'text-blue-600' : 'text-gray-700'
-                      }`}>
-                        {shooterPoints}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {shooterShots}/{totalShotsInMatch}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
+        <TabletShooterSidebar
+          squad={squad}
+          selectedShooter={selectedShooter}
+          allScores={allScores}
+          totalShotsInMatch={totalShotsInMatch}
+          handleShooterSelect={handleShooterSelect}
+          handleMoveShooter={handleMoveShooter}
+        />
 
         {/* Center: Score track */}
         <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 min-w-0">
@@ -612,36 +462,11 @@ export default function TabletScoringView({
           </div>
         </div>
 
-        {/* Right: Number pad */}
-        <div className="w-full lg:w-64 xl:w-72 bg-white border-t lg:border-t-0 lg:border-l border-gray-200 flex-shrink-0 flex flex-col overflow-hidden">
-          <div className="p-2 border-b border-gray-200 flex-shrink-0">
-            <h3 className="font-semibold text-gray-700 text-xs">Score Pad</h3>
-          </div>
-          <div className="p-2 flex-1 overflow-y-auto">
-            <div className="grid grid-cols-3 gap-2">
-              {SCORE_ZONES.map((zone) => {
-                const variant = zone === 'X' || zone === '10' ? 'high' : zone === 'M' ? 'miss' : 'low'
-                const colors = {
-                  high: 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white',
-                  low: 'bg-gray-600 hover:bg-gray-700 active:bg-gray-800 text-white',
-                  miss: 'bg-red-600 hover:bg-red-700 active:bg-red-800 text-white',
-                }
-                
-                return (
-                  <button
-                    key={zone}
-                    onClick={() => handleScoreAdd(zone)}
-                    disabled={!selectedShooter || isMatchCompleted}
-                    aria-label={`${zone === 'M' ? 'Miss' : `Score ${zone}`}`}
-                    className={`h-16 lg:h-14 xl:h-16 rounded-lg font-bold text-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation ${colors[variant]}`}
-                  >
-                    {zone}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
+        <TabletNumberPad
+          selectedShooter={selectedShooter}
+          isMatchCompleted={isMatchCompleted}
+          handleScoreAdd={handleScoreAdd}
+        />
       </div>
     </div>
   )

@@ -179,8 +179,8 @@
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Extracted scoring-helpers.js, MobileScoringViews.jsx, and TabletScoringPanels.jsx; App.jsx and TabletScoringView.jsx are now under 500 lines."
     },
     {
       "id": "US-012",

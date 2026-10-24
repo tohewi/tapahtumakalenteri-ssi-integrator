@@ -2,130 +2,24 @@ import { useState, useCallback, useEffect } from 'react'
 import { useRememberMe } from './hooks/useRememberMe'
 import MatchPicker from './components/MatchPicker'
 import SquadPicker from './components/SquadPicker'
-import ScoringForm from './components/ScoringForm'
-import ShooterPicker from './components/ShooterPicker'
 import LoginScreen from './components/LoginScreen'
 import CupSearch from './components/CupSearch'
+import { MobileSeriesOverview, MobileShooterScoringView } from './components/MobileScoringViews'
 import * as api from './api'
 import fi from './i18n'
 import { log } from './log.js'
+import {
+  SERIES_COUNT,
+  MAX_HITS_PER_SERIES,
+  getScoreCardShots,
+  pointsInSeries,
+  isSeriesScored,
+  selectInitialScoreCard,
+  getDoubleSeriesPairShotSummary,
+  applyScoreDeltaForShooter,
+} from './lib/scoring-helpers'
 
-// ============================================================
-// Scoring constants
-// ============================================================
-
-const SCORE_ZONES = ['X', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1', 'M']
-const SERIES_COUNT = 6
-const MAX_HITS_PER_SERIES = 5
-const ZONE_POINTS = { X: 10, '10': 10, '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2, '1': 1, M: 0 }
-
-function createEmptySeriesScore() {
-  return Object.fromEntries(SCORE_ZONES.map(z => [z, 0]))
-}
-
-function hitsInSeries(seriesScores) {
-  return SCORE_ZONES.reduce((sum, z) => sum + seriesScores[z], 0)
-}
-
-function pointsInSeries(seriesScores) {
-  return SCORE_ZONES.reduce((sum, z) => sum + seriesScores[z] * ZONE_POINTS[z], 0)
-}
-
-function getScoreCardShots(scoreCard) {
-  if (!scoreCard) return 0
-  let total = 0
-  for (let i = 0; i < SERIES_COUNT; i++) {
-    total += hitsInSeries(scoreCard[i] || createEmptySeriesScore())
-  }
-  return total
-}
-
-function isSeriesScored(seriesScores) {
-  return hitsInSeries(seriesScores) > 0
-}
-
-export function selectInitialScoreCard(restoredScoreCard, ssiScoreCard, inferMissingMisses) {
-  if (!restoredScoreCard || inferMissingMisses) return ssiScoreCard
-
-  const restoredShots = getScoreCardShots(restoredScoreCard)
-  const ssiShots = getScoreCardShots(ssiScoreCard)
-
-  // Keep local in-progress work, but avoid stale-empty cache masking fresh SSI scores.
-  if (restoredShots > 0 || ssiShots === 0) {
-    return restoredScoreCard
-  }
-
-  return ssiScoreCard
-}
-
-export function getDoubleSeriesPairShotSummary(scoreCard, seriesIdx, maxHitsPerSeries = MAX_HITS_PER_SERIES) {
-  const pairStart = Math.max(0, Math.min(seriesIdx - (seriesIdx % 2), SERIES_COUNT - 2))
-  const pairEnd = pairStart + 1
-
-  const firstShots = hitsInSeries(scoreCard?.[pairStart] || createEmptySeriesScore())
-  const secondShots = hitsInSeries(scoreCard?.[pairEnd] || createEmptySeriesScore())
-  const requiredShots = maxHitsPerSeries * 2
-  const totalShots = firstShots + secondShots
-
-  return {
-    firstSeriesIndex: pairStart,
-    secondSeriesIndex: pairEnd,
-    firstShots,
-    secondShots,
-    totalShots,
-    requiredShots,
-    isStarted: totalShots > 0,
-    isComplete: firstShots === maxHitsPerSeries && secondShots === maxHitsPerSeries,
-  }
-}
-
-export function applyScoreDeltaForShooter(shooterScores, {
-  seriesIdx,
-  zone,
-  delta,
-  doubleSeries,
-  maxHitsPerSeries = MAX_HITS_PER_SERIES,
-}) {
-  const next = { ...shooterScores }
-
-  if (!doubleSeries) {
-    if (!next[seriesIdx]) next[seriesIdx] = createEmptySeriesScore()
-    next[seriesIdx] = { ...next[seriesIdx] }
-    next[seriesIdx][zone] = Math.max(0, (next[seriesIdx][zone] || 0) + delta)
-    return next
-  }
-
-  const s1Idx = seriesIdx
-  const s2Idx = seriesIdx + 1
-
-  if (!next[s1Idx]) next[s1Idx] = createEmptySeriesScore()
-  if (!next[s2Idx]) next[s2Idx] = createEmptySeriesScore()
-
-  next[s1Idx] = { ...next[s1Idx] }
-  next[s2Idx] = { ...next[s2Idx] }
-
-  const s1Shots = hitsInSeries(next[s1Idx])
-  const s2Shots = hitsInSeries(next[s2Idx])
-
-  if (delta > 0) {
-    if (s1Shots < maxHitsPerSeries) {
-      next[s1Idx][zone] = (next[s1Idx][zone] || 0) + 1
-    } else if (s2Shots < maxHitsPerSeries) {
-      next[s2Idx][zone] = (next[s2Idx][zone] || 0) + 1
-    }
-    return next
-  }
-
-  if (delta < 0) {
-    if ((next[s2Idx][zone] || 0) > 0) {
-      next[s2Idx][zone] -= 1
-    } else if ((next[s1Idx][zone] || 0) > 0) {
-      next[s1Idx][zone] -= 1
-    }
-  }
-
-  return next
-}
+export { selectInitialScoreCard, getDoubleSeriesPairShotSummary, applyScoreDeltaForShooter }
 
 // ============================================================
 // App — views: login → cup → match → squad → series/shooters → scoring
@@ -657,136 +551,21 @@ export function App() {
   // VIEW: Series overview + shooter list
   // ============================================================
   if (view === 'series') {
-    const shooters = selectedSquad.shooters
-    const activeSeriesLabel = doubleSeries
-      ? `${activeSeries + 1}+${activeSeries + 2}`
-      : `${activeSeries + 1}`
-
-    const scoredCountForGroup = () =>
-      shooters.filter(s => isGroupScored(s.id)).length
-
-    const activeGroupScored = scoredCountForGroup()
-    const activeSeriesComplete = activeGroupScored === shooters.length
-
-    const shootersWithStatus = shooters.map(s => ({
-      ...s,
-      scored: isGroupScored(s.id),
-      seriesPoints: groupPoints(s.id),
-    }))
-
-    // In double mode, valid start indices are 0, 2, 4
-    const seriesSteps = doubleSeries
-      ? [0, 2, 4]
-      : [0, 1, 2, 3, 4, 5]
-
-    const handleSeriesTab = (i) => {
-      // Allow switching to current series always
-      if (i === activeSeries) return
-      // Block switching away if current series is incomplete
-      if (!activeSeriesComplete) return
-      setActiveSeries(i)
-    }
-
     return (
-      <div className="min-h-screen bg-gray-50">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white">
-          <button
-            onClick={() => setView('squad')}
-            className="flex items-center gap-1 px-4 pt-2 text-blue-200 text-sm active:text-white"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            {fi.squads}
-          </button>
-          <div className="px-4 py-3">
-            <h1 className="text-lg font-bold">{selectedMatch.name}</h1>
-            <p className="text-blue-200 text-sm">{selectedSquad.name} · {shooters.length} {fi.shooters}</p>
-          </div>
-        </div>
-
-        {/* Series tabs + double toggle */}
-        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
-          <div className="flex items-center">
-            <div className="flex flex-1">
-              {seriesSteps.map(i => {
-                const isActive = i === activeSeries
-                const label = doubleSeries ? `S${i + 1}+${i + 2}` : `S${i + 1}`
-                // Count scored for this group
-                const groupScoredCount = shooters.filter(s => {
-                  if (!allScores[s.id]) return false
-                  const s1 = isSeriesScored(allScores[s.id][i])
-                  if (!doubleSeries) return s1
-                  return s1 && isSeriesScored(allScores[s.id][i + 1])
-                }).length
-                const allDone = groupScoredCount === shooters.length
-                const locked = !activeSeriesComplete && !isActive
-                return (
-                  <button
-                    key={i}
-                    onClick={() => handleSeriesTab(i)}
-                    disabled={locked}
-                    className={`flex-1 py-3 text-center font-semibold text-sm transition-colors
-                      ${locked
-                        ? 'text-gray-300 cursor-not-allowed'
-                        : isActive
-                          ? 'text-blue-600 border-b-3 border-blue-600 bg-blue-50'
-                          : allDone
-                            ? 'text-green-600 bg-green-50'
-                            : groupScoredCount > 0
-                              ? 'text-amber-600 bg-amber-50'
-                              : 'text-gray-500'
-                      }`}
-                  >
-                    {label}
-                    <span className={`block text-xs font-normal ${
-                      locked ? 'text-gray-300'
-                      : allDone ? 'text-green-500' : groupScoredCount > 0 ? 'text-amber-500' : 'text-gray-400'
-                    }`}>
-                      {groupScoredCount}/{shooters.length}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-            {/* Double series toggle */}
-            <label className="flex flex-col items-center px-2 py-1 cursor-pointer shrink-0">
-              <input
-                type="checkbox"
-                checked={doubleSeries}
-                onChange={(e) => handleDoubleSeriesToggle(e.target.checked)}
-                className="w-5 h-5 rounded accent-blue-600"
-              />
-              <span className="text-[10px] text-gray-500 mt-0.5">2x</span>
-            </label>
-          </div>
-        </div>
-
-        {/* Incomplete warning */}
-        {!activeSeriesComplete && activeGroupScored > 0 && (
-          <div className="mx-3 mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
-            <p className="text-amber-700 font-medium text-sm">
-              {fi.scoreAllShootersWarning} {doubleSeries ? fi.pairLowerCase : fi.seriesLowerCase}
-            </p>
-            <p className="text-amber-500 text-xs mt-0.5">
-              {shooters.length - activeGroupScored} {fi.remaining}
-            </p>
-          </div>
-        )}
-
-        {/* Shooter list */}
-        <div className="p-3">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">
-            {fi.series} {activeSeriesLabel} — {fi.pickShooter}
-          </h2>
-          <ShooterPicker
-            shooters={shootersWithStatus}
-            onSelect={handleSelectShooter}
-            currentShooterId={selectedShooterId}
-          />
-        </div>
-      </div>
+      <MobileSeriesOverview
+        selectedMatch={selectedMatch}
+        selectedSquad={selectedSquad}
+        activeSeries={activeSeries}
+        setActiveSeries={setActiveSeries}
+        doubleSeries={doubleSeries}
+        allScores={allScores}
+        isGroupScored={isGroupScored}
+        groupPoints={groupPoints}
+        handleDoubleSeriesToggle={handleDoubleSeriesToggle}
+        handleSelectShooter={handleSelectShooter}
+        selectedShooterId={selectedShooterId}
+        onBackToSquad={() => setView('squad')}
+      />
     )
   }
 
@@ -794,81 +573,22 @@ export function App() {
   // VIEW: Scoring one shooter, one series
   // ============================================================
   const shooter = selectedSquad.shooters.find(s => s.id === selectedShooterId)
-  // In double mode, combine scores from both series for display
-  const seriesScores = allScores[selectedShooterId][activeSeries]
-  const combinedScores = doubleSeries
-    ? Object.fromEntries(SCORE_ZONES.map(z => [
-        z,
-        seriesScores[z] + (allScores[selectedShooterId][pairedSeries]?.[z] || 0)
-      ]))
-    : seriesScores
-  const totalShots = SCORE_ZONES.reduce((sum, z) => sum + combinedScores[z], 0)
-  const pts = SCORE_ZONES.reduce((sum, z) => sum + combinedScores[z] * ZONE_POINTS[z], 0)
-  const isOver = totalShots > effectiveMaxHits
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white">
-        <button
-          onClick={() => setView('series')}
-          className="flex items-center gap-1 px-4 pt-2 text-blue-200 text-sm active:text-white"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          {fi.squad}
-        </button>
-        <div className="px-4 py-3 flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-bold">{shooter.number}. {shooter.name}</h1>
-            <p className="text-blue-200 text-sm">{shooter.division}</p>
-          </div>
-          <div className="text-right">
-            <div className="text-xs text-blue-300">
-              {doubleSeries ? `${fi.series} ${activeSeries + 1}+${activeSeries + 2}` : `${fi.series} ${activeSeries + 1}`}
-            </div>
-            <div className="text-3xl font-bold leading-tight">{pts}<span className="ml-1 text-sm font-semibold align-middle">{fi.pts}</span></div>
-            <div className="text-blue-200 text-xs">{totalShots}/{effectiveMaxHits} {fi.hits}</div>
-          </div>
-        </div>
-      </div>
-
-      <ScoringForm
-        seriesIndex={activeSeries}
-        scores={combinedScores}
-        scoreZones={SCORE_ZONES}
-        maxHits={effectiveMaxHits}
-        totalShots={totalShots}
-        onUpdate={updateScore}
-      />
-
-      {/* Error banner */}
-      {error && (
-        <div className="mx-3 mt-2 bg-red-50 border border-red-200 rounded-xl p-3 text-center">
-          <p className="text-red-700 text-sm font-medium">{error}</p>
-          <button onClick={() => setError(null)} className="text-red-500 text-xs underline mt-1">{fi.dismiss}</button>
-        </div>
-      )}
-
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 shadow-lg">
-        <div className="flex items-center gap-3 max-w-lg mx-auto">
-          <button
-            onClick={() => setView('series')}
-            disabled={saving}
-            className="px-4 py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold text-base active:bg-gray-300 disabled:opacity-50"
-          >
-            ← {fi.back}
-          </button>
-          <button
-            onClick={handleSaveAndNext}
-            disabled={isOver || saving}
-            className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-semibold text-lg active:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500"
-          >
-            {saving ? fi.saving : isOver ? `${fi.tooManyShotsInButton} (${totalShots}/${effectiveMaxHits})` : fi.saveAndNext}
-          </button>
-        </div>
-      </div>
-    </div>
+    <MobileShooterScoringView
+      shooter={shooter}
+      activeSeries={activeSeries}
+      pairedSeries={pairedSeries}
+      doubleSeries={doubleSeries}
+      allScores={allScores}
+      selectedShooterId={selectedShooterId}
+      effectiveMaxHits={effectiveMaxHits}
+      updateScore={updateScore}
+      error={error}
+      setError={setError}
+      saving={saving}
+      handleSaveAndNext={handleSaveAndNext}
+      onBackToSeries={() => setView('series')}
+    />
   )
 }
 

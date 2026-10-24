@@ -69,3 +69,8 @@
 - Extracted `SquaddingOverview` from `scoring-ui/src/components/ManagePage.jsx` into `scoring-ui/src/components/manage/SquaddingOverview.jsx`, reducing `ManagePage.jsx` from 767 to 260 lines.
 - Consolidated `set-dns`/`undo-dns` and helper logic in `scoring-proxy/routes/management.js`, reducing `routes/management.js` from 776 to 468 lines.
 ---
+
+## 2026-10-24 15:39 - US-011 (R76-TD2)
+- Extracted shared scoring constants/helpers into `scoring-ui/src/lib/scoring-helpers.js`, mobile sub-views into `scoring-ui/src/components/MobileScoringViews.jsx`, and tablet panels into `scoring-ui/src/components/TabletScoringPanels.jsx`.
+- Reduced `App.jsx` and `TabletScoringView.jsx` below 500 lines and marked `R76-TD2` as `✅ Implemented`.
+---
