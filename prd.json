@@ -1,0 +1,268 @@
+{
+  "project": "TurRes SSI Tools",
+  "requirementPrefix": "R76",
+  "branchName": "R76-feature-consolidation-and-tech-debt",
+  "description": "Release 7.6 — Consolidation, Compliance Hardening, and Technical Debt Backlog",
+  "userStories": [
+    {
+      "id": "US-001",
+      "requirementId": "R76-MG2",
+      "title": "Align scoring CupSearch sort order to proximity to today",
+      "description": "As a range officer using mobile or tablet scoring, I want CupSearch results sorted ascending by proximity to today so that all cup lists (register, manage, scoring) use consistent ordering.",
+      "acceptanceCriteria": [
+        "Update cup sorting in scoring-proxy/routes/scoring.js so cups are sorted by Math.abs(new Date(starts) - now) ascending",
+        "Add unit test in scoring-proxy/test/scoring.test.js verifying proximity sorting for same-day and nearby cups",
+        "Mark MG2 and R76-MG2 as Implemented in docs/requirements/requirements.md and docs/requirements/release-7.6.md",
+        "scoring-proxy tests pass (npm test)",
+        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Implemented sortByProximityToNow in scoring-proxy/routes/scoring.js with unit test in scoring.test.js."
+    },
+    {
+      "id": "US-002",
+      "requirementId": "R76-CUP1",
+      "title": "Enforce squad capacity when moving squadded shooters in ManagePage",
+      "description": "As a cup manager, I want full squads disabled in SquadPickerSheet and capacity validated on squad move so that shooters cannot be moved into a squad that is already at max capacity.",
+      "acceptanceCriteria": [
+        "Disable full squads (count >= max) in scoring-ui/src/components/manage/SquadPickerSheet.jsx unless it is the shooter's current squad",
+        "Add backend capacity check or validation test for squad moves in scoring-proxy/test/management.test.js",
+        "Add component test in scoring-ui/src/test/components.test.jsx verifying full squads cannot be selected",
+        "Update CUP1 and R76-CUP1 status in docs/requirements/requirements.md and docs/requirements/release-7.6.md",
+        "scoring-proxy tests pass (npm test)",
+        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "requirementId": "R76-TD1",
+      "title": "Extract http-helpers and graphql implementations from ssi-core/client.js",
+      "description": "As a developer, I want HTTP cookie/fetch/CSRF helpers and GraphQL/auth functions to live in lib/ssi-core/http-helpers.js and lib/ssi-core/graphql.js instead of monolithic client.js.",
+      "acceptanceCriteria": [
+        "Move HTTP helper functions (cookie merging, CSRF extraction, ssiFetchPage) into scoring-proxy/lib/ssi-core/http-helpers.js",
+        "Move ssiGraphQL, ssiRefreshJWT, and ssiLogin implementations into scoring-proxy/lib/ssi-core/graphql.js (importing only from http-helpers.js)",
+        "Re-export moved functions from client.js for backward compatibility during decomposition",
+        "scoring-proxy tests pass (npm test)",
+        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "requirementId": "R76-TD1",
+      "title": "Extract scoring and management implementations from ssi-core/client.js",
+      "description": "As a developer, I want scoring and management scraping functions moved into lib/ssi-core/scoring.js and lib/ssi-core/management.js so each domain module owns its implementation.",
+      "acceptanceCriteria": [
+        "Move ssiGetScoringPage and ssiSubmitScore implementations into scoring-proxy/lib/ssi-core/scoring.js",
+        "Move event staff and management group functions into scoring-proxy/lib/ssi-core/management.js",
+        "Ensure both domain modules only import from http-helpers.js (no cross-domain imports)",
+        "scoring-proxy tests pass (npm test)",
+        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "requirementId": "R76-TD1",
+      "title": "Extract participants implementation from ssi-core/client.js and remove ssi-client.js shim",
+      "description": "As a developer, I want participant scraping functions moved into lib/ssi-core/participants.js and the dead lib/ssi-client.js shim removed to complete R76-TD1.",
+      "acceptanceCriteria": [
+        "Move participant search, registration, squad assignment, cup status, and DNS functions into scoring-proxy/lib/ssi-core/participants.js",
+        "Update test imports that referenced ../lib/ssi-core/client.js to import from their respective domain modules",
+        "Delete unused scoring-proxy/lib/ssi-client.js backward-compatibility shim",
+        "Mark R76-TD1 as Implemented in docs/requirements/requirements.md and docs/requirements/release-7.6.md",
+        "scoring-proxy tests pass (npm test)",
+        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "requirementId": "R76-ARCH3",
+      "title": "Extract scoring-service.js from routes/scoring.js",
+      "description": "As a developer, I want pure scoring business logic extracted from scoring-proxy/routes/scoring.js into scoring-proxy/lib/services/scoring-service.js with unit tests.",
+      "acceptanceCriteria": [
+        "Extract pure helper and GraphQL query orchestration functions from scoring-proxy/routes/scoring.js into scoring-proxy/lib/services/scoring-service.js",
+        "Keep routes/scoring.js as a thin HTTP dispatcher",
+        "Add unit tests in scoring-proxy/test/scoring-service.test.js",
+        "scoring-proxy tests pass (npm test)",
+        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Ensure the actual working GraphQL queries from routes/scoring.js are preserved."
+    },
+    {
+      "id": "US-007",
+      "requirementId": "R76-ARCH3",
+      "title": "Extract registration-service.js from routes/registration.js",
+      "description": "As a developer, I want registration validation, captcha management, and cup/squad enrollment orchestration extracted into scoring-proxy/lib/services/registration-service.js.",
+      "acceptanceCriteria": [
+        "Create scoring-proxy/lib/services/registration-service.js with pure business logic extracted from routes/registration.js",
+        "Reduce scoring-proxy/routes/registration.js to a thin HTTP route dispatcher",
+        "Verify all existing tests in scoring-proxy/test/registration.test.js and new service unit tests pass",
+        "scoring-proxy tests pass (npm test)",
+        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "requirementId": "R76-TD3",
+      "title": "Extract staffing-service.js, clean up orphaned staffing prototype files, and add staffing tests",
+      "description": "As a developer, I want staffing route logic extracted to staffing-service.js, orphaned prototype files cleaned up, and unit tests added for staffing.",
+      "acceptanceCriteria": [
+        "Extract business logic from scoring-proxy/routes/staffing.js into scoring-proxy/lib/services/staffing-service.js",
+        "Remove or archive orphaned staffing files (StaffStatusBoard.jsx, StaffSignupPanel.jsx, lib/staffing/cron.js, notifier.js, role-assigner.js, squad-optimizer.js, IMMEDIATE-DEVELOPMENT-NEEDS.md)",
+        "Add unit tests for staffing engine and routes in scoring-proxy/test/staffing.test.js",
+        "Mark R76-ARCH3 and R76-TD3 as Implemented in docs/requirements/requirements.md and docs/requirements/release-7.6.md",
+        "scoring-proxy tests pass (npm test)",
+        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "requirementId": "R76-TD4",
+      "title": "Configure ESLint v9 with module boundary enforcement in scoring-proxy and add CI lint gate",
+      "description": "As a developer, I want ESLint v9 configured in scoring-proxy with architectural boundary rules and enforced in GitHub Actions CI.",
+      "acceptanceCriteria": [
+        "Migrate root .eslintrc-architectural.js rules into scoring-proxy/eslint.config.js (ESLint v9 flat config) and remove obsolete .eslintrc-architectural.js",
+        "Add 'lint': 'eslint .' script to scoring-proxy/package.json and ensure npm run lint passes with 0 errors",
+        "Add UI and proxy lint steps to .github/workflows/ci-deploy.yml",
+        "Mark R76-ARCH4 and R76-TD4 as Implemented in docs/requirements/requirements.md and docs/requirements/release-7.6.md",
+        "scoring-proxy tests pass (npm test)",
+        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "requirementId": "R76-TD2",
+      "title": "Decompose routes/management.js and ManagePage.jsx below 500 lines",
+      "description": "As a developer, I want routes/management.js (742 lines) and ManagePage.jsx (767 lines) decomposed below the ~500-line guideline.",
+      "acceptanceCriteria": [
+        "Move remaining management route orchestration helpers from scoring-proxy/routes/management.js into scoring-proxy/lib/services/cup-manage.js so routes/management.js is under 500 lines",
+        "Extract overview sections from scoring-ui/src/components/ManagePage.jsx into scoring-ui/src/components/manage/ sub-components so ManagePage.jsx is under 500 lines",
+        "scoring-proxy tests pass (npm test)",
+        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "requirementId": "R76-TD2",
+      "title": "Decompose App.jsx and TabletScoringView.jsx below 500 lines",
+      "description": "As a developer, I want App.jsx (890 lines) and TabletScoringView.jsx (648 lines) decomposed below the ~500-line guideline.",
+      "acceptanceCriteria": [
+        "Extract shared scoring constants/helpers and sub-views from scoring-ui/src/App.jsx and scoring-ui/src/components/TabletScoringView.jsx so both files are under 500 lines",
+        "Mark R76-TD2 as Implemented in docs/requirements/requirements.md and docs/requirements/release-7.6.md",
+        "scoring-proxy tests pass (npm test)",
+        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "requirementId": "R76-COM1",
+      "title": "Add Privacy Policy and Terms of Service pages and links",
+      "description": "As a shooter registering for an event, I want accessible Privacy Policy and Terms of Service disclosures linked from Registration and HomePage.",
+      "acceptanceCriteria": [
+        "Add Privacy Policy and Terms of Service view/modal or route in scoring-ui describing SSI passthrough auth, personal data processed, Resend email processor, retention, and contact path",
+        "Link Privacy Policy and Terms of Service from RegisterPage.jsx and HomePage.jsx",
+        "Add component test verifying legal links render on RegisterPage and HomePage",
+        "Mark R76-COM1 as Implemented in docs/requirements/release-7.6.md",
+        "scoring-proxy tests pass (npm test)",
+        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "requirementId": "R76-SES7",
+      "title": "Add admin session monitoring endpoint and OWASP session audit doc",
+      "description": "As an administrator, I want an authenticated manage-scoped session monitoring endpoint and formal OWASP session compliance documentation.",
+      "acceptanceCriteria": [
+        "Expose GET /api/v1/auth/sessions (manage scope required) returning active session count and current user's active sessions via getUserSessions() and getActiveSessionCount()",
+        "Document OWASP Session Management Cheat Sheet compliance matrix and Redis token storage risk evaluation in docs/design/session-handling.md",
+        "Add unit tests for GET /api/v1/auth/sessions in scoring-proxy/test/session/",
+        "Mark R76-SEC1, R76-SEC7, and R76-SES7 as Implemented in docs/requirements/release-7.6.md",
+        "scoring-proxy tests pass (npm test)",
+        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "requirementId": "R76-TEST1",
+      "title": "Expand session unit, integration, security, reliability, and latency tests",
+      "description": "As a developer, I want comprehensive test coverage for session management, Redis fallback recovery, and <50ms p95 session lookup latency.",
+      "acceptanceCriteria": [
+        "Add edge-case unit and security tests in scoring-proxy/test/session/ covering token expiry, scope manipulation, cookie replay, and Redis disconnect fallback",
+        "Add a lightweight session lookup benchmark test asserting <50ms p95 lookup latency across 100 concurrent sessions",
+        "Mark R76-TEST1, R76-TEST2, R76-TEST3, R76-TEST4, R76-TEST5, and R76-TEST7 as Implemented in docs/requirements/release-7.6.md",
+        "scoring-proxy tests pass (npm test)",
+        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "requirementId": "R76-COM3",
+      "title": "Enforce per-user SSI execution identity and structured mutation audit logs",
+      "description": "As a system owner, I want state-changing SSI operations to execute with the authenticated requester's SSI session and log structured audit fields.",
+      "acceptanceCriteria": [
+        "Ensure state-changing management and scoring endpoints execute SSI writes using requester session context and log initiatingUser and executionIdentity fields",
+        "Add automated tests verifying expired/missing requester SSI session fails with auth error without falling back to shared admin session",
+        "Mark R76-COM3 as Implemented in docs/requirements/release-7.6.md",
+        "scoring-proxy tests pass (npm test)",
+        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "requirementId": "R76-AUTH10",
+      "title": "Require authenticated SSI passthrough login before public cup registration submit",
+      "description": "As a shooter, I want cup registration to verify my SSI identity via passthrough login so another person cannot register or change squads using only my email address.",
+      "acceptanceCriteria": [
+        "Require SSI credential verification / authenticated session context in registration submit flow",
+        "Update RegisterPage.jsx and registration.test.js to cover authenticated registration submission",
+        "Mark AUTH10 and R76-AUTH10 as Implemented in docs/requirements/requirements.md and docs/requirements/release-7.6.md",
+        "scoring-proxy tests pass (npm test)",
+        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

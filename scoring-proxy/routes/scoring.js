@@ -23,8 +23,13 @@ function startsOnOrAfterDate(starts, dateStart) {
   return startsDate >= dateStart
 }
 
-function sortByStartAscending(a, b) {
-  return new Date(a.starts).getTime() - new Date(b.starts).getTime()
+function sortByProximityToNow(nowMs = Date.now()) {
+  return (a, b) => {
+    const timeA = new Date(a.starts).getTime()
+    const timeB = new Date(b.starts).getTime()
+    const distDiff = Math.abs(timeA - nowMs) - Math.abs(timeB - nowMs)
+    return distDiff !== 0 ? distDiff : timeA - timeB
+  }
 }
 
 function isUnsupportedStatusFilterError(err) {
@@ -118,7 +123,7 @@ export function createScoringRouter({ requireAuth, graphqlWithRefresh }) {
       : upcomingByDate
 
     const cups = (debugMode ? rawCups : filteredCups)
-      .sort(sortByStartAscending)
+      .sort(sortByProximityToNow())
 
     if (debugMode) {
       return res.json({

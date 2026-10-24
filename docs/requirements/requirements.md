@@ -168,7 +168,7 @@ See [sra-training-staffing-requirements.md](./sra-training-staffing-requirements
 | # | Requirement | Status |
 |---|-------------|--------|
 | MG1 | **Match Management UI** (`#/manage`): Password-protected (SSI login). After login, pick an active Kupittaa cup. Shows consolidated squadding overview — per-squad cross-match table, unsquadded shooters, CUP/match membership mismatches | ✅ |
-| MG2 | **Cup list sorting**: Sort cups ascending by proximity to today (closest first). Applies to all cup lists (register, manage, scoring) | 🟡 Partially Implemented (`shared.jsx` `CupList` sorts by proximity for register/manage; `CupSearch` in scoring still sorts by `starts` ascending) ➜ R7.6 (R76-MG2) |
+| MG2 | **Cup list sorting**: Sort cups ascending by proximity to today (closest first). Applies to all cup lists (register, manage, scoring) | ✅ Implemented (`shared.jsx` `CupList` + `routes/scoring.js` `sortByProximityToNow`) |
 | MG3 | **Scoring route change**: Move scoring app from `#/` to `#/scoring`. Root URL (`#/`) becomes a front page with static links to the main features: Scoring, Registration, Management | ✅ Implemented (`main.jsx` + `HomePage.jsx`) |
 | MG4 | **Shared UI components**: Extract and share common components (LoginScreen, CupList, visual design) between scoring, registration, and management features | ✅ Implemented (`shared.jsx`) |
 | MG5 | **Manage cup list**: Reuse the same CUP list component as Registration. Only change text from "ilmoittautuminen" to "hallitse" | ✅ Implemented (`ManagePage.jsx`) |
@@ -547,7 +547,7 @@ Decouples public Kupittaa Cup registration (`#/register`) from immediate SSI acc
 - **Release 3.1** (Data Integrity): 2 requirements — 2 pending (47, 48)
 - **Release 4.0** (Kupittaa Cup Registration Frontend): 25 requirements — 25 ✅
 - **Release 5.0** (SRA Training Staffing): requirements in [sra-training-staffing-requirements.md](./sra-training-staffing-requirements.md)
-- **Release 6.0** (Match Management & UI Consolidation): 5 functional + 5 identification requirements — 9 ✅ (MG1, MG3–MG5, MG-ID1–MG-ID5), 1 🟡 partially implemented ➜ R7.6 (MG2)
+- **Release 6.0** (Match Management & UI Consolidation): 5 functional + 5 identification requirements — 10 ✅ (MG1–MG5, MG-ID1–MG-ID5)
 - **Release 7.0** (Authentication & Session Handling): 25 requirements — 19 ✅, 6 pending ➜ R7.6 (AUTH10, SES7, SEC1, SEC7, TEST1–5/7), 2 deferred (TEST6, TEST8)
 - **Release 7.1** (Management Availability): 1 requirement — 1 ✅
 - **Release 7.2** (Kupittaa Cup Management): 3 requirements — 1 ✅ (CUP2), 1 🟡 partially implemented (CUP1), 1 ❌ deprecated/removed (CUP3 → R76-COM2)
@@ -555,7 +555,7 @@ Decouples public Kupittaa Cup registration (`#/register`) from immediate SSI acc
 - **Release 7.4** (Refactoring Implementation): 8 requirements — 8 ✅ (RFR1–RFR8)
 - **Release 7.4.1** (Authentication UX Hardening): 5 requirements — 5 ✅ (AUTH-UX1–AUTH-UX5)
 - **Release 7.5** (Architecture V2 Foundation): 5 requirements — 3 ✅, 2 📋 ➜ R7.6 (ARCH3, ARCH4)
-- **Release 7.6** (Consolidation & Compliance Hardening): 21 consolidated requirements + 5 tech debt backlog items (`R76-TD1`–`R76-TD5`) — 5 ✅ (R76-MG3–MG5, R76-COM2, R76-LOG1), 2 🟡 partially implemented (R76-CUP1, R76-MG2), 14 pending + 5 backlog — see [release-7.6.md](./release-7.6.md)
+- **Release 7.6** (Consolidation & Compliance Hardening): 21 consolidated requirements + 5 tech debt backlog items (`R76-TD1`–`R76-TD5`) — 6 ✅ (R76-MG2–MG5, R76-COM2, R76-LOG1), 1 🟡 partially implemented (R76-CUP1), 14 pending + 5 backlog — see [release-7.6.md](./release-7.6.md)
 - **Release 7.7** (QR Code Login for Scoring): 6 requirements — 6 ✅ (QR1–QR6). **7.7.1 hotfix**: 4 fixes ✅
 - **Release 7.8** (Induction Wait List): 32 requirements — 32 ✅ on branch `copilot/vscode-mnw87b09-v5g9` (pending merge to `main`)
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes ✅ (GQL-HF1–GQL-HF3). **7.9.2 hotfix**: 2 fixes ✅ (GQL-HF4, GQL-HF7). **7.9.3 hotfix**: 1 fix 📋 (GQL-HF5). **7.9.4**: 1 requirement ⬚ (GQL-HF6 — iCal calendar attachment)

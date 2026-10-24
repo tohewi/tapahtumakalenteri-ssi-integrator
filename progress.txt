@@ -1,0 +1,22 @@
+# Ralph Progress Log
+
+## Codebase Patterns
+- **Module Boundaries (`AGENTS.md`)**: Routes (`scoring-proxy/routes/*.js`) may only import their domain module from `lib/ssi-core/*.js`, their service module from `lib/services/*.js`, and shared utilities (`logger`, `errors`, `middleware`). Domain modules in `lib/ssi-core/*.js` may only import `http-helpers.js`.
+- **File Size Guideline**: Keep files under ~500 lines. Extract route business logic into `scoring-proxy/lib/services/` and UI sub-components into `scoring-ui/src/components/<page>/`.
+- **Logging Discipline**: Always use `import { log } from '../lib/logger.js'` (`log.info`, `log.warn`, `log.error`, `log.debug`) in backend routes, services, and middleware — never raw `console.*`.
+- **Agent Instructions Sync**: Any update to `AGENTS.md` must be mirrored identically in `.github/copilot-instructions.md`.
+- **Frontend Test Runner on Windows**: Run `npm test -- --maxWorkers=1 --pool=threads` in `scoring-ui` for reliable single-worker execution.
+
+---
+
+## 2026-10-24 - Pre-Loop Baseline (R76-MG3, R76-MG4, R76-MG5, R76-COM2, R76-LOG1)
+- Completed Match Manager repository separation (`tohewi/match-manager`), requirements/documentation sync, npm audit fixes (0 vulnerabilities), and ESLint cleanup (0 errors/warnings in `scoring-ui`).
+- Initialized `prd.json` with 16 atomic user stories (`US-001` to `US-016`) covering all remaining Release 7.6 requirements and technical debt backlog items.
+---
+
+## 2026-10-24 14:40 - US-001 (R76-MG2)
+- Replaced `sortByStartAscending` with `sortByProximityToNow` in `scoring-proxy/routes/scoring.js` so scoring `CupSearch` sorts cups ascending by absolute distance from current time (with chronological tie-breaker).
+- Added unit test in `scoring-proxy/test/scoring.test.js` and marked `MG2` / `R76-MG2` as `✅ Implemented` in `docs/requirements/requirements.md` and `docs/requirements/release-7.6.md`.
+- **Learnings for future iterations:**
+  - `scoring.test.js` debug-mode test asserts exact cup ordering across past and future cups; proximity sorting places `+1d` ahead of `-2d` and `+2d`.
+---

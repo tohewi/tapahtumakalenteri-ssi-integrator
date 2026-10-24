@@ -297,7 +297,7 @@ describe('GET /api/scoring/cups', () => {
     const res = await request('GET', '/api/scoring/cups?search=Kupittaa&debug=true', null, ip, cookies)
 
     expect(res.status).toBe(200)
-    expect(res.data.cups.map(c => c.id)).toEqual(['12', '10', '11'])
+    expect(res.data.cups.map(c => c.id)).toEqual(['10', '11', '12'])
     expect(res.data.debug).toEqual({
       enabled: true,
       totalRaw: 3,
@@ -309,5 +309,45 @@ describe('GET /api/scoring/cups', () => {
     expect(calls).toHaveLength(1)
     expect(calls[0].query).not.toContain('starts_after')
     expect(calls[0].variables).toEqual({ search: 'Kupittaa' })
+  })
+
+  it('sorts cups ascending by proximity to current time (MG2 / R76-MG2)', async () => {
+    const ip = uniqueIp()
+    const cookies = await createScoringSessionCookie()
+
+    const now = new Date()
+    const hourMs = 60 * 60 * 1000
+    const dayMs = 24 * hourMs
+
+    app.setMockResponse({
+      events: [
+        {
+          id: 'far-future',
+          name: 'Kupittaa Next Week',
+          starts: new Date(now.getTime() + 7 * dayMs).toISOString(),
+          status: 'on',
+          get_content_type_key: 136,
+        },
+        {
+          id: 'near-future',
+          name: 'Kupittaa In 2 Days',
+          starts: new Date(now.getTime() + 2 * dayMs).toISOString(),
+          status: 'on',
+          get_content_type_key: 136,
+        },
+        {
+          id: 'closest',
+          name: 'Kupittaa In 1 Hour',
+          starts: new Date(now.getTime() + hourMs).toISOString(),
+          status: 'on',
+          get_content_type_key: 136,
+        },
+      ],
+    })
+
+    const res = await request('GET', '/api/scoring/cups?search=Kupittaa', null, ip, cookies)
+
+    expect(res.status).toBe(200)
+    expect(res.data.cups.map(c => c.id)).toEqual(['closest', 'near-future', 'far-future'])
   })
 })

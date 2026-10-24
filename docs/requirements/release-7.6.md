@@ -70,7 +70,7 @@ The following Release 7.2 requirement is **already implemented** and should be u
 
 | # | Origin | Requirement | Priority | Status |
 |---|--------|-------------|----------|--------|
-| R76-MG2 | R6.0 MG2 | **Cup List Sorting by Proximity**: Sort cups ascending by proximity to today (closest first). Implemented for registration and management in `scoring-ui/src/components/shared.jsx` (`CupList`); mobile/tablet scoring (`CupSearch`) still sorts by `starts` ascending in `scoring-proxy/routes/scoring.js`. | LOW | 🟡 Partially Implemented |
+| R76-MG2 | R6.0 MG2 | **Cup List Sorting by Proximity**: Sort cups ascending by proximity to today (closest first). Implemented for registration and management in `scoring-ui/src/components/shared.jsx` (`CupList`) and for mobile/tablet scoring in `scoring-proxy/routes/scoring.js` (`sortByProximityToNow`). | LOW | ✅ Implemented |
 | R76-MG3 | R6.0 MG3 | **Front Page & Scoring Route Change**: Move scoring app from `#/` to `#/scoring`. Root URL (`#/`) renders `HomePage.jsx` with navigation to Scoring, Registration, Management, Tablet Scoring, Reports, and Staffing (`main.jsx`). | LOW | ✅ Implemented |
 | R76-MG4 | R6.0 MG4 | **Shared UI Components**: Share `LoginScreen` from `scoring-ui/src/components/LoginScreen.jsx` and common UI components (`CupList`, `AppHeader`, `BackButton`, `ErrorBanner`, `Spinner`) from `scoring-ui/src/components/shared.jsx`. | LOW | ✅ Implemented |
 | R76-MG5 | R6.0 MG5 | **Manage Cup List Reuse**: Reuse the same `CupList` component as Registration in `ManagePage.jsx` with `openLabel="Hallitse cupia"` and `allClickable={true}`. | LOW | ✅ Implemented |
@@ -182,7 +182,7 @@ The following Release 7.2 requirement is **already implemented** and should be u
 | **Phase 6** | R76-TEST1/2/3 + R76-TD3 (test coverage & staffing cleanup) | 4-6 h | Quality — closes critical test gaps |
 | **Phase 7** | R76-ARCH4 + R76-TD4 (ESLint rules & CI lint gate) | 1-2 h | Architecture — prevents drift |
 | **Phase 8** | R76-SEC1/SEC7/SES7/COM1 (security/compliance) | 2-3 h | Security + compliance documentation |
-| **Phase 9** | R76-MG2/3/4/5 (UI consolidation) — 🟡 MG3–MG5 completed, MG2 scoring sort remaining | 4-6 h | UX — shared components, front page |
+| **Phase 9** | R76-MG2/3/4/5 (UI consolidation) — ✅ completed | 4-6 h | UX — shared components, front page |
 | **Phase 10** | R76-TEST4/5/7 (advanced testing) | 2-3 h | Quality — reliability and perf |
 
 **Total estimated effort:** ~26-38 hours across 10 phases (~18-26 hours remaining).
@@ -192,8 +192,8 @@ The following Release 7.2 requirement is **already implemented** and should be u
 ## Summary
 
 - **21 consolidated requirements + 5 technical debt backlog items (`R76-TD1`–`R76-TD5`)**
-- **5 completed (✅)**: R76-MG3, R76-MG4, R76-MG5, R76-COM2, R76-LOG1
-- **2 partially implemented (🟡)**: R76-CUP1 (squad move: same-match-only and target capacity criteria remain unmet), R76-MG2 (proximity sort implemented in `CupList` for register/manage; scoring `CupSearch` sort remaining)
+- **6 completed (✅)**: R76-MG2, R76-MG3, R76-MG4, R76-MG5, R76-COM2, R76-LOG1
+- **1 partially implemented (🟡)**: R76-CUP1 (squad move: same-match-only and target capacity criteria remain unmet)
 - **2 HIGH priority pending + 2 HIGH backlog**: R76-AUTH10 (registration passthrough auth), R76-COM3 (per-user SSI execution identity), R76-TD1 (`client.js` decomposition), R76-TD5 (unmerged branch consolidation)
 - **7 MEDIUM priority remaining + 3 MEDIUM backlog**: R76-ARCH3, R76-ARCH4, R76-SEC1, R76-COM1, R76-TEST1/2/3, R76-TD2, R76-TD3, R76-TD4
 - **5 LOW priority pending**: R76-SEC7, R76-SES7, R76-TEST4/5/7
