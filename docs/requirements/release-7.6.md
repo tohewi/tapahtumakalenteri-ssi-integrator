@@ -72,7 +72,7 @@ The following Release 7.2 requirement is **already implemented** and should be u
 |---|--------|-------------|----------|--------|
 | R76-MG2 | R6.0 MG2 | **Cup List Sorting by Proximity**: Sort cups ascending by proximity to today (closest first). Implemented in `scoring-ui/src/components/shared.jsx` (`CupList`). | LOW | ✅ Implemented |
 | R76-MG3 | R6.0 MG3 | **Front Page & Scoring Route Change**: Move scoring app from `#/` to `#/scoring`. Root URL (`#/`) renders `HomePage.jsx` with navigation to Scoring, Registration, Management, Tablet Scoring, Reports, and Staffing (`main.jsx`). | LOW | ✅ Implemented |
-| R76-MG4 | R6.0 MG4 | **Shared UI Components**: Extract and share common components (`LoginScreen`, `CupList`, `LogoutHeader`, `ProgressBar`, `Breadcrumbs`, `ScorePad`) in `scoring-ui/src/components/shared.jsx`. | LOW | ✅ Implemented |
+| R76-MG4 | R6.0 MG4 | **Shared UI Components**: Share `LoginScreen` from `scoring-ui/src/components/LoginScreen.jsx` and common UI components (`CupList`, `AppHeader`, `BackButton`, `ErrorBanner`, `Spinner`) from `scoring-ui/src/components/shared.jsx`. | LOW | ✅ Implemented |
 | R76-MG5 | R6.0 MG5 | **Manage Cup List Reuse**: Reuse the same `CupList` component as Registration in `ManagePage.jsx` with `openLabel="Hallitse cupia"` and `allClickable={true}`. | LOW | ✅ Implemented |
 
 ### 7.6.4 — Security & Compliance Hardening (from R7.0)
