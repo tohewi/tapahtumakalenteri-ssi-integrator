@@ -31,3 +31,8 @@
 - Extracted HTTP cookie, CSRF, form field extraction, and page fetching helpers into `scoring-proxy/lib/ssi-core/http-helpers.js`.
 - Extracted `ssiGraphQL`, `ssiRefreshJWT`, and `ssiLogin` implementations into `scoring-proxy/lib/ssi-core/graphql.js` (importing only from `./http-helpers.js`).
 ---
+
+## 2026-10-24 15:06 - US-004 (R76-TD1)
+- Extracted `ssiGetScoringPage` and `ssiSubmitScore` implementations into `scoring-proxy/lib/ssi-core/scoring.js`.
+- Extracted `ssiGetMatchGroupId`, `ssiGetMatchOfficials`, `ssiAddToMatchManagement`, `ssiRemoveFromMatchManagement`, and `ssiGetEventStaff` implementations into `scoring-proxy/lib/ssi-core/management.js`.
+---

@@ -66,8 +66,8 @@
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Extracted scoring.js and management.js implementations from client.js."
     },
     {
       "id": "US-005",
