@@ -213,8 +213,8 @@
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Exposed GET /api/v1/auth/sessions and documented OWASP session audit and Redis storage risk evaluation."
     },
     {
       "id": "US-014",

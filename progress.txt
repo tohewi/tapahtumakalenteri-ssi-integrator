@@ -79,3 +79,9 @@
 - Created `scoring-ui/src/components/LegalDocumentPage.jsx` (`#/privacy` and `#/terms`) and linked both from `HomePage.jsx` and `RegisterPage.jsx`.
 - Added component tests in `scoring-ui/src/test/components.test.jsx` and marked `R76-COM1` as `✅ Implemented`.
 ---
+
+## 2026-10-24 15:49 - US-013 (R76-SES7 / R76-SEC1 / R76-SEC7)
+- Added `GET /api/v1/auth/sessions` (manage scope required) in `scoring-proxy/routes/auth-v7.js` returning active session count and sanitized user sessions.
+- Documented OWASP Session Management Cheat Sheet compliance matrix and Redis token storage risk evaluation in `docs/design/session-handling.md`.
+- Marked `SES7`, `SEC1`, `SEC7`, `R76-SES7`, `R76-SEC1`, and `R76-SEC7` as `✅ Implemented`.
+---

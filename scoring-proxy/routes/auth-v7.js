@@ -15,6 +15,7 @@ import {
   createSession,
   getSession,
   deleteSession,
+  getUserSessions,
   getActiveSessionCount,
   sessionConfig,
   auditLogin,
@@ -246,6 +247,32 @@ export function createAuthV7Router({ loginLimiter, getAdminSession, requireAuth,
     } catch (err) {
       log.error('[auth-v7] /me error:', err.message)
       return next(internalError('Failed to fetch user info'))
+    }
+  })
+
+  // GET /api/auth/sessions — List active sessions for current user + total active count (R76-SES7, manage scope)
+  router.get('/sessions', requireAuth, async (req, res, next) => {
+    if (req.ssiSession?.scope !== 'manage') {
+      return res.status(403).json({ error: 'Manage session required' })
+    }
+    try {
+      const userId = req.ssiSession.userId
+      const [activeSessionCount, rawSessions] = await Promise.all([
+        getActiveSessionCount(),
+        getUserSessions(userId),
+      ])
+      const sessions = rawSessions.map(s => ({
+        sessionId: s.sessionId,
+        userId: s.userId,
+        scope: s.scope,
+        createdAt: s.createdAt,
+        lastUsed: s.lastUsed,
+        metadata: s.metadata || {},
+      }))
+      res.json({ activeSessionCount, sessions })
+    } catch (err) {
+      log.error('[auth-v7] /sessions error:', err.message)
+      return next(internalError('Failed to fetch active sessions'))
     }
   })
 

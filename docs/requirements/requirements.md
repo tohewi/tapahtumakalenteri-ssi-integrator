@@ -218,19 +218,19 @@ See [sra-training-staffing-requirements.md](./sra-training-staffing-requirements
 | SES4 | **Session Security**: HttpOnly, Secure, SameSite=Lax cookies. Session fixation prevention. CSRF protection. | ✅ Implemented |
 | SES5 | **Concurrent Sessions**: Support multiple sessions per user (different devices). Each device gets separate session ID. | ✅ Implemented |
 | SES6 | **Session Revocation**: Immediate session revocation on logout, password change, or security events. | ✅ Implemented |
-| SES7 | **Session Monitoring**: Track active sessions per user, last activity, and device information. | ⬚ Pending ➜ R7.6 (R76-SES7) |
+| SES7 | **Session Monitoring**: Track active sessions per user, last activity, and device information. | ✅ Implemented (`GET /api/v1/auth/sessions`) |
 
 ### Security Requirements
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| SEC1 | **OWASP Compliance**: Session handling must follow OWASP Session Management Cheat Sheet guidelines. | ⬚ Pending ➜ R7.6 (R76-SEC1) |
+| SEC1 | **OWASP Compliance**: Session handling must follow OWASP Session Management Cheat Sheet guidelines. | ✅ Implemented (`docs/design/session-handling.md`) |
 | SEC2 | **Impersonation Security**: Admin SSI token must never be accessible without valid user session context. | ✅ Implemented |
 | SEC3 | **Token Validation**: Both user and admin SSI tokens must be validated before use in SSI operations. | ✅ Implemented |
 | SEC4 | **Rate Limiting**: Authentication endpoints rate limited (10 attempts/15min per IP). Session refresh limited (30/10min). | ✅ Implemented |
 | SEC5 | **Audit Logging**: All authentication events, session operations, and SSI impersonation must be logged. | ✅ Implemented |
 | SEC6 | **Error Handling**: Authentication errors must be generic to prevent user enumeration. | ✅ Implemented |
-| SEC7 | **Secure Storage**: SSI tokens stored encrypted in Redis. Session keys use cryptographic randomness. | ⬚ Pending ➜ R7.6 (R76-SEC7) |
+| SEC7 | **Secure Storage**: SSI tokens stored encrypted in Redis. Session keys use cryptographic randomness. | ✅ Implemented (`crypto.randomUUID()` + AES-256-GCM device tokens + private network Redis evaluation) |
 
 ### Testing Requirements
 
