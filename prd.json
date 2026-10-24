@@ -266,13 +266,15 @@
     },
     {
       "id": "US-017",
-      "requirementId": "R76-TD6",
-      "title": "Create local mock SSI upstream server and Playwright E2E harness",
-      "description": "As a developer, I want a local mock SSI HTTP server (serving GraphQL and HTML scraping fixtures) and Playwright test runner configured so E2E UAT tests run deterministically offline and in CI.",
+      "requirementId": "TS13",
+      "title": "Replace small up/down arrows in Tablet Scoring shooter list with drag-and-drop handle",
+      "description": "As a range officer using Tablet Scoring (#/scoring-tablet), I want to reorder shooters in the squad list using drag-and-drop via a dedicated drag handle instead of tiny up/down arrows so that I can match firing-line order without accidental position flips when tapping a shooter to score.",
       "acceptanceCriteria": [
-        "Create mock SSI upstream server supporting GraphQL auth/cup/match/competitor queries and HTML login/scoring/participant endpoints using existing fixtures",
-        "Configure Playwright (playwright.config.js) with mobile (390x844) and tablet landscape (1024x768) projects starting scoring-proxy pointed at mock SSI_BASE_URL",
-        "Verify a baseline smoke E2E test loads #/ and navigates to #/privacy and #/terms",
+        "Remove the small ▲/▼ arrow buttons from TabletShooterSidebar in scoring-ui/src/components/TabletScoringPanels.jsx",
+        "Implement touch- and pointer-friendly drag-and-drop reordering in TabletShooterSidebar / TabletScoringView using a dedicated drag handle (grip icon, ≥44x44px touch target) and/or drag threshold so tapping the shooter row selects the shooter without triggering a reorder",
+        "Ensure keyboard accessibility for reordering on the drag handle (e.g., ArrowUp/ArrowDown or Space+arrows) and visual feedback for the dragged item and drop target",
+        "Add component tests in scoring-ui/src/test/ verifying that clicking a shooter row selects the shooter without reordering, and dragging/reordering via the handle updates shooter order via onShootersReorder",
+        "Mark TS13 as Implemented in docs/requirements/requirements.md",
         "scoring-proxy tests pass (npm test)",
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
@@ -283,11 +285,12 @@
     {
       "id": "US-018",
       "requirementId": "R76-TD6",
-      "title": "Automate AUTH-UAT-01..08 authentication & session lifecycle E2E tests",
-      "description": "As a QA/developer, I want AUTH-UAT-01 through AUTH-UAT-08 from docs/Implementation/authentication-uat-test-plan.md automated in Playwright.",
+      "title": "Create local mock SSI upstream server and Playwright E2E harness",
+      "description": "As a developer, I want a local mock SSI HTTP server (serving GraphQL and HTML scraping fixtures) and Playwright test runner configured so E2E UAT tests run deterministically offline and in CI.",
       "acceptanceCriteria": [
-        "Implement Playwright E2E tests for AUTH-UAT-01 (fresh login), AUTH-UAT-02 (reload with valid session without login flash), AUTH-UAT-03 (reload without session), AUTH-UAT-04 (remember-me prefill without auto-login), AUTH-UAT-05/06 (session expiry banner and state restore on re-login), AUTH-UAT-07 (scope mismatch isolation between scoring and manage), and AUTH-UAT-08 (logout persistence)",
-        "All AUTH-UAT Playwright tests pass headlessly",
+        "Create mock SSI upstream server supporting GraphQL auth/cup/match/competitor queries and HTML login/scoring/participant endpoints using existing fixtures",
+        "Configure Playwright (playwright.config.js) with mobile (390x844) and tablet landscape (1024x768) projects starting scoring-proxy pointed at mock SSI_BASE_URL",
+        "Verify a baseline smoke E2E test loads #/ and navigates to #/privacy and #/terms",
         "scoring-proxy tests pass (npm test)",
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
@@ -298,12 +301,11 @@
     {
       "id": "US-019",
       "requirementId": "R76-TD6",
-      "title": "Automate Mobile and Tablet Scoring UAT E2E flows",
-      "description": "As a range officer, I want mobile (#/scoring) and tablet (#/scoring-tablet) scoring workflows verified end-to-end in Playwright.",
+      "title": "Automate AUTH-UAT-01..08 authentication & session lifecycle E2E tests",
+      "description": "As a QA/developer, I want AUTH-UAT-01 through AUTH-UAT-08 from docs/Implementation/authentication-uat-test-plan.md automated in Playwright.",
       "acceptanceCriteria": [
-        "Implement Playwright E2E tests for mobile scoring (cup search -> match -> squad -> series scoring -> 2x double series -> save & next shooter)",
-        "Implement Playwright E2E tests for tablet scoring (3-column layout, score pad tap, double-tap deletion, completed match 'cp' read-only lock, and local score preservation across re-login)",
-        "All scoring Playwright E2E tests pass",
+        "Implement Playwright E2E tests for AUTH-UAT-01 (fresh login), AUTH-UAT-02 (reload with valid session without login flash), AUTH-UAT-03 (reload without session), AUTH-UAT-04 (remember-me prefill without auto-login), AUTH-UAT-05/06 (session expiry banner and state restore on re-login), AUTH-UAT-07 (scope mismatch isolation between scoring and manage), and AUTH-UAT-08 (logout persistence)",
+        "All AUTH-UAT Playwright tests pass headlessly",
         "scoring-proxy tests pass (npm test)",
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
@@ -314,6 +316,22 @@
     {
       "id": "US-020",
       "requirementId": "R76-TD6",
+      "title": "Automate Mobile and Tablet Scoring UAT E2E flows",
+      "description": "As a range officer, I want mobile (#/scoring) and tablet (#/scoring-tablet) scoring workflows verified end-to-end in Playwright.",
+      "acceptanceCriteria": [
+        "Implement Playwright E2E tests for mobile scoring (cup search -> match -> squad -> series scoring -> 2x double series -> save & next shooter)",
+        "Implement Playwright E2E tests for tablet scoring (3-column layout, shooter drag-and-drop reorder handle, score pad tap, double-tap deletion, completed match 'cp' read-only lock, and local score preservation across re-login)",
+        "All scoring Playwright E2E tests pass",
+        "scoring-proxy tests pass (npm test)",
+        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "requirementId": "R76-TD6",
       "title": "Automate Registration and Cup Management E2E flows and wire CI gate",
       "description": "As a cup administrator, I want public registration (#/register) and cup management (#/manage) E2E flows automated in Playwright and wired into GitHub Actions CI.",
       "acceptanceCriteria": [
@@ -323,7 +341,7 @@
         "scoring-proxy tests pass (npm test)",
         "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
       ],
-      "priority": 20,
+      "priority": 21,
       "passes": false,
       "notes": ""
     }
