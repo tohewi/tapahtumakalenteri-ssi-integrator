@@ -64,3 +64,8 @@
 - Added `"lint": "eslint ."` to `scoring-proxy/package.json`, fixed 9 unused-var errors across `scoring-proxy`, and added UI/proxy lint steps to `.github/workflows/ci-deploy.yml`.
 - Marked `ARCH4`, `R76-ARCH4`, and `R76-TD4` as `✅ Implemented`.
 ---
+
+## 2026-10-24 15:33 - US-010 (R76-TD2)
+- Extracted `SquaddingOverview` from `scoring-ui/src/components/ManagePage.jsx` into `scoring-ui/src/components/manage/SquaddingOverview.jsx`, reducing `ManagePage.jsx` from 767 to 260 lines.
+- Consolidated `set-dns`/`undo-dns` and helper logic in `scoring-proxy/routes/management.js`, reducing `routes/management.js` from 776 to 468 lines.
+---
