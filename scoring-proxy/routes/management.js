@@ -289,9 +289,10 @@ export function createManagementRouter({
                 number included
                 match {
                   id name
-                  ... on NordicMatchNode {
-                    squads {
-                      number max_competitors
+                  squads {
+                    number
+                    ... on NordicSquadNode {
+                      max_competitors
                       competitors { id status first_name last_name email }
                     }
                   }
