@@ -1,8 +1,8 @@
 /**
- * Staffing API client — frontend calls to /api/staffing/* endpoints.
+ * Staffing API client — frontend calls to /api/v1/staffing/* endpoints.
  */
 
-const API_BASE = '/api/staffing'
+const API_BASE = '/api/v1/staffing'
 
 async function fetchJson(url, options = {}) {
   const resp = await fetch(url, {

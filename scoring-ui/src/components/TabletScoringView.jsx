@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { AppHeader } from './shared'
 import * as api from '../api'
 import t from '../i18n'
@@ -90,10 +90,10 @@ export default function TabletScoringView({
 
   // Check if match is completed (status: 'cp')
   const isMatchCompleted = match?.status === 'cp'
-  const ssiParseOptions = {
+  const ssiParseOptions = useMemo(() => ({
     inferMissingMisses: isMatchCompleted,
     maxHitsPerSeries: MAX_HITS_PER_SERIES,
-  }
+  }), [isMatchCompleted])
   
   // Calculate total shots for the match
   const totalShotsInMatch = SERIES_COUNT * MAX_HITS_PER_SERIES
@@ -199,7 +199,7 @@ export default function TabletScoringView({
       
       log.debug('[tablet] Loaded SSI scores for all shooters, starting with:', firstShooter.id)
     }
-  }, [squad.shooters, selectedShooter, onScoresUpdate, allScores])
+  }, [squad.shooters, selectedShooter, onScoresUpdate, allScores, ssiParseOptions])
 
   // Handle shooter selection
   const handleShooterSelect = useCallback(async (shooter) => {
@@ -307,7 +307,7 @@ export default function TabletScoringView({
     }
   }
 
-  const handleScoreDelete = (seriesIdx, zone, hitIdx) => {
+  const handleScoreDelete = (seriesIdx, zone, _hitIdx) => {
     if (!selectedShooter) return
 
     const shooterScores = allScores[selectedShooter.id]

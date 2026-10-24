@@ -173,7 +173,7 @@ export default function DeviceTokens() {
     setError(null)
     setSuccess(null)
     try {
-      const data = await apiFetch('/auth/device-tokens', {
+      await apiFetch('/auth/device-tokens', {
         method: 'POST',
         body: JSON.stringify({
           ssiEmail: form.ssiEmail.trim(),

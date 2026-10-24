@@ -209,8 +209,8 @@ To enable this feature in production:
 ## Troubleshooting Resources
 
 - **Workflow Documentation:** `.github/workflows/README.md`
-- **Preview Deployments Guide:** `docs/PR-PREVIEW-DEPLOYMENTS.md`
-- **Branching Strategy:** `docs/BRANCHING-STRATEGY.md`
+- **Preview Deployments Guide:** `docs/instructions/PR-PREVIEW-DEPLOYMENTS.md`
+- **Branching Strategy:** `docs/instructions/BRANCHING-STRATEGY.md`
 - **GitHub Actions Logs:** Repository → Actions tab
 - **Render Dashboard:** https://dashboard.render.com
 - **Render API Docs:** https://api-docs.render.com

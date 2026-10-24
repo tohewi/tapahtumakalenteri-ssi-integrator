@@ -34,12 +34,7 @@ export default function RegisterPage() {
   // Loading state
   const [loading, setLoading] = useState(false)
 
-  // Load captcha on mount
-  useEffect(() => {
-    loadCaptcha()
-  }, [])
-
-  const loadCaptcha = async () => {
+  const loadCaptcha = useCallback(async () => {
     try {
       const c = await regApi.getCaptcha()
       setCaptcha(c)
@@ -47,7 +42,23 @@ export default function RegisterPage() {
     } catch {
       setError('Palvelua ei voitu ladata. Yritä myöhemmin.')
     }
-  }
+  }, [])
+
+  // Load captcha on mount
+  useEffect(() => {
+    let isActive = true
+    regApi.getCaptcha()
+      .then((c) => {
+        if (!isActive) return
+        setCaptcha(c)
+        setCaptchaAnswer('')
+      })
+      .catch(() => {
+        if (!isActive) return
+        setError('Palvelua ei voitu ladata. Yritä myöhemmin.')
+      })
+    return () => { isActive = false }
+  }, [])
 
   // Verify captcha server-side, then load cups (or skip ahead if returning from captcha expiry)
   const handleCaptchaSubmit = useCallback(async (e) => {
@@ -141,7 +152,7 @@ export default function RegisterPage() {
         setStep('email')
       }
     }
-  }, [email, selectedCup, selectedSquad, captcha, captchaAnswer])
+  }, [email, selectedCup, selectedSquad, captcha, captchaAnswer, loadCaptcha])
 
   // Reset everything
   const handleReset = () => {

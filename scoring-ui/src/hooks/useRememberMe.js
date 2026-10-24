@@ -25,7 +25,7 @@ export function useRememberMe(storageKey) {
         } else {
           localStorage.removeItem(storageKey) // corrupted data
         }
-      } catch (err) {
+      } catch {
         // Decryption failed - remove corrupted data
         localStorage.removeItem(storageKey)
       }

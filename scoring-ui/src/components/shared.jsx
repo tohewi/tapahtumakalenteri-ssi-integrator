@@ -120,14 +120,17 @@ export function Spinner() {
  * @param {string} props.emptyLabel - shown when no open cups (default: "Ei avoimia ilmoittautumisia")
  * @param {boolean} props.allClickable - when true, all cups are clickable regardless of registrationOpen status (e.g., for management page)
  */
-export function CupList({ cups, onSelect, loading, openLabel = 'Ilmoittautuminen auki', emptyLabel = 'Ei avoimia ilmoittautumisia', allClickable = false }) {
-  // Sort ascending by proximity to today (closest first)
-  const now = Date.now()
-  const sorted = [...cups].sort((a, b) => {
+function sortCupsByProximity(cups, now = Date.now()) {
+  return [...cups].sort((a, b) => {
     const da = Math.abs(parseDateLocal(a.starts).getTime() - now)
     const db = Math.abs(parseDateLocal(b.starts).getTime() - now)
     return da - db
   })
+}
+
+export function CupList({ cups, onSelect, loading, openLabel = 'Ilmoittautuminen auki', emptyLabel = 'Ei avoimia ilmoittautumisia', allClickable = false }) {
+  // Sort ascending by proximity to today (closest first)
+  const sorted = sortCupsByProximity(cups)
 
   // When allClickable is true (e.g. management), treat all cups as "open" (clickable)
   const openCups = allClickable ? sorted : sorted.filter(c => c.registrationOpen)

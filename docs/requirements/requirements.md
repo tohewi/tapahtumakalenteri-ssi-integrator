@@ -22,8 +22,8 @@
 | 14 | Match name is in format "Kupittaa dd.mm.yyyy <name>" | ✅ |
 | 15 | Matches belong to the Cup event | ✅ |
 | 16 | Result verification should not be required | ✅ |
-| 17 | There are three squads per match - Oma ase 1, Oma ase 2, Laina-ase | ✅ |
-| 18 | Oma ase 1 and 2 have max 9 shooters. Laina-ase has max 7 shooters | ✅ |
+| 17 | There are three squads per match — Squad 1: Laina-ase (pieni puoli), Squad 2: Oma ase 1 (iso puoli, vasen), Squad 3: Oma ase 2 (iso puoli, oikea) | ✅ |
+| 18 | Laina-ase and Oma ase 1 have max 9 shooters. Oma ase 2 has max 7 shooters (total 25) | ✅ |
 | 19 | Squad names and maximum shooters are defined in a configuration file | ✅ |
 | 20 | Match registration will start at the same time with the Cup | ✅ |
 | 21 | Cup is managed by group id 25874 | ✅ |
@@ -381,13 +381,24 @@ Establish architectural patterns and foundations for future scalability while ma
 
 ## Release 7.6 — Consolidation & Compliance Hardening
 
-Consolidates pending requirements from Releases 6.0, 7.0, 7.2, and 7.5 along with SSI license compliance hardening. See [release-7.6.md](./release-7.6.md) for the full specification and technical acceptance checklists.
+Consolidates pending requirements from Releases 6.0, 7.0, 7.2, and 7.5 along with SSI license compliance hardening and the technical debt backlog (`R76-TD1`–`R76-TD5`). See [release-7.6.md](./release-7.6.md) for the full specification, technical acceptance checklists, and technical debt backlog.
 
 ### Release 7.6.1 — Compliance Hardening: Paid Tracking Disabled
 
 | # | Requirement | Status |
 |---|-------------|--------|
 | R76-COM2 | **Disable Paid Tracking in Tooling**: Remove paid-status tracking from management UI and disable backend `toggle-paid` mutations by default (`FEATURE_PAID_TOGGLE_ENABLED=false`). | ✅ Implemented |
+| R76-LOG1 | **Middleware Logging Consistency**: Replace raw `console.warn` / `console.error` calls in `scoring-proxy/middleware/auth-v7.js` with structured `log.warn` / `log.error`. | ✅ Implemented |
+
+### Technical Debt Backlog (R76-TD1–R76-TD5)
+
+| # | Requirement | Priority | Status |
+|---|-------------|----------|--------|
+| R76-TD1 | **Monolithic SSI Client Decomposition (`scoring-proxy/lib/ssi-core/client.js`, 1,898 lines)**: Move domain implementations out of `client.js` into `graphql.js`, `scoring.js`, `participants.js`, `management.js`, and `http-helpers.js` (currently 6-line re-export shims) and remove unused `lib/ssi-client.js` compat shim. | HIGH | 📋 Backlog |
+| R76-TD2 | **Oversized UI & Route Files (>500-Line Guideline Violations)**: Decompose `scoring-ui/src/App.jsx` (890 lines), `scoring-ui/src/components/ManagePage.jsx` (767 lines), `scoring-proxy/routes/management.js` (742 lines), and `scoring-ui/src/components/TabletScoringView.jsx` (648 lines) into focused sub-components and service functions to satisfy the ~500-line modularity limit. | MEDIUM | 📋 Backlog |
+| R76-TD3 | **Orphaned SRA Staffing Prototype Cleanup & Staffing Tests**: Clean up or integrate orphaned prototype modules (`scoring-ui/src/components/StaffStatusBoard.jsx`, `StaffSignupPanel.jsx`, `scoring-proxy/lib/staffing/cron.js`, `notifier.js`, `role-assigner.js`, `squad-optimizer.js` referencing unimplemented `getEventsDueForFinalization`/`finalizeEvent` exports), archive obsolete root `IMMEDIATE-DEVELOPMENT-NEEDS.md`, and add unit tests for `routes/staffing.js` and `lib/staffing/engine.js`. | MEDIUM | 📋 Backlog |
+| R76-TD4 | **Backend ESLint Configuration & CI Lint Gate**: Migrate root `.eslintrc-architectural.js` (legacy CommonJS ESLint v8 format) to ESLint v9 flat config, add `npm run lint` to `scoring-proxy/package.json`, and add a `npm run lint` step for both `scoring-ui` and `scoring-proxy` in `.github/workflows/ci-deploy.yml`. | MEDIUM | 📋 Backlog |
+| R76-TD5 | **Unmerged Feature Branch Consolidation (`R7.8`, `R7.9`, `R10.0`)**: Reconcile and merge completed work sitting on unmerged feature branches: `copilot/vscode-mnw87b09-v5g9` (Release 7.8 Induction Wait List), `R79-hotfix-cup-count-status-sync` (7-day manage window + -1d lookback), and `R100-feature-registration-buffer-*` (Release 10.0 Registration Buffer). | HIGH | 📋 Backlog |
 
 ## Release 7.7 — QR Code Login for Scoring
 
@@ -544,7 +555,7 @@ Decouples public Kupittaa Cup registration (`#/register`) from immediate SSI acc
 - **Release 7.4** (Refactoring Implementation): 8 requirements — 8 ✅ (RFR1–RFR8)
 - **Release 7.4.1** (Authentication UX Hardening): 5 requirements — 5 ✅ (AUTH-UX1–AUTH-UX5)
 - **Release 7.5** (Architecture V2 Foundation): 5 requirements — 3 ✅, 2 📋 ➜ R7.6 (ARCH3, ARCH4)
-- **Release 7.6** (Consolidation & Compliance Hardening): 21 requirements consolidated from R6.0/R7.0/R7.2/R7.5 + compliance — 4 ✅ (R76-MG3–MG5, R76-COM2), 2 🟡 partially implemented (R76-CUP1, R76-MG2), 15 pending — see [release-7.6.md](./release-7.6.md)
+- **Release 7.6** (Consolidation & Compliance Hardening): 21 consolidated requirements + 5 tech debt backlog items (`R76-TD1`–`R76-TD5`) — 5 ✅ (R76-MG3–MG5, R76-COM2, R76-LOG1), 2 🟡 partially implemented (R76-CUP1, R76-MG2), 14 pending + 5 backlog — see [release-7.6.md](./release-7.6.md)
 - **Release 7.7** (QR Code Login for Scoring): 6 requirements — 6 ✅ (QR1–QR6). **7.7.1 hotfix**: 4 fixes ✅
 - **Release 7.8** (Induction Wait List): 32 requirements — 32 ✅ on branch `copilot/vscode-mnw87b09-v5g9` (pending merge to `main`)
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes ✅ (GQL-HF1–GQL-HF3). **7.9.2 hotfix**: 2 fixes ✅ (GQL-HF4, GQL-HF7). **7.9.3 hotfix**: 1 fix 📋 (GQL-HF5). **7.9.4**: 1 requirement ⬚ (GQL-HF6 — iCal calendar attachment)

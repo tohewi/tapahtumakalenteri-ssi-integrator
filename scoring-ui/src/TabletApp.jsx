@@ -18,21 +18,6 @@ const SERIES_COUNT = 6
 const MAX_HITS_PER_SERIES = 5
 const ZONE_POINTS = { X: 10, '10': 10, '9': 9, '8': 8, '7': 7, '6': 6, '5': 5, '4': 4, '3': 3, '2': 2, '1': 1, M: 0 }
 
-function createEmptySeriesScore() {
-  return Object.fromEntries(SCORE_ZONES.map(z => [z, 0]))
-}
-
-function createEmptyAllScores(shooters) {
-  const all = {}
-  for (const s of shooters) {
-    all[s.id] = {}
-    for (let i = 0; i < SERIES_COUNT; i++) {
-      all[s.id][i] = createEmptySeriesScore()
-    }
-  }
-  return all
-}
-
 // ============================================================
 // TabletApp — views: login → cup → match → squad → tablet scoring
 // ============================================================
@@ -218,7 +203,7 @@ export function TabletApp() {
     }
 
     setView(nav.view === 'cup' ? 'cup' : 'match')
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // On reload, keep users in scoring flow when session cookie is still valid.
   // QR5: Also checks for ?token= in URL for QR code device login.

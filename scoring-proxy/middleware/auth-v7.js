@@ -19,6 +19,7 @@ import {
   auditSecurityViolation,
   toLegacySession,
 } from '../lib/session/index.js'
+import { log } from '../lib/logger.js'
 
 const SESSION_COOKIE = sessionConfig.session.cookieName
 
@@ -63,7 +64,7 @@ export function requireAuthV7(allowedScopes = null) {
             lastRefreshed: Date.now(),
           }
         } catch {
-          console.warn('[auth-v7] User SSI token refresh failed')
+          log.warn('[auth-v7] User SSI token refresh failed')
           if (userTokenInvalid) {
             return res.status(401).json({
               error: 'SSI token expired. Please login again.',
@@ -114,7 +115,7 @@ export function requireAuthV7(allowedScopes = null) {
             lastRefreshed: Date.now(),
           }
         } catch {
-          console.warn('[auth-v7] Admin SSI token refresh failed')
+          log.warn('[auth-v7] Admin SSI token refresh failed')
         }
       }
 
@@ -144,7 +145,7 @@ export function requireAuthV7(allowedScopes = null) {
 
       next()
     } catch (err) {
-      console.error('[auth-v7] Middleware error:', err.message)
+      log.error('[auth-v7] Middleware error:', err.message)
       res.status(500).json({ error: 'Authentication error' })
     }
   }
