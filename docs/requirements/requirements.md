@@ -241,7 +241,7 @@ See [sra-training-staffing-requirements.md](./sra-training-staffing-requirements
 | TEST3 | **Security Tests**: Test impersonation security, privilege escalation prevention, and session hijacking scenarios. | ✅ Implemented |
 | TEST4 | **Reliability Tests**: Test Redis failure scenarios, session recovery, and SSI token expiry handling. | ✅ Implemented |
 | TEST5 | **Performance Tests**: Session lookup latency <50ms p95. Support 100 concurrent users. | ✅ Implemented (`reliability-and-perf.test.js`) |
-| TEST6 | **E2E Tests**: Complete user journeys through login, session expiry, re-authentication, and state restoration. | ⬚ Pending |
+| TEST6 | **E2E Tests**: Complete user journeys through login, session expiry, re-authentication, and state restoration. | 📋 Backlog ➜ R7.6 (`R76-TD6` — Playwright E2E Suite Against Mock/Stubbed SSI Upstream) |
 | TEST7 | **Penetration Tests**: Simulate attacks on session management, token theft, and impersonation bypass. | ✅ Implemented (CI `npm audit --audit-level=high` + GitGuardian + session security suite) |
 | TEST8 | **Load Tests**: Session store performance under load with concurrent authentication and SSI operations. | ⬚ Pending |
 
@@ -390,7 +390,7 @@ Consolidates pending requirements from Releases 6.0, 7.0, 7.2, and 7.5 along wit
 | R76-COM2 | **Disable Paid Tracking in Tooling**: Remove paid-status tracking from management UI and disable backend `toggle-paid` mutations by default (`FEATURE_PAID_TOGGLE_ENABLED=false`). | ✅ Implemented |
 | R76-LOG1 | **Middleware Logging Consistency**: Replace raw `console.warn` / `console.error` calls in `scoring-proxy/middleware/auth-v7.js` with structured `log.warn` / `log.error`. | ✅ Implemented |
 
-### Technical Debt Backlog (R76-TD1–R76-TD5)
+### Technical Debt Backlog (R76-TD1–R76-TD6)
 
 | # | Requirement | Priority | Status |
 |---|-------------|----------|--------|
@@ -399,6 +399,7 @@ Consolidates pending requirements from Releases 6.0, 7.0, 7.2, and 7.5 along wit
 | R76-TD3 | **Orphaned SRA Staffing Prototype Cleanup & Staffing Tests**: Clean up or integrate orphaned prototype modules (`scoring-ui/src/components/StaffStatusBoard.jsx`, `StaffSignupPanel.jsx`, `scoring-proxy/lib/staffing/cron.js`, `notifier.js`, `role-assigner.js`, `squad-optimizer.js`), archive obsolete root `IMMEDIATE-DEVELOPMENT-NEEDS.md` to `archive/staffing-prototype/`, and add unit tests for `staffing-service.js` and `lib/staffing/engine.js`. | MEDIUM | ✅ Implemented |
 | R76-TD4 | **Backend ESLint Configuration & CI Lint Gate**: Migrate root `.eslintrc-architectural.js` (legacy CommonJS ESLint v8 format) to ESLint v9 flat config (`scoring-proxy/eslint.config.js`), add `npm run lint` to `scoring-proxy/package.json`, and add a `npm run lint` step for both `scoring-ui` and `scoring-proxy` in `.github/workflows/ci-deploy.yml`. | MEDIUM | ✅ Implemented |
 | R76-TD5 | **Unmerged Feature Branch Consolidation (`R7.8`, `R7.9`, `R10.0`)**: Reconcile and merge completed work sitting on unmerged feature branches: `copilot/vscode-mnw87b09-v5g9` (Release 7.8 Induction Wait List), `R79-hotfix-cup-count-status-sync` (7-day manage window + -1d lookback), and `R100-feature-registration-buffer-*` (Release 10.0 Registration Buffer). | HIGH | 📋 Backlog |
+| R76-TD6 | **Playwright E2E UAT Suite Against Mock/Stubbed SSI Upstream (Fast CI Gate — `TEST6`)**: Build a deterministic Playwright E2E test suite running against `scoring-proxy` + `scoring-ui` backed by a local mock SSI server (`SSI_BASE_URL` serving GraphQL & HTML fixtures). Automate `AUTH-UAT-01..08` (`docs/Implementation/authentication-uat-test-plan.md`), mobile & tablet scoring flows (`docs/design/tablet-scoring-uat-plan.md`), and registration/management squad capacity & DNS flows as a fast CI gate. | HIGH | 📋 Backlog |
 
 ## Release 7.7 — QR Code Login for Scoring
 
@@ -555,7 +556,7 @@ Decouples public Kupittaa Cup registration (`#/register`) from immediate SSI acc
 - **Release 7.4** (Refactoring Implementation): 8 requirements — 8 ✅ (RFR1–RFR8)
 - **Release 7.4.1** (Authentication UX Hardening): 5 requirements — 5 ✅ (AUTH-UX1–AUTH-UX5)
 - **Release 7.5** (Architecture V2 Foundation): 5 requirements — 5 ✅ (ARCH1–ARCH5)
-- **Release 7.6** (Consolidation & Compliance Hardening): 21 consolidated requirements + 5 tech debt backlog items (`R76-TD1`–`R76-TD5`) — 25 ✅ (`R76` 21/21 + `R76-TD1`–`R76-TD4`), 1 backlog (`R76-TD5` unmerged feature branch consolidation) — see [release-7.6.md](./release-7.6.md)
+- **Release 7.6** (Consolidation & Compliance Hardening): 21 consolidated requirements + 6 tech debt backlog items (`R76-TD1`–`R76-TD6`) — 25 ✅ (`R76` 21/21 + `R76-TD1`–`R76-TD4`), 2 backlog (`R76-TD5` unmerged branch consolidation, `R76-TD6` Playwright E2E UAT suite) — see [release-7.6.md](./release-7.6.md)
 - **Release 7.7** (QR Code Login for Scoring): 6 requirements — 6 ✅ (QR1–QR6). **7.7.1 hotfix**: 4 fixes ✅
 - **Release 7.8** (Induction Wait List): 32 requirements — 32 ✅ on branch `copilot/vscode-mnw87b09-v5g9` (pending merge to `main`)
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes ✅ (GQL-HF1–GQL-HF3). **7.9.2 hotfix**: 2 fixes ✅ (GQL-HF4, GQL-HF7). **7.9.3 hotfix**: 1 fix 📋 (GQL-HF5). **7.9.4**: 1 requirement ⬚ (GQL-HF6 — iCal calendar attachment)
