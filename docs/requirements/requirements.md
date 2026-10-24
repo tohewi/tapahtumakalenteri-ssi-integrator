@@ -255,7 +255,7 @@ See [sra-training-staffing-requirements.md](./sra-training-staffing-requirements
 
 | # | Requirement | Status |
 |---|-------------|--------|
-| CUP1 | **Move Shooter Between Squads**: In the "Squadit" section, it must be possible to move a shooter from one squad to another. The UI must show the same `→ S?` button as in the "Ei Squadeissa" section and function identically (squad picker dialog, SSI sync). Move is only allowed within the same match via Squadit. | ✅ Implemented (`SquadCard.jsx` + `fix-squad`) |
+| CUP1 | **Move Shooter Between Squads**: In the "Squadit" section, it must be possible to move a shooter from one squad to another. The UI must show the same `→ S?` button as in the "Ei Squadeissa" section and function identically (squad picker dialog, SSI sync). Move is only allowed within the same match via Squadit, and the target squad must not be full. | 🟡 Partially Implemented (`fix-squad` updates all included matches and does not enforce target squad capacity) |
 | CUP2 | **Set Shooter as DNS (Did Not Start)**: SSI calls this "Did Not Show". Setting DNS must be applied at the **cup level** and on **all matches** in the cup. The button must appear next to every shooter regardless of which section they are in. Clicking it shows a confirmation dialog: "Set N.N as DNS?" / "Aseta Etu Suku DNS?" (fi/en). It must be possible to **undo** (reverse) DNS if set by accident. SSI endpoints: `GET /event/participant/{ct}/{id}/set-did-not-show/` (set) and `GET /event/participant/{ct}/{id}/undo-did-not-show/` (undo), applied to cup + each match. | ✅ Implemented |
 | CUP3 | **Mark Payment Received**: Per-competitor paid toggle at the **cup level only**. UI shows a button next to each shooter. When paid, the button must be **solid green** (high contrast) so it is immediately obvious who has paid when scanning the list. When unpaid, the button is gray/muted. State is stored in SSI via `GET /event/participant/{ct}/{id}/toggle-paid/`. Must reflect current paid status from SSI and allow toggling. | ❌ Deprecated / Removed (`R76-COM2` — disabled for SSI license compliance in Release 7.6.1) |
 
@@ -539,12 +539,12 @@ Decouples public Kupittaa Cup registration (`#/register`) from immediate SSI acc
 - **Release 6.0** (Match Management & UI Consolidation): 5 functional + 5 identification requirements — 10 ✅ (MG1–MG5, MG-ID1–MG-ID5)
 - **Release 7.0** (Authentication & Session Handling): 25 requirements — 19 ✅, 6 pending ➜ R7.6 (AUTH10, SES7, SEC1, SEC7, TEST1–5/7), 2 deferred (TEST6, TEST8)
 - **Release 7.1** (Management Availability): 1 requirement — 1 ✅
-- **Release 7.2** (Kupittaa Cup Management): 3 requirements — 2 ✅ (CUP1, CUP2), 1 ❌ deprecated/removed (CUP3 → R76-COM2)
+- **Release 7.2** (Kupittaa Cup Management): 3 requirements — 1 ✅ (CUP2), 1 🟡 partially implemented (CUP1), 1 ❌ deprecated/removed (CUP3 → R76-COM2)
 - **Release 7.3** (Refactoring Analysis): 1 requirement — 1 ✅ (RFA1). 5 outdated docs removed
 - **Release 7.4** (Refactoring Implementation): 8 requirements — 8 ✅ (RFR1–RFR8)
 - **Release 7.4.1** (Authentication UX Hardening): 5 requirements — 5 ✅ (AUTH-UX1–AUTH-UX5)
 - **Release 7.5** (Architecture V2 Foundation): 5 requirements — 3 ✅, 2 📋 ➜ R7.6 (ARCH3, ARCH4)
-- **Release 7.6** (Consolidation & Compliance Hardening): 21 requirements consolidated from R6.0/R7.0/R7.2/R7.5 + compliance — 6 ✅ (R76-CUP1, R76-MG2–MG5, R76-COM2), 15 pending — see [release-7.6.md](./release-7.6.md)
+- **Release 7.6** (Consolidation & Compliance Hardening): 21 requirements consolidated from R6.0/R7.0/R7.2/R7.5 + compliance — 5 ✅ (R76-MG2–MG5, R76-COM2), 1 🟡 partially implemented (R76-CUP1), 15 pending — see [release-7.6.md](./release-7.6.md)
 - **Release 7.7** (QR Code Login for Scoring): 6 requirements — 6 ✅ (QR1–QR6). **7.7.1 hotfix**: 4 fixes ✅
 - **Release 7.8** (Induction Wait List): 32 requirements — 32 ✅ on branch `copilot/vscode-mnw87b09-v5g9` (pending merge to `main`)
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes ✅ (GQL-HF1–GQL-HF3). **7.9.2 hotfix**: 2 fixes ✅ (GQL-HF4, GQL-HF7). **7.9.3 hotfix**: 1 fix 📋 (GQL-HF5). **7.9.4**: 1 requirement ⬚ (GQL-HF6 — iCal calendar attachment)

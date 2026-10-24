@@ -57,7 +57,7 @@ The following Release 7.2 requirement is **already implemented** and should be u
 
 | # | Origin | Requirement | Priority | Status |
 |---|--------|-------------|----------|--------|
-| R76-CUP1 | R7.2 CUP1 | **Move Squadded Shooter Between Squads**: In the "Squadit" section, add a `→ S?` squad move button for shooters already assigned to a squad. Implemented in `SquadCard.jsx` (`ActionButton` with `onMoveSquad`) wired to `handleFixSquad` (`POST /api/v1/manage/cup/:id/fix-squad`). | HIGH | ✅ Implemented |
+| R76-CUP1 | R7.2 CUP1 | **Move Squadded Shooter Between Squads**: In the "Squadit" section, allow moving a shooter to another squad only within the same match, and prevent moves into a full squad. The UI has a `→ S?` button in `SquadCard.jsx` (`ActionButton` with `onMoveSquad`) wired to `handleFixSquad` (`POST /api/v1/manage/cup/:id/fix-squad`), but the endpoint updates all included matches and the picker does not prevent selecting a full squad. | HIGH | 🟡 Partially Implemented |
 
 ### 7.6.2 — Architecture Completion (from R7.5)
 
@@ -167,7 +167,7 @@ The following Release 7.2 requirement is **already implemented** and should be u
 | **Phase 1** | R76-COM3 (per-user SSI execution identity) | 3-5 h | High compliance risk reduction |
 | **Phase 2** | R76-COM2 (disable paid tracking) — ✅ completed | 1-2 h | Immediate compliance hardening |
 | **Phase 3** | R76-LOG1 (middleware logging) | 0.5 h | Quick win — completes logging discipline |
-| **Phase 4** | R76-CUP1 (squad move) — ✅ completed | 2-3 h | High user value — completes cup management |
+| **Phase 4** | R76-CUP1 (squad move) — 🟡 partially implemented | 2-3 h | High user value — completes cup management |
 | **Phase 5** | R76-ARCH3 (service layer: scoring, registration, staffing) | 3-4 h | Architecture — reduces route file complexity |
 | **Phase 6** | R76-TEST1/2/3 (test coverage) | 3-4 h | Quality — closes critical test gaps |
 | **Phase 7** | R76-ARCH4 (ESLint rules) | 1-2 h | Architecture — prevents drift |
@@ -182,7 +182,8 @@ The following Release 7.2 requirement is **already implemented** and should be u
 ## Summary
 
 - **21 requirements** consolidated from 4 previous releases (R6.0, R7.0, R7.2, R7.5) plus compliance follow-up
-- **6 completed (✅)**: R76-CUP1, R76-MG2, R76-MG3, R76-MG4, R76-MG5, R76-COM2
-- **3 HIGH priority remaining**: R76-AUTH10 (registration passthrough auth), R76-COM3 (per-user SSI execution identity), R76-LOG1 (middleware logging)
+- **5 completed (✅)**: R76-MG2, R76-MG3, R76-MG4, R76-MG5, R76-COM2
+- **1 partially implemented (🟡)**: R76-CUP1 (squad move: same-match-only and target capacity criteria remain unmet)
+- **3 HIGH priority pending**: R76-AUTH10 (registration passthrough auth), R76-COM3 (per-user SSI execution identity), R76-LOG1 (middleware logging)
 - **7 MEDIUM priority remaining**: R76-ARCH3, R76-ARCH4, R76-SEC1, R76-COM1, R76-TEST1/2/3
-- **5 LOW priority remaining**: R76-SEC7, R76-SES7, R76-TEST4/5/7
+- **5 LOW priority pending**: R76-SEC7, R76-SES7, R76-TEST4/5/7
