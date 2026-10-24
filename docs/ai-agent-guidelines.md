@@ -157,7 +157,7 @@ function validateScore(score) {
 
 ### Planned Structure (after refactoring)
 
-See `docs/refactoring-plan.md` for complete details. Summary:
+See `docs/design/architecture-review.md` for complete details. Summary:
 
 ```
 ├── packages/
@@ -604,7 +604,7 @@ AI agents cache context between requests. Optimize by:
 
 ## Migration Guide
 
-As the codebase is refactored (see `docs/refactoring-plan.md`), update your prompts:
+As the codebase is refactored (see `docs/design/architecture-review.md`), update your prompts:
 
 ### Phase 1: Shared SDK (Current)
 

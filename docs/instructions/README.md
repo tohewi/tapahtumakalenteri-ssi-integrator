@@ -16,31 +16,30 @@ This directory contains comprehensive documentation for the tapahtumakalenteri-s
 - **[Session Handling](../design/session-handling.md)** - Inactivity timeout, feature isolation, explicit auth, state restoration
 - **[Session Lifecycle](../design/session-lifecycle.md)** - State charts and flow analysis for session management
 - **[Registration Flow](../design/registration-flow.md)** - Backend sequence diagrams and SSI state machine
-- **[Shooter State Management](../SHOOTER-STATE-MANAGEMENT.md)** - State diagrams, functions, and shooter identification system
+- **[Shooter State Management](../design/SHOOTER-STATE-MANAGEMENT.md)** - State diagrams, functions, and shooter identification system
 - **[SSI Dual Approach: GraphQL + Web Scraping](../design/ssi-dual-approach-graphql-webscraping.md)** - How GraphQL and web scraping work together, email handling, authentication differences
 - **[SSI Admin Operations](../design/ssi-admin-operations.md)** - Web scraping endpoints and form field reference
 - **[SSI GraphQL Findings](../design/ssi-graphql-findings.md)** - Known GraphQL API limitations and workarounds
 - **[Requirements](../requirements/requirements.md)** - Full requirements traceability matrix
 
 ### Architecture & Refactoring
-- **[Refactoring Plan](refactoring-plan.md)** - Comprehensive software architecture analysis and refactoring strategy
-- **[Refactoring Visual Summary](refactoring-visual-summary.md)** - Quick reference with diagrams and comparisons
-- **[AI Agent Guidelines](ai-agent-guidelines.md)** - Token-efficient development with AI assistants
+- **[Architecture Review](../design/architecture-review.md)** - Software architecture analysis and modular monolith roadmap
+- **[AI Agent Guidelines](../ai-agent-guidelines.md)** - Token-efficient development with AI assistants
 
 ### Development Process
-- **[Development Modularity Guidelines](DEVELOPMENT-MODULARITY-GUIDELINES.md)** - Guidelines for reducing merge conflicts through modular development
-- **[Shared Component Modification Process](SHARED-COMPONENT-PROCESS.md)** - Quick reference guide for modifying core shared components
+- **[Development Modularity Guidelines](../design/DEVELOPMENT-MODULARITY-GUIDELINES.md)** - Guidelines for reducing merge conflicts through modular development
+- **[Shared Component Modification Process](../SHARED-COMPONENT-PROCESS.md)** - Quick reference guide for modifying core shared components
 - **[Branching Strategy](BRANCHING-STRATEGY.md)** - Git workflow, PR process, and branch protection rules
+- **[PR Preview Deployments](PR-PREVIEW-DEPLOYMENTS.md)** - Automated PR preview environments on Render
 
 ### Release Information
-- **[Release Notes](RELEASE-NOTES.md)** - Version history and changelog
-- **[Release v1.0.0](RELEASE-v1.0.0.md)** - Initial release details
+- **[Release Notes](../RELEASE-NOTES.md)** - Version history and changelog
 
 ### Design & Planning
-- **[Developer Guide](developer-guide.md)** - Technical documentation for developers
-- **[UI Design Guidelines](ui-design-guidelines.md)** - Design patterns and component guidelines
-- **[Manage Page Design](manage-page-design.md)** - Management console design
-- **[Scoring Enhancements](scoring-enhancements.md)** - Planned improvements
+- **[Developer Guide](../developer-guide.md)** - Technical documentation for developers
+- **[UI Design Guidelines](../design/ui-design-guidelines.md)** - Design patterns and component guidelines
+- **[Manage Page Design](../design/manage-page-design.md)** - Management console design
+- **[Scoring Enhancements](../design/scoring-enhancements.md)** - Planned improvements
 
 ---
 

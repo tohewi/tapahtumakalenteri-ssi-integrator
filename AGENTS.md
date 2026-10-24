@@ -71,7 +71,6 @@ This is a **shooting competition management system** to help setting up events i
 │   │   │   ├── management.js   # Match management (re-export shim)
 │   │   │   └── http-helpers.js # Cookie/fetch helpers (re-export shim)
 │   │   ├── services/        # Business logic (pure functions)
-│   │   │   ├── scoring-service.js  # Scoring operations
 │   │   │   └── cup-manage.js       # Cup management operations
 │   │   ├── errors/          # Custom error classes
 │   │   │   └── AppError.js  # AppError hierarchy (9 error types)
@@ -165,7 +164,7 @@ Preview environments are **automatically created** for all pull requests via Git
 - GitHub secrets:
   - `RENDER_API_KEY` - API token from Render Dashboard → Account Settings → API Keys
   - `RENDER_OWNER_ID` - Workspace ID (`tea-d62r4ucoud1c73d50qg0` for this repo)
-- See `docs/PR-PREVIEW-DEPLOYMENTS.md` for complete documentation
+- See `docs/instructions/PR-PREVIEW-DEPLOYMENTS.md` for complete documentation
 
 **Troubleshooting:**
 - Check workflow logs in GitHub Actions tab if preview creation fails
@@ -191,7 +190,7 @@ Preview environments are **automatically created** for all pull requests via Git
 | Modify SSI integration | `scoring-proxy/lib/ssi-core/*.js` (domain module, NOT `client.js`) |
 | Update home navigation | `scoring-ui/src/components/HomePage.jsx` |
 | Change deploy config | `render.yaml` |
-| Modify scoring logic | `scoring-proxy/lib/services/scoring-service.js`, `scoring-proxy/routes/scoring.js` |
+| Modify scoring logic | `scoring-proxy/routes/scoring.js`, `scoring-proxy/lib/ssi-core/scoring.js` |
 | Modify management logic | `scoring-proxy/lib/services/cup-manage.js`, `scoring-proxy/routes/management.js` |
 | Modify staffing logic | `scoring-proxy/lib/staffing/engine.js`, `scoring-proxy/routes/staffing.js` |
 | Modify staffing config | `config/sra-training-config.yml`, `scoring-proxy/lib/staffing/config-loader.js` |

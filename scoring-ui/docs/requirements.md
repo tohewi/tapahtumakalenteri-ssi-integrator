@@ -1,5 +1,7 @@
 # SSI Scoring UI — Requirements
 
+> **Deprecated:** This is a historical v1 requirements draft for the initial scoring UI. The canonical, maintained requirements traceability matrix for the entire project is located at [docs/requirements/requirements.md](../../docs/requirements/requirements.md).
+
 ## 1. Overview
 
 A mobile-first web application that provides a simplified scoring interface for Nordic shooting competitions managed in Shoot'n Score It (SSI). The app acts as a front-end overlay that submits scores back to SSI via form POST or GraphQL API.

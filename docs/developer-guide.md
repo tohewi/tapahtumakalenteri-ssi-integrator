@@ -135,7 +135,7 @@ Three squads per match:
 SSI uses Django session-based authentication. Use `Connect-SSI.ps1` for programmatic login:
 
 ```powershell
-$session = .\scripts\Connect-SSI.ps1 -Username "email@example.com" -Password "password"
+$session = .\archive\scripts-legacy\Connect-SSI.ps1 -Username "email@example.com" -Password "password"
 ```
 
 Alternatively, use a session ID from browser cookies:
@@ -156,7 +156,7 @@ $session.Cookies.Add((New-Object System.Net.Cookie("django_language", "en", "/",
 WordPress uses cookie-based authentication with email 2FA. Use `Connect-WordPress.ps1`:
 
 ```powershell
-$wpSession = .\scripts\Connect-WordPress.ps1 -Username "wp-username" -Password "wp-password"
+$wpSession = .\archive\scripts-legacy\Connect-WordPress.ps1 -Username "wp-username" -Password "wp-password"
 ```
 
 **2FA Flow:**
