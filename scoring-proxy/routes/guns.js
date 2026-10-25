@@ -14,6 +14,7 @@ import {
   updateGun,
   retireGun,
   checkoutGun,
+  undoCheckoutGun,
   returnGun,
   returnAllGuns,
   recordGunMaintenance,
@@ -191,10 +192,29 @@ export function createGunsRouter({ requireAuth, getAdminSession, graphqlWithRefr
   }))
 
   router.delete('/:id', asyncHandler(async (req, res) => {
-    const gun = retireGun(req.params.id)
+    const gun = retireGun(req.params.id, {
+      reason: req.body?.reason || '',
+      retiredBy: req.gunActor,
+    })
     auditMutation({
       endpoint: `/api/v1/guns/${req.params.id}`,
       operation: 'retire_gun',
+      initiatingUserId: req.gunActor,
+      executionIdentityUserId: req.gunActor,
+      targetEntity: { gunId: gun.id, serialNumber: gun.serialNumber, state: gun.state },
+      result: 'success',
+    })
+    res.json({ gun })
+  }))
+
+  router.post('/:id/undo-checkout', asyncHandler(async (req, res) => {
+    const gun = undoCheckoutGun({
+      gunId: req.params.id,
+      undoneBy: req.gunActor,
+    })
+    auditMutation({
+      endpoint: `/api/v1/guns/${req.params.id}/undo-checkout`,
+      operation: 'undo_checkout_gun',
       initiatingUserId: req.gunActor,
       executionIdentityUserId: req.gunActor,
       targetEntity: { gunId: gun.id, serialNumber: gun.serialNumber },

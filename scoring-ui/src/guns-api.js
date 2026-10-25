@@ -84,6 +84,13 @@ export function returnGun(gunId) {
   })
 }
 
+export function undoCheckoutGun(gunId) {
+  return request(`/${gunId}/undo-checkout`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
 export function returnAllGuns({ cupId = null } = {}) {
   return request('/return-all', {
     method: 'POST',

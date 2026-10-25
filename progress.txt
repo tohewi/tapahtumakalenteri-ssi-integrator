@@ -28,4 +28,11 @@
 - Implemented `ssiSetParticipantNumber`, `buildCompetitorNumberSyncPlan`, `POST /api/v1/manage/cup/:id/sync-numbers`, and the `Synkronoi kilpailijanumerot` UI action (`GQL-HF5`).
 ---
 
+## 2026-10-25 14:35 - US-008, US-009 & US-010 (R90-GUN19, R90-GUN20, R90-GUN22)
+- Implemented `undoCheckoutGun` (`POST /api/v1/guns/:id/undo-checkout`) and "Peru lainaus" button in `SquadCard.jsx` (`#/manage`) returning gun to safe and restoring ammo stock.
+- Added shooter `consumptions[]` tracking in `ammo-inventory.json` and `ammo-events.csv` and `maintenanceCount` on guns (`R90-GUN20`).
+- Updated `retireGun` ("Poista") to set `state = 'not_in_use'` preserving full gun history/events and added "Näytä käytöstä poistetut" toggle in `GunsPage.jsx` (`R90-GUN22`).
+---
+
+
 

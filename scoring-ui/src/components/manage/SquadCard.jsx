@@ -16,6 +16,7 @@ export default function SquadCard({
   guns = [],
   onSelectLoanerGun,
   onReturnLoanerGun,
+  onUndoLoanerGun,
 }) {
   const shooterCount = group.total
   const hasIssues = group.issueShooters.length > 0
@@ -87,6 +88,15 @@ export default function SquadCard({
                                 className="px-2 py-0.5 bg-emerald-600 text-white rounded-md text-xs font-semibold active:bg-emerald-700"
                               >
                                 Palauta kaappiin
+                              </button>
+                            )}
+                            {onUndoLoanerGun && (
+                              <button
+                                type="button"
+                                onClick={() => onUndoLoanerGun(assignedGun)}
+                                className="px-2 py-0.5 bg-red-100 text-red-700 border border-red-200 rounded-md text-xs font-semibold active:bg-red-200"
+                              >
+                                Peru lainaus
                               </button>
                             )}
                           </div>

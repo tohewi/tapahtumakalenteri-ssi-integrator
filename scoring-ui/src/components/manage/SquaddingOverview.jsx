@@ -242,6 +242,16 @@ export default function SquaddingOverview({ data, cupId, onRefresh, onPatchShoot
     }
   }
 
+  const handleUndoLoanerGun = async (gun) => {
+    setActionError(null)
+    try {
+      await gunsApi.undoCheckoutGun(gun.id)
+      await loadGuns()
+    } catch (err) {
+      setActionError(err.message)
+    }
+  }
+
   const handleReturnAllLoanerGuns = async () => {
     setActionError(null)
     try {
@@ -567,6 +577,7 @@ export default function SquaddingOverview({ data, cupId, onRefresh, onPatchShoot
               guns={cupScopedGuns}
               onSelectLoanerGun={loanerGunsAllowed ? (s) => setLoanerPickerShooter(s) : undefined}
               onReturnLoanerGun={loanerGunsAllowed ? handleReturnLoanerGun : undefined}
+              onUndoLoanerGun={loanerGunsAllowed ? handleUndoLoanerGun : undefined}
               expanded={expandedSquads.has(group.number)}
               onToggleExpand={() => setExpandedSquads(prev => {
                 const next = new Set(prev)

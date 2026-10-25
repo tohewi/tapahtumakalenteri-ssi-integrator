@@ -370,6 +370,7 @@ describe('R90-GUN3..GUN5: /api/v1/guns Express Route Integration', () => {
     expect(linkedGun.data.gun.ammoMake).toBe('GCI')
 
     // Checkout gun with 100 cartridges -> deducts 100 from GCI ammo calculatedStock (1000 -> 900)
+    // and records shooter consumption event in ammo-inventory.json (R90-GUN20)
     const checkoutWithAmmo = await callApp(adminApp, 'POST', `/api/v1/guns/${gunId}/checkout`, {
       shooterName: 'Teppo Testaaja',
       cupId: '160',
@@ -378,9 +379,30 @@ describe('R90-GUN3..GUN5: /api/v1/guns Express Route Integration', () => {
     expect(checkoutWithAmmo.status).toBe(200)
     expect(checkoutWithAmmo.data.gun.currentCheckout.ammoMake).toBe('GCI')
 
-    const ammoAfterCheckout = await callApp(adminApp, 'GET', '/api/v1/guns/ammo')
+    let ammoAfterCheckout = await callApp(adminApp, 'GET', '/api/v1/guns/ammo')
     expect(ammoAfterCheckout.data.ammo[0].calculatedStock).toBe(900)
     expect(ammoAfterCheckout.data.ammo[0].totalIssued).toBe(100)
+    expect(ammoAfterCheckout.data.ammo[0].consumptions).toHaveLength(1)
+    expect(ammoAfterCheckout.data.ammo[0].consumptions[0].shooterName).toBe('Teppo Testaaja')
+
+    // Undo checkout (R90-GUN19) -> returns gun to safe and restores 100 cartridges to ammo stock (900 -> 1000)
+    const undone = await callApp(adminApp, 'POST', `/api/v1/guns/${gunId}/undo-checkout`, {})
+    expect(undone.status).toBe(200)
+    expect(undone.data.gun.state).toBe('in_gun_safe')
+    expect(undone.data.gun.currentCheckout).toBeNull()
+
+    ammoAfterCheckout = await callApp(adminApp, 'GET', '/api/v1/guns/ammo')
+    expect(ammoAfterCheckout.data.ammo[0].calculatedStock).toBe(1000)
+    expect(ammoAfterCheckout.data.ammo[0].totalIssued).toBe(0)
+    expect(ammoAfterCheckout.data.ammo[0].consumptions[0].undone).toBe(true)
+
+    // Re-checkout gun with 100 cartridges so stock becomes 900 before stocktake
+    await callApp(adminApp, 'POST', `/api/v1/guns/${gunId}/checkout`, {
+      shooterName: 'Teppo Testaaja',
+      cupId: '160',
+      cartridgesGiven: 100,
+    })
+    await callApp(adminApp, 'POST', `/api/v1/guns/${gunId}/return`, {})
 
     // Physical stocktake: actualCount = 880 vs calculatedStock = 900 -> discrepancy = -20
     const stocktakeRes = await callApp(adminApp, 'POST', `/api/v1/guns/ammo/${ammoId}/stocktake`, {
@@ -392,6 +414,16 @@ describe('R90-GUN3..GUN5: /api/v1/guns Express Route Integration', () => {
     expect(stocktakeRes.data.stocktake.actualCount).toBe(880)
     expect(stocktakeRes.data.stocktake.discrepancy).toBe(-20)
     expect(stocktakeRes.data.ammo.calculatedStock).toBe(880)
+
+    // Retire gun ("Poista", R90-GUN22) -> sets state = 'not_in_use', hides from active list, preserves full history
+    const retiredRes = await callApp(adminApp, 'DELETE', `/api/v1/guns/${gunId}`, {
+      reason: 'Myyty / poistettu käytöstä',
+    })
+    expect(retiredRes.status).toBe(200)
+    expect(retiredRes.data.gun.state).toBe('not_in_use')
+    expect(retiredRes.data.gun.usageHistory.length).toBeGreaterThanOrEqual(2)
+    expect((await callApp(adminApp, 'GET', '/api/v1/guns')).data.guns).toHaveLength(0)
+    expect((await callApp(adminApp, 'GET', '/api/v1/guns?includeRetired=true')).data.guns).toHaveLength(1)
 
     // Verify separate files on disk for guns vs ammo (R90-GUN17)
     expect(existsSync(TEST_INVENTORY_FILE)).toBe(true)

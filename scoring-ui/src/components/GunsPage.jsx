@@ -20,6 +20,7 @@ function GunsPageContent({ initialAuthenticated }) {
   const [ammo, setAmmo] = useState([])
   const [config, setConfig] = useState(null)
   const [accessDenied, setAccessDenied] = useState(false)
+  const [includeRetired, setIncludeRetired] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingGun, setEditingGun] = useState(null)
   const [maintGun, setMaintGun] = useState(null)
@@ -64,7 +65,7 @@ function GunsPageContent({ initialAuthenticated }) {
     setError(null)
     try {
       await withSessionCheck(async () => {
-        const res = await gunsApi.getGuns()
+        const res = await gunsApi.getGuns({ includeRetired })
         setGuns(res.guns || [])
         setAmmo(res.ammo || [])
         setConfig(res.config || null)
@@ -80,7 +81,7 @@ function GunsPageContent({ initialAuthenticated }) {
     } finally {
       setLoading(false)
     }
-  }, [setLoading, setError, withSessionCheck])
+  }, [includeRetired, setLoading, setError, withSessionCheck])
 
   useEffect(() => {
     if (!authed) return
@@ -88,7 +89,7 @@ function GunsPageContent({ initialAuthenticated }) {
     setLoading(true)
     setError(null)
     withSessionCheck(async () => {
-      const res = await gunsApi.getGuns()
+      const res = await gunsApi.getGuns({ includeRetired })
       if (!active) return
       setGuns(res.guns || [])
       setAmmo(res.ammo || [])
@@ -108,7 +109,7 @@ function GunsPageContent({ initialAuthenticated }) {
         if (active) setLoading(false)
       })
     return () => { active = false }
-  }, [authed, setLoading, setError, withSessionCheck])
+  }, [authed, includeRetired, setLoading, setError, withSessionCheck])
 
   const handleLogin = async (email, password, apiKey, rememberMe) => {
     await baseLogin(email, password, apiKey, rememberMe)
@@ -253,6 +254,15 @@ function GunsPageContent({ initialAuthenticated }) {
             >
               Patruunavarasto →
             </a>
+            <label className="inline-flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer ml-1">
+              <input
+                type="checkbox"
+                checked={includeRetired}
+                onChange={e => setIncludeRetired(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              Näytä käytöstä poistetut
+            </label>
           </div>
           {inRangeCount > 0 && (
             <button
@@ -296,9 +306,10 @@ function GunsPageContent({ initialAuthenticated }) {
         <div className="space-y-2.5">
           {guns.map(gun => {
             const isInUse = gun.state === 'in_range_use'
+            const isRetired = gun.state === 'not_in_use' || gun.state === 'retired'
             const ammoDisplay = gun.defaultAmmoLabel || gun.ammoMake
             return (
-              <div key={gun.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-xs">
+              <div key={gun.id} className={`bg-white rounded-xl border border-gray-200 p-4 shadow-xs ${isRetired ? 'opacity-75' : ''}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
@@ -306,9 +317,13 @@ function GunsPageContent({ initialAuthenticated }) {
                         {gun.make} {gun.model}
                       </h3>
                       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                        isInUse ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'
+                        isRetired
+                          ? 'bg-gray-200 text-gray-700'
+                          : isInUse
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-green-100 text-green-800'
                       }`}>
-                        {isInUse ? 'Radalla käytössä' : 'Asekaapissa'}
+                        {isRetired ? 'Poistettu käytöstä' : isInUse ? 'Radalla käytössä' : 'Asekaapissa'}
                       </span>
                       {ammoDisplay && (
                         <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
@@ -344,7 +359,7 @@ function GunsPageContent({ initialAuthenticated }) {
                     >
                       Muokkaa
                     </button>
-                    {!isInUse && (
+                    {!isInUse && !isRetired && (
                       <button
                         type="button"
                         onClick={() => handleRetireGun(gun)}

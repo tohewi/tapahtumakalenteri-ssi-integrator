@@ -67,6 +67,7 @@ function retainBackupFile(filePath, oldVersion) {
 }
 
 function normalizeGunRecord(g = {}) {
+  const maintenanceHistory = Array.isArray(g.maintenanceHistory) ? g.maintenanceHistory : []
   return {
     id: g.id || crypto.randomUUID(),
     make: String(g.make || '').trim(),
@@ -81,10 +82,14 @@ function normalizeGunRecord(g = {}) {
     timesUsedSinceMaintenance: Number(g.timesUsedSinceMaintenance || 0),
     cartridgesIssuedTotal: Number(g.cartridgesIssuedTotal || 0),
     cartridgesSinceMaintenance: Number(g.cartridgesSinceMaintenance || 0),
+    maintenanceCount: Number(g.maintenanceCount ?? maintenanceHistory.length),
     lastMaintenanceAt: g.lastMaintenanceAt || null,
     lastMaintenanceBy: g.lastMaintenanceBy || null,
+    retiredAt: g.retiredAt || null,
+    retiredBy: g.retiredBy || null,
+    retireReason: g.retireReason || '',
     currentCheckout: g.currentCheckout || null,
-    maintenanceHistory: Array.isArray(g.maintenanceHistory) ? g.maintenanceHistory : [],
+    maintenanceHistory,
     usageHistory: Array.isArray(g.usageHistory) ? g.usageHistory : [],
     createdAt: g.createdAt || new Date().toISOString(),
   }
@@ -108,6 +113,7 @@ function normalizeAmmoRecord(a = {}) {
     lastStocktakeAt: a.lastStocktakeAt || null,
     purchases: Array.isArray(a.purchases) ? a.purchases : [],
     stocktakes: Array.isArray(a.stocktakes) ? a.stocktakes : [],
+    consumptions: Array.isArray(a.consumptions) ? a.consumptions : [],
     createdAt: a.createdAt || new Date().toISOString(),
   }
 }
@@ -362,15 +368,17 @@ export function buildGunsCsv() {
     'id', 'make', 'model', 'serialNumber', 'acquisitionYear', 'state',
     'defaultAmmoId', 'ammoMake', 'defaultAmmoLabel',
     'timesUsedTotal', 'timesUsedSinceMaintenance',
-    'cartridgesIssuedTotal', 'cartridgesSinceMaintenance',
-    'lastMaintenanceAt', 'lastMaintenanceBy',
+    'cartridgesIssuedTotal', 'cartridgesSinceMaintenance', 'maintenanceCount',
+    'lastMaintenanceAt', 'lastMaintenanceBy', 'retiredAt', 'retiredBy', 'retireReason',
   ]
   const rows = guns.map(g => [
     g.id, g.make, g.model, g.serialNumber, g.acquisitionYear, g.state,
     g.defaultAmmoId || '', g.ammoMake || '', g.defaultAmmoLabel || '',
     g.timesUsedTotal || 0, g.timesUsedSinceMaintenance || 0,
     g.cartridgesIssuedTotal || 0, g.cartridgesSinceMaintenance || 0,
+    g.maintenanceCount ?? (g.maintenanceHistory || []).length,
     g.lastMaintenanceAt || '', g.lastMaintenanceBy || '',
+    g.retiredAt || '', g.retiredBy || '', g.retireReason || '',
   ])
   return toCsv(headers, rows)
 }
@@ -430,6 +438,7 @@ export function buildAmmoEventsCsv() {
     'ammoId', 'make', 'model', 'caliber',
     'count', 'priceEur', 'store', 'purchaseDate',
     'calculatedBefore', 'actualCount', 'discrepancy',
+    'shooterName', 'shooterEmail', 'cupId', 'cupName', 'gunLabel', 'undone',
     'actor', 'notes',
   ]
   const rows = []
@@ -440,7 +449,20 @@ export function buildAmmoEventsCsv() {
         a.id, a.make, a.model, a.caliber,
         p.count ?? 0, p.price ?? 0, p.store || '', p.purchaseDate || '',
         '', '', '',
+        '', '', '', '', '', '',
         p.purchasedBy || '', '',
+      ])
+    }
+    for (const c of (a.consumptions || [])) {
+      rows.push([
+        'consumption', c.id, c.timestamp,
+        a.id, a.make, a.model, a.caliber,
+        c.cartridgesConsumed ?? 0, '', '', '',
+        '', '', '',
+        c.shooterName || '', c.shooterEmail || '', c.cupId || '', c.cupName || '',
+        `${c.gunMake || ''} ${c.gunModel || ''} (${c.serialNumber || ''})`.trim(),
+        c.undone ? 'true' : 'false',
+        c.issuedBy || '', '',
       ])
     }
     for (const s of (a.stocktakes || [])) {
@@ -449,6 +471,7 @@ export function buildAmmoEventsCsv() {
         a.id, a.make, a.model, a.caliber,
         '', '', '', '',
         s.calculatedBefore ?? 0, s.actualCount ?? 0, s.discrepancy ?? 0,
+        '', '', '', '', '', '',
         s.performedBy || '', s.notes || '',
       ])
     }

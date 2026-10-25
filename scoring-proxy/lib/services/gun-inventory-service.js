@@ -159,9 +159,13 @@ function resolveAmmoSelection(ammoList, { defaultAmmoId, ammoMake }) {
   }
 }
 
+function isRetiredGunState(state) {
+  return state === 'retired' || state === 'not_in_use'
+}
+
 export function listGuns({ includeRetired = false } = {}) {
   const { guns } = readGunInventoryData()
-  return includeRetired ? guns : guns.filter(g => g.state !== 'retired')
+  return includeRetired ? guns : guns.filter(g => !isRetiredGunState(g.state))
 }
 
 export function createGun({ make, model, serialNumber, acquisitionYear, defaultAmmoId = null, ammoMake = '' }) {
@@ -254,7 +258,7 @@ export function updateGun(gunId, { make, model, serialNumber, acquisitionYear, d
   return gun
 }
 
-export function retireGun(gunId) {
+export function retireGun(gunId, { reason = '', retiredBy = 'unknown' } = {}) {
   const data = readGunInventoryData()
   const gun = data.guns.find(g => g.id === gunId)
   if (!gun) {
@@ -264,7 +268,10 @@ export function retireGun(gunId) {
     throw new AppError('Cannot retire a gun while it is in range use', 409, 'CONFLICT')
   }
 
-  gun.state = 'retired'
+  gun.state = 'not_in_use'
+  gun.retiredAt = new Date().toISOString()
+  gun.retiredBy = String(retiredBy || 'unknown').trim()
+  gun.retireReason = String(reason || '').trim()
   gun.currentCheckout = null
   writeGunInventoryData(data)
   return gun
@@ -310,15 +317,34 @@ export function checkoutGun({
     ammoItem = ammoData.ammo.find(a => a.make.toLowerCase() === gun.ammoMake.toLowerCase()) || null
   }
 
+  const nowIso = new Date().toISOString()
+  const checkoutId = crypto.randomUUID()
+
   if (rounds > 0 && ammoItem) {
     ammoItem.calculatedStock = (ammoItem.calculatedStock || 0) - rounds
     ammoItem.totalIssued = (ammoItem.totalIssued || 0) + rounds
+    const consumptionRecord = {
+      id: crypto.randomUUID(),
+      checkoutId,
+      timestamp: nowIso,
+      shooterName: cleanShooter,
+      shooterEmail: String(shooterEmail || '').trim(),
+      cupId: cupId != null ? String(cupId) : null,
+      cupName: String(cupName || '').trim(),
+      gunId: gun.id,
+      gunMake: gun.make,
+      gunModel: gun.model,
+      serialNumber: gun.serialNumber,
+      cartridgesConsumed: rounds,
+      issuedBy: checkedOutBy,
+      undone: false,
+    }
+    ammoItem.consumptions = [consumptionRecord, ...(ammoItem.consumptions || [])]
     writeAmmoInventoryData(ammoData)
   }
 
-  const nowIso = new Date().toISOString()
   const checkoutRecord = {
-    id: crypto.randomUUID(),
+    id: checkoutId,
     checkedOutAt: nowIso,
     returnedAt: null,
     shooterName: cleanShooter,
@@ -330,6 +356,7 @@ export function checkoutGun({
     ammoMake: ammoItem?.make || gun.ammoMake || '',
     ammoLabel: ammoItem ? formatAmmoLabel(ammoItem) : (gun.defaultAmmoLabel || gun.ammoMake || ''),
     checkedOutBy,
+    undone: false,
   }
 
   gun.state = 'in_range_use'
@@ -341,6 +368,56 @@ export function checkoutGun({
   gun.usageHistory = [checkoutRecord, ...(gun.usageHistory || [])]
 
   writeGunInventoryData(data)
+  return gun
+}
+
+export function undoCheckoutGun({ gunId, undoneBy = 'unknown' }) {
+  const data = readGunInventoryData()
+  const gun = data.guns.find(g => g.id === gunId)
+  if (!gun) {
+    throw new AppError('Gun not found', 404, 'NOT_FOUND')
+  }
+  if (gun.state !== 'in_range_use' || !gun.currentCheckout) {
+    throw new AppError('Gun does not have an active checkout to undo', 409, 'CONFLICT')
+  }
+
+  const activeCheckout = gun.currentCheckout
+  const rounds = Number(activeCheckout.cartridgesGiven || 0)
+  const nowIso = new Date().toISOString()
+
+  if (Array.isArray(gun.usageHistory)) {
+    const histEntry = gun.usageHistory.find(h => h.id === activeCheckout.id)
+    if (histEntry) {
+      histEntry.undone = true
+      histEntry.undoneAt = nowIso
+      histEntry.undoneBy = undoneBy
+    }
+  }
+
+  gun.timesUsedTotal = Math.max(0, (gun.timesUsedTotal || 0) - 1)
+  gun.timesUsedSinceMaintenance = Math.max(0, (gun.timesUsedSinceMaintenance || 0) - 1)
+  gun.cartridgesIssuedTotal = Math.max(0, (gun.cartridgesIssuedTotal || 0) - rounds)
+  gun.cartridgesSinceMaintenance = Math.max(0, (gun.cartridgesSinceMaintenance || 0) - rounds)
+  gun.state = 'in_gun_safe'
+  gun.currentCheckout = null
+  writeGunInventoryData(data)
+
+  if (rounds > 0 && activeCheckout.ammoId) {
+    const ammoData = readAmmoInventoryData()
+    const ammoItem = ammoData.ammo.find(a => a.id === activeCheckout.ammoId)
+    if (ammoItem) {
+      ammoItem.calculatedStock = (ammoItem.calculatedStock || 0) + rounds
+      ammoItem.totalIssued = Math.max(0, (ammoItem.totalIssued || 0) - rounds)
+      const consEntry = (ammoItem.consumptions || []).find(c => c.checkoutId === activeCheckout.id)
+      if (consEntry) {
+        consEntry.undone = true
+        consEntry.undoneAt = nowIso
+        consEntry.undoneBy = undoneBy
+      }
+      writeAmmoInventoryData(ammoData)
+    }
+  }
+
   return gun
 }
 
@@ -419,6 +496,7 @@ export function recordGunMaintenance({ gunId, notes = '', performedBy = 'unknown
   gun.lastMaintenanceAt = nowIso
   gun.lastMaintenanceBy = performedBy
   gun.maintenanceHistory = [entry, ...(gun.maintenanceHistory || [])]
+  gun.maintenanceCount = gun.maintenanceHistory.length
 
   writeGunInventoryData(data)
   return gun

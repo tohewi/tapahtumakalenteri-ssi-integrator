@@ -114,6 +114,55 @@
       "priority": 7,
       "passes": true,
       "notes": "Implemented CSV export endpoints and download toolbar on #/guns."
+    },
+    {
+      "id": "US-008",
+      "requirementId": "R90-GUN19",
+      "title": "Add undo gun & ammo loan (undoCheckoutGun) in backend and ManagePage (#/manage)",
+      "description": "As a range officer in #/manage, I want to undo an active gun and ammo loan if a shooter leaves before shooting or if the wrong gun/ammo was selected, returning the gun to the safe and restoring the ammo stock and gun usage counters.",
+      "acceptanceCriteria": [
+        "Implement undoCheckoutGun({ gunId, undoneBy }) in scoring-proxy/lib/services/gun-inventory-service.js: return gun to 'in_gun_safe', decrement timesUsedTotal (-1), timesUsedSinceMaintenance (-1), cartridgesIssuedTotal (-cartridgesGiven), and cartridgesSinceMaintenance (-cartridgesGiven) (clamped at 0), restore cartridgesGiven to the linked ammo item's calculatedStock (+cartridgesGiven) and decrement totalIssued (-cartridgesGiven), and mark the usageHistory entry as undone (undone: true, undoneAt, undoneBy)",
+        "Expose POST /api/v1/guns/:id/undo-checkout in scoring-proxy/routes/guns.js (with auditMutation logging) and add undoCheckoutGun(gunId) in scoring-ui/src/guns-api.js",
+        "Add a 'Peru lainaus' (Undo loan) button next to 'Palauta kaappiin' on checked-out shooters in SquadCard.jsx and wire it in SquaddingOverview.jsx",
+        "Add unit and route tests in scoring-proxy/test/gun-inventory.test.js and mark GUN19 / R90-GUN19 as Implemented in docs/requirements/requirements.md and docs/requirements/release-9.0-gun-inventory.md",
+        "scoring-proxy lint and tests pass (npm run lint && npm test) and scoring-ui lint and build pass (npm run lint && npm run build)"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "Implemented undoCheckoutGun in gun-inventory-service.js, POST /api/v1/guns/:id/undo-checkout, and Peru lainaus button in SquadCard.jsx."
+    },
+    {
+      "id": "US-009",
+      "requirementId": "R90-GUN20",
+      "title": "Record shooter ammo consumption events in ammo-inventory.json and gun maintenance count in gun-inventory.json",
+      "description": "As an administrator and reporting analyst, I want gun events stored in gun-inventory.json (tracking total rounds, rounds since maintenance, and total maintenances) and ammo consumption events (who consumed cartridges, when, how many, in which cup/gun) stored in ammo-inventory.json and exported in ammo-events.csv so both gun-centric and ammo-per-shooter reports can be generated from their respective stores.",
+      "acceptanceCriteria": [
+        "Include maintenanceCount (maintenanceHistory.length) on gun records and in buildGunsCsv() in scoring-proxy/lib/services/ammo-inventory-service.js",
+        "Record a consumption event in ammoItem.consumptions[] inside ammo-inventory.json whenever checkoutGun() issues cartridges (cartridgesGiven > 0), storing { id, checkoutId, timestamp, shooterName, shooterEmail, cupId, cupName, gunId, gunMake, gunModel, serialNumber, cartridgesConsumed, issuedBy, undone: false }",
+        "When undoCheckoutGun() is called, mark the matching ammoItem.consumptions[] entry as undone (undone: true, undoneAt, undoneBy) in ammo-inventory.json",
+        "Include 'consumption' rows (with shooterName, shooterEmail, cupName, gunMake/gunModel/serialNumber, count, timestamp, actor, undone status) in buildAmmoEventsCsv() so ammo-events.csv contains purchases, stocktakes, and per-shooter consumptions",
+        "Add unit tests in scoring-proxy/test/gun-inventory.test.js verifying ammoItem.consumptions[], undo marking, maintenanceCount, and CSV exports, and mark GUN20 / R90-GUN20 as Implemented in docs/requirements/",
+        "scoring-proxy lint and tests pass (npm run lint && npm test) and scoring-ui lint and build pass (npm run lint && npm run build)"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "Recorded shooter consumption events in ammo-inventory.json consumptions[] and ammo-events.csv, and added maintenanceCount to guns."
+    },
+    {
+      "id": "US-010",
+      "requirementId": "R90-GUN22",
+      "title": "Preserve full gun history on 'Poista' (Not in Use / Poistettu käytöstä state) with toggle in GunsPage",
+      "description": "As an administrator, when I click 'Poista' on a gun in #/guns (e.g. when a gun is scrapped or sold), I want the gun marked as 'not in use' (Poistettu käytöstä) so it cannot be selected for shooting in #/manage while its full information, counters, and event history remain preserved in gun-inventory.json, CSV exports, and historical view.",
+      "acceptanceCriteria": [
+        "Update retireGun(gunId, { reason, retiredBy }) in scoring-proxy/lib/services/gun-inventory-service.js and DELETE /api/v1/guns/:id in routes/guns.js to preserve the gun record and all usageHistory/maintenanceHistory, setting state = 'not_in_use' (and supporting legacy 'retired'), retiredAt, retiredBy, and retireReason",
+        "Ensure listGuns({ includeRetired: false }) excludes 'not_in_use' and 'retired' guns by default (so LoanerGunPickerSheet never shows them for shooting), while listGuns({ includeRetired: true }), buildGunsCsv(), and buildGunEventsCsv() always include them",
+        "Add a 'Näytä käytöstä poistetut' (Show not-in-use guns) checkbox toggle on GunsPage.jsx (#/guns) displaying 'Poistettu käytöstä' badge and retirement info while keeping all historical counters visible",
+        "Add unit tests in scoring-proxy/test/gun-inventory.test.js verifying that retiring a gun preserves its record and events in storage and CSV exports while excluding it from active loaner selection, and mark GUN22 / R90-GUN22 as Implemented",
+        "scoring-proxy lint and tests pass (npm run lint && npm test) and scoring-ui lint and build pass (npm run lint && npm run build)"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "Updated retireGun to set state='not_in_use' preserving history and added Näytä käytöstä poistetut toggle on GunsPage.jsx."
     }
   ]
 }
