@@ -157,7 +157,9 @@ export const fi = {
   completed: 'Valmis',
   matchCompleted: 'Ottelu valmis',
   gunInventoryTitle: 'Laina-aseet ja huolto',
-  gunInventoryDescription: 'Asekaapin inventaario, käyttökerrat, patruunat ja puhdistukset',
+  gunInventoryDescription: 'Asekaapin inventaario, käyttökerrat ja puhdistukset',
+  ammoInventoryTitle: 'Patruunavarasto',
+  ammoInventoryDescription: 'Patruunaostot, varastosaldo ja inventointi',
 }
 
 // English UI strings
@@ -319,7 +321,9 @@ export const en = {
   completed: 'Completed',
   matchCompleted: 'Match Completed',
   gunInventoryTitle: 'Gun Inventory & Maintenance',
-  gunInventoryDescription: 'Loaner firearms inventory, usage counters, cartridges, and maintenance',
+  gunInventoryDescription: 'Loaner firearms inventory, usage counters, and maintenance',
+  ammoInventoryTitle: 'Ammo Inventory',
+  ammoInventoryDescription: 'Cartridge purchases, stock balance, and stocktake',
 }
 
 // Detect browser language and return appropriate translations

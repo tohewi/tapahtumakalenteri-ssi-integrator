@@ -3,7 +3,6 @@ import { useAuthenticatedPage } from '../hooks/useAuthenticatedPage'
 import LoginScreen from './LoginScreen'
 import ManageSessionGate from './manage/ManageSessionGate'
 import { LegalFooterLinks } from './LegalDocumentPage'
-import AmmoInventorySection from './guns/AmmoInventorySection'
 import { AppHeader, ErrorBanner, Spinner } from './shared'
 import * as gunsApi from '../guns-api'
 
@@ -238,14 +237,22 @@ function GunsPageContent({ initialAuthenticated }) {
 
       {!accessDenied && (
       <div className="p-3 max-w-2xl mx-auto space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={openAddModal}
-            className="px-4 py-2.5 bg-blue-600 text-white rounded-xl font-semibold text-sm active:bg-blue-700"
-          >
-            + Lisää ase
-          </button>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={openAddModal}
+              className="px-4 py-2.5 bg-blue-600 text-white rounded-xl font-semibold text-sm active:bg-blue-700"
+            >
+              + Lisää ase
+            </button>
+            <a
+              href="#/ammo"
+              className="px-3 py-2.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl font-semibold text-xs"
+            >
+              Patruunavarasto →
+            </a>
+          </div>
           {inRangeCount > 0 && (
             <button
               type="button"
@@ -255,6 +262,28 @@ function GunsPageContent({ initialAuthenticated }) {
               Palauta kaikki kaappiin ({inRangeCount})
             </button>
           )}
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-3 flex items-center justify-between flex-wrap gap-2">
+          <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+            CSV-lataukset (Aseet ja tapahtumat)
+          </span>
+          <div className="flex gap-2">
+            <a
+              href={gunsApi.CSV_EXPORT_URLS.guns}
+              download="guns.csv"
+              className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-xs font-medium"
+            >
+              Lataa aseet CSV
+            </a>
+            <a
+              href={gunsApi.CSV_EXPORT_URLS.gunEvents}
+              download="gun-events.csv"
+              className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-xs font-medium"
+            >
+              Lataa asetapahtumat CSV
+            </a>
+          </div>
         </div>
 
         {guns.length === 0 && !loading && (
@@ -355,12 +384,6 @@ function GunsPageContent({ initialAuthenticated }) {
             )
           })}
         </div>
-
-        <AmmoInventorySection
-          ammo={ammo}
-          onRefresh={loadInventory}
-          onError={(msg) => setError(msg)}
-        />
       </div>
       )}
 

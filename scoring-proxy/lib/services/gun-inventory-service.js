@@ -16,6 +16,11 @@ import {
   readAmmoInventoryData,
   writeAmmoInventoryData,
   formatAmmoLabel,
+} from './ammo-inventory-service.js'
+
+export {
+  getGunDataFilePath,
+  getAmmoDataFilePath,
   listAmmo,
   addAmmoPurchase,
   recordAmmoStocktake,
@@ -24,16 +29,6 @@ import {
   buildAmmoCsv,
   buildAmmoEventsCsv,
 } from './ammo-inventory-service.js'
-
-export {
-  listAmmo,
-  addAmmoPurchase,
-  recordAmmoStocktake,
-  buildGunsCsv,
-  buildGunEventsCsv,
-  buildAmmoCsv,
-  buildAmmoEventsCsv,
-}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const CONFIG_PATH = path.resolve(__dirname, '..', '..', '..', 'config', 'gun-inventory-config.yml')

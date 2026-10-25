@@ -54,27 +54,13 @@ export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) 
     : 0
 
   return (
-    <div className="space-y-3 pt-4 border-t border-gray-200">
-      {/* CSV Export Toolbar (R90-GUN15 & GUN16) */}
+    <div className="space-y-3">
+      {/* CSV Export Toolbar for Ammo (R90-GUN16) */}
       <div className="bg-white rounded-xl border border-gray-200 p-3">
         <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">
-          CSV-lataukset (vienti taulukkoon / ulkoiseen järjestelmään)
+          CSV-lataukset (Patruunavarasto ja tapahtumat)
         </div>
         <div className="flex flex-wrap gap-2">
-          <a
-            href={gunsApi.CSV_EXPORT_URLS.guns}
-            download="guns.csv"
-            className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-xs font-medium"
-          >
-            Lataa aseet CSV
-          </a>
-          <a
-            href={gunsApi.CSV_EXPORT_URLS.gunEvents}
-            download="gun-events.csv"
-            className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-xs font-medium"
-          >
-            Lataa asetapahtumat CSV
-          </a>
           <a
             href={gunsApi.CSV_EXPORT_URLS.ammo}
             download="ammo.csv"

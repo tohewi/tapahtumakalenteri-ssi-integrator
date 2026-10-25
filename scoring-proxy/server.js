@@ -15,6 +15,7 @@ import { createReportsRouter } from './routes/reports.js'
 import { createManagementRouter } from './routes/management.js'
 import { createStaffingRouter } from './routes/staffing.js'
 import { createGunsRouter } from './routes/guns.js'
+import { getGunDataFilePath, getAmmoDataFilePath } from './lib/services/gun-inventory-service.js'
 import { initRedis, getActiveSessionCount, isUsingRedis, touchSession } from './lib/session/index.js'
 import { requireAuthV7 } from './middleware/auth-v7.js'
 import { createAuthV7Router } from './routes/auth-v7.js'
@@ -375,7 +376,9 @@ const registerBodyLimit = express.json({ limit: '1kb' })
 // Mount route modules
 // ============================================================
 
-// API versioning info endpoint
+// Log storage configuration on startup
+log.info(`[storage] Gun inventory file: ${getGunDataFilePath()}`)
+log.info(`[storage] Ammo inventory file: ${getAmmoDataFilePath()}`)
 app.use(API_V1_BASE, apiV1Router)
 
 // Scoring routes (mounted at /api/v1/scoring)

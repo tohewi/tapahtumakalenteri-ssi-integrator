@@ -16,22 +16,30 @@ const RENDER_PERSISTENT_DIR = '/var/data'
 export const GUN_SCHEMA_VERSION = 2
 export const AMMO_SCHEMA_VERSION = 2
 
-function getDefaultDataDir() {
-  if (process.env.PERSISTENT_DATA_DIR) return process.env.PERSISTENT_DATA_DIR
-  if (existsSync(RENDER_PERSISTENT_DIR)) return RENDER_PERSISTENT_DIR
-  return LOCAL_DATA_DIR
+function resolveWritablePath(envPath, defaultFileName) {
+  if (envPath) {
+    const dir = path.dirname(envPath)
+    if (existsSync(dir) || !envPath.startsWith(RENDER_PERSISTENT_DIR)) {
+      return envPath
+    }
+  }
+  const baseDir = existsSync(RENDER_PERSISTENT_DIR) ? RENDER_PERSISTENT_DIR : LOCAL_DATA_DIR
+  return path.join(baseDir, defaultFileName)
 }
 
 export function getGunDataFilePath() {
-  return process.env.GUN_INVENTORY_FILE_PATH || path.join(getDefaultDataDir(), 'gun-inventory.json')
+  return resolveWritablePath(process.env.GUN_INVENTORY_FILE_PATH, 'gun-inventory.json')
 }
 
 export function getAmmoDataFilePath() {
-  if (process.env.AMMO_INVENTORY_FILE_PATH) return process.env.AMMO_INVENTORY_FILE_PATH
-  if (process.env.GUN_INVENTORY_FILE_PATH) {
-    return path.join(path.dirname(process.env.GUN_INVENTORY_FILE_PATH), 'ammo-inventory.json')
+  if (process.env.AMMO_INVENTORY_FILE_PATH) {
+    return resolveWritablePath(process.env.AMMO_INVENTORY_FILE_PATH, 'ammo-inventory.json')
   }
-  return path.join(getDefaultDataDir(), 'ammo-inventory.json')
+  if (process.env.GUN_INVENTORY_FILE_PATH) {
+    const gunPath = getGunDataFilePath()
+    return path.join(path.dirname(gunPath), 'ammo-inventory.json')
+  }
+  return resolveWritablePath(null, 'ammo-inventory.json')
 }
 
 function atomicWriteJson(filePath, payload) {
