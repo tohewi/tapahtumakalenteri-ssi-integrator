@@ -1,102 +1,119 @@
 {
   "project": "TurRes SSI Tools",
-  "requirementPrefix": "R90",
-  "branchName": "R90-feature-gun-inventory",
-  "description": "Release 9.0 — Gun Inventory, Usage (Laina-ase & Cartridge Tracking), and Cleaning/Maintenance Tracking with Configurable SSI Group 25874 Admin Access Control",
+  "requirementPrefix": "R79",
+  "branchName": "R79-feature-ical-and-number-sync",
+  "description": "Release 7.9.3 & 7.9.4 — iCal (.ics) Calendar Attachment in Registration Confirmation Email (GQL-HF6) and Cup-Match Competitor Number Sync Hardening (GQL-HF5)",
   "userStories": [
     {
       "id": "US-001",
-      "requirementId": "R90-GUN1",
-      "title": "Add configurable SSI Group 25874 admin access check and config loader",
-      "description": "As an administrator, I want gun inventory access restricted to members of a configurable SSI group (default 25874) with role 'admin' so only authorized club officials can manage firearms.",
+      "requirementId": "GQL-HF6",
+      "title": "Build RFC 5545 iCal (.ics) generator and attach to sendRegistrationConfirmation in lib/email.js",
+      "description": "As a registered shooter, I want an RFC 5545 .ics calendar invite attached to my registration confirmation email so I can add the Cup event to iPhone, Android, Outlook, or Google Calendar with one tap.",
       "acceptanceCriteria": [
-        "Create config/gun-inventory-config.yml defining groupId: '25874' and requiredRole: 'admin' (overridable via SSI_GUN_INVENTORY_GROUP_ID env var)",
-        "Add ssiGetGroupMembers(groupId, cookies) in scoring-proxy/lib/ssi-core/management.js scraping /groups/{groupId}/ to extract group members, emails, and roles",
-        "Create scoring-proxy/lib/services/gun-inventory-service.js helper verifyGunInventoryAdminAccess({ userEmail, cookies, groupId }) with session-level caching",
-        "Add unit tests in scoring-proxy/test/gun-inventory.test.js verifying group member scraping and admin role authorization",
-        "scoring-proxy tests and lint pass (npm run lint && npm test)"
+        "Implement buildRegistrationIcs({ cupId, cupName, starts, ends, shooterEmail, matchSquads }) in scoring-proxy/lib/email.js producing a valid RFC 5545 VCALENDAR/VEVENT (METHOD:REQUEST, deterministic UID registration-{cupId}-{shooterEmail}@ssi-tools, DTSTART, DTEND defaulting to starts + 8h when ends is absent)",
+        "Update sendRegistrationConfirmation in scoring-proxy/lib/email.js to accept optional { cupId, starts, ends } and attach { filename: 'ilmoittautuminen.ics', content: base64, content_type: 'text/calendar; charset=utf-8; method=REQUEST' } when starts is valid (falling back gracefully with a warning if starts is missing)",
+        "Update CupDetail GraphQL query in POST /api/v1/register/submit (scoring-proxy/routes/registration.js) to fetch starts and ends and pass { cupId, starts, ends } to sendRegistrationConfirmation",
+        "Add unit tests in scoring-proxy/test/email-ical.test.js verifying RFC 5545 .ics output, 8h fallback when ends is missing, deterministic UID, and graceful fallback when starts is missing",
+        "Mark GQL-HF6 as Implemented in docs/requirements/requirements.md",
+        "scoring-proxy lint and tests pass (npm run lint && npm test)"
       ],
       "priority": 1,
-      "passes": true,
-      "notes": "Implemented config/gun-inventory-config.yml, ssiGetGroupMembers in management.js, and verifyGunInventoryAdminAccess in gun-inventory-service.js with unit tests."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-002",
-      "requirementId": "R90-GUN2",
-      "title": "Implement JSON file gun inventory store, checkout, return, and maintenance service logic",
-      "description": "As a developer, I want pure service functions backed by scoring-proxy/data/gun-inventory.json for gun CRUD, Laina-ase checkout with cartridge count, single/bulk return to gun safe, and maintenance reset.",
+      "requirementId": "GQL-HF5",
+      "title": "Add SSI participant number scraping and update helpers in lib/ssi-core/participants.js",
+      "description": "As a developer, I want SSI participant number read and update helpers in participants.js so the proxy can inspect and synchronize competitor numbers between a Cup and its included matches.",
       "acceptanceCriteria": [
-        "Implement JSON file persistence in scoring-proxy/lib/services/gun-inventory-service.js (scoring-proxy/data/gun-inventory.json) with fields: id, make, model, serialNumber, acquisitionYear, state ('in_gun_safe' | 'in_range_use' | 'retired'), timesUsedTotal, timesUsedSinceMaintenance, cartridgesIssuedTotal, cartridgesSinceMaintenance, currentCheckout, maintenanceHistory, usageHistory",
-        "Implement createGun, updateGun, retireGun, listGuns, checkoutGun({ gunId, shooterName, shooterEmail, cupId, cupName, cartridgesGiven, checkedOutBy }), returnGun({ gunId, returnedBy }), returnAllGuns({ cupId, returnedBy }), and recordGunMaintenance({ gunId, notes, performedBy })",
-        "Ensure checkoutGun increments timesUsedTotal (+1), timesUsedSinceMaintenance (+1), cartridgesIssuedTotal (+cartridgesGiven), and cartridgesSinceMaintenance (+cartridgesGiven), and recordGunMaintenance resets timesUsedSinceMaintenance and cartridgesSinceMaintenance to 0",
-        "Add unit tests in scoring-proxy/test/gun-inventory.test.js covering CRUD, checkout + cartridge counting (100 and 0 rounds), single/bulk return, and maintenance counter reset",
-        "scoring-proxy tests and lint pass (npm run lint && npm test)"
+        "Add ssiSetParticipantNumber(participantId, number, cookies, participantContentType = 93) in scoring-proxy/lib/ssi-core/participants.js (and re-export in client.js) that GETs /event/participant/{ct}/{id}/edit/, extracts form fields, overrides 'number', and POSTs the edit form",
+        "Add unit tests in scoring-proxy/test/ssi-core-scraping.test.js verifying ssiSetParticipantNumber form field extraction and POST payload",
+        "scoring-proxy lint and tests pass (npm run lint && npm test)"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Implemented JSON gun inventory store, CRUD, checkout with cartridge tracking, single/bulk return, and maintenance reset in gun-inventory-service.js."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-003",
-      "requirementId": "R90-GUN3",
-      "title": "Add /api/v1/guns Express router and mount in server.js",
-      "description": "As a frontend client, I want REST endpoints under /api/v1/guns protected by SSI authentication and SSI Group 25874 admin authorization.",
+      "requirementId": "GQL-HF5",
+      "title": "Implement CUP-canonical competitor number mismatch detection and sync in lib/services/cup-manage.js",
+      "description": "As a cup manager, I want CUP participant numbers treated as canonical and automatically compared/synchronized across all included matches.",
       "acceptanceCriteria": [
-        "Create scoring-proxy/routes/guns.js with GET /api/v1/guns, POST /api/v1/guns, PUT /api/v1/guns/:id, DELETE /api/v1/guns/:id, POST /api/v1/guns/:id/checkout, POST /api/v1/guns/:id/return, POST /api/v1/guns/return-all, and POST /api/v1/guns/:id/maintenance",
-        "Enforce requireAuth and SSI Group 25874 admin check on all /api/v1/guns endpoints, returning 403 when user is not an admin of the configured group",
-        "Log state-changing gun operations via auditMutation and mount router at /api/v1/guns and /api/guns in scoring-proxy/server.js",
-        "Add route integration tests in scoring-proxy/test/gun-inventory.test.js",
-        "scoring-proxy tests and lint pass (npm run lint && npm test)"
+        "Add buildCompetitorNumberSyncPlan(cupEvent) in scoring-proxy/lib/services/cup-manage.js mapping CUP competitors (by first_name + last_name + email key) to included match competitors and returning a deterministic list of mismatches ({ shooterName, email, canonicalNumber, matchId, matchName, matchParticipantId, currentNumber })",
+        "Add syncCupCompetitorNumbers({ cupEvent, cookies }) in scoring-proxy/lib/services/cup-manage.js that applies ssiSetParticipantNumber for each mismatch and returns an idempotent audit summary",
+        "Expose POST /api/v1/manage/cup/:id/sync-numbers in scoring-proxy/routes/management.js (with auditMutation logging) and also include numberMismatchCount in GET /api/v1/manage/cup/:id",
+        "Add unit and route tests in scoring-proxy/test/cup-manage.test.js and scoring-proxy/test/management.test.js",
+        "scoring-proxy lint and tests pass (npm run lint && npm test)"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "Created scoring-proxy/routes/guns.js, mounted at /api/v1/guns and /api/guns in server.js, and verified with route integration tests."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-004",
-      "requirementId": "R90-GUN6",
-      "title": "Create frontend guns-api.js client, i18n strings, and GunsPage (#/guns) UI",
-      "description": "As an authorized group admin, I want a dedicated Gun Inventory page (#/guns) to view gun states, total & since-maintenance usage/cartridges, add/edit/retire guns, record cleaning/maintenance, and return guns to the safe.",
+      "requirementId": "GQL-HF5",
+      "title": "Add competitor number sync button in ManagePage (#/manage) and update requirements & release notes",
+      "description": "As a cup manager on #/manage, I want to see when match competitor numbers differ from CUP numbers and synchronize them with one click.",
       "acceptanceCriteria": [
-        "Create scoring-ui/src/guns-api.js wrapping /api/v1/guns endpoints and add bilingual (fi/en) translations in scoring-ui/src/i18n.js",
-        "Create scoring-ui/src/components/GunsPage.jsx and wire #/guns in scoring-ui/src/main.jsx and HomePage.jsx",
-        "Display each gun's Make, Model, Serial Number, Acquisition Year, state badge (Asekaapissa / Radalla käytössä), total times used & cartridges, times used & cartridges since last cleaning/maintenance, Add/Edit Gun modal, Record Cleaning/Maintenance action, and Return to Safe action",
-        "Add component tests in scoring-ui/src/test/components.test.jsx",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test -- --maxWorkers=1 --pool=threads)"
+        "Add manageSyncNumbers(cupId) in scoring-ui/src/api.js and display a 'Synkronoi kilpailijanumerot' banner/button in SquaddingOverview.jsx when numberMismatchCount > 0",
+        "Add component test in scoring-ui/src/test/components.test.jsx",
+        "Mark GQL-HF5 as Implemented in docs/requirements/requirements.md and add Release 7.9.3 & 7.9.4 entries to docs/RELEASE-NOTES.md",
+        "scoring-proxy tests pass (npm test) and scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test -- --maxWorkers=1 --pool=threads)"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "Created guns-api.js, added i18n strings, and created GunsPage.jsx (#/guns) wired in main.jsx and HomePage.jsx."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-005",
-      "requirementId": "R90-GUN7",
-      "title": "Integrate Laina-ase gun checkout, cartridge input, and bulk return into ManagePage (#/manage)",
-      "description": "As a range officer on #/manage, I want to pick a shooter in the 'Laina-ase' squad, select a gun from the inventory and enter cartridges given (100, 0, or custom), see the checked-out gun on the shooter row, and return guns to the safe at the end of the match.",
+      "requirementId": "R90-GUN11",
+      "title": "Implement Cartridge/Ammo Inventory store, gun-to-ammo linking (defaultAmmoId), checkout deduction, and stocktake discrepancy in backend",
+      "description": "As an administrator, I want backend service functions and REST endpoints for ammo inventory grouped by (make, model, caliber), linking each gun to an ammo inventory item (defaultAmmoId), automatic stock deduction when a loaner gun is checked out with cartridges, and physical stocktake discrepancy calculation.",
       "acceptanceCriteria": [
-        "Create scoring-ui/src/components/manage/LoanerGunPickerSheet.jsx allowing selection of an 'in_gun_safe' gun and cartridge count (quick buttons for 100 patr. and 0 patr. plus numeric input)",
-        "Update SquadCard.jsx and SquaddingOverview.jsx so shooters in the 'Laina-ase' squad show a 'Valitse ase' button (or active gun + cartridge badge with 'Palauta' button when checked out) and a 'Palauta kaikki laina-aseet kaappiin' button when any gun is in range use for the cup",
-        "Add component tests in scoring-ui/src/test/components.test.jsx for LoanerGunPickerSheet and Laina-ase squad integration",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test -- --maxWorkers=1 --pool=threads)"
+        "Implement ammo inventory grouped by (make, model, caliber) in scoring-proxy/lib/services/gun-inventory-service.js: listAmmo(), addAmmoPurchase({ make, model, caliber, count, price, store, purchaseDate, purchasedBy }), and recordAmmoStocktake({ ammoId, actualCount, notes, performedBy }) computing discrepancy = actualCount - calculatedBefore and updating calculatedStock = actualCount",
+        "Support defaultAmmoId (and resolved ammoMake/ammoLabel) on guns in createGun and updateGun in gun-inventory-service.js so each gun can be linked to an ammo inventory item",
+        "Update checkoutGun() so it uses the gun's linked defaultAmmoId (or an explicit ammoId override) when cartridgesGiven > 0, deducting cartridgesGiven from that ammo item's calculatedStock and incrementing totalIssued, and recording ammoId/ammoLabel on currentCheckout and usageHistory",
+        "Expose GET /api/v1/guns/ammo, POST /api/v1/guns/ammo/purchases, and POST /api/v1/guns/ammo/:id/stocktake in scoring-proxy/routes/guns.js (protected by the same SSI Group 25874 admin middleware as gun inventory, and include ammo list in GET /api/v1/guns)",
+        "Add unit and route tests in scoring-proxy/test/gun-inventory.test.js covering gun-to-ammo linking (defaultAmmoId), ammo purchase, checkout deduction, stocktake discrepancy calculation, and Group 25874 admin access enforcement on ammo endpoints",
+        "scoring-proxy lint and tests pass (npm run lint && npm test)"
       ],
       "priority": 5,
       "passes": true,
-      "notes": "Integrated LoanerGunPickerSheet, SquadCard loaner gun badges/actions, and SquaddingOverview bulk return into #/manage."
+      "notes": "Implemented ammo-inventory-service.js, gun-to-ammo linking (defaultAmmoId), checkout deduction, stocktake discrepancy, and CSV builders/endpoints."
     },
     {
       "id": "US-006",
-      "requirementId": "R90-GUN8",
-      "title": "Add Playwright E2E UAT coverage for Gun Inventory (#/guns) and ManagePage Laina-ase checkout/return",
-      "description": "As a QA/developer, I want Playwright E2E tests verifying the full Gun Inventory CRUD, Laina-ase checkout with cartridge count, end-of-match return to gun safe, and maintenance counter reset.",
+      "requirementId": "R90-GUN12",
+      "title": "Add Cartridge/Ammo Inventory, Gun-to-Ammo selector, Purchase Modal, and Stocktake Discrepancy UI to GunsPage (#/guns) and LoanerGunPickerSheet",
+      "description": "As a club equipment manager, I want to select which ammo inventory item is used with each gun in #/guns, manage ammo purchases, perform physical ammo stocktakes with discrepancy display, and automatically pre-select the gun's linked ammo when handing over a loaner gun on #/manage.",
       "acceptanceCriteria": [
-        "Update scoring-proxy/test/e2e/mock-ssi-server.js to serve /groups/25874/ HTML with admin membership for test users",
-        "Add scoring-ui/e2e/gun-inventory.spec.js testing adding a gun on #/guns, checking it out to a Laina-ase shooter on #/manage with 100 cartridges, returning it to the gun safe, and recording cleaning/maintenance on #/guns",
-        "Mark GUN1-GUN8 and R90-GUN1-R90-GUN8 as Implemented in docs/requirements/requirements.md, docs/requirements/release-9.0-gun-inventory.md, and docs/RELEASE-NOTES.md",
-        "All Playwright E2E tests, scoring-proxy tests, and scoring-ui tests pass"
+        "Add getAmmo, addAmmoPurchase, and recordAmmoStocktake in scoring-ui/src/guns-api.js",
+        "Update GunsPage.jsx (#/guns) to include: (a) a 'Käytettävä patruuna (Linked Ammo)' dropdown in the Gun Add/Edit modal populated from the Ammo Inventory items (make + model + caliber) and displayed on each gun card, (b) a Patruunavarasto (Ammo Inventory) section showing each (make, model, caliber) with calculatedStock, totalPurchased, totalIssued, and last stocktake discrepancy, (c) '+ Lisää patruunaosto' modal (make, model, caliber, count, price, store, date, buyer), and (d) 'Inventointi' modal (actualCount -> shows live discrepancy vs calculatedStock)",
+        "Update LoanerGunPickerSheet.jsx and SquadCard.jsx to automatically pre-select and display the selected gun's linked ammo item (e.g. 'Patruuna: GCI FMJ 124gr (9x19)') and deduct from that ammo item on checkout",
+        "Add component tests in scoring-ui/src/test/components.test.jsx",
+        "scoring-proxy tests pass (npm test) and scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test -- --maxWorkers=1 --pool=threads)"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": "Added gun-inventory.spec.js Playwright E2E test and updated requirements.md, release-9.0-gun-inventory.md, and RELEASE-NOTES.md."
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "requirementId": "R90-GUN15",
+      "title": "Add CSV export for Gun Inventory, Gun Events, Ammo Inventory, and Ammo Events",
+      "description": "As an authorized group admin, I want to download CSV files for gun inventory, gun loan/maintenance events, ammo inventory, and ammo purchase/stocktake events so I can easily import them into external systems or spreadsheets.",
+      "acceptanceCriteria": [
+        "Implement buildGunsCsv(), buildGunEventsCsv(), buildAmmoCsv(), and buildAmmoEventsCsv() in scoring-proxy/lib/services/gun-inventory-service.js with proper CSV escaping (RFC 4180)",
+        "Expose GET /api/v1/guns/export/guns.csv, GET /api/v1/guns/export/gun-events.csv, GET /api/v1/guns/export/ammo.csv, and GET /api/v1/guns/export/ammo-events.csv in scoring-proxy/routes/guns.js (protected by SSI Group 25874 admin middleware, returning Content-Type: text/csv; charset=utf-8 and Content-Disposition attachment headers)",
+        "Add CSV download buttons ('Lataa aseet CSV', 'Lataa asetapahtumat CSV', 'Lataa patruunat CSV', 'Lataa patruunatapahtumat CSV') to GunsPage.jsx (#/guns)",
+        "Add unit and route tests in scoring-proxy/test/gun-inventory.test.js and mark GUN11-GUN16 and R90-GUN11-R90-GUN16 as Implemented in docs/requirements/requirements.md, docs/requirements/release-9.0-gun-inventory.md, and docs/RELEASE-NOTES.md",
+        "scoring-proxy tests pass (npm test) and scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test -- --maxWorkers=1 --pool=threads)"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
     }
   ]
 }

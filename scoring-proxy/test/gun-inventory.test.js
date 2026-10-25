@@ -332,5 +332,56 @@ describe('R90-GUN3..GUN5: /api/v1/guns Express Route Integration', () => {
     expect(maint.status).toBe(200)
     expect(maint.data.gun.timesUsedSinceMaintenance).toBe(0)
     expect(maint.data.gun.cartridgesSinceMaintenance).toBe(0)
+
+    // Non-admin is also blocked on ammo and export endpoints (R90-GUN12/GUN15/GUN16)
+    const deniedAmmo = await callApp(staffApp, 'GET', '/api/v1/guns/ammo')
+    expect(deniedAmmo.status).toBe(403)
+
+    // Admin adds ammo purchase (GCI FMJ 124gr 9x19, 1000 rounds)
+    const ammoPurchase = await callApp(adminApp, 'POST', '/api/v1/guns/ammo/purchases', {
+      make: 'GCI',
+      model: 'FMJ 124gr',
+      caliber: '9x19',
+      count: 1000,
+      price: 250,
+      store: 'Asekauppa Turku',
+      purchaseDate: '2026-10-20',
+      purchasedBy: 'Tommi Wiren',
+    })
+    expect(ammoPurchase.status).toBe(201)
+    expect(ammoPurchase.data.ammo.calculatedStock).toBe(1000)
+    const ammoId = ammoPurchase.data.ammo.id
+
+    // Link gun to ammo via defaultAmmoId
+    const linkedGun = await callApp(adminApp, 'PUT', `/api/v1/guns/${gunId}`, {
+      defaultAmmoId: ammoId,
+    })
+    expect(linkedGun.status).toBe(200)
+    expect(linkedGun.data.gun.defaultAmmoId).toBe(ammoId)
+    expect(linkedGun.data.gun.ammoMake).toBe('GCI')
+
+    // Checkout gun with 100 cartridges -> deducts 100 from GCI ammo calculatedStock (1000 -> 900)
+    const checkoutWithAmmo = await callApp(adminApp, 'POST', `/api/v1/guns/${gunId}/checkout`, {
+      shooterName: 'Teppo Testaaja',
+      cupId: '160',
+      cartridgesGiven: 100,
+    })
+    expect(checkoutWithAmmo.status).toBe(200)
+    expect(checkoutWithAmmo.data.gun.currentCheckout.ammoMake).toBe('GCI')
+
+    const ammoAfterCheckout = await callApp(adminApp, 'GET', '/api/v1/guns/ammo')
+    expect(ammoAfterCheckout.data.ammo[0].calculatedStock).toBe(900)
+    expect(ammoAfterCheckout.data.ammo[0].totalIssued).toBe(100)
+
+    // Physical stocktake: actualCount = 880 vs calculatedStock = 900 -> discrepancy = -20
+    const stocktakeRes = await callApp(adminApp, 'POST', `/api/v1/guns/ammo/${ammoId}/stocktake`, {
+      actualCount: 880,
+      notes: 'Syysinventointi',
+    })
+    expect(stocktakeRes.status).toBe(200)
+    expect(stocktakeRes.data.stocktake.calculatedBefore).toBe(900)
+    expect(stocktakeRes.data.stocktake.actualCount).toBe(880)
+    expect(stocktakeRes.data.stocktake.discrepancy).toBe(-20)
+    expect(stocktakeRes.data.ammo.calculatedStock).toBe(880)
   })
 })

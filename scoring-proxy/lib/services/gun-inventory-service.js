@@ -3,17 +3,38 @@
 // ============================================================
 
 import crypto from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse } from 'yaml'
 import { ssiGetGroupMembers } from '../ssi-core/management.js'
 import { log } from '../logger.js'
 import { AppError } from '../errors/AppError.js'
+import {
+  readInventoryData,
+  writeInventoryData,
+  formatAmmoLabel,
+  listAmmo,
+  addAmmoPurchase,
+  recordAmmoStocktake,
+  buildGunsCsv,
+  buildGunEventsCsv,
+  buildAmmoCsv,
+  buildAmmoEventsCsv,
+} from './ammo-inventory-service.js'
+
+export {
+  listAmmo,
+  addAmmoPurchase,
+  recordAmmoStocktake,
+  buildGunsCsv,
+  buildGunEventsCsv,
+  buildAmmoCsv,
+  buildAmmoEventsCsv,
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const CONFIG_PATH = path.resolve(__dirname, '..', '..', '..', 'config', 'gun-inventory-config.yml')
-const DEFAULT_DATA_PATH = path.resolve(__dirname, '..', '..', 'data', 'gun-inventory.json')
 
 const DEFAULT_CONFIG = {
   accessControl: {
@@ -28,38 +49,6 @@ const DEFAULT_CONFIG = {
 
 const accessCache = new Map()
 const ACCESS_CACHE_TTL_MS = 10 * 60 * 1000
-
-function getDataFilePath() {
-  return process.env.GUN_INVENTORY_FILE_PATH || DEFAULT_DATA_PATH
-}
-
-function readInventoryData() {
-  const filePath = getDataFilePath()
-  if (!existsSync(filePath)) {
-    return { guns: [] }
-  }
-  let parsed
-  try {
-    parsed = JSON.parse(readFileSync(filePath, 'utf8'))
-  } catch (err) {
-    log.error('[guns] Failed to read or parse existing gun-inventory.json:', err.message)
-    throw new AppError('Gun inventory storage is unreadable', 500, 'STORAGE_READ_ERROR')
-  }
-  if (!Array.isArray(parsed?.guns)) {
-    log.error('[guns] Malformed gun-inventory.json: missing guns array')
-    throw new AppError('Gun inventory storage is malformed', 500, 'STORAGE_READ_ERROR')
-  }
-  return parsed
-}
-
-function writeInventoryData(data) {
-  const filePath = getDataFilePath()
-  const dir = path.dirname(filePath)
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
-  }
-  writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8')
-}
 
 export function loadGunInventoryConfig() {
   let fileConfig = {}
@@ -154,12 +143,31 @@ export async function verifyGunInventoryAdminAccess({
 // Gun Inventory CRUD, Checkout, Return & Maintenance Logic
 // ============================================================
 
+function resolveAmmoSelection(data, { defaultAmmoId, ammoMake }) {
+  if (defaultAmmoId) {
+    const linked = data.ammo.find(a => a.id === defaultAmmoId)
+    if (linked) {
+      return {
+        defaultAmmoId: linked.id,
+        ammoMake: linked.make,
+        defaultAmmoLabel: formatAmmoLabel(linked),
+      }
+    }
+  }
+  const cleanAmmoMake = String(ammoMake || '').trim()
+  return {
+    defaultAmmoId: null,
+    ammoMake: cleanAmmoMake,
+    defaultAmmoLabel: cleanAmmoMake,
+  }
+}
+
 export function listGuns({ includeRetired = false } = {}) {
   const { guns } = readInventoryData()
   return includeRetired ? guns : guns.filter(g => g.state !== 'retired')
 }
 
-export function createGun({ make, model, serialNumber, acquisitionYear }) {
+export function createGun({ make, model, serialNumber, acquisitionYear, defaultAmmoId = null, ammoMake = '' }) {
   const cleanMake = String(make || '').trim()
   const cleanModel = String(model || '').trim()
   const cleanSerial = String(serialNumber || '').trim()
@@ -177,12 +185,15 @@ export function createGun({ make, model, serialNumber, acquisitionYear }) {
     throw new AppError(`Gun with serial number "${cleanSerial}" already exists`, 409, 'CONFLICT')
   }
 
+  const ammoMeta = resolveAmmoSelection(data, { defaultAmmoId, ammoMake })
+
   const gun = {
     id: crypto.randomUUID(),
     make: cleanMake,
     model: cleanModel,
     serialNumber: cleanSerial,
     acquisitionYear: yearNum,
+    ...ammoMeta,
     state: 'in_gun_safe',
     timesUsedTotal: 0,
     timesUsedSinceMaintenance: 0,
@@ -201,7 +212,7 @@ export function createGun({ make, model, serialNumber, acquisitionYear }) {
   return gun
 }
 
-export function updateGun(gunId, { make, model, serialNumber, acquisitionYear }) {
+export function updateGun(gunId, { make, model, serialNumber, acquisitionYear, defaultAmmoId, ammoMake }) {
   const data = readInventoryData()
   const gun = data.guns.find(g => g.id === gunId)
   if (!gun) {
@@ -233,6 +244,12 @@ export function updateGun(gunId, { make, model, serialNumber, acquisitionYear })
     }
     gun.acquisitionYear = yearNum
   }
+  if (defaultAmmoId !== undefined || ammoMake !== undefined) {
+    Object.assign(gun, resolveAmmoSelection(data, {
+      defaultAmmoId: defaultAmmoId !== undefined ? defaultAmmoId : gun.defaultAmmoId,
+      ammoMake: ammoMake !== undefined ? ammoMake : gun.ammoMake,
+    }))
+  }
 
   writeInventoryData(data)
   return gun
@@ -261,6 +278,7 @@ export function checkoutGun({
   cupId = null,
   cupName = '',
   cartridgesGiven,
+  ammoId = null,
   checkedOutBy = 'unknown',
 }) {
   const cleanShooter = String(shooterName || '').trim()
@@ -286,6 +304,17 @@ export function checkoutGun({
     throw new AppError(`Gun is not available in gun safe (current state: ${gun.state})`, 409, 'CONFLICT')
   }
 
+  const resolvedAmmoId = ammoId || gun.defaultAmmoId || null
+  let ammoItem = resolvedAmmoId ? data.ammo.find(a => a.id === resolvedAmmoId) : null
+  if (!ammoItem && gun.ammoMake) {
+    ammoItem = data.ammo.find(a => a.make.toLowerCase() === gun.ammoMake.toLowerCase()) || null
+  }
+
+  if (rounds > 0 && ammoItem) {
+    ammoItem.calculatedStock = (ammoItem.calculatedStock || 0) - rounds
+    ammoItem.totalIssued = (ammoItem.totalIssued || 0) + rounds
+  }
+
   const nowIso = new Date().toISOString()
   const checkoutRecord = {
     id: crypto.randomUUID(),
@@ -296,6 +325,9 @@ export function checkoutGun({
     cupId: cupId != null ? String(cupId) : null,
     cupName: String(cupName || '').trim(),
     cartridgesGiven: rounds,
+    ammoId: ammoItem?.id || null,
+    ammoMake: ammoItem?.make || gun.ammoMake || '',
+    ammoLabel: ammoItem ? formatAmmoLabel(ammoItem) : (gun.defaultAmmoLabel || gun.ammoMake || ''),
     checkedOutBy,
   }
 

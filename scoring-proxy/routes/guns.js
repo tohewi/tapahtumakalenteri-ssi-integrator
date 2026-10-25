@@ -1,5 +1,5 @@
 // ============================================================
-// Gun Inventory Routes — /api/v1/guns (Release 9.0 — R90)
+// Gun & Ammo Inventory Routes — /api/v1/guns (Release 9.0 — R90)
 // ============================================================
 
 import express from 'express'
@@ -17,6 +17,13 @@ import {
   returnGun,
   returnAllGuns,
   recordGunMaintenance,
+  listAmmo,
+  addAmmoPurchase,
+  recordAmmoStocktake,
+  buildGunsCsv,
+  buildGunEventsCsv,
+  buildAmmoCsv,
+  buildAmmoEventsCsv,
 } from '../lib/services/gun-inventory-service.js'
 
 export function createGunsRouter({ requireAuth, getAdminSession, graphqlWithRefresh }) {
@@ -52,7 +59,7 @@ export function createGunsRouter({ requireAuth, getAdminSession, graphqlWithRefr
       })
 
       if (!access.allowed) {
-        log.warn(`[guns] Access denied for user=${userEmail} group=${access.groupId} reason=${access.reason}`)
+        log.warn(`[guns] Access denied for user=${userEmail} name="${userName}" group=${access.groupId} reason=${access.reason}`)
         return res.status(403).json({
           error: `Gun inventory access requires role "${access.requiredRole}" in SSI group ${access.groupId}`,
           groupId: access.groupId,
@@ -61,7 +68,7 @@ export function createGunsRouter({ requireAuth, getAdminSession, graphqlWithRefr
         })
       }
 
-      req.gunActor = userEmail || 'unknown'
+      req.gunActor = userEmail || userName || 'unknown'
       return next()
     } catch (err) {
       log.error('[guns] Group admin verification failed:', err.message)
@@ -76,13 +83,88 @@ export function createGunsRouter({ requireAuth, getAdminSession, graphqlWithRefr
     const cfg = loadGunInventoryConfig()
     res.json({
       guns: listGuns({ includeRetired }),
+      ammo: listAmmo(),
       config: cfg,
     })
   }))
 
+  router.get('/ammo', asyncHandler(async (_req, res) => {
+    res.json({ ammo: listAmmo() })
+  }))
+
+  router.post('/ammo/purchases', asyncHandler(async (req, res) => {
+    const { make, model, caliber, count, price, store, purchaseDate, purchasedBy } = req.body || {}
+    const ammo = addAmmoPurchase({
+      make,
+      model,
+      caliber,
+      count,
+      price,
+      store,
+      purchaseDate,
+      purchasedBy: purchasedBy || req.gunActor,
+    })
+    auditMutation({
+      endpoint: '/api/v1/guns/ammo/purchases',
+      operation: 'add_ammo_purchase',
+      initiatingUserId: req.gunActor,
+      executionIdentityUserId: req.gunActor,
+      targetEntity: { ammoId: ammo.id, make: ammo.make, model: ammo.model, caliber: ammo.caliber, count },
+      result: 'success',
+    })
+    res.status(201).json({ ammo })
+  }))
+
+  router.post('/ammo/:id/stocktake', asyncHandler(async (req, res) => {
+    const { actualCount, notes } = req.body || {}
+    const result = recordAmmoStocktake({
+      ammoId: req.params.id,
+      actualCount,
+      notes,
+      performedBy: req.gunActor,
+    })
+    auditMutation({
+      endpoint: `/api/v1/guns/ammo/${req.params.id}/stocktake`,
+      operation: 'record_ammo_stocktake',
+      initiatingUserId: req.gunActor,
+      executionIdentityUserId: req.gunActor,
+      targetEntity: {
+        ammoId: result.ammo.id,
+        actualCount: result.stocktake.actualCount,
+        discrepancy: result.stocktake.discrepancy,
+      },
+      result: 'success',
+    })
+    res.json(result)
+  }))
+
+  router.get('/export/guns.csv', asyncHandler(async (_req, res) => {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', 'attachment; filename="guns.csv"')
+    res.send(buildGunsCsv())
+  }))
+
+  router.get('/export/gun-events.csv', asyncHandler(async (_req, res) => {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', 'attachment; filename="gun-events.csv"')
+    res.send(buildGunEventsCsv())
+  }))
+
+  router.get('/export/ammo.csv', asyncHandler(async (_req, res) => {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', 'attachment; filename="ammo.csv"')
+    res.send(buildAmmoCsv())
+  }))
+
+  router.get('/export/ammo-events.csv', asyncHandler(async (_req, res) => {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', 'attachment; filename="ammo-events.csv"')
+    res.send(buildAmmoEventsCsv())
+  }))
+
   router.post('/', asyncHandler(async (req, res) => {
-    const { make, model, serialNumber, acquisitionYear } = req.body || {}
-    const gun = createGun({ make, model, serialNumber, acquisitionYear })
+    const { make, model, serialNumber, acquisitionYear, defaultAmmoId, ammoMake } = req.body || {}
+    const gun = createGun({ make, model, serialNumber, acquisitionYear, defaultAmmoId, ammoMake })
     auditMutation({
       endpoint: '/api/v1/guns',
       operation: 'create_gun',
@@ -95,8 +177,8 @@ export function createGunsRouter({ requireAuth, getAdminSession, graphqlWithRefr
   }))
 
   router.put('/:id', asyncHandler(async (req, res) => {
-    const { make, model, serialNumber, acquisitionYear } = req.body || {}
-    const gun = updateGun(req.params.id, { make, model, serialNumber, acquisitionYear })
+    const { make, model, serialNumber, acquisitionYear, defaultAmmoId, ammoMake } = req.body || {}
+    const gun = updateGun(req.params.id, { make, model, serialNumber, acquisitionYear, defaultAmmoId, ammoMake })
     auditMutation({
       endpoint: `/api/v1/guns/${req.params.id}`,
       operation: 'update_gun',
@@ -122,7 +204,7 @@ export function createGunsRouter({ requireAuth, getAdminSession, graphqlWithRefr
   }))
 
   router.post('/:id/checkout', asyncHandler(async (req, res) => {
-    const { shooterName, shooterEmail, cupId, cupName, cartridgesGiven } = req.body || {}
+    const { shooterName, shooterEmail, cupId, cupName, cartridgesGiven, ammoId } = req.body || {}
     const gun = checkoutGun({
       gunId: req.params.id,
       shooterName,
@@ -130,6 +212,7 @@ export function createGunsRouter({ requireAuth, getAdminSession, graphqlWithRefr
       cupId,
       cupName,
       cartridgesGiven,
+      ammoId,
       checkedOutBy: req.gunActor,
     })
     auditMutation({
@@ -142,6 +225,7 @@ export function createGunsRouter({ requireAuth, getAdminSession, graphqlWithRefr
         shooterName: gun.currentCheckout?.shooterName,
         cupId: gun.currentCheckout?.cupId,
         cartridgesGiven: gun.currentCheckout?.cartridgesGiven,
+        ammoId: gun.currentCheckout?.ammoId,
       },
       result: 'success',
     })

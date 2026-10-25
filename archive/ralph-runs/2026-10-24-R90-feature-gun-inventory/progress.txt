@@ -1,0 +1,56 @@
+# Ralph Progress Log
+
+## Codebase Patterns
+- **Module Boundaries (`scoring-proxy`)**:
+  - Routes (`scoring-proxy/routes/*.js`) are thin HTTP dispatchers: validate input -> call service (`lib/services/*.js`) or domain module (`lib/ssi-core/*.js`) -> return JSON.
+  - Domain modules in `scoring-proxy/lib/ssi-core/*.js` (`graphql.js`, `scoring.js`, `participants.js`, `management.js`) may import ONLY `http-helpers.js` (and `constants.js`/`../logger.js` where needed). Never import across domain modules or from `ssi-core/index.js`.
+  - Services (`scoring-proxy/lib/services/*.js`) hold pure business logic and orchestration without Express `req`/`res`.
+- **SSI GraphQL `SquadInterface` Inline Fragment Rule**:
+  - In SSI GraphQL, `match.squads` is typed as `SquadInterface` (exposing only `id`, `number`, `comment`). Never query `competitors` or `max_competitors` directly on `squads` — always wrap them in `... on NordicSquadNode { max_competitors competitors { ... } }`.
+- **Logging Discipline**:
+  - Never use raw `console.log` / `console.warn` / `console.error` in `scoring-proxy/routes/*.js` or `scoring-proxy/middleware/*.js`. Always import `{ log } from '../lib/logger.js'`.
+- **File Size Guideline**:
+  - Keep backend routes/services and frontend React page components under ~500 lines. Extract sub-components into `scoring-ui/src/components/<feature>/` and business logic into `scoring-proxy/lib/services/`.
+- **Agent Instructions Synchronization**:
+  - Whenever `AGENTS.md` is updated with new patterns or file mappings, `.github/copilot-instructions.md` must be updated identically in the same commit.
+
+---
+
+## 2026-10-24 21:12 - US-001 (R90-GUN1)
+- Created `config/gun-inventory-config.yml` (`groupId: "25874"`, `requiredRole: "admin"`, `cartridgesGiven: 100`).
+- Added `ssiGetGroupMembers(groupId, cookies)` in `scoring-proxy/lib/ssi-core/management.js` and `verifyGunInventoryAdminAccess` in `scoring-proxy/lib/services/gun-inventory-service.js`.
+- Added unit tests in `scoring-proxy/test/gun-inventory.test.js`.
+---
+
+## 2026-10-24 21:16 - US-002 (R90-GUN2..GUN5)
+- Implemented JSON file gun inventory persistence (`scoring-proxy/data/gun-inventory.json`) and service functions (`listGuns`, `createGun`, `updateGun`, `retireGun`, `checkoutGun`, `returnGun`, `returnAllGuns`, `recordGunMaintenance`) in `scoring-proxy/lib/services/gun-inventory-service.js`.
+- Added unit tests in `scoring-proxy/test/gun-inventory.test.js` covering CRUD, `100` and `0` cartridge checkouts, single/bulk return to safe, and maintenance counter reset.
+---
+
+## 2026-10-24 21:21 - US-003 (R90-GUN3..GUN5)
+- Created `scoring-proxy/routes/guns.js` enforcing `requireAuth` and SSI Group 25874 admin access (`requireGunGroupAdmin`) with `auditMutation` logging across all state-changing endpoints.
+- Mounted `/api/v1/guns` and `/api/guns` in `scoring-proxy/server.js` and added route integration tests in `scoring-proxy/test/gun-inventory.test.js`.
+---
+
+## 2026-10-24 21:26 - US-004 (R90-GUN6)
+- Created `scoring-ui/src/guns-api.js`, added bilingual (`fi`/`en`) strings in `scoring-ui/src/i18n.js`, and created `scoring-ui/src/components/GunsPage.jsx` (`#/guns`).
+- Wired `#/guns` in `scoring-ui/src/main.jsx` and `scoring-ui/src/components/HomePage.jsx`.
+---
+
+## 2026-10-24 21:31 - US-005 (R90-GUN7)
+- Created `scoring-ui/src/components/manage/LoanerGunPickerSheet.jsx` with `100 patr.` and `0 patr.` quick buttons and numeric input.
+- Updated `SquadCard.jsx` and `SquaddingOverview.jsx` to allow picking a gun for shooters in the `"Laina-ase"` squad, display checked-out gun + cartridge badges, and return guns individually or via "Palauta kaikki laina-aseet kaappiin".
+- Added component tests in `scoring-ui/src/test/components.test.jsx`.
+---
+
+## 2026-10-24 21:38 - US-006 (R90-GUN8)
+- Updated `scoring-proxy/test/e2e/mock-ssi-server.js` to serve `/groups/25874/` with `admin` role for `manager@example.com` and `admin@example.com`.
+- Added `scoring-ui/e2e/gun-inventory.spec.js` testing end-to-end Gun Inventory CRUD (`#/guns`), Laina-ase checkout with `100 patr.` in `#/manage`, bulk return to gun safe, and cleaning/maintenance counter reset.
+- Marked `GUN1–GUN8` (`R90-GUN1`–`R90-GUN8`) as `✅ Implemented` in `docs/requirements/requirements.md`, `docs/requirements/release-9.0-gun-inventory.md`, and `docs/RELEASE-NOTES.md`.
+---
+
+
+
+
+
+
