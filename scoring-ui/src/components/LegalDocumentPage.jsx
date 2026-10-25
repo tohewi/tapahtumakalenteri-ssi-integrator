@@ -1,18 +1,19 @@
 import { AppHeader } from './shared'
+import t from '../i18n'
 
 export function LegalFooterLinks() {
   return (
     <footer className="mt-6 pb-6 text-center text-xs text-gray-500 space-x-3">
       <a href="#/privacy" className="underline hover:text-gray-700">
-        Tietosuojaseloste (Privacy Policy)
+        {t.privacyPolicyLink}
       </a>
       <span>·</span>
       <a href="#/privacy-guns" className="underline hover:text-gray-700">
-        Laina-aseiden rekisteriseloste (Gun Register Privacy)
+        {t.gunRegisterPrivacyLink}
       </a>
       <span>·</span>
       <a href="#/terms" className="underline hover:text-gray-700">
-        Käyttöehdot (Terms of Service)
+        {t.termsOfServiceLink}
       </a>
     </footer>
   )

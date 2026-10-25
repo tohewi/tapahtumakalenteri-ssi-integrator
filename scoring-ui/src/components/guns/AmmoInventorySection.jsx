@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import * as gunsApi from '../../guns-api'
+import t from '../../i18n'
 
 export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) {
   const [showPurchaseModal, setShowPurchaseModal] = useState(false)
@@ -9,7 +10,7 @@ export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) 
   const [purchaseForm, setPurchaseForm] = useState({
     make: '',
     model: '',
-    caliber: '9x19',
+    caliber: '.22 LR',
     count: 1000,
     price: 0,
     store: '',
@@ -58,7 +59,7 @@ export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) 
       {/* CSV Export Toolbar for Ammo (R90-GUN16) */}
       <div className="bg-white rounded-xl border border-gray-200 p-3">
         <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">
-          CSV-lataukset (Patruunavarasto ja tapahtumat)
+          CSV-lataukset ({t.ammoInventoryTitle})
         </div>
         <div className="flex flex-wrap gap-2">
           <a
@@ -81,21 +82,21 @@ export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) 
       {/* Ammo Inventory Section Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-bold text-gray-900 text-base">Patruunavarasto (Merkki · Malli · Kaliiperi)</h2>
-          <p className="text-xs text-gray-500">Ostot, kulutus laina-aseilla ja inventointierot</p>
+          <h2 className="font-bold text-gray-900 text-base">{t.ammoInventoryTitle}</h2>
+          <p className="text-xs text-gray-500">{t.ammoInventoryDescription}</p>
         </div>
         <button
           type="button"
           onClick={() => setShowPurchaseModal(true)}
           className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-semibold text-xs active:bg-indigo-700"
         >
-          + Lisää patruunaosto
+          {t.addAmmoPurchaseButton}
         </button>
       </div>
 
       {ammo.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-5 text-center text-gray-500 text-xs">
-          Ei patruunoita varastossa. Kirjaa ensimmäinen patruunaosto painamalla &quot;+ Lisää patruunaosto&quot;.
+          Ei patruunoita varastossa. Kirjaa ensimmäinen patruunaosto painamalla &quot;{t.addAmmoPurchaseButton}&quot;.
         </div>
       ) : (
         <div className="space-y-2">
@@ -115,24 +116,24 @@ export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) 
                   onClick={() => openStocktake(item)}
                   className="px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-xs font-semibold active:bg-amber-100"
                 >
-                  Inventointi
+                  {t.stocktakeButton}
                 </button>
               </div>
 
               <div className="mt-2 grid grid-cols-2 gap-2 bg-gray-50 rounded-lg p-2 text-xs">
                 <div>
-                  <span className="text-gray-500 block">Laskennallinen saldo</span>
+                  <span className="text-gray-500 block">{t.calculatedStockLabel}</span>
                   <span className="font-bold text-gray-900 text-sm">{item.calculatedStock} patr.</span>
                 </div>
                 <div>
-                  <span className="text-gray-500 block">Viimeisin inventointiero</span>
+                  <span className="text-gray-500 block">{t.lastDiscrepancyLabel}</span>
                   <span className={`font-semibold ${
                     item.lastDiscrepancy === null ? 'text-gray-500'
                       : item.lastDiscrepancy === 0 ? 'text-green-700'
                       : 'text-red-700'
                   }`}>
                     {item.lastDiscrepancy === null
-                      ? 'Ei inventoitu'
+                      ? t.notStocktakenYet
                       : `${item.lastDiscrepancy > 0 ? '+' : ''}${item.lastDiscrepancy} patr.`}
                   </span>
                 </div>
@@ -146,25 +147,25 @@ export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) 
       {showPurchaseModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <form onSubmit={handleSavePurchase} className="bg-white rounded-2xl shadow-xl p-5 max-w-sm w-full space-y-2.5 text-xs">
-            <h3 className="font-bold text-gray-900 text-base">Lisää patruunaosto</h3>
+            <h3 className="font-bold text-gray-900 text-base">{t.addAmmoPurchaseTitle}</h3>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block font-medium text-gray-700 mb-0.5">Merkki (Make)</label>
+                <label className="block font-medium text-gray-700 mb-0.5">{t.makeLabel}</label>
                 <input
                   type="text"
                   required
-                  placeholder="esim. GCI"
+                  placeholder={t.ammoMakePlaceholder}
                   value={purchaseForm.make}
                   onChange={e => setPurchaseForm(s => ({ ...s, make: e.target.value }))}
                   className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="block font-medium text-gray-700 mb-0.5">Malli (Model)</label>
+                <label className="block font-medium text-gray-700 mb-0.5">{t.modelLabel}</label>
                 <input
                   type="text"
                   required
-                  placeholder="esim. FMJ 124gr"
+                  placeholder={t.ammoModelPlaceholder}
                   value={purchaseForm.model}
                   onChange={e => setPurchaseForm(s => ({ ...s, model: e.target.value }))}
                   className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
@@ -173,18 +174,18 @@ export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) 
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <label className="block font-medium text-gray-700 mb-0.5">Kaliiperi</label>
+                <label className="block font-medium text-gray-700 mb-0.5">{t.caliberLabel}</label>
                 <input
                   type="text"
                   required
-                  placeholder="9x19"
+                  placeholder=".22 LR"
                   value={purchaseForm.caliber}
                   onChange={e => setPurchaseForm(s => ({ ...s, caliber: e.target.value }))}
                   className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm font-mono"
                 />
               </div>
               <div>
-                <label className="block font-medium text-gray-700 mb-0.5">Määrä (kpl)</label>
+                <label className="block font-medium text-gray-700 mb-0.5">{t.countLabel}</label>
                 <input
                   type="number"
                   required
@@ -195,7 +196,7 @@ export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) 
                 />
               </div>
               <div>
-                <label className="block font-medium text-gray-700 mb-0.5">Hinta (€)</label>
+                <label className="block font-medium text-gray-700 mb-0.5">{t.priceLabel}</label>
                 <input
                   type="number"
                   step="0.01"
@@ -208,17 +209,17 @@ export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) 
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block font-medium text-gray-700 mb-0.5">Ostopaikka (Store)</label>
+                <label className="block font-medium text-gray-700 mb-0.5">{t.storeLabel}</label>
                 <input
                   type="text"
-                  placeholder="esim. XXL / Asekauppa"
+                  placeholder={t.storePlaceholder}
                   value={purchaseForm.store}
                   onChange={e => setPurchaseForm(s => ({ ...s, store: e.target.value }))}
                   className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="block font-medium text-gray-700 mb-0.5">Päivämäärä</label>
+                <label className="block font-medium text-gray-700 mb-0.5">{t.dateLabel}</label>
                 <input
                   type="date"
                   value={purchaseForm.purchaseDate}
@@ -228,10 +229,10 @@ export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) 
               </div>
             </div>
             <div>
-              <label className="block font-medium text-gray-700 mb-0.5">Ostaja (Who purchased)</label>
+              <label className="block font-medium text-gray-700 mb-0.5">{t.buyerLabel}</label>
               <input
                 type="text"
-                placeholder="esim. Tommi Wiren"
+                placeholder={t.buyerPlaceholder}
                 value={purchaseForm.purchasedBy}
                 onChange={e => setPurchaseForm(s => ({ ...s, purchasedBy: e.target.value }))}
                 className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
@@ -243,13 +244,13 @@ export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) 
                 onClick={() => setShowPurchaseModal(false)}
                 className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium"
               >
-                Peruuta
+                {t.cancel}
               </button>
               <button
                 type="submit"
                 className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold"
               >
-                Tallenna osto
+                {t.savePurchaseButton}
               </button>
             </div>
           </form>
@@ -261,19 +262,19 @@ export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) 
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <form onSubmit={handleSaveStocktake} className="bg-white rounded-2xl shadow-xl p-5 max-w-sm w-full space-y-3 text-xs">
             <h3 className="font-bold text-gray-900 text-base">
-              Patruunainventointi: {stocktakeItem.make} {stocktakeItem.model} ({stocktakeItem.caliber})
+              {t.stocktakeButton}: {stocktakeItem.make} {stocktakeItem.model} ({stocktakeItem.caliber})
             </h3>
             <div className="bg-gray-50 rounded-xl p-3 space-y-1">
-              <div>Laskennallinen saldo: <strong>{stocktakeItem.calculatedStock} patr.</strong></div>
+              <div>{t.calculatedStockLabel}: <strong>{stocktakeItem.calculatedStock} patr.</strong></div>
               <div>
-                Inventointiero:{' '}
+                {t.lastDiscrepancyLabel}:{' '}
                 <strong className={liveDiscrepancy === 0 ? 'text-green-700' : 'text-red-700'}>
                   {liveDiscrepancy > 0 ? '+' : ''}{liveDiscrepancy} patr.
                 </strong>
               </div>
             </div>
             <div>
-              <label className="block font-medium text-gray-700 mb-1">Todellinen laskettu määrä (kpl)</label>
+              <label className="block font-medium text-gray-700 mb-1">{t.actualCountLabel}</label>
               <input
                 type="number"
                 required
@@ -285,7 +286,7 @@ export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) 
             </div>
             <input
               type="text"
-              placeholder="Huomiot (valinnainen)"
+              placeholder={t.notesOptionalPlaceholder}
               value={stocktakeNotes}
               onChange={e => setStocktakeNotes(e.target.value)}
               className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
@@ -296,13 +297,13 @@ export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) 
                 onClick={() => setStocktakeItem(null)}
                 className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium"
               >
-                Peruuta
+                {t.cancel}
               </button>
               <button
                 type="submit"
                 className="flex-1 py-2.5 bg-amber-600 text-white rounded-xl text-sm font-semibold"
               >
-                Vahvista inventointi
+                {t.confirmStocktakeButton}
               </button>
             </div>
           </form>

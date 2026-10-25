@@ -5,6 +5,7 @@ import ManageSessionGate from './manage/ManageSessionGate'
 import { LegalFooterLinks } from './LegalDocumentPage'
 import { AppHeader, ErrorBanner, Spinner } from './shared'
 import * as gunsApi from '../guns-api'
+import t from '../i18n'
 
 export default function GunsPage() {
   return (
@@ -391,43 +392,43 @@ function GunsPageContent({ initialAuthenticated }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <form onSubmit={handleSaveGun} className="bg-white rounded-2xl shadow-xl p-5 max-w-sm w-full space-y-3">
             <h3 className="font-bold text-gray-900 text-base">
-              {editingGun ? 'Muokkaa asetta' : 'Lisää uusi ase'}
+              {editingGun ? t.editGunTitle : t.addGunTitle}
             </h3>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Merkki (Make)</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">{t.makeLabel}</label>
               <input
                 type="text"
                 required
-                placeholder="esim. CZ tai Glock"
+                placeholder={t.gunMakePlaceholder}
                 value={formState.make}
                 onChange={e => setFormState(s => ({ ...s, make: e.target.value }))}
                 className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Malli (Model)</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">{t.modelLabel}</label>
               <input
                 type="text"
                 required
-                placeholder="esim. Shadow 2 tai 17 Gen5"
+                placeholder={t.gunModelPlaceholder}
                 value={formState.model}
                 onChange={e => setFormState(s => ({ ...s, model: e.target.value }))}
                 className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Sarjanumero (Serial Number)</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">{t.serialNumberLabel}</label>
               <input
                 type="text"
                 required
-                placeholder="esim. D482910"
+                placeholder={t.serialNumberPlaceholder}
                 value={formState.serialNumber}
                 onChange={e => setFormState(s => ({ ...s, serialNumber: e.target.value }))}
                 className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm font-mono"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Hankintavuosi (Acquisition Year)</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">{t.acquisitionYearLabel}</label>
               <input
                 type="number"
                 required
@@ -440,14 +441,14 @@ function GunsPageContent({ initialAuthenticated }) {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
-                Käytettävä patruuna varastosta (Linked Ammo)
+                {t.linkedAmmoLabel}
               </label>
               <select
                 value={formState.defaultAmmoId}
                 onChange={e => setFormState(s => ({ ...s, defaultAmmoId: e.target.value }))}
                 className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
               >
-                <option value="">— Ei linkitettyä varastoerää —</option>
+                <option value="">{t.noLinkedAmmo}</option>
                 {ammo.map(a => (
                   <option key={a.id} value={a.id}>
                     {a.make} {a.model} ({a.caliber}) · Saldo: {a.calculatedStock} patr.
@@ -457,11 +458,11 @@ function GunsPageContent({ initialAuthenticated }) {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
-                Suositeltu patruunamerkki ja malli
+                {t.recommendedAmmoLabel}
               </label>
               <input
                 type="text"
-                placeholder="esim. GCI"
+                placeholder={t.recommendedAmmoPlaceholder}
                 value={formState.ammoMake}
                 onChange={e => setFormState(s => ({ ...s, ammoMake: e.target.value }))}
                 className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
@@ -473,13 +474,13 @@ function GunsPageContent({ initialAuthenticated }) {
                 onClick={() => setShowAddModal(false)}
                 className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium"
               >
-                Peruuta
+                {t.cancel}
               </button>
               <button
                 type="submit"
                 className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold"
               >
-                Tallenna
+                {t.save}
               </button>
             </div>
           </form>
