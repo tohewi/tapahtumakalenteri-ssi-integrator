@@ -13,6 +13,7 @@ import {
   createGun,
   updateGun,
   retireGun,
+  restoreGun,
   checkoutGun,
   undoCheckoutGun,
   returnGun,
@@ -199,6 +200,21 @@ export function createGunsRouter({ requireAuth, getAdminSession, graphqlWithRefr
     auditMutation({
       endpoint: `/api/v1/guns/${req.params.id}`,
       operation: 'retire_gun',
+      initiatingUserId: req.gunActor,
+      executionIdentityUserId: req.gunActor,
+      targetEntity: { gunId: gun.id, serialNumber: gun.serialNumber, state: gun.state },
+      result: 'success',
+    })
+    res.json({ gun })
+  }))
+
+  router.post('/:id/restore', asyncHandler(async (req, res) => {
+    const gun = restoreGun(req.params.id, {
+      restoredBy: req.gunActor,
+    })
+    auditMutation({
+      endpoint: `/api/v1/guns/${req.params.id}/restore`,
+      operation: 'restore_gun',
       initiatingUserId: req.gunActor,
       executionIdentityUserId: req.gunActor,
       targetEntity: { gunId: gun.id, serialNumber: gun.serialNumber, state: gun.state },

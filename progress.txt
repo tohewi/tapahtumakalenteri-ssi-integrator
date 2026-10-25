@@ -34,5 +34,11 @@
 - Updated `retireGun` ("Poista") to set `state = 'not_in_use'` preserving full gun history/events and added "Näytä käytöstä poistetut" toggle in `GunsPage.jsx` (`R90-GUN22`).
 ---
 
+## 2026-10-25 14:48 - US-011 (R90-GUN23 & R90-GUN11)
+- Implemented `restoreGun` in `scoring-proxy/lib/services/gun-inventory-service.js`, `POST /api/v1/guns/:id/restore` in `routes/guns.js`, `restoreGun` in `guns-api.js`, and "Palauta asekaappiin" button on retired gun cards in `GunsPage.jsx`.
+- Removed the duplicate "Käytettävä patruuna varastosta" field from the Gun Add/Edit modal in `GunsPage.jsx` and replaced "Suositeltu patruunamerkki ja malli" with a single dropdown populated from the ammo inventory without stock numbers.
+---
+
+
 
 

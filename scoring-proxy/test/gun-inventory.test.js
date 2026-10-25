@@ -425,6 +425,12 @@ describe('R90-GUN3..GUN5: /api/v1/guns Express Route Integration', () => {
     expect((await callApp(adminApp, 'GET', '/api/v1/guns')).data.guns).toHaveLength(0)
     expect((await callApp(adminApp, 'GET', '/api/v1/guns?includeRetired=true')).data.guns).toHaveLength(1)
 
+    // Restore gun ("Palauta asekaappiin", R90-GUN23) -> returns from 'not_in_use' to 'in_gun_safe'
+    const restoredRes = await callApp(adminApp, 'POST', `/api/v1/guns/${gunId}/restore`, {})
+    expect(restoredRes.status).toBe(200)
+    expect(restoredRes.data.gun.state).toBe('in_gun_safe')
+    expect((await callApp(adminApp, 'GET', '/api/v1/guns')).data.guns).toHaveLength(1)
+
     // Verify separate files on disk for guns vs ammo (R90-GUN17)
     expect(existsSync(TEST_INVENTORY_FILE)).toBe(true)
     expect(existsSync(TEST_AMMO_FILE)).toBe(true)

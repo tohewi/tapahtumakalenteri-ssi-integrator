@@ -168,6 +168,16 @@ function GunsPageContent({ initialAuthenticated }) {
     }
   }
 
+  const handleRestoreGun = async (gun) => {
+    setError(null)
+    try {
+      await gunsApi.restoreGun(gun.id)
+      await loadInventory()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   const handleReturnGun = async (gun) => {
     setError(null)
     try {
@@ -359,6 +369,15 @@ function GunsPageContent({ initialAuthenticated }) {
                     >
                       Muokkaa
                     </button>
+                    {isRetired && (
+                      <button
+                        type="button"
+                        onClick={() => handleRestoreGun(gun)}
+                        className="px-2.5 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold active:bg-emerald-700"
+                      >
+                        Palauta asekaappiin
+                      </button>
+                    )}
                     {!isInUse && !isRetired && (
                       <button
                         type="button"
@@ -456,32 +475,27 @@ function GunsPageContent({ initialAuthenticated }) {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
-                {t.linkedAmmoLabel}
+                {t.recommendedAmmoLabel}
               </label>
               <select
                 value={formState.defaultAmmoId}
-                onChange={e => setFormState(s => ({ ...s, defaultAmmoId: e.target.value }))}
+                onChange={e => {
+                  const selectedAmmo = ammo.find(a => a.id === e.target.value)
+                  setFormState(s => ({
+                    ...s,
+                    defaultAmmoId: e.target.value,
+                    ammoMake: selectedAmmo ? `${selectedAmmo.make} ${selectedAmmo.model} (${selectedAmmo.caliber})` : '',
+                  }))
+                }}
                 className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
               >
                 <option value="">{t.noLinkedAmmo}</option>
                 {ammo.map(a => (
                   <option key={a.id} value={a.id}>
-                    {a.make} {a.model} ({a.caliber}) · Saldo: {a.calculatedStock} patr.
+                    {a.make} {a.model} ({a.caliber})
                   </option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                {t.recommendedAmmoLabel}
-              </label>
-              <input
-                type="text"
-                placeholder={t.recommendedAmmoPlaceholder}
-                value={formState.ammoMake}
-                onChange={e => setFormState(s => ({ ...s, ammoMake: e.target.value }))}
-                className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
-              />
             </div>
             <div className="flex gap-2 pt-2">
               <button

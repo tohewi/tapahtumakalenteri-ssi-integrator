@@ -63,6 +63,13 @@ export function retireGun(gunId) {
   })
 }
 
+export function restoreGun(gunId) {
+  return request(`/${gunId}/restore`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
 export function checkoutGun(gunId, { shooterName, shooterEmail, cupId, cupName, cartridgesGiven, ammoId = null }) {
   return request(`/${gunId}/checkout`, {
     method: 'POST',

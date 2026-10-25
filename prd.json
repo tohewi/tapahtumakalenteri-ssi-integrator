@@ -163,6 +163,21 @@
       "priority": 10,
       "passes": true,
       "notes": "Updated retireGun to set state='not_in_use' preserving history and added Näytä käytöstä poistetut toggle on GunsPage.jsx."
+    },
+    {
+      "id": "US-011",
+      "requirementId": "R90-GUN23",
+      "title": "Allow restoring gun from 'Poistettu käytöstä' to 'Asekaapissa' and replace gun modal ammo fields with single 'Suositeltu patruunamerkki ja malli' dropdown",
+      "description": "As an administrator on #/guns, I want to restore a 'Poistettu käytöstä' gun back to 'Asekaapissa', and in the Gun Add/Edit modal I want a single 'Suositeltu patruunamerkki ja malli' dropdown populated from the ammo inventory (without stock numbers and without a duplicate 'Käytettävä patruuna varastosta' field).",
+      "acceptanceCriteria": [
+        "Implement restoreGun(gunId) in scoring-proxy/lib/services/gun-inventory-service.js (transitioning 'not_in_use'/'retired' to 'in_gun_safe'), expose POST /api/v1/guns/:id/restore in scoring-proxy/routes/guns.js (with auditMutation), add restoreGun(gunId) in scoring-ui/src/guns-api.js, and render a 'Palauta asekaappiin' button on retired gun cards in GunsPage.jsx",
+        "In GunsPage.jsx Add/Edit modal, remove the 'Käytettävä patruuna varastosta' field and make 'Suositeltu patruunamerkki ja malli' a single <select> dropdown populated from ammo inventory items formatted as '{make} {model} ({caliber})' without showing stock count",
+        "Add unit and route tests in scoring-proxy/test/gun-inventory.test.js for restoreGun and mark GUN11, GUN23 / R90-GUN11, R90-GUN23 as Implemented in docs/requirements/",
+        "scoring-proxy lint and tests pass (npm run lint && npm test) and scoring-ui lint and build pass (npm run lint && npm run build)"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "Implemented restoreGun (POST /api/v1/guns/:id/restore) with Palauta asekaappiin button and replaced gun modal ammo fields with single Suositeltu patruunamerkki ja malli dropdown."
     }
   ]
 }

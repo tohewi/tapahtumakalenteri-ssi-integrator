@@ -277,6 +277,24 @@ export function retireGun(gunId, { reason = '', retiredBy = 'unknown' } = {}) {
   return gun
 }
 
+export function restoreGun(gunId, { restoredBy = 'unknown' } = {}) {
+  const data = readGunInventoryData()
+  const gun = data.guns.find(g => g.id === gunId)
+  if (!gun) {
+    throw new AppError('Gun not found', 404, 'NOT_FOUND')
+  }
+  if (!isRetiredGunState(gun.state)) {
+    throw new AppError('Gun is not in not_in_use/retired state', 409, 'CONFLICT')
+  }
+
+  gun.state = 'in_gun_safe'
+  gun.restoredAt = new Date().toISOString()
+  gun.restoredBy = String(restoredBy || 'unknown').trim()
+  gun.currentCheckout = null
+  writeGunInventoryData(data)
+  return gun
+}
+
 export function checkoutGun({
   gunId,
   shooterName,
