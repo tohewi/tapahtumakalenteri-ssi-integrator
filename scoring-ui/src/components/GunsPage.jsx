@@ -434,7 +434,7 @@ function GunsPageContent({ initialAuthenticated }) {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">
-                Suositeltu patruunamerkki (esim. GCI Glockille)
+                Suositeltu patruunamerkki ja malli
               </label>
               <input
                 type="text"
