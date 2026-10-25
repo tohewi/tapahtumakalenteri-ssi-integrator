@@ -404,16 +404,30 @@ describe('R90-GUN3..GUN5: /api/v1/guns Express Route Integration', () => {
     })
     await callApp(adminApp, 'POST', `/api/v1/guns/${gunId}/return`, {})
 
-    // Physical stocktake: actualCount = 880 vs calculatedStock = 900 -> discrepancy = -20
-    const stocktakeRes = await callApp(adminApp, 'POST', `/api/v1/guns/ammo/${ammoId}/stocktake`, {
-      actualCount: 880,
+    // Physical stocktake: whole-inventory stocktake (R90-GUN14)
+    // actualCount = 880 vs calculatedStock = 900 -> discrepancy = -20, sets lastStocktakeCount = 880
+    const stocktakeRes = await callApp(adminApp, 'POST', '/api/v1/guns/ammo/stocktake', {
+      items: [{ ammoId, actualCount: 880 }],
       notes: 'Syysinventointi',
     })
     expect(stocktakeRes.status).toBe(200)
-    expect(stocktakeRes.data.stocktake.calculatedBefore).toBe(900)
-    expect(stocktakeRes.data.stocktake.actualCount).toBe(880)
-    expect(stocktakeRes.data.stocktake.discrepancy).toBe(-20)
-    expect(stocktakeRes.data.ammo.calculatedStock).toBe(880)
+    expect(stocktakeRes.data.stocktakes[0].calculatedBefore).toBe(900)
+    expect(stocktakeRes.data.stocktakes[0].actualCount).toBe(880)
+    expect(stocktakeRes.data.stocktakes[0].discrepancy).toBe(-20)
+    expect(stocktakeRes.data.ammo[0].calculatedStock).toBe(880)
+    expect(stocktakeRes.data.ammo[0].lastStocktakeCount).toBe(880)
+
+    // Purchase 500 more rounds after stocktake -> calculatedStock = 880 + 500 - 0 = 1380
+    const postStocktakePurchase = await callApp(adminApp, 'POST', '/api/v1/guns/ammo/purchases', {
+      make: 'GCI',
+      model: 'FMJ 124gr',
+      caliber: '9x19',
+      count: 500,
+      price: 125,
+    })
+    expect(postStocktakePurchase.status).toBe(201)
+    expect(postStocktakePurchase.data.ammo.calculatedStock).toBe(1380)
+    expect(postStocktakePurchase.data.ammo.purchasedSinceStocktake).toBe(500)
 
     // Retire gun ("Poista", R90-GUN22) -> sets state = 'not_in_use', hides from active list, preserves full history
     const retiredRes = await callApp(adminApp, 'DELETE', `/api/v1/guns/${gunId}`, {

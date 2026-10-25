@@ -24,6 +24,7 @@ export {
   listAmmo,
   addAmmoPurchase,
   recordAmmoStocktake,
+  recordWholeAmmoStocktake,
   buildGunsCsv,
   buildGunEventsCsv,
   buildAmmoCsv,
@@ -339,8 +340,13 @@ export function checkoutGun({
   const checkoutId = crypto.randomUUID()
 
   if (rounds > 0 && ammoItem) {
-    ammoItem.calculatedStock = (ammoItem.calculatedStock || 0) - rounds
     ammoItem.totalIssued = (ammoItem.totalIssued || 0) + rounds
+    if (ammoItem.lastStocktakeCount !== null && ammoItem.lastStocktakeCount !== undefined) {
+      ammoItem.issuedSinceStocktake = (ammoItem.issuedSinceStocktake || 0) + rounds
+      ammoItem.calculatedStock = Number(ammoItem.lastStocktakeCount) + (ammoItem.purchasedSinceStocktake || 0) - ammoItem.issuedSinceStocktake
+    } else {
+      ammoItem.calculatedStock = (ammoItem.calculatedStock || 0) - rounds
+    }
     const consumptionRecord = {
       id: crypto.randomUUID(),
       checkoutId,
@@ -424,8 +430,13 @@ export function undoCheckoutGun({ gunId, undoneBy = 'unknown' }) {
     const ammoData = readAmmoInventoryData()
     const ammoItem = ammoData.ammo.find(a => a.id === activeCheckout.ammoId)
     if (ammoItem) {
-      ammoItem.calculatedStock = (ammoItem.calculatedStock || 0) + rounds
       ammoItem.totalIssued = Math.max(0, (ammoItem.totalIssued || 0) - rounds)
+      if (ammoItem.lastStocktakeCount !== null && ammoItem.lastStocktakeCount !== undefined) {
+        ammoItem.issuedSinceStocktake = Math.max(0, (ammoItem.issuedSinceStocktake || 0) - rounds)
+        ammoItem.calculatedStock = Number(ammoItem.lastStocktakeCount) + (ammoItem.purchasedSinceStocktake || 0) - ammoItem.issuedSinceStocktake
+      } else {
+        ammoItem.calculatedStock = (ammoItem.calculatedStock || 0) + rounds
+      }
       const consEntry = (ammoItem.consumptions || []).find(c => c.checkoutId === activeCheckout.id)
       if (consEntry) {
         consEntry.undone = true

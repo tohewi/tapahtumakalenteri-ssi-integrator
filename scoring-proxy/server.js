@@ -38,6 +38,7 @@ function readBooleanEnv(name, defaultValue = false) {
 
 // Compliance hardening: paid tracking is disabled by default.
 const FEATURE_PAID_TOGGLE_ENABLED = readBooleanEnv('FEATURE_PAID_TOGGLE_ENABLED', false)
+const FEATURE_STAFFING_ENABLED = readBooleanEnv('FEATURE_STAFFING_ENABLED', false)
 
 if (!SSI_ADMIN_API_KEY) {
   log.warn('[graphql] SSI_ADMIN_API_KEY is not set — GraphQL requests will fail')
@@ -433,14 +434,16 @@ const reportsRouter = createReportsRouter({
 app.use(`${API_V1_BASE}/report`, reportsRouter)
 app.use(`${API_LEGACY_BASE}/report`, legacyApiAlias, reportsRouter)
 
-// Staffing routes
-const staffingRouter = createStaffingRouter({
-  requireAuth,
-  graphqlWithRefresh,
-  getAdminSession,
-})
-app.use(`${API_V1_BASE}/staffing`, staffingRouter)
-app.use(`${API_LEGACY_BASE}/staffing`, legacyApiAlias, staffingRouter)
+// Staffing routes (disabled by default per GUN24)
+if (FEATURE_STAFFING_ENABLED) {
+  const staffingRouter = createStaffingRouter({
+    requireAuth,
+    graphqlWithRefresh,
+    getAdminSession,
+  })
+  app.use(`${API_V1_BASE}/staffing`, staffingRouter)
+  app.use(`${API_LEGACY_BASE}/staffing`, legacyApiAlias, staffingRouter)
+}
 
 // Gun inventory routes (R90 — Group 25874 admin restricted)
 const gunsRouter = createGunsRouter({

@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import * as gunsApi from '../../guns-api'
+import { formatDateShort } from '../shared'
 import t from '../../i18n'
 
 export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) {
   const [showPurchaseModal, setShowPurchaseModal] = useState(false)
-  const [stocktakeItem, setStocktakeItem] = useState(null)
-  const [actualCount, setActualCount] = useState(0)
+  const [showStocktakeTable, setShowStocktakeTable] = useState(false)
+  const [countsById, setCountsById] = useState({})
   const [stocktakeNotes, setStocktakeNotes] = useState('')
   const [purchaseForm, setPurchaseForm] = useState({
     make: '',
@@ -18,6 +19,12 @@ export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) 
     purchasedBy: '',
   })
 
+  const latestStocktakeAt = ammo.reduce((latest, item) => {
+    if (!item.lastStocktakeAt) return latest
+    if (!latest || item.lastStocktakeAt > latest) return item.lastStocktakeAt
+    return latest
+  }, null)
+
   const handleSavePurchase = async (e) => {
     e.preventDefault()
     try {
@@ -29,30 +36,33 @@ export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) 
     }
   }
 
-  const openStocktake = (item) => {
-    setStocktakeItem(item)
-    setActualCount(item.calculatedStock ?? 0)
+  const openWholeStocktake = () => {
+    const initial = {}
+    for (const item of ammo) {
+      initial[item.id] = item.calculatedStock ?? 0
+    }
+    setCountsById(initial)
     setStocktakeNotes('')
+    setShowStocktakeTable(true)
   }
 
-  const handleSaveStocktake = async (e) => {
+  const handleSaveWholeStocktake = async (e) => {
     e.preventDefault()
-    if (!stocktakeItem) return
     try {
-      await gunsApi.recordAmmoStocktake(stocktakeItem.id, {
-        actualCount: Number(actualCount),
+      const items = ammo.map(item => ({
+        ammoId: item.id,
+        actualCount: Number(countsById[item.id] ?? item.calculatedStock ?? 0),
+      }))
+      await gunsApi.recordWholeAmmoStocktake({
+        items,
         notes: stocktakeNotes,
       })
-      setStocktakeItem(null)
+      setShowStocktakeTable(false)
       await onRefresh()
     } catch (err) {
       onError?.(err.message)
     }
   }
-
-  const liveDiscrepancy = stocktakeItem
-    ? Number(actualCount) - (stocktakeItem.calculatedStock ?? 0)
-    : 0
 
   return (
     <div className="space-y-3">
@@ -80,66 +90,169 @@ export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) 
       </div>
 
       {/* Ammo Inventory Section Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="font-bold text-gray-900 text-base">{t.ammoInventoryTitle}</h2>
-          <p className="text-xs text-gray-500">{t.ammoInventoryDescription}</p>
+          <p className="text-xs text-gray-500">
+            {latestStocktakeAt
+              ? `Viimeisin inventointi: ${formatDateShort(latestStocktakeAt)}`
+              : 'Inventointia ei ole vielä tehty'}
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowPurchaseModal(true)}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-semibold text-xs active:bg-indigo-700"
-        >
-          {t.addAmmoPurchaseButton}
-        </button>
+        <div className="flex items-center gap-2">
+          {ammo.length > 0 && (
+            <button
+              type="button"
+              onClick={openWholeStocktake}
+              className="px-3.5 py-2 bg-amber-600 text-white rounded-xl font-semibold text-xs active:bg-amber-700"
+            >
+              {t.stocktakeButton}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowPurchaseModal(true)}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-semibold text-xs active:bg-indigo-700"
+          >
+            {t.addAmmoPurchaseButton}
+          </button>
+        </div>
       </div>
 
+      {/* Whole-Inventory Summary Table (R90-GUN14) */}
       {ammo.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-5 text-center text-gray-500 text-xs">
           Ei patruunoita varastossa. Kirjaa ensimmäinen patruunaosto painamalla &quot;{t.addAmmoPurchaseButton}&quot;.
         </div>
       ) : (
-        <div className="space-y-2">
-          {ammo.map(item => (
-            <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-xs">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h3 className="font-bold text-gray-900 text-sm">
-                    {item.make} {item.model} <span className="text-indigo-700 font-mono">({item.caliber})</span>
-                  </h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Ostettu yht: {item.totalPurchased} patr. ({item.totalSpendEur} €) · Luovutettu yht: {item.totalIssued} patr.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => openStocktake(item)}
-                  className="px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-xs font-semibold active:bg-amber-100"
-                >
-                  {t.stocktakeButton}
-                </button>
-              </div>
+        <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto shadow-xs">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
+                <th className="p-3">{t.makeLabel} / {t.modelLabel}</th>
+                <th className="p-3">{t.caliberLabel}</th>
+                <th className="p-3 text-right">Varastosaldo</th>
+                <th className="p-3 text-right">Inventoitu</th>
+                <th className="p-3 text-right">Inventointipäivä</th>
+                <th className="p-3 text-right">{t.lastDiscrepancyLabel}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {ammo.map(item => (
+                <tr key={item.id} className="hover:bg-gray-50">
+                  <td className="p-3">
+                    <div className="font-bold text-gray-900 text-sm">{item.make} {item.model}</div>
+                    <div className="text-[11px] text-gray-500">
+                      Ostettu yht: {item.totalPurchased} patr. ({item.totalSpendEur} €) · Kulutettu yht: {item.totalIssued} patr.
+                    </div>
+                  </td>
+                  <td className="p-3 font-mono text-indigo-700 font-semibold">{item.caliber}</td>
+                  <td className="p-3 text-right">
+                    <span className="font-bold text-gray-900 text-sm">{item.calculatedStock} patr.</span>
+                    {item.lastStocktakeCount !== null && item.lastStocktakeCount !== undefined && (
+                      <div className="text-[11px] text-gray-500">
+                        Inv. {item.lastStocktakeCount} + osto {item.purchasedSinceStocktake || 0} − kulutus {item.issuedSinceStocktake || 0}
+                      </div>
+                    )}
+                  </td>
+                  <td className="p-3 text-right text-gray-700 font-medium">
+                    {item.lastStocktakeCount !== null && item.lastStocktakeCount !== undefined
+                      ? `${item.lastStocktakeCount} patr.`
+                      : '—'}
+                  </td>
+                  <td className="p-3 text-right text-gray-600">
+                    {item.lastStocktakeAt ? formatDateShort(item.lastStocktakeAt) : t.notStocktakenYet}
+                  </td>
+                  <td className="p-3 text-right">
+                    <span className={`font-semibold ${
+                      item.lastDiscrepancy === null ? 'text-gray-400'
+                        : item.lastDiscrepancy === 0 ? 'text-green-700'
+                        : 'text-red-700'
+                    }`}>
+                      {item.lastDiscrepancy === null
+                        ? '—'
+                        : `${item.lastDiscrepancy > 0 ? '+' : ''}${item.lastDiscrepancy} patr.`}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-              <div className="mt-2 grid grid-cols-2 gap-2 bg-gray-50 rounded-lg p-2 text-xs">
-                <div>
-                  <span className="text-gray-500 block">{t.calculatedStockLabel}</span>
-                  <span className="font-bold text-gray-900 text-sm">{item.calculatedStock} patr.</span>
-                </div>
-                <div>
-                  <span className="text-gray-500 block">{t.lastDiscrepancyLabel}</span>
-                  <span className={`font-semibold ${
-                    item.lastDiscrepancy === null ? 'text-gray-500'
-                      : item.lastDiscrepancy === 0 ? 'text-green-700'
-                      : 'text-red-700'
-                  }`}>
-                    {item.lastDiscrepancy === null
-                      ? t.notStocktakenYet
-                      : `${item.lastDiscrepancy > 0 ? '+' : ''}${item.lastDiscrepancy} patr.`}
-                  </span>
-                </div>
-              </div>
+      {/* Whole-Inventory Stocktake Modal (all cartridge types at once) */}
+      {showStocktakeTable && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <form onSubmit={handleSaveWholeStocktake} className="bg-white rounded-2xl shadow-xl p-5 max-w-xl w-full space-y-3 text-xs">
+            <h3 className="font-bold text-gray-900 text-base">
+              {t.stocktakeButton} — Kaikki patruunatyypit
+            </h3>
+            <div className="max-h-72 overflow-y-auto border border-gray-200 rounded-xl">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200 text-gray-600 font-semibold">
+                    <th className="p-2.5">{t.makeLabel} / {t.modelLabel} ({t.caliberLabel})</th>
+                    <th className="p-2.5 text-right">{t.calculatedStockLabel}</th>
+                    <th className="p-2.5 text-right">{t.actualCountLabel}</th>
+                    <th className="p-2.5 text-right">Ero</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {ammo.map(item => {
+                    const actualVal = Number(countsById[item.id] ?? item.calculatedStock ?? 0)
+                    const diff = actualVal - (item.calculatedStock ?? 0)
+                    return (
+                      <tr key={item.id}>
+                        <td className="p-2.5 font-semibold text-gray-900">
+                          {item.make} {item.model} <span className="font-mono text-indigo-700">({item.caliber})</span>
+                        </td>
+                        <td className="p-2.5 text-right font-medium text-gray-700">
+                          {item.calculatedStock} patr.
+                        </td>
+                        <td className="p-2.5 text-right">
+                          <input
+                            type="number"
+                            required
+                            min="0"
+                            aria-label={`Todellinen määrä ${item.make} ${item.model}`}
+                            value={countsById[item.id] ?? item.calculatedStock ?? 0}
+                            onChange={e => setCountsById(prev => ({ ...prev, [item.id]: Number(e.target.value) }))}
+                            className="w-24 border border-gray-300 rounded-lg px-2 py-1 text-right text-sm font-semibold"
+                          />
+                        </td>
+                        <td className={`p-2.5 text-right font-bold ${diff === 0 ? 'text-green-700' : 'text-red-700'}`}>
+                          {diff > 0 ? '+' : ''}{diff}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
-          ))}
+            <input
+              type="text"
+              placeholder={t.notesOptionalPlaceholder}
+              value={stocktakeNotes}
+              onChange={e => setStocktakeNotes(e.target.value)}
+              className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
+            />
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowStocktakeTable(false)}
+                className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium"
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-2.5 bg-amber-600 text-white rounded-xl text-sm font-semibold"
+              >
+                {t.confirmStocktakeButton}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
@@ -251,59 +364,6 @@ export default function AmmoInventorySection({ ammo = [], onRefresh, onError }) 
                 className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold"
               >
                 {t.savePurchaseButton}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Physical Stocktake Discrepancy Modal */}
-      {stocktakeItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <form onSubmit={handleSaveStocktake} className="bg-white rounded-2xl shadow-xl p-5 max-w-sm w-full space-y-3 text-xs">
-            <h3 className="font-bold text-gray-900 text-base">
-              {t.stocktakeButton}: {stocktakeItem.make} {stocktakeItem.model} ({stocktakeItem.caliber})
-            </h3>
-            <div className="bg-gray-50 rounded-xl p-3 space-y-1">
-              <div>{t.calculatedStockLabel}: <strong>{stocktakeItem.calculatedStock} patr.</strong></div>
-              <div>
-                {t.lastDiscrepancyLabel}:{' '}
-                <strong className={liveDiscrepancy === 0 ? 'text-green-700' : 'text-red-700'}>
-                  {liveDiscrepancy > 0 ? '+' : ''}{liveDiscrepancy} patr.
-                </strong>
-              </div>
-            </div>
-            <div>
-              <label className="block font-medium text-gray-700 mb-1">{t.actualCountLabel}</label>
-              <input
-                type="number"
-                required
-                min="0"
-                value={actualCount}
-                onChange={e => setActualCount(Number(e.target.value))}
-                className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
-              />
-            </div>
-            <input
-              type="text"
-              placeholder={t.notesOptionalPlaceholder}
-              value={stocktakeNotes}
-              onChange={e => setStocktakeNotes(e.target.value)}
-              className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
-            />
-            <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setStocktakeItem(null)}
-                className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium"
-              >
-                {t.cancel}
-              </button>
-              <button
-                type="submit"
-                className="flex-1 py-2.5 bg-amber-600 text-white rounded-xl text-sm font-semibold"
-              >
-                {t.confirmStocktakeButton}
               </button>
             </div>
           </form>

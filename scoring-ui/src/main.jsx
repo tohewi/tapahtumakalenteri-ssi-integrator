@@ -8,7 +8,6 @@ import RegisterPage from './components/RegisterPage.jsx'
 import ManagePage from './components/ManagePage.jsx'
 import ReportPage from './components/ReportPage.jsx'
 import SummaryReportPage from './components/SummaryReportPage.jsx'
-import StaffingPage from './components/StaffingPage.jsx'
 import LegalDocumentPage from './components/LegalDocumentPage.jsx'
 import GunsPage from './components/GunsPage.jsx'
 import AmmoPage from './components/AmmoPage.jsx'
@@ -77,9 +76,6 @@ function Router() {
   }
   if (path === '#/summary') {
     return <SummaryReportPage />
-  }
-  if (path === '#/staffing') {
-    return <StaffingPage />
   }
   if (path === '#/guns') {
     return <GunsPage />

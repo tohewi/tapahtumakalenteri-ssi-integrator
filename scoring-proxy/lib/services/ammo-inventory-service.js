@@ -109,6 +109,9 @@ function normalizeAmmoRecord(a = {}) {
     totalPurchased: Number(a.totalPurchased ?? 0),
     totalIssued: Number(a.totalIssued ?? 0),
     totalSpendEur: Number(a.totalSpendEur ?? 0),
+    lastStocktakeCount: a.lastStocktakeCount !== undefined ? a.lastStocktakeCount : null,
+    purchasedSinceStocktake: Number(a.purchasedSinceStocktake ?? 0),
+    issuedSinceStocktake: Number(a.issuedSinceStocktake ?? 0),
     lastDiscrepancy: a.lastDiscrepancy !== undefined ? a.lastDiscrepancy : null,
     lastStocktakeAt: a.lastStocktakeAt || null,
     purchases: Array.isArray(a.purchases) ? a.purchases : [],
@@ -270,10 +273,14 @@ export function addAmmoPurchase({
       totalPurchased: 0,
       totalIssued: 0,
       totalSpendEur: 0,
+      lastStocktakeCount: null,
+      purchasedSinceStocktake: 0,
+      issuedSinceStocktake: 0,
       lastDiscrepancy: null,
       lastStocktakeAt: null,
       purchases: [],
       stocktakes: [],
+      consumptions: [],
       createdAt: nowIso,
     }
     data.ammo.push(item)
@@ -292,33 +299,25 @@ export function addAmmoPurchase({
     createdAt: nowIso,
   }
 
-  item.calculatedStock = (item.calculatedStock || 0) + countNum
   item.totalPurchased = (item.totalPurchased || 0) + countNum
   item.totalSpendEur = Number(((item.totalSpendEur || 0) + priceNum).toFixed(2))
+  if (item.lastStocktakeCount !== null && item.lastStocktakeCount !== undefined) {
+    item.purchasedSinceStocktake = (item.purchasedSinceStocktake || 0) + countNum
+    item.calculatedStock = Number(item.lastStocktakeCount) + item.purchasedSinceStocktake - (item.issuedSinceStocktake || 0)
+  } else {
+    item.calculatedStock = (item.calculatedStock || 0) + countNum
+  }
   item.purchases = [purchaseRecord, ...(item.purchases || [])]
 
   writeAmmoInventoryData(data)
   return item
 }
 
-export function recordAmmoStocktake({
-  ammoId,
-  actualCount,
-  notes = '',
-  performedBy = 'unknown',
-}) {
+function applySingleAmmoStocktake(item, actualCount, { notes = '', performedBy = 'unknown', nowIso = new Date().toISOString() }) {
   const actualNum = Number(actualCount)
   if (!Number.isInteger(actualNum) || actualNum < 0) {
     throw new AppError('actualCount must be a non-negative integer', 400, 'VALIDATION_ERROR')
   }
-
-  const data = readAmmoInventoryData()
-  const item = data.ammo.find(a => a.id === ammoId)
-  if (!item) {
-    throw new AppError('Ammo item not found', 404, 'NOT_FOUND')
-  }
-
-  const nowIso = new Date().toISOString()
   const calculatedBefore = item.calculatedStock || 0
   const discrepancy = actualNum - calculatedBefore
 
@@ -332,13 +331,57 @@ export function recordAmmoStocktake({
     notes: String(notes || '').trim(),
   }
 
+  item.lastStocktakeCount = actualNum
+  item.purchasedSinceStocktake = 0
+  item.issuedSinceStocktake = 0
   item.calculatedStock = actualNum
   item.lastDiscrepancy = discrepancy
   item.lastStocktakeAt = nowIso
   item.stocktakes = [stocktakeRecord, ...(item.stocktakes || [])]
+  return stocktakeRecord
+}
 
+export function recordAmmoStocktake({
+  ammoId,
+  actualCount,
+  notes = '',
+  performedBy = 'unknown',
+}) {
+  const data = readAmmoInventoryData()
+  const item = data.ammo.find(a => a.id === ammoId)
+  if (!item) {
+    throw new AppError('Ammo item not found', 404, 'NOT_FOUND')
+  }
+
+  const stocktakeRecord = applySingleAmmoStocktake(item, actualCount, { notes, performedBy })
   writeAmmoInventoryData(data)
   return { ammo: item, stocktake: stocktakeRecord }
+}
+
+export function recordWholeAmmoStocktake({
+  items = [],
+  notes = '',
+  performedBy = 'unknown',
+}) {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new AppError('items array is required for whole-inventory stocktake', 400, 'VALIDATION_ERROR')
+  }
+
+  const data = readAmmoInventoryData()
+  const nowIso = new Date().toISOString()
+  const stocktakes = []
+
+  for (const entry of items) {
+    const item = data.ammo.find(a => a.id === entry.ammoId)
+    if (!item) {
+      throw new AppError(`Ammo item not found: ${entry.ammoId}`, 404, 'NOT_FOUND')
+    }
+    const rec = applySingleAmmoStocktake(item, entry.actualCount, { notes, performedBy, nowIso })
+    stocktakes.push({ ammoId: item.id, ...rec })
+  }
+
+  writeAmmoInventoryData(data)
+  return { ammo: data.ammo, stocktakes, stocktakeAt: nowIso }
 }
 
 // ============================================================

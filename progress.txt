@@ -39,6 +39,13 @@
 - Removed the duplicate "Käytettävä patruuna varastosta" field from the Gun Add/Edit modal in `GunsPage.jsx` and replaced "Suositeltu patruunamerkki ja malli" with a single dropdown populated from the ammo inventory without stock numbers.
 ---
 
+## 2026-10-25 15:02 - US-012, US-013 & US-014 (R90-GUN14, R90-GUN24, R90-GUN25)
+- Implemented `recordWholeAmmoStocktake` (`POST /api/v1/guns/ammo/stocktake`), post-stocktake balance calculation (`lastStocktakeCount + purchasedSinceStocktake - issuedSinceStocktake`), and whole-inventory stocktake table with inventory date display on `#/ammo`.
+- Removed `#/staffing` (`SRA-harjoitusten vetäjähallinta`) from `HomePage.jsx` and `main.jsx` and gated `/api/v1/staffing` behind `FEATURE_STAFFING_ENABLED` (default `false`).
+- Updated `SquadCard.jsx` (`#/manage`) so a shooter's checked-out gun and ammo badge + `Palauta kaappiin` / `Peru lainaus` buttons follow the shooter into any squad.
+---
+
+
 
 
 

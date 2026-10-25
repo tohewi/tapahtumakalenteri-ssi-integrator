@@ -141,3 +141,13 @@ export function recordAmmoStocktake(ammoId, { actualCount, notes = '' }) {
     }),
   })
 }
+
+export function recordWholeAmmoStocktake({ items = [], notes = '' }) {
+  return request('/ammo/stocktake', {
+    method: 'POST',
+    body: JSON.stringify({
+      items: items.map(i => ({ ammoId: i.ammoId, actualCount: Number(i.actualCount) })),
+      notes,
+    }),
+  })
+}

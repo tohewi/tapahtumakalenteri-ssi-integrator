@@ -22,6 +22,7 @@ import {
   listAmmo,
   addAmmoPurchase,
   recordAmmoStocktake,
+  recordWholeAmmoStocktake,
   buildGunsCsv,
   buildGunEventsCsv,
   buildAmmoCsv,
@@ -115,6 +116,24 @@ export function createGunsRouter({ requireAuth, getAdminSession, graphqlWithRefr
       result: 'success',
     })
     res.status(201).json({ ammo })
+  }))
+
+  router.post('/ammo/stocktake', asyncHandler(async (req, res) => {
+    const { items, notes } = req.body || {}
+    const result = recordWholeAmmoStocktake({
+      items,
+      notes,
+      performedBy: req.gunActor,
+    })
+    auditMutation({
+      endpoint: '/api/v1/guns/ammo/stocktake',
+      operation: 'record_whole_ammo_stocktake',
+      initiatingUserId: req.gunActor,
+      executionIdentityUserId: req.gunActor,
+      targetEntity: { count: result.stocktakes.length },
+      result: 'success',
+    })
+    res.json(result)
   }))
 
   router.post('/ammo/:id/stocktake', asyncHandler(async (req, res) => {

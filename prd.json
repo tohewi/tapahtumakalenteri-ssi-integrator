@@ -178,6 +178,53 @@
       "priority": 11,
       "passes": true,
       "notes": "Implemented restoreGun (POST /api/v1/guns/:id/restore) with Palauta asekaappiin button and replaced gun modal ammo fields with single Suositeltu patruunamerkki ja malli dropdown."
+    },
+    {
+      "id": "US-012",
+      "requirementId": "R90-GUN14",
+      "title": "Implement whole-inventory ammo stocktake table, post-stocktake balance calculation, and inventory date display on #/ammo",
+      "description": "As an equipment manager on #/ammo, I want to perform a physical stocktake for the entire ammo inventory in a single table of all cartridge types, see the date of the last inventory, and have the visible stock equal the inventoried count plus any purchases after the inventory minus any consumption after the inventory.",
+      "acceptanceCriteria": [
+        "Add recordWholeAmmoStocktake({ items: [{ ammoId, actualCount }], notes, performedBy }) in scoring-proxy/lib/services/ammo-inventory-service.js (and re-export in gun-inventory-service.js) and expose POST /api/v1/guns/ammo/stocktake in scoring-proxy/routes/guns.js",
+        "Track lastStocktakeCount, lastStocktakeAt, purchasedSinceStocktake, and issuedSinceStocktake on each ammo record so calculatedStock = lastStocktakeCount + purchasedSinceStocktake - issuedSinceStocktake when inventoried (or totalPurchased - totalIssued when not yet inventoried)",
+        "Update AmmoInventorySection.jsx (#/ammo) to display a summary table of all cartridge types with their current stock, last inventory date (formatDateShort(lastStocktakeAt)), last discrepancy, and a top-level 'Tee inventointi' action that opens a whole-inventory stocktake table for all cartridge types at once",
+        "Add unit and route tests in scoring-proxy/test/gun-inventory.test.js verifying whole-inventory stocktake and post-stocktake purchase/consumption calculation, and mark GUN14 / R90-GUN14 as Implemented",
+        "scoring-proxy lint and tests pass (npm run lint && npm test) and scoring-ui lint and build pass (npm run lint && npm run build)"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "Implemented recordWholeAmmoStocktake, post-stocktake balance calculation (lastStocktakeCount + purchasedSinceStocktake - issuedSinceStocktake), and whole-inventory table with inventory date on #/ammo."
+    },
+    {
+      "id": "US-013",
+      "requirementId": "R90-GUN24",
+      "title": "Disable and remove SRA-harjoitusten vetäjähallinta (#/staffing) from HomePage and router",
+      "description": "As an administrator, I want SRA-harjoitusten vetäjähallinta (#/staffing) removed from the front page and disabled by default.",
+      "acceptanceCriteria": [
+        "Remove the '#/staffing' card ('SRA-harjoitusten vetäjähallinta') from scoring-ui/src/components/HomePage.jsx",
+        "Disable the '#/staffing' route in scoring-ui/src/main.jsx so it falls back to HomePage",
+        "Gate /api/v1/staffing and /api/staffing in scoring-proxy/server.js behind FEATURE_STAFFING_ENABLED (default false)",
+        "Update HomePage test in scoring-ui/src/test/components.test.jsx and mark GUN24 as Implemented in docs/requirements/requirements.md",
+        "scoring-proxy lint and tests pass (npm run lint && npm test) and scoring-ui lint and build pass (npm run lint && npm run build)"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": "Removed #/staffing from HomePage.jsx and main.jsx and gated /api/v1/staffing behind FEATURE_STAFFING_ENABLED."
+    },
+    {
+      "id": "US-014",
+      "requirementId": "R90-GUN25",
+      "title": "Ensure checked-out gun and ammo badge follows shooter when moved to another squad in ManagePage",
+      "description": "As a cup manager on #/manage, when I move a shooter who has a borrowed gun and ammo from the Laina-ase squad to another squad (e.g. Oma ase 1), I want their assigned gun + ammo badge and Palauta kaappiin / Peru lainaus buttons to remain visible with the shooter in their new squad.",
+      "acceptanceCriteria": [
+        "Update findAssignedGun and shooter row rendering in scoring-ui/src/components/manage/SquadCard.jsx so that any shooter with an active gun checkout (matched by email or name in guns[]) displays the Laina-ase + ammo badge, 'Palauta kaappiin', and 'Peru lainaus' buttons regardless of which squad they are currently in (both okShooters and issueShooters)",
+        "Keep the initial 'Valitse ase' button (for shooters without an assigned gun) restricted to isLoanerSquad",
+        "Add a component test in scoring-ui/src/test/components.test.jsx verifying that SquadCard renders the assigned gun badge and return/undo actions even when isLoanerSquad is false, and mark GUN25 / R90-GUN25 as Implemented in docs/requirements/",
+        "scoring-proxy lint and tests pass (npm run lint && npm test) and scoring-ui lint and build pass (npm run lint && npm run build)"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": "Updated SquadCard.jsx so assigned gun and ammo badge + return/undo buttons render in any squad."
     }
   ]
 }
