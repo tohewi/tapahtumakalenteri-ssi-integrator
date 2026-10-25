@@ -212,6 +212,11 @@ jobs:
                 "plan": "starter",
                 "region": "frankfurt",
                 "nodeVersion": "24",
+                "disk": {
+                  "name": "preview-data",
+                  "mountPath": "/var/data",
+                  "sizeGB": 1
+                },
                 "envSpecificDetails": {
                   "buildCommand": $buildCommand,
                   "startCommand": $startCommand

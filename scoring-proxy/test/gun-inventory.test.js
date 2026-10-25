@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import express from 'express'
-import { rmSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ssiGetGroupMembers } from '../lib/ssi-core/management.js'
@@ -18,10 +18,13 @@ import {
   returnGun,
   returnAllGuns,
   recordGunMaintenance,
+  listAmmo,
 } from '../lib/services/gun-inventory-service.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const TEST_INVENTORY_FILE = path.resolve(__dirname, '../data/test-gun-inventory.json')
+const TEST_AMMO_FILE = path.resolve(__dirname, '../data/test-ammo-inventory.json')
+const TEST_V1_BACKUP_FILE = `${TEST_INVENTORY_FILE}.v1.bak.json`
 
 const SAMPLE_GROUP_HTML = `
   <table>
@@ -61,12 +64,18 @@ beforeEach(() => {
   clearGunAdminAccessCache()
   delete process.env.SSI_GUN_INVENTORY_GROUP_ID
   process.env.GUN_INVENTORY_FILE_PATH = TEST_INVENTORY_FILE
+  process.env.AMMO_INVENTORY_FILE_PATH = TEST_AMMO_FILE
   rmSync(TEST_INVENTORY_FILE, { force: true })
+  rmSync(TEST_AMMO_FILE, { force: true })
+  rmSync(TEST_V1_BACKUP_FILE, { force: true })
 })
 
 afterEach(() => {
   rmSync(TEST_INVENTORY_FILE, { force: true })
+  rmSync(TEST_AMMO_FILE, { force: true })
+  rmSync(TEST_V1_BACKUP_FILE, { force: true })
   delete process.env.GUN_INVENTORY_FILE_PATH
+  delete process.env.AMMO_INVENTORY_FILE_PATH
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
@@ -383,5 +392,59 @@ describe('R90-GUN3..GUN5: /api/v1/guns Express Route Integration', () => {
     expect(stocktakeRes.data.stocktake.actualCount).toBe(880)
     expect(stocktakeRes.data.stocktake.discrepancy).toBe(-20)
     expect(stocktakeRes.data.ammo.calculatedStock).toBe(880)
+
+    // Verify separate files on disk for guns vs ammo (R90-GUN17)
+    expect(existsSync(TEST_INVENTORY_FILE)).toBe(true)
+    expect(existsSync(TEST_AMMO_FILE)).toBe(true)
+  })
+
+  it('migrates legacy v1 gun-inventory.json to schemaVersion 2, splits embedded ammo to ammo-inventory.json, and retains .v1.bak.json backup (R90-GUN18)', () => {
+    const legacyV1Data = {
+      guns: [
+        {
+          id: 'legacy-gun-1',
+          make: 'Glock',
+          model: '17',
+          serialNumber: 'GL-V1',
+          acquisitionYear: 2021,
+          state: 'in_gun_safe',
+          timesUsedTotal: 5,
+          cartridgesIssuedTotal: 500,
+        },
+      ],
+      ammo: [
+        {
+          id: 'legacy-ammo-1',
+          make: 'GCI',
+          model: 'FMJ',
+          caliber: '9x19',
+          calculatedStock: 400,
+          totalPurchased: 900,
+          totalIssued: 500,
+        },
+      ],
+    }
+    writeFileSync(TEST_INVENTORY_FILE, JSON.stringify(legacyV1Data, null, 2), 'utf8')
+
+    const guns = listGuns()
+    expect(guns).toHaveLength(1)
+    expect(guns[0].serialNumber).toBe('GL-V1')
+    expect(guns[0].timesUsedTotal).toBe(5)
+
+    // Backup of v1 file must be retained on disk
+    expect(existsSync(TEST_V1_BACKUP_FILE)).toBe(true)
+    const backup = JSON.parse(readFileSync(TEST_V1_BACKUP_FILE, 'utf8'))
+    expect(backup.guns[0].id).toBe('legacy-gun-1')
+
+    // Migrated gun file is now schemaVersion 2 without embedded ammo[]
+    const migratedGunFile = JSON.parse(readFileSync(TEST_INVENTORY_FILE, 'utf8'))
+    expect(migratedGunFile.schemaVersion).toBe(2)
+    expect(migratedGunFile.ammo).toBeUndefined()
+
+    // Embedded ammo from v1 was migrated to the separate ammo-inventory.json file
+    const ammo = listAmmo()
+    expect(ammo).toHaveLength(1)
+    expect(ammo[0].make).toBe('GCI')
+    expect(ammo[0].calculatedStock).toBe(400)
   })
 })

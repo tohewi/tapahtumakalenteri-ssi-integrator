@@ -11,8 +11,10 @@ import { ssiGetGroupMembers } from '../ssi-core/management.js'
 import { log } from '../logger.js'
 import { AppError } from '../errors/AppError.js'
 import {
-  readInventoryData,
-  writeInventoryData,
+  readGunInventoryData,
+  writeGunInventoryData,
+  readAmmoInventoryData,
+  writeAmmoInventoryData,
   formatAmmoLabel,
   listAmmo,
   addAmmoPurchase,
@@ -143,9 +145,9 @@ export async function verifyGunInventoryAdminAccess({
 // Gun Inventory CRUD, Checkout, Return & Maintenance Logic
 // ============================================================
 
-function resolveAmmoSelection(data, { defaultAmmoId, ammoMake }) {
+function resolveAmmoSelection(ammoList, { defaultAmmoId, ammoMake }) {
   if (defaultAmmoId) {
-    const linked = data.ammo.find(a => a.id === defaultAmmoId)
+    const linked = (ammoList || []).find(a => a.id === defaultAmmoId)
     if (linked) {
       return {
         defaultAmmoId: linked.id,
@@ -163,7 +165,7 @@ function resolveAmmoSelection(data, { defaultAmmoId, ammoMake }) {
 }
 
 export function listGuns({ includeRetired = false } = {}) {
-  const { guns } = readInventoryData()
+  const { guns } = readGunInventoryData()
   return includeRetired ? guns : guns.filter(g => g.state !== 'retired')
 }
 
@@ -180,12 +182,13 @@ export function createGun({ make, model, serialNumber, acquisitionYear, defaultA
     throw new AppError('acquisitionYear must be a valid year (1900-2100)', 400, 'VALIDATION_ERROR')
   }
 
-  const data = readInventoryData()
+  const data = readGunInventoryData()
   if (data.guns.some(g => g.state !== 'retired' && g.serialNumber.toLowerCase() === cleanSerial.toLowerCase())) {
     throw new AppError(`Gun with serial number "${cleanSerial}" already exists`, 409, 'CONFLICT')
   }
 
-  const ammoMeta = resolveAmmoSelection(data, { defaultAmmoId, ammoMake })
+  const { ammo } = readAmmoInventoryData()
+  const ammoMeta = resolveAmmoSelection(ammo, { defaultAmmoId, ammoMake })
 
   const gun = {
     id: crypto.randomUUID(),
@@ -208,12 +211,12 @@ export function createGun({ make, model, serialNumber, acquisitionYear, defaultA
   }
 
   data.guns.push(gun)
-  writeInventoryData(data)
+  writeGunInventoryData(data)
   return gun
 }
 
 export function updateGun(gunId, { make, model, serialNumber, acquisitionYear, defaultAmmoId, ammoMake }) {
-  const data = readInventoryData()
+  const data = readGunInventoryData()
   const gun = data.guns.find(g => g.id === gunId)
   if (!gun) {
     throw new AppError('Gun not found', 404, 'NOT_FOUND')
@@ -245,18 +248,19 @@ export function updateGun(gunId, { make, model, serialNumber, acquisitionYear, d
     gun.acquisitionYear = yearNum
   }
   if (defaultAmmoId !== undefined || ammoMake !== undefined) {
-    Object.assign(gun, resolveAmmoSelection(data, {
+    const { ammo } = readAmmoInventoryData()
+    Object.assign(gun, resolveAmmoSelection(ammo, {
       defaultAmmoId: defaultAmmoId !== undefined ? defaultAmmoId : gun.defaultAmmoId,
       ammoMake: ammoMake !== undefined ? ammoMake : gun.ammoMake,
     }))
   }
 
-  writeInventoryData(data)
+  writeGunInventoryData(data)
   return gun
 }
 
 export function retireGun(gunId) {
-  const data = readInventoryData()
+  const data = readGunInventoryData()
   const gun = data.guns.find(g => g.id === gunId)
   if (!gun) {
     throw new AppError('Gun not found', 404, 'NOT_FOUND')
@@ -267,7 +271,7 @@ export function retireGun(gunId) {
 
   gun.state = 'retired'
   gun.currentCheckout = null
-  writeInventoryData(data)
+  writeGunInventoryData(data)
   return gun
 }
 
@@ -295,7 +299,7 @@ export function checkoutGun({
     throw new AppError('cartridgesGiven must be an integer between 0 and 5000', 400, 'VALIDATION_ERROR')
   }
 
-  const data = readInventoryData()
+  const data = readGunInventoryData()
   const gun = data.guns.find(g => g.id === gunId)
   if (!gun) {
     throw new AppError('Gun not found', 404, 'NOT_FOUND')
@@ -304,15 +308,17 @@ export function checkoutGun({
     throw new AppError(`Gun is not available in gun safe (current state: ${gun.state})`, 409, 'CONFLICT')
   }
 
+  const ammoData = readAmmoInventoryData()
   const resolvedAmmoId = ammoId || gun.defaultAmmoId || null
-  let ammoItem = resolvedAmmoId ? data.ammo.find(a => a.id === resolvedAmmoId) : null
+  let ammoItem = resolvedAmmoId ? ammoData.ammo.find(a => a.id === resolvedAmmoId) : null
   if (!ammoItem && gun.ammoMake) {
-    ammoItem = data.ammo.find(a => a.make.toLowerCase() === gun.ammoMake.toLowerCase()) || null
+    ammoItem = ammoData.ammo.find(a => a.make.toLowerCase() === gun.ammoMake.toLowerCase()) || null
   }
 
   if (rounds > 0 && ammoItem) {
     ammoItem.calculatedStock = (ammoItem.calculatedStock || 0) - rounds
     ammoItem.totalIssued = (ammoItem.totalIssued || 0) + rounds
+    writeAmmoInventoryData(ammoData)
   }
 
   const nowIso = new Date().toISOString()
@@ -339,12 +345,12 @@ export function checkoutGun({
   gun.currentCheckout = checkoutRecord
   gun.usageHistory = [checkoutRecord, ...(gun.usageHistory || [])]
 
-  writeInventoryData(data)
+  writeGunInventoryData(data)
   return gun
 }
 
 export function returnGun({ gunId, returnedBy = 'unknown' }) {
-  const data = readInventoryData()
+  const data = readGunInventoryData()
   const gun = data.guns.find(g => g.id === gunId)
   if (!gun) {
     throw new AppError('Gun not found', 404, 'NOT_FOUND')
@@ -364,12 +370,12 @@ export function returnGun({ gunId, returnedBy = 'unknown' }) {
 
   gun.state = 'in_gun_safe'
   gun.currentCheckout = null
-  writeInventoryData(data)
+  writeGunInventoryData(data)
   return gun
 }
 
 export function returnAllGuns({ cupId = null, returnedBy = 'unknown' } = {}) {
-  const data = readInventoryData()
+  const data = readGunInventoryData()
   const nowIso = new Date().toISOString()
   const returnedGuns = []
 
@@ -392,12 +398,12 @@ export function returnAllGuns({ cupId = null, returnedBy = 'unknown' } = {}) {
     returnedGuns.push(gun)
   }
 
-  writeInventoryData(data)
+  writeGunInventoryData(data)
   return { returnedCount: returnedGuns.length, guns: returnedGuns }
 }
 
 export function recordGunMaintenance({ gunId, notes = '', performedBy = 'unknown' }) {
-  const data = readInventoryData()
+  const data = readGunInventoryData()
   const gun = data.guns.find(g => g.id === gunId)
   if (!gun) {
     throw new AppError('Gun not found', 404, 'NOT_FOUND')
@@ -419,6 +425,6 @@ export function recordGunMaintenance({ gunId, notes = '', performedBy = 'unknown
   gun.lastMaintenanceBy = performedBy
   gun.maintenanceHistory = [entry, ...(gun.maintenanceHistory || [])]
 
-  writeInventoryData(data)
+  writeGunInventoryData(data)
   return gun
 }

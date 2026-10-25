@@ -1,25 +1,113 @@
 // ============================================================
-// Ammo Inventory & CSV Export Service (Release 9.0 — R90)
+// Ammo Inventory, Separate File Storage, Schema Migration & CSV Service (R90)
 // ============================================================
 
 import crypto from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { log } from '../logger.js'
 import { AppError } from '../errors/AppError.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DEFAULT_DATA_PATH = path.resolve(__dirname, '..', '..', 'data', 'gun-inventory.json')
+const LOCAL_DATA_DIR = path.resolve(__dirname, '..', '..', 'data')
+const RENDER_PERSISTENT_DIR = '/var/data'
 
-export function getDataFilePath() {
-  return process.env.GUN_INVENTORY_FILE_PATH || DEFAULT_DATA_PATH
+export const GUN_SCHEMA_VERSION = 2
+export const AMMO_SCHEMA_VERSION = 2
+
+function getDefaultDataDir() {
+  if (process.env.PERSISTENT_DATA_DIR) return process.env.PERSISTENT_DATA_DIR
+  if (existsSync(RENDER_PERSISTENT_DIR)) return RENDER_PERSISTENT_DIR
+  return LOCAL_DATA_DIR
 }
 
-export function readInventoryData() {
-  const filePath = getDataFilePath()
+export function getGunDataFilePath() {
+  return process.env.GUN_INVENTORY_FILE_PATH || path.join(getDefaultDataDir(), 'gun-inventory.json')
+}
+
+export function getAmmoDataFilePath() {
+  if (process.env.AMMO_INVENTORY_FILE_PATH) return process.env.AMMO_INVENTORY_FILE_PATH
+  if (process.env.GUN_INVENTORY_FILE_PATH) {
+    return path.join(path.dirname(process.env.GUN_INVENTORY_FILE_PATH), 'ammo-inventory.json')
+  }
+  return path.join(getDefaultDataDir(), 'ammo-inventory.json')
+}
+
+function atomicWriteJson(filePath, payload) {
+  const dir = path.dirname(filePath)
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true })
+  }
+  const content = JSON.stringify(payload, null, 2)
+  const tmpPath = `${filePath}.tmp`
+  try {
+    writeFileSync(tmpPath, content, 'utf8')
+    renameSync(tmpPath, filePath)
+  } catch {
+    writeFileSync(filePath, content, 'utf8')
+    rmSync(tmpPath, { force: true })
+  }
+}
+
+function retainBackupFile(filePath, oldVersion) {
+  const backupPath = `${filePath}.v${oldVersion}.bak.json`
+  if (!existsSync(backupPath)) {
+    copyFileSync(filePath, backupPath)
+  }
+  return backupPath
+}
+
+function normalizeGunRecord(g = {}) {
+  return {
+    id: g.id || crypto.randomUUID(),
+    make: String(g.make || '').trim(),
+    model: String(g.model || '').trim(),
+    serialNumber: String(g.serialNumber || '').trim(),
+    acquisitionYear: Number(g.acquisitionYear) || new Date().getFullYear(),
+    defaultAmmoId: g.defaultAmmoId || null,
+    ammoMake: String(g.ammoMake || '').trim(),
+    defaultAmmoLabel: String(g.defaultAmmoLabel || g.ammoMake || '').trim(),
+    state: g.state || 'in_gun_safe',
+    timesUsedTotal: Number(g.timesUsedTotal || 0),
+    timesUsedSinceMaintenance: Number(g.timesUsedSinceMaintenance || 0),
+    cartridgesIssuedTotal: Number(g.cartridgesIssuedTotal || 0),
+    cartridgesSinceMaintenance: Number(g.cartridgesSinceMaintenance || 0),
+    lastMaintenanceAt: g.lastMaintenanceAt || null,
+    lastMaintenanceBy: g.lastMaintenanceBy || null,
+    currentCheckout: g.currentCheckout || null,
+    maintenanceHistory: Array.isArray(g.maintenanceHistory) ? g.maintenanceHistory : [],
+    usageHistory: Array.isArray(g.usageHistory) ? g.usageHistory : [],
+    createdAt: g.createdAt || new Date().toISOString(),
+  }
+}
+
+function normalizeAmmoRecord(a = {}) {
+  const make = String(a.make || '').trim()
+  const model = String(a.model || '').trim()
+  const caliber = String(a.caliber || '').trim()
+  return {
+    id: a.id || crypto.randomUUID(),
+    make,
+    model,
+    caliber,
+    label: a.label || `${make} ${model} (${caliber})`.trim(),
+    calculatedStock: Number(a.calculatedStock ?? 0),
+    totalPurchased: Number(a.totalPurchased ?? 0),
+    totalIssued: Number(a.totalIssued ?? 0),
+    totalSpendEur: Number(a.totalSpendEur ?? 0),
+    lastDiscrepancy: a.lastDiscrepancy !== undefined ? a.lastDiscrepancy : null,
+    lastStocktakeAt: a.lastStocktakeAt || null,
+    purchases: Array.isArray(a.purchases) ? a.purchases : [],
+    stocktakes: Array.isArray(a.stocktakes) ? a.stocktakes : [],
+    createdAt: a.createdAt || new Date().toISOString(),
+  }
+}
+
+export function readGunInventoryData() {
+  const filePath = getGunDataFilePath()
   if (!existsSync(filePath)) {
-    return { guns: [], ammo: [] }
+    return { schemaVersion: GUN_SCHEMA_VERSION, guns: [] }
   }
   let parsed
   try {
@@ -32,22 +120,85 @@ export function readInventoryData() {
     log.error('[guns] Malformed gun-inventory.json: missing guns array')
     throw new AppError('Gun inventory storage is malformed', 500, 'STORAGE_READ_ERROR')
   }
-  if (!Array.isArray(parsed.ammo)) {
-    parsed.ammo = []
+
+  const fileVersion = Number(parsed.schemaVersion || 1)
+  if (fileVersion < GUN_SCHEMA_VERSION) {
+    retainBackupFile(filePath, fileVersion)
+
+    // If v1 gun-inventory.json had embedded ammo[], migrate it into separate ammo-inventory.json
+    if (Array.isArray(parsed.ammo) && parsed.ammo.length > 0) {
+      const ammoData = readAmmoInventoryData()
+      const existingIds = new Set(ammoData.ammo.map(a => a.id))
+      for (const legacyAmmo of parsed.ammo) {
+        const normalized = normalizeAmmoRecord(legacyAmmo)
+        if (!existingIds.has(normalized.id)) {
+          ammoData.ammo.push(normalized)
+          existingIds.add(normalized.id)
+        }
+      }
+      writeAmmoInventoryData(ammoData)
+    }
+
+    const migrated = {
+      schemaVersion: GUN_SCHEMA_VERSION,
+      migratedFromVersion: fileVersion,
+      migratedAt: new Date().toISOString(),
+      guns: parsed.guns.map(normalizeGunRecord),
+    }
+    atomicWriteJson(filePath, migrated)
+    return migrated
   }
+
   return parsed
 }
 
-export function writeInventoryData(data) {
-  const filePath = getDataFilePath()
-  const dir = path.dirname(filePath)
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
+export function writeGunInventoryData(data) {
+  const filePath = getGunDataFilePath()
+  atomicWriteJson(filePath, {
+    schemaVersion: GUN_SCHEMA_VERSION,
+    guns: Array.isArray(data.guns) ? data.guns : [],
+  })
+}
+
+export function readAmmoInventoryData() {
+  const filePath = getAmmoDataFilePath()
+  if (!existsSync(filePath)) {
+    return { schemaVersion: AMMO_SCHEMA_VERSION, ammo: [] }
   }
-  if (!Array.isArray(data.ammo)) {
-    data.ammo = []
+  let parsed
+  try {
+    parsed = JSON.parse(readFileSync(filePath, 'utf8'))
+  } catch (err) {
+    log.error('[guns] Failed to read or parse existing ammo-inventory.json:', err.message)
+    throw new AppError('Ammo inventory storage is unreadable', 500, 'STORAGE_READ_ERROR')
   }
-  writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8')
+  if (!Array.isArray(parsed?.ammo)) {
+    log.error('[guns] Malformed ammo-inventory.json: missing ammo array')
+    throw new AppError('Ammo inventory storage is malformed', 500, 'STORAGE_READ_ERROR')
+  }
+
+  const fileVersion = Number(parsed.schemaVersion || 1)
+  if (fileVersion < AMMO_SCHEMA_VERSION) {
+    retainBackupFile(filePath, fileVersion)
+    const migrated = {
+      schemaVersion: AMMO_SCHEMA_VERSION,
+      migratedFromVersion: fileVersion,
+      migratedAt: new Date().toISOString(),
+      ammo: parsed.ammo.map(normalizeAmmoRecord),
+    }
+    atomicWriteJson(filePath, migrated)
+    return migrated
+  }
+
+  return parsed
+}
+
+export function writeAmmoInventoryData(data) {
+  const filePath = getAmmoDataFilePath()
+  atomicWriteJson(filePath, {
+    schemaVersion: AMMO_SCHEMA_VERSION,
+    ammo: Array.isArray(data.ammo) ? data.ammo : [],
+  })
 }
 
 export function formatAmmoLabel(ammo) {
@@ -56,7 +207,7 @@ export function formatAmmoLabel(ammo) {
 }
 
 export function listAmmo() {
-  const { ammo } = readInventoryData()
+  const { ammo } = readAmmoInventoryData()
   return ammo
 }
 
@@ -86,7 +237,7 @@ export function addAmmoPurchase({
     throw new AppError('price must be a non-negative number', 400, 'VALIDATION_ERROR')
   }
 
-  const data = readInventoryData()
+  const data = readAmmoInventoryData()
   let item = data.ammo.find(a =>
     a.make.toLowerCase() === cleanMake.toLowerCase() &&
     a.model.toLowerCase() === cleanModel.toLowerCase() &&
@@ -132,7 +283,7 @@ export function addAmmoPurchase({
   item.totalSpendEur = Number(((item.totalSpendEur || 0) + priceNum).toFixed(2))
   item.purchases = [purchaseRecord, ...(item.purchases || [])]
 
-  writeInventoryData(data)
+  writeAmmoInventoryData(data)
   return item
 }
 
@@ -147,7 +298,7 @@ export function recordAmmoStocktake({
     throw new AppError('actualCount must be a non-negative integer', 400, 'VALIDATION_ERROR')
   }
 
-  const data = readInventoryData()
+  const data = readAmmoInventoryData()
   const item = data.ammo.find(a => a.id === ammoId)
   if (!item) {
     throw new AppError('Ammo item not found', 404, 'NOT_FOUND')
@@ -172,7 +323,7 @@ export function recordAmmoStocktake({
   item.lastStocktakeAt = nowIso
   item.stocktakes = [stocktakeRecord, ...(item.stocktakes || [])]
 
-  writeInventoryData(data)
+  writeAmmoInventoryData(data)
   return { ammo: item, stocktake: stocktakeRecord }
 }
 
@@ -198,7 +349,7 @@ function toCsv(headers, rows) {
 }
 
 export function buildGunsCsv() {
-  const { guns } = readInventoryData()
+  const { guns } = readGunInventoryData()
   const headers = [
     'id', 'make', 'model', 'serialNumber', 'acquisitionYear', 'state',
     'defaultAmmoId', 'ammoMake', 'defaultAmmoLabel',
@@ -217,7 +368,7 @@ export function buildGunsCsv() {
 }
 
 export function buildGunEventsCsv() {
-  const { guns } = readInventoryData()
+  const { guns } = readGunInventoryData()
   const headers = [
     'eventType', 'eventId', 'timestamp', 'returnedAt',
     'gunId', 'gunMake', 'gunModel', 'serialNumber',
@@ -250,7 +401,7 @@ export function buildGunEventsCsv() {
 }
 
 export function buildAmmoCsv() {
-  const { ammo } = readInventoryData()
+  const { ammo } = readAmmoInventoryData()
   const headers = [
     'id', 'make', 'model', 'caliber',
     'calculatedStock', 'totalPurchased', 'totalIssued',
@@ -265,7 +416,7 @@ export function buildAmmoCsv() {
 }
 
 export function buildAmmoEventsCsv() {
-  const { ammo } = readInventoryData()
+  const { ammo } = readAmmoInventoryData()
   const headers = [
     'eventType', 'eventId', 'timestamp',
     'ammoId', 'make', 'model', 'caliber',
