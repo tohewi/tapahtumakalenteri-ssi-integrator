@@ -426,6 +426,6 @@ describe('LoanerGunPickerSheet (R90-GUN7)', () => {
     // Select 0 cartridges (own permit) and submit
     await userEvent.click(screen.getByRole('button', { name: /^0 patr\./i }))
     await userEvent.click(screen.getByRole('button', { name: /Merkitse käyttöön/i }))
-    expect(onConfirm).toHaveBeenCalledWith({ gunId: 'g1', cartridgesGiven: 0 })
+    expect(onConfirm).toHaveBeenCalledWith({ gunId: 'g1', cartridgesGiven: 0, ammoId: null })
   })
 })

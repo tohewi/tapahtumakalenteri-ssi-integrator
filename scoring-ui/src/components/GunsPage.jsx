@@ -3,6 +3,7 @@ import { useAuthenticatedPage } from '../hooks/useAuthenticatedPage'
 import LoginScreen from './LoginScreen'
 import ManageSessionGate from './manage/ManageSessionGate'
 import { LegalFooterLinks } from './LegalDocumentPage'
+import AmmoInventorySection from './guns/AmmoInventorySection'
 import { AppHeader, ErrorBanner, Spinner } from './shared'
 import * as gunsApi from '../guns-api'
 
@@ -16,6 +17,7 @@ export default function GunsPage() {
 
 function GunsPageContent({ initialAuthenticated }) {
   const [guns, setGuns] = useState([])
+  const [ammo, setAmmo] = useState([])
   const [config, setConfig] = useState(null)
   const [accessDenied, setAccessDenied] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -27,10 +29,13 @@ function GunsPageContent({ initialAuthenticated }) {
     model: '',
     serialNumber: '',
     acquisitionYear: new Date().getFullYear(),
+    defaultAmmoId: '',
+    ammoMake: '',
   })
 
   const clearPageState = useCallback(() => {
     setGuns([])
+    setAmmo([])
     setConfig(null)
     setAccessDenied(false)
   }, [])
@@ -61,6 +66,7 @@ function GunsPageContent({ initialAuthenticated }) {
       await withSessionCheck(async () => {
         const res = await gunsApi.getGuns()
         setGuns(res.guns || [])
+        setAmmo(res.ammo || [])
         setConfig(res.config || null)
         setAccessDenied(false)
       })
@@ -85,6 +91,7 @@ function GunsPageContent({ initialAuthenticated }) {
       const res = await gunsApi.getGuns()
       if (!active) return
       setGuns(res.guns || [])
+      setAmmo(res.ammo || [])
       setConfig(res.config || null)
       setAccessDenied(false)
     })
@@ -114,6 +121,8 @@ function GunsPageContent({ initialAuthenticated }) {
       model: '',
       serialNumber: '',
       acquisitionYear: new Date().getFullYear(),
+      defaultAmmoId: ammo[0]?.id || '',
+      ammoMake: '',
     })
     setShowAddModal(true)
   }
@@ -125,6 +134,8 @@ function GunsPageContent({ initialAuthenticated }) {
       model: gun.model,
       serialNumber: gun.serialNumber,
       acquisitionYear: gun.acquisitionYear,
+      defaultAmmoId: gun.defaultAmmoId || '',
+      ammoMake: gun.ammoMake || '',
     })
     setShowAddModal(true)
   }
@@ -255,11 +266,12 @@ function GunsPageContent({ initialAuthenticated }) {
         <div className="space-y-2.5">
           {guns.map(gun => {
             const isInUse = gun.state === 'in_range_use'
+            const ammoDisplay = gun.defaultAmmoLabel || gun.ammoMake
             return (
               <div key={gun.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-xs">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-bold text-gray-900 text-base">
                         {gun.make} {gun.model}
                       </h3>
@@ -268,6 +280,11 @@ function GunsPageContent({ initialAuthenticated }) {
                       }`}>
                         {isInUse ? 'Radalla käytössä' : 'Asekaapissa'}
                       </span>
+                      {ammoDisplay && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                          Patruuna: {ammoDisplay}
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-gray-500 mt-0.5">
                       Sarjanumero: <span className="font-mono font-medium text-gray-700">{gun.serialNumber}</span> · Hankintavuosi: {gun.acquisitionYear}
@@ -314,6 +331,9 @@ function GunsPageContent({ initialAuthenticated }) {
                     Käyttäjä: <strong>{gun.currentCheckout.shooterName}</strong>
                     {gun.currentCheckout.cupName ? ` · ${gun.currentCheckout.cupName}` : ''}
                     {` · Patruunat: ${gun.currentCheckout.cartridgesGiven} kpl`}
+                    {gun.currentCheckout.ammoLabel || gun.currentCheckout.ammoMake
+                      ? ` (${gun.currentCheckout.ammoLabel || gun.currentCheckout.ammoMake})`
+                      : ''}
                   </div>
                 )}
 
@@ -335,6 +355,12 @@ function GunsPageContent({ initialAuthenticated }) {
             )
           })}
         </div>
+
+        <AmmoInventorySection
+          ammo={ammo}
+          onRefresh={loadInventory}
+          onError={(msg) => setError(msg)}
+        />
       </div>
       )}
 
@@ -349,7 +375,7 @@ function GunsPageContent({ initialAuthenticated }) {
               <input
                 type="text"
                 required
-                placeholder="esim. CZ"
+                placeholder="esim. CZ tai Glock"
                 value={formState.make}
                 onChange={e => setFormState(s => ({ ...s, make: e.target.value }))}
                 className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
@@ -360,7 +386,7 @@ function GunsPageContent({ initialAuthenticated }) {
               <input
                 type="text"
                 required
-                placeholder="esim. Shadow 2"
+                placeholder="esim. Shadow 2 tai 17 Gen5"
                 value={formState.model}
                 onChange={e => setFormState(s => ({ ...s, model: e.target.value }))}
                 className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
@@ -386,6 +412,35 @@ function GunsPageContent({ initialAuthenticated }) {
                 max="2100"
                 value={formState.acquisitionYear}
                 onChange={e => setFormState(s => ({ ...s, acquisitionYear: Number(e.target.value) }))}
+                className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Käytettävä patruuna varastosta (Linked Ammo)
+              </label>
+              <select
+                value={formState.defaultAmmoId}
+                onChange={e => setFormState(s => ({ ...s, defaultAmmoId: e.target.value }))}
+                className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
+              >
+                <option value="">— Ei linkitettyä varastoerää —</option>
+                {ammo.map(a => (
+                  <option key={a.id} value={a.id}>
+                    {a.make} {a.model} ({a.caliber}) · Saldo: {a.calculatedStock} patr.
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Suositeltu patruunamerkki (esim. GCI Glockille)
+              </label>
+              <input
+                type="text"
+                placeholder="esim. GCI"
+                value={formState.ammoMake}
+                onChange={e => setFormState(s => ({ ...s, ammoMake: e.target.value }))}
                 className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
               />
             </div>

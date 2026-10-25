@@ -21,6 +21,7 @@ export {
   ssiSetParticipantSquad,
   ssiSetMatchParticipantStatus,
   ssiDeleteMatchParticipant,
+  ssiSetParticipantNumber,
   ssiFindCompetitorInMatch,
   ssiFindParticipantInEvent,
   ssiSetDidNotShow,

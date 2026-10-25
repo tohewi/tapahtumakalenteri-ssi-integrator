@@ -191,7 +191,7 @@ export function createRegistrationRouter({
       const cupData = await adminGraphQL(`
         query CupDetail($id: String!) {
           event(content_type: 136, id: $id) {
-            id name
+            id name starts ends
             ... on NordicSerieNode {
               component_matches {
                 number included
@@ -313,7 +313,11 @@ export function createRegistrationRouter({
           .filter(r => r.success)
           .map(r => ({ matchName: r.matchName, squadNumber, squadLabel: r.squadLabel || '' }))
 
-        sendRegistrationConfirmation(email, shooterName, cupData.event.name, matchSquads)
+        sendRegistrationConfirmation(email, shooterName, cupData.event.name, matchSquads, {
+          cupId,
+          starts: cupData.event.starts,
+          ends: cupData.event.ends,
+        })
           .then(result => {
             if (!result.success) log.warn(`[register] Confirmation email failed: ${result.error}`)
           })

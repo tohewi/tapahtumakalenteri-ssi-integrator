@@ -21,3 +21,11 @@
 - Added unit and route tests in `scoring-proxy/test/gun-inventory.test.js`.
 ---
 
+## 2026-10-25 00:18 - US-006, US-007 & US-001..US-004 (R90-GUN11..16, GQL-HF6, GQL-HF5)
+- Created `scoring-ui/src/components/guns/AmmoInventorySection.jsx` with ammo stock cards, purchase modal, physical stocktake discrepancy modal, and CSV export links (`guns.csv`, `gun-events.csv`, `ammo.csv`, `ammo-events.csv`).
+- Updated `GunsPage.jsx`, `LoanerGunPickerSheet.jsx`, and `SquadCard.jsx` with Gun-to-Ammo selector (`defaultAmmoId`) and recommended cartridge display.
+- Implemented RFC 5545 `.ics` calendar attachment (`buildRegistrationIcs`) in `scoring-proxy/lib/email.js` (`GQL-HF6`).
+- Implemented `ssiSetParticipantNumber`, `buildCompetitorNumberSyncPlan`, `POST /api/v1/manage/cup/:id/sync-numbers`, and the `Synkronoi kilpailijanumerot` UI action (`GQL-HF5`).
+---
+
+

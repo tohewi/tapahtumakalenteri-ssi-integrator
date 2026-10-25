@@ -321,6 +321,21 @@ export default function SquaddingOverview({ data, cupId, onRefresh, onPatchShoot
           </div>
         )}
 
+        {/* GQL-HF5: Competitor number mismatch banner */}
+        {data.numberMismatchCount > 0 && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 flex items-center justify-between gap-2">
+            <div className="text-xs text-indigo-900">
+              <strong>{data.numberMismatchCount}</strong> kilpailijanumeroa poikkeaa Cupin numeroinnista.
+            </div>
+            <ActionButton
+              label="Synkronoi kilpailijanumerot"
+              loading={actionLoading?.action === 'syncNumbers'}
+              onClick={() => runAction(() => api.manageSyncNumbers(cupId), 'all', 'syncNumbers')}
+              color="blue"
+            />
+          </div>
+        )}
+
         {/* ── All OK banner ── */}
         {totalIssues === 0 && (
           <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">

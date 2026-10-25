@@ -13,19 +13,75 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
 }
+
 const REGISTER_URL = 'https://tapahtumakalenteri-ssi-integrator.onrender.com/#/register'
 const MY_REGISTRATIONS_URL = 'https://shootnscoreit.com/my-registrations/'
 
-/**
- * Send registration confirmation email to shooter.
- *
- * @param {string} to — shooter's email
- * @param {string} shooterName — shooter's display name
- * @param {string} cupName — CUP name (e.g. "TurRes Kupittaa CUP 08.02.2026")
- * @param {Array<{matchName: string, squadNumber: number, squadLabel: string}>} matchSquads
- * @returns {Promise<{success: boolean, error?: string}>}
- */
-export async function sendRegistrationConfirmation(to, shooterName, cupName, matchSquads) {
+function formatIcsUtcDate(date) {
+  return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
+}
+
+function escapeIcsText(str = '') {
+  return String(str)
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n')
+}
+
+export function buildRegistrationIcs({
+  cupId = 'cup',
+  cupName = 'Kupittaa CUP',
+  starts,
+  ends = null,
+  shooterEmail = 'shooter@example.com',
+  matchSquads = [],
+}) {
+  if (!starts) return null
+  const startDate = new Date(starts)
+  if (Number.isNaN(startDate.getTime())) return null
+
+  const endDate = ends ? new Date(ends) : null
+  const resolvedEnd = (endDate && !Number.isNaN(endDate.getTime()) && endDate > startDate)
+    ? endDate
+    : new Date(startDate.getTime() + 8 * 60 * 60 * 1000)
+
+  const matchList = (matchSquads || [])
+    .map(ms => `${ms.matchName}: Squad ${ms.squadNumber}${ms.squadLabel ? ` (${ms.squadLabel})` : ''}`)
+    .join('\n')
+
+  const description = [
+    cupName,
+    matchList,
+    `Squadin vaihto: ${REGISTER_URL}`,
+    `Peruminen: ${MY_REGISTRATIONS_URL}`,
+  ].filter(Boolean).join('\n\n')
+
+  const uid = `registration-${String(cupId).trim()}-${String(shooterEmail).trim().toLowerCase()}@ssi-tools`
+  const dtstamp = formatIcsUtcDate(new Date())
+  const dtstart = formatIcsUtcDate(startDate)
+  const dtend = formatIcsUtcDate(resolvedEnd)
+
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//TurRes//SSI Tools//FI',
+    'CALSCALE:GREGORIAN',
+    'METHOD:REQUEST',
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTAMP:${dtstamp}`,
+    `DTSTART:${dtstart}`,
+    `DTEND:${dtend}`,
+    `SUMMARY:${escapeIcsText(cupName)}`,
+    `DESCRIPTION:${escapeIcsText(description)}`,
+    'STATUS:CONFIRMED',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n') + '\r\n'
+}
+
+export async function sendRegistrationConfirmation(to, shooterName, cupName, matchSquads, eventMeta = {}) {
   if (!resend) {
     console.warn('[email] RESEND_API_KEY not configured — skipping confirmation email')
     return { success: false, error: 'Email not configured' }
@@ -99,6 +155,27 @@ Poista sekä CUP- että osakilpailuilmoittautumiset.
 ---
 Tämä viesti on lähetetty automaattisesti.`
 
+  const icsContent = buildRegistrationIcs({
+    cupId: eventMeta?.cupId,
+    cupName,
+    starts: eventMeta?.starts,
+    ends: eventMeta?.ends,
+    shooterEmail: to,
+    matchSquads,
+  })
+
+  if (!icsContent && eventMeta && Object.keys(eventMeta).length > 0) {
+    console.warn('[email] Missing or invalid cup starts date — omitting .ics calendar attachment')
+  }
+
+  const attachments = icsContent
+    ? [{
+        filename: 'ilmoittautuminen.ics',
+        content: Buffer.from(icsContent, 'utf8').toString('base64'),
+        contentType: 'text/calendar; charset=utf-8; method=REQUEST',
+      }]
+    : undefined
+
   try {
     const result = await resend.emails.send({
       from: FROM_EMAIL,
@@ -106,6 +183,7 @@ Tämä viesti on lähetetty automaattisesti.`
       subject: `Ilmoittautuminen: ${cupName}`,
       html,
       text,
+      ...(attachments ? { attachments } : {}),
     })
 
     if (result.error) {

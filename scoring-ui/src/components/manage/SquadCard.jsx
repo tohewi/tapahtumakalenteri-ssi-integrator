@@ -76,6 +76,9 @@ export default function SquadCard({
                           <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                             <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-100 text-amber-800">
                               Laina-ase: {assignedGun.make} {assignedGun.model} ({assignedGun.serialNumber}) · {assignedGun.currentCheckout?.cartridgesGiven ?? 0} patr.
+                              {assignedGun.currentCheckout?.ammoLabel || assignedGun.currentCheckout?.ammoMake || assignedGun.ammoMake
+                                ? ` (${assignedGun.currentCheckout?.ammoLabel || assignedGun.currentCheckout?.ammoMake || assignedGun.ammoMake})`
+                                : ''}
                             </span>
                             {onReturnLoanerGun && (
                               <button

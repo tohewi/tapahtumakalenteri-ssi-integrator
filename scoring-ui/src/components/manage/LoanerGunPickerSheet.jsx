@@ -5,12 +5,16 @@ export default function LoanerGunPickerSheet({ shooter, guns = [], onConfirm, on
   const [selectedGunId, setSelectedGunId] = useState(availableGuns[0]?.id || '')
   const [cartridgesGiven, setCartridgesGiven] = useState(100)
 
+  const selectedGun = availableGuns.find(g => g.id === selectedGunId) || null
+  const recommendedAmmo = selectedGun?.defaultAmmoLabel || selectedGun?.ammoMake || ''
+
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!selectedGunId) return
     onConfirm({
       gunId: selectedGunId,
       cartridgesGiven: Number(cartridgesGiven),
+      ammoId: selectedGun?.defaultAmmoId || null,
     })
   }
 
@@ -41,6 +45,7 @@ export default function LoanerGunPickerSheet({ shooter, guns = [], onConfirm, on
             <div className="space-y-1.5 max-h-48 overflow-y-auto">
               {availableGuns.map(gun => {
                 const selected = selectedGunId === gun.id
+                const gunAmmo = gun.defaultAmmoLabel || gun.ammoMake
                 return (
                   <button
                     key={gun.id}
@@ -57,6 +62,11 @@ export default function LoanerGunPickerSheet({ shooter, guns = [], onConfirm, on
                       <div className="text-xs text-gray-500 font-mono">
                         SN: {gun.serialNumber} · {gun.acquisitionYear}
                       </div>
+                      {gunAmmo && (
+                        <div className="text-xs font-semibold text-indigo-700 mt-0.5">
+                          Patruuna: {gunAmmo}
+                        </div>
+                      )}
                     </div>
                     <div className="text-xs text-gray-500 text-right">
                       <div>Huollon jälkeen:</div>
@@ -70,6 +80,12 @@ export default function LoanerGunPickerSheet({ shooter, guns = [], onConfirm, on
             </div>
           )}
         </div>
+
+        {recommendedAmmo && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2 text-xs text-indigo-900 font-medium">
+            Suositeltu luovutettava patruuna tälle aseelle: <strong>{recommendedAmmo}</strong>
+          </div>
+        )}
 
         <div>
           <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">

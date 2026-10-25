@@ -18,8 +18,8 @@
         "scoring-proxy lint and tests pass (npm run lint && npm test)"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented buildRegistrationIcs and .ics attachment in sendRegistrationConfirmation with unit tests in email-ical.test.js."
     },
     {
       "id": "US-002",
@@ -32,8 +32,8 @@
         "scoring-proxy lint and tests pass (npm run lint && npm test)"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented ssiSetParticipantNumber in scoring-proxy/lib/ssi-core/participants.js."
     },
     {
       "id": "US-003",
@@ -48,8 +48,8 @@
         "scoring-proxy lint and tests pass (npm run lint && npm test)"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented buildCompetitorNumberSyncPlan and POST /api/v1/manage/cup/:id/sync-numbers."
     },
     {
       "id": "US-004",
@@ -63,8 +63,8 @@
         "scoring-proxy tests pass (npm test) and scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test -- --maxWorkers=1 --pool=threads)"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added manageSyncNumbers in api.js and Synkronoi kilpailijanumerot banner in SquaddingOverview.jsx."
     },
     {
       "id": "US-005",
@@ -96,8 +96,8 @@
         "scoring-proxy tests pass (npm test) and scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test -- --maxWorkers=1 --pool=threads)"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added AmmoInventorySection.jsx, gun-to-ammo selector in GunsPage.jsx, and recommended ammo display in LoanerGunPickerSheet.jsx."
     },
     {
       "id": "US-007",
@@ -112,8 +112,8 @@
         "scoring-proxy tests pass (npm test) and scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test -- --maxWorkers=1 --pool=threads)"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented CSV export endpoints and download toolbar on #/guns."
     }
   ]
 }

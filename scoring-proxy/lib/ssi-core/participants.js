@@ -649,6 +649,50 @@ export async function ssiDeleteMatchParticipant(matchId, participantId, shooterN
 }
 
 // ============================================================
+// Admin: set match participant number via edit form (GQL-HF5)
+// GET /event/participant/{participantCT}/{participantId}/edit/
+// POST with overridden 'number' field
+// ============================================================
+
+export async function ssiSetParticipantNumber(participantId, number, cookies, participantContentType = 93) {
+  const url = `${SSI_BASE_URL}/event/participant/${participantContentType}/${participantId}/edit/`
+  const resp = await fetch(url, {
+    headers: { 'Cookie': formatCookies(cookies) },
+    redirect: 'follow',
+  })
+  if (!resp.ok) throw new Error(`Participant edit page HTTP ${resp.status}`)
+  const html = await resp.text()
+  cookies = _participantResponseCookies(cookies, resp)
+
+  const formMatch = html.match(/<form[^>]*method="post"[^>]*>([\s\S]*?)<\/form>/i)
+  if (!formMatch) throw new Error('No edit form found on participant page')
+
+  const formData = _extractFormFields(formMatch[1])
+  formData.set('number', String(number))
+
+  const editResp = await fetch(url, {
+    method: 'POST',
+    headers: _participantFormHeaders(cookies, url),
+    body: formData.toString(),
+    redirect: 'manual',
+  })
+
+  if (editResp.status === 302 || editResp.status === 301) {
+    return { success: true }
+  }
+  if (editResp.status === 200) {
+    const respHtml = await editResp.text()
+    if (respHtml.includes('errorlist') || respHtml.includes('is-invalid')) {
+      const errorMatch = respHtml.match(/<(?:ul|div)[^>]*(?:errorlist|invalid-feedback)[^>]*>([\s\S]*?)<\/(?:ul|div)>/)
+      const errorText = errorMatch ? errorMatch[1].replace(/<[^>]+>/g, '').trim() : 'Edit error'
+      return { success: false, message: errorText }
+    }
+    return { success: true }
+  }
+  throw new Error(`Participant number edit failed HTTP ${editResp.status}`)
+}
+
+// ============================================================
 // Staffing: register user to trainer squad in one step
 // 1. POST search-and-add by email → find register link
 // 2. GET register link → confirmation form with squad select
