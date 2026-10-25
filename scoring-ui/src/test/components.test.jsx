@@ -401,19 +401,24 @@ describe('TabletShooterSidebar drag-and-drop reordering (TS13)', () => {
 // LoanerGunPickerSheet — Laina-ase & Cartridge Picker (R90)
 // ============================================================
 
-describe('LoanerGunPickerSheet (R90-GUN7)', () => {
-  it('selects an available gun from in_gun_safe and submits cartridge count (100 or 0)', async () => {
+describe('LoanerGunPickerSheet (R90-GUN7 & GUN11..13)', () => {
+  it('selects an available gun and cartridge batch from inventory when cartridgesGiven > 0, or 0 cartridges without ammo deduction', async () => {
     const onConfirm = vi.fn()
     const onClose = vi.fn()
     const guns = [
-      { id: 'g1', make: 'CZ', model: 'Shadow 2', serialNumber: 'CZ-101', acquisitionYear: 2024, state: 'in_gun_safe', timesUsedSinceMaintenance: 2, cartridgesSinceMaintenance: 200 },
+      { id: 'g1', make: 'CZ', model: 'Shadow 2', serialNumber: 'CZ-101', acquisitionYear: 2024, state: 'in_gun_safe', defaultAmmoId: 'a1', timesUsedSinceMaintenance: 2, cartridgesSinceMaintenance: 200 },
       { id: 'g2', make: 'Glock', model: '17', serialNumber: 'GL-202', acquisitionYear: 2023, state: 'in_range_use', timesUsedSinceMaintenance: 1, cartridgesSinceMaintenance: 100 },
+    ]
+    const ammo = [
+      { id: 'a1', make: 'S&B', model: 'FMJ 124gr', caliber: '9x19', calculatedStock: 800 },
+      { id: 'a2', make: 'GCI', model: 'FMJ 115gr', caliber: '9x19', calculatedStock: 500 },
     ]
 
     render(
       <LoanerGunPickerSheet
         shooter={{ name: 'Matti Meikäläinen', email: 'matti@example.com' }}
         guns={guns}
+        ammo={ammo}
         onConfirm={onConfirm}
         onClose={onClose}
       />
@@ -423,7 +428,14 @@ describe('LoanerGunPickerSheet (R90-GUN7)', () => {
     expect(screen.getByText(/CZ Shadow 2/i)).toBeInTheDocument()
     expect(screen.queryByText(/Glock 17/i)).toBeNull()
 
-    // Select 0 cartridges (own permit) and submit
+    // Choose GCI cartridge batch (a2) with 100 rounds and submit
+    const ammoSelect = screen.getByLabelText(/Luovutettava patruuna varastosta/i)
+    await userEvent.selectOptions(ammoSelect, 'a2')
+    await userEvent.click(screen.getByRole('button', { name: /Merkitse käyttöön/i }))
+    expect(onConfirm).toHaveBeenCalledWith({ gunId: 'g1', cartridgesGiven: 100, ammoId: 'a2' })
+
+    // Select 0 cartridges (own permit) and submit -> ammoId is null
+    onConfirm.mockClear()
     await userEvent.click(screen.getByRole('button', { name: /^0 patr\./i }))
     await userEvent.click(screen.getByRole('button', { name: /Merkitse käyttöön/i }))
     expect(onConfirm).toHaveBeenCalledWith({ gunId: 'g1', cartridgesGiven: 0, ammoId: null })

@@ -27,8 +27,9 @@ export default function SquaddingOverview({ data, cupId, onRefresh, onPatchShoot
   const [squadPicker, setSquadPicker] = useState(null) // { shooterName, type: 'assign'|'assignCupOnly' }
   const [expandedSquads, setExpandedSquads] = useState(new Set()) // persists across refreshes
 
-  // R90: Loaner gun inventory state (loaded if user is in SSI Group 25874 admin)
+  // R90: Loaner gun & ammo inventory state (loaded if user is in SSI Group 25874 admin)
   const [guns, setGuns] = useState([])
+  const [ammo, setAmmo] = useState([])
   const [loanerGunsAllowed, setLoanerGunsAllowed] = useState(false)
   const [loanerPickerShooter, setLoanerPickerShooter] = useState(null)
 
@@ -36,6 +37,7 @@ export default function SquaddingOverview({ data, cupId, onRefresh, onPatchShoot
     try {
       const res = await gunsApi.getGuns()
       setGuns(res.guns || [])
+      setAmmo(res.ammo || [])
       setLoanerGunsAllowed(true)
     } catch {
       setLoanerGunsAllowed(false)
@@ -48,6 +50,7 @@ export default function SquaddingOverview({ data, cupId, onRefresh, onPatchShoot
       .then(res => {
         if (!active) return
         setGuns(res.guns || [])
+        setAmmo(res.ammo || [])
         setLoanerGunsAllowed(true)
       })
       .catch(() => {
@@ -210,7 +213,7 @@ export default function SquaddingOverview({ data, cupId, onRefresh, onPatchShoot
   }
 
   // R90: Loaner gun checkout & return handlers
-  const handleConfirmLoanerGun = async ({ gunId, cartridgesGiven }) => {
+  const handleConfirmLoanerGun = async ({ gunId, cartridgesGiven, ammoId }) => {
     if (!loanerPickerShooter) return
     setActionError(null)
     try {
@@ -220,6 +223,7 @@ export default function SquaddingOverview({ data, cupId, onRefresh, onPatchShoot
         cupId: String(cupId),
         cupName: data.cup?.name || '',
         cartridgesGiven,
+        ammoId,
       })
       setLoanerPickerShooter(null)
       await loadGuns()
@@ -580,6 +584,7 @@ export default function SquaddingOverview({ data, cupId, onRefresh, onPatchShoot
         <LoanerGunPickerSheet
           shooter={loanerPickerShooter}
           guns={guns}
+          ammo={ammo}
           onConfirm={handleConfirmLoanerGun}
           onClose={() => setLoanerPickerShooter(null)}
         />
