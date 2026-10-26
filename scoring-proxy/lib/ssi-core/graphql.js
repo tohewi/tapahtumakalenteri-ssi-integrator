@@ -118,6 +118,7 @@ export async function ssiGraphQL(jwtToken, query, variables = {}, apiKey = null)
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     let resp
+    const attemptStartMs = Date.now()
     try {
       resp = await fetch(SSI_GRAPHQL, {
         method: 'POST',
@@ -196,6 +197,14 @@ export async function ssiGraphQL(jwtToken, query, variables = {}, apiKey = null)
       }
 
       throw new Error(`GraphQL HTTP ${resp.status}: ${resp.statusText}`)
+    }
+
+    const durationMs = Date.now() - attemptStartMs
+    if (durationMs > 2000) {
+      log.warn('[ssi-graphql] Slow GraphQL query (>2000ms) — review query efficiency per SSI API guidelines', {
+        durationMs,
+        attempt,
+      })
     }
 
     const json = await resp.json()

@@ -274,6 +274,12 @@ $values = [regex]::Matches($formPage.Content, '<input[^>]+name="weapon_groups"[^
 - **Array fields** (`weapon_groups`, `categories`, `competence_classes`) must be present with valid enum values scraped from the form
 - **`has_accepted_event_data_ass_agreement`** must be `"on"`
 - **`group`** and `ends_date`/`ends_time` are accepted but not required
+- **`match.squads` is `SquadInterface` (Abstract GraphQL Type)** — Always wrap `max_competitors` and `competitors` inside `... on NordicSquadNode { max_competitors competitors { ... } }`.
+- **SSI GraphQL API Rate/Efficiency & Deprecation Rules (Mandatory)**:
+  1. **Always send `x-api-key`** on every GraphQL request (`ssiGraphQL` enforces this).
+  2. **Never send parallel GraphQL query bursts (`Promise.all` of many windows/matches)** — SSI disables API keys that overload their server or run multi-second query storms. Keep SSI requests sequential (`concurrency = 1`) with short-TTL caching.
+  3. **Deprecated `scorecards` / `scorecards_count` fields**: Never query `scorecards` or `scorecards_count` on `EventInterface` or `CompetitorInterface`, and never query `event { stages { scorecards } }`. Use `competitor_scorecards()` / `competitor_scorecards_count()` or on-demand `StageInterface.scorecards`.
+  4. **Terms of Usage**: Do not build features that compete with SSI's monetization of Premium Events, Organizations, or Shooters (paid-status tracking remains disabled via `FEATURE_PAID_TOGGLE_ENABLED=false`).
 
 ## Architecture Guidelines (v7.5+)
 

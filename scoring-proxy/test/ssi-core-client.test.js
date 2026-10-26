@@ -3,8 +3,13 @@
 // ============================================================
 
 import { describe, it, expect, afterEach, vi } from 'vitest'
+import { readdirSync, readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { ssiGraphQL } from '../lib/ssi-core/graphql.js'
 import { ssiFindCompetitorInMatch } from '../lib/ssi-core/participants.js'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 afterEach(() => {
   delete process.env.SSI_GRAPHQL_MAX_RETRIES
@@ -58,6 +63,22 @@ describe('ssiGraphQL hardening', () => {
       isUpstreamTransient: true,
     })
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('never uses deprecated EventInterface/CompetitorInterface scorecards or scorecards_count fields in scoring-proxy (R91-SSI4)', () => {
+    const dirs = [
+      path.resolve(__dirname, '../routes'),
+      path.resolve(__dirname, '../lib/services'),
+      path.resolve(__dirname, '../lib/ssi-core'),
+    ]
+    for (const dir of dirs) {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (!entry.isFile() || !entry.name.endsWith('.js')) continue
+        const content = readFileSync(path.join(dir, entry.name), 'utf8')
+        expect(content).not.toMatch(/\bscorecards_count\b/)
+        expect(content).not.toMatch(/stages\s*\{\s*scorecards\b/)
+      }
+    }
   })
 })
 

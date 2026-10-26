@@ -19,6 +19,7 @@ import {
   filterManageableCups,
   getManageWindowBounds,
   buildCompetitorNumberSyncPlan,
+  findMatchParticipantIdFromCupEvent,
 } from '../lib/services/cup-manage.js'
 import { log } from '../lib/logger.js'
 import { AppError } from '../lib/errors/AppError.js'
@@ -295,6 +296,7 @@ export function createManagementRouter({
                 number included
                 match {
                   id name
+                  competitors { id status first_name last_name email }
                   squads {
                     number
                     ... on NordicSquadNode {
@@ -336,12 +338,13 @@ export function createManagementRouter({
         }
       }
 
-      const matchIds = targetMatches.map(m => m.id)
       const { firstName, lastName } = splitShooterName(shooterName)
-
       const results = []
-      for (const matchId of matchIds) {
-        let participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies, email)
+      for (const m of targetMatches) {
+        const matchId = m.id
+        let participantId =
+          findMatchParticipantIdFromCupEvent(m, shooterName, email) ||
+          await ssiFindCompetitorInMatch(matchId, shooterName, cookies, email)
         if (!participantId) {
           await ssiSearchAndAddParticipant(91, matchId, email, cookies, { firstName, lastName })
           participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies, email)

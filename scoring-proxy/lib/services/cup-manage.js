@@ -453,6 +453,36 @@ export function makeShooterKey(firstName, lastName, email) {
 }
 
 // ============================================================
+// R91-SSI3: Resolve match participant ID directly from parent Cup GraphQL response
+// Avoids firing redundant per-match ssiFindCompetitorInMatch GraphQL queries
+// ============================================================
+
+export function findMatchParticipantIdFromCupEvent(match, shooterName, email = null) {
+  if (!match) return null
+  const normalizedEmail = email ? String(email).trim().toLowerCase() : ''
+  const normalizedName = String(shooterName || '').trim().toLowerCase()
+
+  const candidates = [
+    ...(match.competitors || []),
+    ...(match.squads || []).flatMap(sq => sq.competitors || []),
+  ].filter(c => c && c.id && (!c.status || c.status === 'a'))
+
+  if (normalizedEmail) {
+    const byEmail = candidates.find(c => String(c.email || '').trim().toLowerCase() === normalizedEmail)
+    if (byEmail) return String(byEmail.id)
+  }
+
+  if (normalizedName) {
+    const byName = candidates.find(c =>
+      `${c.first_name || ''} ${c.last_name || ''}`.trim().toLowerCase() === normalizedName
+    )
+    if (byName) return String(byName.id)
+  }
+
+  return null
+}
+
+// ============================================================
 // GQL-HF5: CUP-canonical competitor number mismatch plan
 // ============================================================
 

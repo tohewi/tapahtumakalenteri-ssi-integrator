@@ -51,6 +51,16 @@
 - Updated `scoring-proxy/lib/session/audit.js` (`logAudit`, `auditMutation`, `serializeAuditLogJson`) to include `level: 'info' | 'error'` and omit null `error`/`errorCode` keys so Render does not classify successful `LOGIN_SUCCESS`/`SSI_OPERATION` events as errors.
 ---
 
+## 2026-10-26 19:35 - US-018..US-023 (R91-SSI1..SSI4, R91-PERF1, R91-UI1, R91-DOC1)
+- Replaced 11-window `Promise.all` burst in `GET /api/v1/scoring/matches` with a single bounded GraphQL query + 60s cache, and removed the failing `status: 'on'` query in `GET /api/v1/scoring/cups`.
+- Added `findMatchParticipantIdFromCupEvent` in `cup-manage.js` (used in `routes/management.js`) and single-flight deduplication on `getAdminSession()` in `server.js`.
+- Added `>2000ms` slow-query warning in `lib/ssi-core/graphql.js` and deprecated `scorecards` guard test in `test/ssi-core-client.test.js`.
+- Added write-through in-memory cache (`jsonFileCache`) for `gun-inventory.json` and `ammo-inventory.json` in `ammo-inventory-service.js`.
+- Fixed `CupSearch.jsx` static import of `api.js` and added `React.lazy` + `<Suspense>` in `scoring-ui/src/main.jsx`.
+- Synced `AGENTS.md` and `.github/copilot-instructions.md` with SSI GraphQL API rules and delegated disjoint modularity/refactoring issues to GitHub Copilot.
+---
+
+
 
 
 

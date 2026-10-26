@@ -223,10 +223,21 @@ let adminJwt = null
 let adminRefreshToken = null
 let adminCookieTime = 0
 let adminJwtTime = 0
+let adminSessionInFlight = null
 const ADMIN_COOKIE_TTL = 4 * 60 * 60 * 1000 // 4 hours — SSI web cookies
 const ADMIN_JWT_TTL = 14 * 60 * 1000         // 14 min — SSI JWTs expire ~15 min
 
 async function getAdminSession() {
+  if (adminSessionInFlight) {
+    return adminSessionInFlight
+  }
+  adminSessionInFlight = _resolveAdminSession().finally(() => {
+    adminSessionInFlight = null
+  })
+  return adminSessionInFlight
+}
+
+async function _resolveAdminSession() {
   const email = process.env.SSI_ADMIN_EMAIL
   const password = process.env.SSI_ADMIN_PASSWORD
   const apiKey = SSI_ADMIN_API_KEY || null

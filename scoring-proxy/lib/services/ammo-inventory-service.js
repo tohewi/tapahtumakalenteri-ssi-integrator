@@ -3,7 +3,7 @@
 // ============================================================
 
 import crypto from 'node:crypto'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { log } from '../logger.js'
@@ -15,6 +15,33 @@ const RENDER_PERSISTENT_DIR = '/var/data'
 
 export const GUN_SCHEMA_VERSION = 2
 export const AMMO_SCHEMA_VERSION = 2
+
+// R91-PERF1: Write-through in-memory cache keyed by resolved filePath
+const jsonFileCache = new Map()
+
+function readCachedJsonFile(filePath) {
+  if (!existsSync(filePath)) {
+    jsonFileCache.delete(filePath)
+    return null
+  }
+  const mtimeMs = statSync(filePath).mtimeMs
+  const cached = jsonFileCache.get(filePath)
+  if (cached && cached.mtimeMs === mtimeMs) {
+    return structuredClone(cached.data)
+  }
+  const parsed = JSON.parse(readFileSync(filePath, 'utf8'))
+  jsonFileCache.set(filePath, { mtimeMs, data: structuredClone(parsed) })
+  return parsed
+}
+
+function updateCachedJsonFile(filePath, payload) {
+  try {
+    const mtimeMs = existsSync(filePath) ? statSync(filePath).mtimeMs : Date.now()
+    jsonFileCache.set(filePath, { mtimeMs, data: structuredClone(payload) })
+  } catch {
+    jsonFileCache.delete(filePath)
+  }
+}
 
 function resolveWritablePath(envPath, defaultFileName) {
   if (envPath) {
@@ -56,6 +83,7 @@ function atomicWriteJson(filePath, payload) {
     writeFileSync(filePath, content, 'utf8')
     rmSync(tmpPath, { force: true })
   }
+  updateCachedJsonFile(filePath, payload)
 }
 
 function retainBackupFile(filePath, oldVersion) {
@@ -128,7 +156,7 @@ export function readGunInventoryData() {
   }
   let parsed
   try {
-    parsed = JSON.parse(readFileSync(filePath, 'utf8'))
+    parsed = readCachedJsonFile(filePath)
   } catch (err) {
     log.error('[guns] Failed to read or parse existing gun-inventory.json:', err.message)
     throw new AppError('Gun inventory storage is unreadable', 500, 'STORAGE_READ_ERROR')
@@ -184,7 +212,7 @@ export function readAmmoInventoryData() {
   }
   let parsed
   try {
-    parsed = JSON.parse(readFileSync(filePath, 'utf8'))
+    parsed = readCachedJsonFile(filePath)
   } catch (err) {
     log.error('[guns] Failed to read or parse existing ammo-inventory.json:', err.message)
     throw new AppError('Ammo inventory storage is unreadable', 500, 'STORAGE_READ_ERROR')

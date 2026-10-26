@@ -156,7 +156,7 @@ describe('GET /api/scoring/cups', () => {
     expect(app.getScoringQueryCalls()).toHaveLength(0)
   })
 
-  it('uses GraphQL status filter and returns active cups on or after current date', async () => {
+  it('queries starts_after in a single GraphQL call and filters status=on locally (R91-SSI2)', async () => {
     const ip = uniqueIp()
     const cookies = await createScoringSessionCookie()
 
@@ -177,6 +177,13 @@ describe('GET /api/scoring/cups', () => {
           name: 'Kupittaa Active Future',
           starts: new Date(now.getTime() + dayMs).toISOString(),
           status: 'on',
+          get_content_type_key: 136,
+        },
+        {
+          id: '3',
+          name: 'Kupittaa Completed Future',
+          starts: new Date(now.getTime() + dayMs).toISOString(),
+          status: 'cp',
           get_content_type_key: 136,
         },
         {
@@ -204,61 +211,38 @@ describe('GET /api/scoring/cups', () => {
     const calls = app.getScoringQueryCalls()
     expect(calls).toHaveLength(1)
     expect(calls[0].query).toContain('starts_after')
-    expect(calls[0].query).toContain('status: $status')
+    expect(calls[0].query).not.toContain('status: $status')
     expect(calls[0].variables.search).toBe('Kupittaa')
-    expect(calls[0].variables.status).toBe('on')
     expect(typeof calls[0].variables.startsAfter).toBe('string')
   })
 
-  it('falls back to local status filter if GraphQL status argument is unsupported', async () => {
+  it('executes a single bounded GraphQL query and caches repeat match searches (R91-SSI1)', async () => {
     const ip = uniqueIp()
     const cookies = await createScoringSessionCookie()
 
-    const now = new Date()
-    const dayMs = 24 * 60 * 60 * 1000
-
-    app.setMockResponder(async (_session, query) => {
-      if (query.includes('status: $status')) {
-        throw new Error('GraphQL Error: Unknown argument "status" on field "events".')
-      }
-
-      return {
-        events: [
-          {
-            id: '20',
-            name: 'Fallback Active',
-            starts: new Date(now.getTime() + dayMs).toISOString(),
-            status: 'on',
-            get_content_type_key: 136,
-          },
-          {
-            id: '21',
-            name: 'Fallback Completed',
-            starts: new Date(now.getTime() + dayMs).toISOString(),
-            status: 'cp',
-            get_content_type_key: 136,
-          },
-          {
-            id: '22',
-            name: 'Fallback Cancelled',
-            starts: new Date(now.getTime() + dayMs).toISOString(),
-            status: 'cs',
-            get_content_type_key: 136,
-          },
-        ],
-      }
+    app.setMockResponse({
+      events: [
+        {
+          id: '910',
+          name: 'TurRes Kupittaa Tarkkuus',
+          starts: '2026-06-13T09:00:00Z',
+          status: 'on',
+          rule: 'Nordic',
+          get_content_type_key: 91,
+        },
+      ],
     })
 
-    const res = await request('GET', '/api/scoring/cups?search=Kupittaa', null, ip, cookies)
+    const res1 = await request('GET', '/api/scoring/matches?search=Tarkkuus', null, ip, cookies)
+    expect(res1.status).toBe(200)
+    expect(res1.data.matches).toHaveLength(1)
+    expect(app.getScoringQueryCalls()).toHaveLength(1)
 
-    expect(res.status).toBe(200)
-    expect(res.data.cups.map(c => c.id)).toEqual(['20'])
-
-    const calls = app.getScoringQueryCalls()
-    expect(calls).toHaveLength(2)
-    expect(calls[0].query).toContain('status: $status')
-    expect(calls[1].query).not.toContain('status: $status')
-    expect(calls[1].query).toContain('starts_after')
+    // Repeat identical search within 60s TTL -> served from cache without hitting SSI GraphQL again
+    const res2 = await request('GET', '/api/scoring/matches?search=Tarkkuus', null, ip, cookies)
+    expect(res2.status).toBe(200)
+    expect(res2.data.matches).toHaveLength(1)
+    expect(app.getScoringQueryCalls()).toHaveLength(1)
   })
 
   it('returns unfiltered cup list in debug mode', async () => {

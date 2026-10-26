@@ -67,21 +67,21 @@ export function buildScoreFormData({ scores, csrfToken, warning, dqReason, comme
   return formData
 }
 
-export function buildMatchSearchWindows(now = new Date()) {
-  const windows = []
-  const futureEnd = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())
-  windows.push({ after: now.toISOString().split('T')[0], before: futureEnd.toISOString().split('T')[0] })
-  for (let i = 0; i < 10; i++) {
-    const end = new Date(now)
-    end.setMonth(end.getMonth() - i * 6)
-    const start = new Date(now)
-    start.setMonth(start.getMonth() - (i + 1) * 6)
-    windows.push({
-      after: start.toISOString().split('T')[0],
-      before: end.toISOString().split('T')[0],
-    })
+export function buildMatchSearchWindows(now = new Date(), { after = null, before = null } = {}) {
+  if (after || before) {
+    const defaultStart = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
+    const defaultEnd = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())
+    return [{
+      after: after || defaultStart.toISOString().split('T')[0],
+      before: before || defaultEnd.toISOString().split('T')[0],
+    }]
   }
-  return windows
+  const pastStart = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
+  const futureEnd = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())
+  return [{
+    after: pastStart.toISOString().split('T')[0],
+    before: futureEnd.toISOString().split('T')[0],
+  }]
 }
 
 export function mergeAndFormatEvents(results) {
