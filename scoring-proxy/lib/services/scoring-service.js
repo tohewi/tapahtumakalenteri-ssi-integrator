@@ -68,19 +68,11 @@ export function buildScoreFormData({ scores, csrfToken, warning, dqReason, comme
 }
 
 export function buildMatchSearchWindows(now = new Date(), { after = null, before = null } = {}) {
-  if (after || before) {
-    const defaultStart = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
-    const defaultEnd = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())
-    return [{
-      after: after || defaultStart.toISOString().split('T')[0],
-      before: before || defaultEnd.toISOString().split('T')[0],
-    }]
-  }
-  const pastStart = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
-  const futureEnd = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())
+  const pastStart = new Date(Date.UTC(now.getUTCFullYear() - 1, now.getUTCMonth(), now.getUTCDate()))
+  const futureEnd = new Date(Date.UTC(now.getUTCFullYear() + 1, now.getUTCMonth(), now.getUTCDate()))
   return [{
-    after: pastStart.toISOString().split('T')[0],
-    before: futureEnd.toISOString().split('T')[0],
+    after: after || pastStart.toISOString().split('T')[0],
+    before: before || futureEnd.toISOString().split('T')[0],
   }]
 }
 

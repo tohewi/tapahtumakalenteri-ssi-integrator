@@ -62,9 +62,10 @@ describe('scoring-service pure helpers', () => {
     expect(formData.get('score_comment')).toBe('good series')
   })
 
-  it('builds 11 search windows and merges/deduplicates events descending by date', () => {
+  it('builds a single bounded search window (R91-SSI1) and merges/deduplicates events descending by date', () => {
     const windows = buildMatchSearchWindows(new Date('2026-06-15T00:00:00Z'))
-    expect(windows).toHaveLength(11)
+    expect(windows).toHaveLength(1)
+    expect(windows[0]).toEqual({ after: '2025-06-15', before: '2027-06-15' })
 
     const merged = mergeAndFormatEvents([
       {
