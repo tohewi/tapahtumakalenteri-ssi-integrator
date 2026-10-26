@@ -8,7 +8,6 @@ export default defineConfig({
   timeout: 30000,
   use: {
     baseURL: 'http://127.0.0.1:3099',
-    locale: 'fi-FI',
     trace: 'off',
   },
   projects: [

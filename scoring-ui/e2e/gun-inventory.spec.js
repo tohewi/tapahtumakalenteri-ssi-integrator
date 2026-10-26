@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test'
 
+test.use({ locale: 'fi-FI' })
+
 test.describe('Gun & Ammo Inventory, Laina-ase Checkout, Undo & Maintenance UAT E2E (R90)', () => {
   test('manages ammo (#/ammo) & guns (#/guns), checks out & undoes loan in #/manage, returns to safe, records maintenance, and retires/restores gun', async ({ page }) => {
     // 1. Login to #/ammo as Group 25874 admin and add CCI Standard Velocity (.22 LR) purchase + whole-inventory stocktake
