@@ -45,6 +45,13 @@
 - Updated `SquadCard.jsx` (`#/manage`) so a shooter's checked-out gun and ammo badge + `Palauta kaappiin` / `Peru lainaus` buttons follow the shooter into any squad.
 ---
 
+## 2026-10-26 18:10 - US-015, US-016 & US-017 (R90-TEST9, R90-TEST10, R90-LOG2)
+- Added Tier 2 post-deploy preview smoke verifier (`scoring-proxy/test/e2e/verify-preview-deploy.js`) and wired into `.github/workflows/pr-preview.yml`.
+- Added Tier 3 Live-SSI upstream compatibility canary (`scoring-proxy/test/e2e/live-ssi-canary.js`) and `.github/workflows/ssi-canary.yml`.
+- Updated `scoring-proxy/lib/session/audit.js` (`logAudit`, `auditMutation`, `serializeAuditLogJson`) to include `level: 'info' | 'error'` and omit null `error`/`errorCode` keys so Render does not classify successful `LOGIN_SUCCESS`/`SSI_OPERATION` events as errors.
+---
+
+
 
 
 

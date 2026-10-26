@@ -225,6 +225,51 @@
       "priority": 14,
       "passes": true,
       "notes": "Updated SquadCard.jsx so assigned gun and ammo badge + return/undo buttons render in any squad."
+    },
+    {
+      "id": "US-015",
+      "requirementId": "R90-TEST9",
+      "title": "Add Tier 2 post-deploy Render PR preview health and SPA smoke verification",
+      "description": "As a developer, I want pr-preview.yml to verify that the deployed Render preview URL responds on /api/v1/health and serves the SPA index page so broken preview deployments are caught automatically.",
+      "acceptanceCriteria": [
+        "Create scoring-proxy/test/e2e/verify-preview-deploy.js exporting verifyPreviewDeployment({ baseUrl, maxAttempts, delayMs, fetchImpl }) that checks /api/v1/health (status === 'ok') and / (HTML containing <div id=\"root\">)",
+        "Wire a verification step into .github/workflows/pr-preview.yml and include the verification result in the PR preview comment",
+        "Add unit tests in scoring-proxy/test/live-ssi-canary.test.js covering verifyPreviewDeployment success, retry, and failure handling, and mark TEST9 / R90-TEST9 as Implemented",
+        "scoring-proxy lint and tests pass (npm run lint && npm test)"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": "Created scoring-proxy/test/e2e/verify-preview-deploy.js and wired Tier 2 smoke check into pr-preview.yml."
+    },
+    {
+      "id": "US-016",
+      "requirementId": "R90-TEST10",
+      "title": "Add Tier 3 Live-SSI upstream compatibility canary script and GitHub Actions workflow",
+      "description": "As a maintainer, I want a scheduled and on-demand read-only Live-SSI canary check that verifies SSI login, GraphQL schema (me + NordicSquadNode), and /groups/25874/ HTML scraping so upstream SSI changes are detected immediately.",
+      "acceptanceCriteria": [
+        "Create scoring-proxy/test/e2e/live-ssi-canary.js exporting runLiveSsiCanary({ email, password, apiKey, groupId }) performing read-only checks: (1) ssiLogin web session, (2) GraphQL token_auth + { me { email first_name last_name } }, (3) GraphQL events query with ... on NordicSquadNode fragment, and (4) ssiGetGroupMembers(groupId, cookies) verifying at least one admin member is parsed",
+        "Create .github/workflows/ssi-canary.yml with workflow_dispatch and weekly schedule triggers running node scoring-proxy/test/e2e/live-ssi-canary.js",
+        "Add unit tests in scoring-proxy/test/live-ssi-canary.test.js testing runLiveSsiCanary against mocked SSI responses and mark TEST10 / R90-TEST10 as Implemented in docs/requirements/",
+        "scoring-proxy lint and tests pass (npm run lint && npm test) and scoring-ui lint and build pass (npm run lint && npm run build)"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": "Created scoring-proxy/test/e2e/live-ssi-canary.js and .github/workflows/ssi-canary.yml with unit tests."
+    },
+    {
+      "id": "US-017",
+      "requirementId": "R90-LOG2",
+      "title": "Fix audit log JSON format so Render does not classify successful LOGIN_SUCCESS / SSI_OPERATION events as errors",
+      "description": "As an operator viewing Render logs, I want successful audit log lines (e.g. LOGIN_SUCCESS with success: true) to include level: 'info' and omit 'error': null so Render's log parser does not mark them with a red error icon.",
+      "acceptanceCriteria": [
+        "Update logAudit and auditMutation in scoring-proxy/lib/session/audit.js to include level: entry.success ? 'info' : 'error' and omit null error/errorCode fields when serializing JSON log lines in production (and use console.error only when entry.success === false)",
+        "Add unit test in scoring-proxy/test/session/reliability-and-perf.test.js verifying that successful logAudit/auditLogin JSON serialization has level='info' and does not contain '\"error\":' or '\"errorCode\":'",
+        "Mark LOG2 / R90-LOG2 as Implemented in docs/requirements/requirements.md and docs/requirements/release-9.0-gun-inventory.md",
+        "scoring-proxy lint and tests pass (npm run lint && npm test)"
+      ],
+      "priority": 17,
+      "passes": true,
+      "notes": "Added level: 'info' | 'error' and omitted null error/errorCode keys in audit.js."
     }
   ]
 }
