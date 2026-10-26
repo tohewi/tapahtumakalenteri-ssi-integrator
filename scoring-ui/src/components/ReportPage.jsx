@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import * as api from '../api'
 import { useAuthenticatedPage } from '../hooks/useAuthenticatedPage'
+import { useReportMatchSearch } from '../hooks/useReportMatchSearch'
 import LoginScreen from './LoginScreen'
 import { AppHeader, ErrorBanner, Spinner, formatDateShort } from './shared'
 import fi from '../i18n'
@@ -8,19 +9,30 @@ import fi from '../i18n'
 const LS_REPORT_STATE = 'ssi_report_state'
 
 export default function ReportPage() {
-  // Search
-  const [searchText, setSearchText] = useState('')
-  const [allResults, setAllResults] = useState([]) // raw results from API
-  const [searched, setSearched] = useState(false)
-
-  // Client-side filters
-  const [filterType, setFilterType] = useState('all') // 'all' | 'cup' | 'match'
-  const [filterSport, setFilterSport] = useState('all') // 'all' | specific rule string
-  const [filterDateFrom, setFilterDateFrom] = useState('')
-  const [filterDateTo, setFilterDateTo] = useState('')
-
-  // Selection — always stores match IDs (for cups, the component match IDs)
-  const [selected, setSelected] = useState(new Set())
+  const {
+    searchText,
+    setSearchText,
+    allResults,
+    searched,
+    filterType,
+    setFilterType,
+    filterSport,
+    setFilterSport,
+    filterDateFrom,
+    setFilterDateFrom,
+    filterDateTo,
+    setFilterDateTo,
+    selected,
+    resetSearchState,
+    handleSearch: searchMatches,
+    sportOptions,
+    matchContentTypeMap,
+    filteredResults,
+    getAllFilteredMatchIds,
+    toggleItem,
+    toggleAll,
+    isItemSelected,
+  } = useReportMatchSearch()
 
   // Report data
   const [reportRows, setReportRows] = useState([])
@@ -39,10 +51,7 @@ export default function ReportPage() {
       return state.view || 'search'
     },
     onLogout: () => {
-      setSearchText('')
-      setAllResults([])
-      setSearched(false)
-      setSelected(new Set())
+      resetSearchState()
       setReportRows([])
     },
   })
@@ -59,112 +68,9 @@ export default function ReportPage() {
     }))
   }, [authed, view, searchText])
 
-  // Search — fetches all results, filtering is client-side
-  const handleSearch = useCallback(async (e) => {
-    if (e) e.preventDefault()
-    if (!searchText.trim() || searchText.length < 2) return
-    setLoading(true)
-    setError(null)
-    setSearched(false)
-    try {
-      await withSessionCheck(async () => {
-        const data = await api.searchMatches(searchText)
-        setAllResults(data)
-        setSearched(true)
-        setSelected(new Set())
-        setFilterType('all')
-        setFilterSport('all')
-        setFilterDateFrom('')
-        setFilterDateTo('')
-      })
-    } catch (err) {
-      if (!(err instanceof api.SessionExpiredError)) {
-        setError(err.message)
-      }
-    }
-    setLoading(false)
-  }, [searchText, withSessionCheck, setError, setLoading])
-
-  // Collect unique sport values from results for the filter dropdown
-  const sportOptions = [...new Set(
-    allResults.map(r => r.rule).filter(Boolean)
-  )].sort()
-
-  // Determine if an item is a cup (has component matches) or a standalone match
-  const isCup = (item) => item.componentMatches && item.componentMatches.length > 0
-
-  // Build matchId → contentType map from results
-  // For standalone matches: use item.contentType
-  // For component matches inside cups: use 91 (Nordic match, since cups are NordicSerieNode)
-  const matchContentTypeMap = new Map()
-  for (const item of allResults) {
-    if (isCup(item)) {
-      for (const cm of item.componentMatches) {
-        matchContentTypeMap.set(cm.id, 91)
-      }
-    } else {
-      matchContentTypeMap.set(item.id, item.contentType)
-    }
-  }
-
-  // Apply client-side filters
-  const filteredResults = allResults.filter(item => {
-    if (filterType === 'cup' && !isCup(item)) return false
-    if (filterType === 'match' && isCup(item)) return false
-    if (filterSport !== 'all' && item.rule !== filterSport) return false
-    if (filterDateFrom && item.starts < filterDateFrom) return false
-    if (filterDateTo && item.starts > filterDateTo + 'T23:59:59') return false
-    return true
-  })
-
-  // Get all selectable match IDs for an item
-  // For cups: use componentMatch IDs; for matches: use the event ID directly
-  const getMatchIdsForItem = (item) => {
-    if (item.componentMatches && item.componentMatches.length > 0) {
-      return item.componentMatches.map(m => m.id)
-    }
-    return [item.id]
-  }
-
-  const getAllFilteredMatchIds = useCallback(() => {
-    return filteredResults.flatMap(item => getMatchIdsForItem(item))
-  }, [filteredResults])
-
-  // Toggle a single item
-  const toggleItem = (item) => {
-    setSelected(prev => {
-      const next = new Set(prev)
-      const ids = getMatchIdsForItem(item)
-      const allSelected = ids.every(id => next.has(id))
-      if (allSelected) {
-        ids.forEach(id => next.delete(id))
-      } else {
-        ids.forEach(id => next.add(id))
-      }
-      return next
-    })
-  }
-
-  // Select all / deselect all (operates on filtered results only)
-  const toggleAll = () => {
-    const allIds = getAllFilteredMatchIds()
-    if (allIds.length > 0 && allIds.every(id => selected.has(id))) {
-      // Deselect only the filtered ones
-      setSelected(prev => {
-        const next = new Set(prev)
-        allIds.forEach(id => next.delete(id))
-        return next
-      })
-    } else {
-      setSelected(prev => new Set([...prev, ...allIds]))
-    }
-  }
-
-  // Check if an item is fully selected
-  const isItemSelected = (item) => {
-    const ids = getMatchIdsForItem(item)
-    return ids.length > 0 && ids.every(id => selected.has(id))
-  }
+  const handleSearch = useCallback((e) => searchMatches(e, {
+    withSessionCheck, setLoading, setError,
+  }), [searchMatches, withSessionCheck, setLoading, setError])
 
   // Run report
   const handleRunReport = async () => {
