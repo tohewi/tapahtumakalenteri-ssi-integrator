@@ -142,6 +142,7 @@ export function useReportMatchSearch() {
     resetSearchState,
     handleSearch,
     sportOptions,
+    isCup,
     matchContentTypeMap,
     filteredResults,
     getAllFilteredMatchIds,

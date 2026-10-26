@@ -26,6 +26,7 @@ export default function SummaryReportPage() {
     resetSearchState,
     handleSearch: searchMatches,
     sportOptions,
+    isCup,
     matchContentTypeMap,
     filteredResults,
     getAllFilteredMatchIds,
