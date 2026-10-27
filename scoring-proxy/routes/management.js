@@ -10,6 +10,7 @@ import {
   ssiUndoDidNotShow,
   ssiTogglePaid,
   ssiGetCupParticipantStatuses,
+  ssiSetParticipantNumber,
 } from '../lib/ssi-core/participants.js'
 import {
   buildSquaddingOverview,
@@ -17,6 +18,8 @@ import {
   getIncludedMatchIds,
   filterManageableCups,
   getManageWindowBounds,
+  buildCompetitorNumberSyncPlan,
+  findMatchParticipantIdFromCupEvent,
 } from '../lib/services/cup-manage.js'
 import { log } from '../lib/logger.js'
 import { AppError } from '../lib/errors/AppError.js'
@@ -158,17 +161,17 @@ export function createManagementRouter({
           event(content_type: 136, id: $id) {
             id name starts status
             ... on NordicSerieNode {
-              competitors { id status email shooter { first_name last_name email } }
+              competitors { id number status email shooter { first_name last_name email } }
               component_matches {
                 number included
                 match {
                   id name
-                  competitors { id status first_name last_name email }
+                  competitors { id number status first_name last_name email }
                   squads {
                     id number comment
                     ... on NordicSquadNode {
                       max_competitors
-                      competitors { id status first_name last_name email }
+                      competitors { id number status first_name last_name email }
                     }
                   }
                 }
@@ -204,6 +207,8 @@ export function createManagementRouter({
         return list.map(s => (s && typeof s === 'object' ? { ...s, paid: false } : s))
       }
 
+      const numberMismatches = buildCompetitorNumberSyncPlan(cup)
+
       res.json({
         cup: { id: cup.id, name: cup.name, starts: cup.starts },
         matches,
@@ -211,6 +216,8 @@ export function createManagementRouter({
         cupOnly: applyPaidVisibility(cupOnlyWithStatus),
         matchOnly: applyPaidVisibility(matchOnly),
         pendingShooters: applyPaidVisibility(pendingShooters),
+        numberMismatchCount: numberMismatches.length,
+        numberMismatches,
         features: { paidToggleEnabled },
       })
     } catch (err) {
@@ -289,6 +296,7 @@ export function createManagementRouter({
                 number included
                 match {
                   id name
+                  competitors { id status first_name last_name email }
                   squads {
                     number
                     ... on NordicSquadNode {
@@ -330,12 +338,13 @@ export function createManagementRouter({
         }
       }
 
-      const matchIds = targetMatches.map(m => m.id)
       const { firstName, lastName } = splitShooterName(shooterName)
-
       const results = []
-      for (const matchId of matchIds) {
-        let participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies, email)
+      for (const m of targetMatches) {
+        const matchId = m.id
+        let participantId =
+          findMatchParticipantIdFromCupEvent(m, shooterName, email) ||
+          await ssiFindCompetitorInMatch(matchId, shooterName, cookies, email)
         if (!participantId) {
           await ssiSearchAndAddParticipant(91, matchId, email, cookies, { firstName, lastName })
           participantId = await ssiFindCompetitorInMatch(matchId, shooterName, cookies, email)
@@ -535,6 +544,62 @@ export function createManagementRouter({
     } catch (err) {
       log.error('[manage] toggle-paid error:', err.message)
       return next(internalError('Failed to toggle paid status'))
+    }
+  })
+
+  router.post('/cup/:id/sync-numbers', requireAuth('manage'), async (req, res, next) => {
+    const cookies = req.ssiSession.ssiCookies
+    if (!cookies) return res.status(401).json({ error: 'No SSI session cookies' })
+    const user = req.ssiSession.userId || req.ssiSession._userId || 'unknown'
+
+    try {
+      const result = await graphqlWithRefresh(req.ssiSession, `
+        query ManageCupNumbers($id: String!) {
+          event(content_type: 136, id: $id) {
+            id name
+            ... on NordicSerieNode {
+              competitors { id number status email shooter { first_name last_name email } }
+              component_matches {
+                number included
+                match {
+                  id name
+                  competitors { id number status first_name last_name email }
+                  squads {
+                    number
+                    ... on NordicSquadNode {
+                      competitors { id number status first_name last_name email }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      `, { id: req.params.id })
+
+      if (!result.event) return res.status(404).json({ error: 'Cup not found' })
+
+      const plan = buildCompetitorNumberSyncPlan(result.event)
+      const updated = []
+      for (const item of plan) {
+        const editRes = await ssiSetParticipantNumber(item.matchParticipantId, item.canonicalNumber, cookies)
+        updated.push({ ...item, success: editRes.success })
+      }
+
+      const allOk = updated.every(u => u.success)
+      auditMutation({
+        endpoint: `/api/v1/manage/cup/${req.params.id}/sync-numbers`,
+        operation: 'sync_competitor_numbers',
+        initiatingUserId: user,
+        executionIdentityUserId: user,
+        targetEntity: { cupId: req.params.id, mismatchCount: plan.length },
+        result: allOk ? 'success' : 'failure',
+      })
+
+      res.json({ success: allOk, syncedCount: updated.filter(u => u.success).length, results: updated })
+    } catch (err) {
+      log.error('[manage] sync-numbers error:', err.message)
+      return next(internalError('Failed to synchronize competitor numbers'))
     }
   })
 

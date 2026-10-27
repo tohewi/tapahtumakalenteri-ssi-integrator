@@ -91,11 +91,13 @@ jobs:
               SERVICE_ID=$(echo "$BODY" | jq -r '.[0].service.id')
               SERVICE_URL=$(echo "$BODY" | jq -r '.[0].service.serviceDetails.url')
               BUILD_CMD=$(echo "$BODY" | jq -r '.[0].service.serviceDetails.envSpecificDetails.buildCommand')
+              DISK_ID=$(echo "$BODY" | jq -r '.[0].service.serviceDetails.disk.id // empty')
               echo "exists=true" >> $GITHUB_OUTPUT
               echo "service_id=${SERVICE_ID}" >> $GITHUB_OUTPUT
               echo "service_url=${SERVICE_URL}" >> $GITHUB_OUTPUT
               echo "build_command=${BUILD_CMD}" >> $GITHUB_OUTPUT
-              echo "Service exists with ID: ${SERVICE_ID}"
+              echo "has_disk=${DISK_ID}" >> $GITHUB_OUTPUT
+              echo "Service exists with ID: ${SERVICE_ID} (disk: ${DISK_ID:-none})"
               echo "Service URL: ${SERVICE_URL}"
               echo "Current build command: ${BUILD_CMD}"
             else
@@ -107,9 +109,9 @@ jobs:
             echo "Service does not exist or API error (HTTP ${HTTP_CODE})"
           fi
 
-      - name: Delete service if build command is outdated
+      - name: Delete service if build command or persistent disk is outdated
         id: delete-if-outdated
-        if: github.event.action != 'closed' && steps.check-service.outputs.exists == 'true' && (!contains(steps.check-service.outputs.build_command, 'npm ci') || !contains(steps.check-service.outputs.build_command, '--include=dev'))
+        if: github.event.action != 'closed' && steps.check-service.outputs.exists == 'true' && (!contains(steps.check-service.outputs.build_command, 'npm ci') || !contains(steps.check-service.outputs.build_command, '--include=dev') || steps.check-service.outputs.has_disk == '')
         run: |
           SERVICE_ID="${{ steps.check-service.outputs.service_id }}"
           SERVICE_NAME="${{ steps.preview-name.outputs.service_name }}"
@@ -178,7 +180,11 @@ jobs:
               {"key": "NODE_ENV", "value": $nodeEnv},
               {"key": "SESSION_SECRET", "value": $sessionSecret},
               {"key": "LOG_LEVEL", "value": $logLevel},
-              {"key": "APP_URL", "value": $appUrl}
+              {"key": "APP_URL", "value": $appUrl},
+              {"key": "PERSISTENT_DATA_DIR", "value": "/var/data"},
+              {"key": "GUN_INVENTORY_FILE_PATH", "value": "/var/data/gun-inventory.json"},
+              {"key": "AMMO_INVENTORY_FILE_PATH", "value": "/var/data/ammo-inventory.json"},
+              {"key": "STAFFING_DATA_FILE_PATH", "value": "/var/data/staffing-events.json"}
             ]
             + (if $ssiAdminEmail != "" then [{"key": "SSI_ADMIN_EMAIL", "value": $ssiAdminEmail}] else [] end)
             + (if $ssiAdminPassword != "" then [{"key": "SSI_ADMIN_PASSWORD", "value": $ssiAdminPassword}] else [] end)
@@ -212,6 +218,11 @@ jobs:
                 "plan": "starter",
                 "region": "frankfurt",
                 "nodeVersion": "24",
+                "disk": {
+                  "name": "preview-data",
+                  "mountPath": "/var/data",
+                  "sizeGB": 1
+                },
                 "envSpecificDetails": {
                   "buildCommand": $buildCommand,
                   "startCommand": $startCommand
@@ -243,6 +254,18 @@ jobs:
             echo "❌ Failed to create preview service (HTTP ${HTTP_CODE})"
             echo "$BODY" | jq '.' || echo "$BODY"
             exit 1
+          fi
+
+      - name: Tier 2 smoke check on preview URL
+        id: verify-preview
+        if: github.event.action != 'closed'
+        continue-on-error: true
+        run: |
+          PREVIEW_URL="${{ steps.create-service.outputs.service_url || steps.check-service.outputs.service_url }}"
+          if node scoring-proxy/test/e2e/verify-preview-deploy.js "$PREVIEW_URL"; then
+            echo "verified=true" >> $GITHUB_OUTPUT
+          else
+            echo "verified=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Comment on PR with preview URL

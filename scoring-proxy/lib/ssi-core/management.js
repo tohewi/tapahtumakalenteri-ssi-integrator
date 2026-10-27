@@ -302,3 +302,46 @@ export async function ssiGetEventStaff(contentType, eventId, cookies) {
   }
   return staff
 }
+
+// ============================================================
+// Get SSI group members and roles by scraping /groups/{groupId}/
+// Returns [{ userId, name, contact, email, role }]
+// ============================================================
+
+export async function ssiGetGroupMembers(groupId, cookies) {
+  const path = `/groups/${groupId}/`
+  const html = await ssiFetchPage(path, cookies)
+
+  const members = []
+  const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi
+  let rowMatch
+  while ((rowMatch = rowRegex.exec(html)) !== null) {
+    const rowHtml = rowMatch[1]
+    const tds = [...rowHtml.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m =>
+      m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    )
+    if (tds.length < 3) continue
+
+    const checkboxMatch = rowHtml.match(/<input[^>]*type="checkbox"[^>]*value="(\d+)"/i)
+    const userId = checkboxMatch ? checkboxMatch[1] : null
+    const roleCandidate = tds[tds.length - 1].toLowerCase()
+    if (!['admin', 'staff', 'assistant', 'member'].includes(roleCandidate)) continue
+
+    const name = tds.length >= 5 ? tds[2] : tds[1]
+    const contact = tds.length >= 5 ? tds[3] : (tds[2] || '')
+    const emailMatch = contact.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)
+    const email = emailMatch ? emailMatch[0].toLowerCase() : null
+
+    if (name && name.toLowerCase() !== 'name') {
+      members.push({
+        userId,
+        name,
+        contact,
+        email,
+        role: roleCandidate,
+      })
+    }
+  }
+
+  return members
+}

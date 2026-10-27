@@ -1,0 +1,36 @@
+name: Live-SSI Upstream Compatibility Canary
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Runs every Monday at 06:00 UTC to detect upstream SSI HTML/GraphQL changes
+    - cron: '0 6 * * 1'
+
+jobs:
+  ssi-canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: scoring-proxy/package-lock.json
+
+      - name: Install proxy dependencies
+        working-directory: scoring-proxy
+        run: npm ci
+
+      - name: Run read-only Live-SSI compatibility canary
+        working-directory: scoring-proxy
+        env:
+          SSI_ADMIN_EMAIL: ${{ secrets.PREVIEW_SSI_ADMIN_EMAIL || secrets.SSI_ADMIN_EMAIL }}
+          SSI_ADMIN_PASSWORD: ${{ secrets.PREVIEW_SSI_ADMIN_PASSWORD || secrets.SSI_ADMIN_PASSWORD }}
+          SSI_ADMIN_API_KEY: ${{ secrets.PREVIEW_SSI_ADMIN_API_KEY || secrets.SSI_ADMIN_API_KEY }}
+        run: |
+          if [ -z "$SSI_ADMIN_EMAIL" ] || [ -z "$SSI_ADMIN_PASSWORD" ] || [ -z "$SSI_ADMIN_API_KEY" ]; then
+            echo "::notice::SSI admin secrets not configured — skipping live upstream canary."
+            exit 0
+          fi
+          node test/e2e/live-ssi-canary.js

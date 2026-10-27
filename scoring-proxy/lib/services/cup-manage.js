@@ -451,3 +451,92 @@ export function makeShooterKey(firstName, lastName, email) {
   }
   return `${firstName}|||${lastName}|||${email}`
 }
+
+// ============================================================
+// R91-SSI3: Resolve match participant ID directly from parent Cup GraphQL response
+// Avoids firing redundant per-match ssiFindCompetitorInMatch GraphQL queries
+// ============================================================
+
+export function findMatchParticipantIdFromCupEvent(match, shooterName, email = null) {
+  if (!match) return null
+  const normalizedEmail = email ? String(email).trim().toLowerCase() : ''
+  const normalizedName = String(shooterName || '').trim().toLowerCase()
+
+  const candidates = [
+    ...(match.competitors || []),
+    ...(match.squads || []).flatMap(sq => sq.competitors || []),
+  ].filter(c => c && c.id && (!c.status || c.status === 'a'))
+
+  if (normalizedEmail) {
+    const byEmail = candidates.find(c => String(c.email || '').trim().toLowerCase() === normalizedEmail)
+    if (byEmail) return String(byEmail.id)
+  }
+
+  if (normalizedName) {
+    const byName = candidates.find(c =>
+      `${c.first_name || ''} ${c.last_name || ''}`.trim().toLowerCase() === normalizedName
+    )
+    if (byName) return String(byName.id)
+  }
+
+  return null
+}
+
+// ============================================================
+// GQL-HF5: CUP-canonical competitor number mismatch plan
+// ============================================================
+
+export function buildCompetitorNumberSyncPlan(cupEvent) {
+  const cupCompetitors = (cupEvent?.competitors || []).filter(c => c.status === 'a' && c.number != null)
+  const canonicalByKey = new Map()
+
+  for (const c of cupCompetitors) {
+    const mapped = mapCupCompetitor(c)
+    if (!mapped.email) continue
+    const key = `${mapped.firstName.toLowerCase()}|||${mapped.lastName.toLowerCase()}|||${mapped.email.toLowerCase()}`
+    canonicalByKey.set(key, {
+      canonicalNumber: Number(c.number),
+      shooterName: mapped.name,
+      email: mapped.email,
+    })
+  }
+
+  const mismatches = []
+  const componentMatches = (cupEvent?.component_matches || [])
+    .filter(cm => cm.included && cm.match)
+    .sort((a, b) => a.number - b.number)
+
+  for (const cm of componentMatches) {
+    const match = cm.match
+    const seenIds = new Set()
+    const matchComps = [
+      ...(match.competitors || []),
+      ...(match.squads || []).flatMap(sq => sq.competitors || []),
+    ]
+
+    for (const mc of matchComps) {
+      if (mc.status !== 'a' || !mc.id || seenIds.has(String(mc.id))) continue
+      seenIds.add(String(mc.id))
+      const email = String(mc.email || '').trim().toLowerCase()
+      if (!email) continue
+      const key = `${String(mc.first_name || '').trim().toLowerCase()}|||${String(mc.last_name || '').trim().toLowerCase()}|||${email}`
+      const canonical = canonicalByKey.get(key)
+      if (!canonical) continue
+
+      const currentNumber = mc.number != null ? Number(mc.number) : null
+      if (currentNumber !== canonical.canonicalNumber) {
+        mismatches.push({
+          shooterName: canonical.shooterName,
+          email: canonical.email,
+          canonicalNumber: canonical.canonicalNumber,
+          matchId: String(match.id),
+          matchName: match.name,
+          matchParticipantId: String(mc.id),
+          currentNumber,
+        })
+      }
+    }
+  }
+
+  return mismatches
+}

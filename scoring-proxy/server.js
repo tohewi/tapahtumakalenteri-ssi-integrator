@@ -14,6 +14,8 @@ import { createRegistrationRouter } from './routes/registration.js'
 import { createReportsRouter } from './routes/reports.js'
 import { createManagementRouter } from './routes/management.js'
 import { createStaffingRouter } from './routes/staffing.js'
+import { createGunsRouter } from './routes/guns.js'
+import { getGunDataFilePath, getAmmoDataFilePath } from './lib/services/gun-inventory-service.js'
 import { initRedis, getActiveSessionCount, isUsingRedis, touchSession } from './lib/session/index.js'
 import { requireAuthV7 } from './middleware/auth-v7.js'
 import { createAuthV7Router } from './routes/auth-v7.js'
@@ -36,6 +38,7 @@ function readBooleanEnv(name, defaultValue = false) {
 
 // Compliance hardening: paid tracking is disabled by default.
 const FEATURE_PAID_TOGGLE_ENABLED = readBooleanEnv('FEATURE_PAID_TOGGLE_ENABLED', false)
+const FEATURE_STAFFING_ENABLED = readBooleanEnv('FEATURE_STAFFING_ENABLED', false)
 
 if (!SSI_ADMIN_API_KEY) {
   log.warn('[graphql] SSI_ADMIN_API_KEY is not set — GraphQL requests will fail')
@@ -220,10 +223,21 @@ let adminJwt = null
 let adminRefreshToken = null
 let adminCookieTime = 0
 let adminJwtTime = 0
+let adminSessionInFlight = null
 const ADMIN_COOKIE_TTL = 4 * 60 * 60 * 1000 // 4 hours — SSI web cookies
 const ADMIN_JWT_TTL = 14 * 60 * 1000         // 14 min — SSI JWTs expire ~15 min
 
 async function getAdminSession() {
+  if (adminSessionInFlight) {
+    return adminSessionInFlight
+  }
+  adminSessionInFlight = _resolveAdminSession().finally(() => {
+    adminSessionInFlight = null
+  })
+  return adminSessionInFlight
+}
+
+async function _resolveAdminSession() {
   const email = process.env.SSI_ADMIN_EMAIL
   const password = process.env.SSI_ADMIN_PASSWORD
   const apiKey = SSI_ADMIN_API_KEY || null
@@ -374,7 +388,9 @@ const registerBodyLimit = express.json({ limit: '1kb' })
 // Mount route modules
 // ============================================================
 
-// API versioning info endpoint
+// Log storage configuration on startup
+log.info(`[storage] Gun inventory file: ${getGunDataFilePath()}`)
+log.info(`[storage] Ammo inventory file: ${getAmmoDataFilePath()}`)
 app.use(API_V1_BASE, apiV1Router)
 
 // Scoring routes (mounted at /api/v1/scoring)
@@ -429,14 +445,25 @@ const reportsRouter = createReportsRouter({
 app.use(`${API_V1_BASE}/report`, reportsRouter)
 app.use(`${API_LEGACY_BASE}/report`, legacyApiAlias, reportsRouter)
 
-// Staffing routes
-const staffingRouter = createStaffingRouter({
+// Staffing routes (disabled by default per GUN24)
+if (FEATURE_STAFFING_ENABLED) {
+  const staffingRouter = createStaffingRouter({
+    requireAuth,
+    graphqlWithRefresh,
+    getAdminSession,
+  })
+  app.use(`${API_V1_BASE}/staffing`, staffingRouter)
+  app.use(`${API_LEGACY_BASE}/staffing`, legacyApiAlias, staffingRouter)
+}
+
+// Gun inventory routes (R90 — Group 25874 admin restricted)
+const gunsRouter = createGunsRouter({
   requireAuth,
-  graphqlWithRefresh,
   getAdminSession,
+  graphqlWithRefresh,
 })
-app.use(`${API_V1_BASE}/staffing`, staffingRouter)
-app.use(`${API_LEGACY_BASE}/staffing`, legacyApiAlias, staffingRouter)
+app.use(`${API_V1_BASE}/guns`, gunsRouter)
+app.use(`${API_LEGACY_BASE}/guns`, legacyApiAlias, gunsRouter)
 
 // ============================================================
 // SPA fallback — serve index.html for non-API routes (production)

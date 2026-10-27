@@ -6,6 +6,20 @@
 
 The ShootNScoreIt (SSI) GraphQL API has **known limitations** that affect how we can interact with it. This document provides essential context for AI agents to make informed decisions when working with SSI integration code.
 
+## Mandatory GraphQL Request Rules
+
+- **Always send `x-api-key`.** Every GraphQL request requires this header in
+  addition to `Authorization: JWT ...` when an authenticated query is needed.
+  The shared client rejects requests without a key; configure `SSI_ADMIN_API_KEY`
+  or pass the key explicitly.
+- **Do not send parallel query bursts.** Sequence SSI GraphQL requests rather
+  than launching batches concurrently (for example, do not use `Promise.all` for
+  multiple SSI GraphQL queries). The upstream API is sensitive to query bursts.
+- **Do not select deprecated scorecard fields** `scorecards` or
+  `scorecards_count` on `EventInterface` or `CompetitorInterface`. Use
+  `competitor_scorecards()` / `competitor_scorecards_count()` instead, or query
+  `StageInterface.scorecards` only when stage scorecards are needed.
+
 ## GraphQL API Status
 
 ### ✅ What Works (Read Operations)
@@ -19,21 +33,25 @@ The following GraphQL operations are **fully functional**:
 - `event(content_type, id)` query - Read single event with full details
   - **Important schema rule for `squads`:** `match.squads` returns `SquadInterface` (which only exposes `id`, `number`, `comment`). Selecting `competitors` or `max_competitors` directly on `squads` throws `GraphQL Error: Cannot query field 'competitors' on type 'SquadInterface'`. Always use an inline fragment such as `... on NordicSquadNode { max_competitors competitors { ... } }`.
 - `get_abstract_event` query - Returns form choices for rule/sub_rule/serie_type
-- Schema introspection - Full mutation/query schema is accessible
+- Schema introspection - Full mutation/query schema is accessible, subject to
+  the required `x-api-key` header and request pacing rules above
 
-### ❌ What Does NOT Work (Write Operations / Mutations)
+### ⚠️ Historical Write Limitation (Last Tested February 2026)
 
-**CRITICAL**: GraphQL mutations are **broken server-side** in most cases:
+The following `create_event` failure was observed in February 2026; the current
+mutation status has not been revalidated:
 
-- `create_event` mutation - **DOES NOT WORK** for both Cups and Matches
+- `create_event` mutation failed for both Cups and Matches
   - Error: `'NoneType' object has no attribute '_meta'`
   - Root cause: Server-side bug in the mutation resolver
-  - Status: Awaiting fix from SSI development team
 - Any dependent mutations that require `create_event` to work first
 
 ## Root Cause
 
-The `create_event` mutation fails at the resolver entry point before any form data is processed. The Django error indicates the mutation resolver maps `(rule, sub_rule, serie_type)` → Django model class, gets `None`, then crashes accessing `None._meta`.
+In the February 2026 observations, the `create_event` mutation failed at the
+resolver entry point before any form data was processed. The Django error
+indicates the mutation resolver maps `(rule, sub_rule, serie_type)` → Django
+model class, gets `None`, then crashes accessing `None._meta`.
 
 **Evidence**:
 - Every combination fails identically (cup/match, full/minimal fields, with/without organizer)
@@ -46,7 +64,8 @@ The `create_event` mutation fails at the resolver entry point before any form da
 
 ### Current Approach: Web Scraping
 
-Until the SSI development team fixes the GraphQL API, **web scraping is the required approach** for write operations:
+Until the mutation is verified to work, use web scraping for the affected write
+operations:
 
 1. **Cup Creation**: Use `scripts/New-KupittaaCup.ps1` (web scraping version)
    - Location: `archive/scripts-legacy/New-KupittaaCup.ps1`
@@ -74,12 +93,14 @@ Invoke-Pester -Path .\scripts-graphql\tests\SSI-GraphQL.Tests.ps1 -Output Detail
 
 ### When Adding SSI Integration Features
 
-1. **Read Operations**: Use GraphQL freely
-   - Queries work reliably
-   - Use the shared client in `scoring-proxy/lib/ssi-core/client.js`
+1. **Read Operations**: Use GraphQL with the request rules above
+   - Use the domain client in `scoring-proxy/lib/ssi-core/graphql.js`
+   - Include the required API key and sequence queries; do not issue bursts
+   - Avoid the deprecated scorecard fields on event and competitor interfaces
 
 2. **Write Operations**: Use web scraping approach
-   - **DO NOT** attempt to use GraphQL mutations for creating/updating data
+   - Do not rely on GraphQL mutations for creating/updating data until their
+     behavior has been verified
    - Refer to existing web scraping implementations in `archive/scripts-legacy/`
    - Follow the Django form submission pattern
 
@@ -118,31 +139,29 @@ This **does not** affect:
 - Authentication and token management
 - Competitor information retrieval
 
-## Timeline
+## Status and Review
 
-- **Current Status**: GraphQL mutations broken (as of 2026-02-06)
-- **Depends On**: SSI development team fixing the server-side resolver bug
-- **ETA**: Unknown - this is external to our codebase
-- **Validation**: Run Pester tests when fix is suspected
+- The `create_event` mutation failure described above was observed in February
+  2026; its current status has not been revalidated here.
+- The API-key, query-pacing, and deprecated-scorecard rules above apply to
+  GraphQL integrations regardless of mutation availability.
+- **Last updated**: 2026-10-26
 
 ## References
 
 - Detailed technical analysis: `docs/design/ssi-graphql-findings.md`
 - Working web scraping scripts: `archive/scripts-legacy/New-KupittaaCup.ps1`
 - GraphQL test suite: `scripts-graphql/tests/SSI-GraphQL.Tests.ps1`
-- SSI client implementation: `scoring-proxy/lib/ssi-core/client.js`
-
-## Last Updated
-
-- **Date**: 2026-02-08
-- **Status**: GraphQL mutations still broken, web scraping required
-- **Next Review**: When SSI team announces API fix
+- SSI GraphQL implementation: `scoring-proxy/lib/ssi-core/graphql.js`
 
 ---
 
 **Summary for Quick Reference:**
-- ✅ GraphQL reads work perfectly
-- ❌ GraphQL writes (mutations) are broken server-side
-- ✅ Web scraping works for all write operations
-- ⏳ Waiting for SSI team to fix the API
-- 🧪 Pester tests exist to validate when fixed
+- ✅ GraphQL reads work subject to the request rules above
+- 🔑 Every GraphQL request requires `x-api-key`
+- 🐢 Sequence queries; do not send parallel bursts
+- ⚠️ Avoid deprecated event/competitor `scorecards` and `scorecards_count`
+- ⚠️ `create_event` failure was reported in February 2026; current status has
+  not been revalidated
+- ✅ Web scraping is the documented workaround for writes
+- 🧪 Pester tests exist to validate when the mutation fix is suspected

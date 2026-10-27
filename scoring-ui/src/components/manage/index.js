@@ -1,6 +1,7 @@
 export { default as ActionButton } from './ActionButton'
 export { default as ShooterActions } from './ShooterActions'
 export { default as SquadPickerSheet } from './SquadPickerSheet'
+export { default as LoanerGunPickerSheet } from './LoanerGunPickerSheet'
 export { default as SectionHeader } from './SectionHeader'
 export { default as SquadCard } from './SquadCard'
 export { default as SquaddingOverview } from './SquaddingOverview'

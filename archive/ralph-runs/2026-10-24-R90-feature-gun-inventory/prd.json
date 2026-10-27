@@ -1,0 +1,102 @@
+{
+  "project": "TurRes SSI Tools",
+  "requirementPrefix": "R90",
+  "branchName": "R90-feature-gun-inventory",
+  "description": "Release 9.0 — Gun Inventory, Usage (Laina-ase & Cartridge Tracking), and Cleaning/Maintenance Tracking with Configurable SSI Group 25874 Admin Access Control",
+  "userStories": [
+    {
+      "id": "US-001",
+      "requirementId": "R90-GUN1",
+      "title": "Add configurable SSI Group 25874 admin access check and config loader",
+      "description": "As an administrator, I want gun inventory access restricted to members of a configurable SSI group (default 25874) with role 'admin' so only authorized club officials can manage firearms.",
+      "acceptanceCriteria": [
+        "Create config/gun-inventory-config.yml defining groupId: '25874' and requiredRole: 'admin' (overridable via SSI_GUN_INVENTORY_GROUP_ID env var)",
+        "Add ssiGetGroupMembers(groupId, cookies) in scoring-proxy/lib/ssi-core/management.js scraping /groups/{groupId}/ to extract group members, emails, and roles",
+        "Create scoring-proxy/lib/services/gun-inventory-service.js helper verifyGunInventoryAdminAccess({ userEmail, cookies, groupId }) with session-level caching",
+        "Add unit tests in scoring-proxy/test/gun-inventory.test.js verifying group member scraping and admin role authorization",
+        "scoring-proxy tests and lint pass (npm run lint && npm test)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Implemented config/gun-inventory-config.yml, ssiGetGroupMembers in management.js, and verifyGunInventoryAdminAccess in gun-inventory-service.js with unit tests."
+    },
+    {
+      "id": "US-002",
+      "requirementId": "R90-GUN2",
+      "title": "Implement JSON file gun inventory store, checkout, return, and maintenance service logic",
+      "description": "As a developer, I want pure service functions backed by scoring-proxy/data/gun-inventory.json for gun CRUD, Laina-ase checkout with cartridge count, single/bulk return to gun safe, and maintenance reset.",
+      "acceptanceCriteria": [
+        "Implement JSON file persistence in scoring-proxy/lib/services/gun-inventory-service.js (scoring-proxy/data/gun-inventory.json) with fields: id, make, model, serialNumber, acquisitionYear, state ('in_gun_safe' | 'in_range_use' | 'retired'), timesUsedTotal, timesUsedSinceMaintenance, cartridgesIssuedTotal, cartridgesSinceMaintenance, currentCheckout, maintenanceHistory, usageHistory",
+        "Implement createGun, updateGun, retireGun, listGuns, checkoutGun({ gunId, shooterName, shooterEmail, cupId, cupName, cartridgesGiven, checkedOutBy }), returnGun({ gunId, returnedBy }), returnAllGuns({ cupId, returnedBy }), and recordGunMaintenance({ gunId, notes, performedBy })",
+        "Ensure checkoutGun increments timesUsedTotal (+1), timesUsedSinceMaintenance (+1), cartridgesIssuedTotal (+cartridgesGiven), and cartridgesSinceMaintenance (+cartridgesGiven), and recordGunMaintenance resets timesUsedSinceMaintenance and cartridgesSinceMaintenance to 0",
+        "Add unit tests in scoring-proxy/test/gun-inventory.test.js covering CRUD, checkout + cartridge counting (100 and 0 rounds), single/bulk return, and maintenance counter reset",
+        "scoring-proxy tests and lint pass (npm run lint && npm test)"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Implemented JSON gun inventory store, CRUD, checkout with cartridge tracking, single/bulk return, and maintenance reset in gun-inventory-service.js."
+    },
+    {
+      "id": "US-003",
+      "requirementId": "R90-GUN3",
+      "title": "Add /api/v1/guns Express router and mount in server.js",
+      "description": "As a frontend client, I want REST endpoints under /api/v1/guns protected by SSI authentication and SSI Group 25874 admin authorization.",
+      "acceptanceCriteria": [
+        "Create scoring-proxy/routes/guns.js with GET /api/v1/guns, POST /api/v1/guns, PUT /api/v1/guns/:id, DELETE /api/v1/guns/:id, POST /api/v1/guns/:id/checkout, POST /api/v1/guns/:id/return, POST /api/v1/guns/return-all, and POST /api/v1/guns/:id/maintenance",
+        "Enforce requireAuth and SSI Group 25874 admin check on all /api/v1/guns endpoints, returning 403 when user is not an admin of the configured group",
+        "Log state-changing gun operations via auditMutation and mount router at /api/v1/guns and /api/guns in scoring-proxy/server.js",
+        "Add route integration tests in scoring-proxy/test/gun-inventory.test.js",
+        "scoring-proxy tests and lint pass (npm run lint && npm test)"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Created scoring-proxy/routes/guns.js, mounted at /api/v1/guns and /api/guns in server.js, and verified with route integration tests."
+    },
+    {
+      "id": "US-004",
+      "requirementId": "R90-GUN6",
+      "title": "Create frontend guns-api.js client, i18n strings, and GunsPage (#/guns) UI",
+      "description": "As an authorized group admin, I want a dedicated Gun Inventory page (#/guns) to view gun states, total & since-maintenance usage/cartridges, add/edit/retire guns, record cleaning/maintenance, and return guns to the safe.",
+      "acceptanceCriteria": [
+        "Create scoring-ui/src/guns-api.js wrapping /api/v1/guns endpoints and add bilingual (fi/en) translations in scoring-ui/src/i18n.js",
+        "Create scoring-ui/src/components/GunsPage.jsx and wire #/guns in scoring-ui/src/main.jsx and HomePage.jsx",
+        "Display each gun's Make, Model, Serial Number, Acquisition Year, state badge (Asekaapissa / Radalla käytössä), total times used & cartridges, times used & cartridges since last cleaning/maintenance, Add/Edit Gun modal, Record Cleaning/Maintenance action, and Return to Safe action",
+        "Add component tests in scoring-ui/src/test/components.test.jsx",
+        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test -- --maxWorkers=1 --pool=threads)"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Created guns-api.js, added i18n strings, and created GunsPage.jsx (#/guns) wired in main.jsx and HomePage.jsx."
+    },
+    {
+      "id": "US-005",
+      "requirementId": "R90-GUN7",
+      "title": "Integrate Laina-ase gun checkout, cartridge input, and bulk return into ManagePage (#/manage)",
+      "description": "As a range officer on #/manage, I want to pick a shooter in the 'Laina-ase' squad, select a gun from the inventory and enter cartridges given (100, 0, or custom), see the checked-out gun on the shooter row, and return guns to the safe at the end of the match.",
+      "acceptanceCriteria": [
+        "Create scoring-ui/src/components/manage/LoanerGunPickerSheet.jsx allowing selection of an 'in_gun_safe' gun and cartridge count (quick buttons for 100 patr. and 0 patr. plus numeric input)",
+        "Update SquadCard.jsx and SquaddingOverview.jsx so shooters in the 'Laina-ase' squad show a 'Valitse ase' button (or active gun + cartridge badge with 'Palauta' button when checked out) and a 'Palauta kaikki laina-aseet kaappiin' button when any gun is in range use for the cup",
+        "Add component tests in scoring-ui/src/test/components.test.jsx for LoanerGunPickerSheet and Laina-ase squad integration",
+        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test -- --maxWorkers=1 --pool=threads)"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Integrated LoanerGunPickerSheet, SquadCard loaner gun badges/actions, and SquaddingOverview bulk return into #/manage."
+    },
+    {
+      "id": "US-006",
+      "requirementId": "R90-GUN8",
+      "title": "Add Playwright E2E UAT coverage for Gun Inventory (#/guns) and ManagePage Laina-ase checkout/return",
+      "description": "As a QA/developer, I want Playwright E2E tests verifying the full Gun Inventory CRUD, Laina-ase checkout with cartridge count, end-of-match return to gun safe, and maintenance counter reset.",
+      "acceptanceCriteria": [
+        "Update scoring-proxy/test/e2e/mock-ssi-server.js to serve /groups/25874/ HTML with admin membership for test users",
+        "Add scoring-ui/e2e/gun-inventory.spec.js testing adding a gun on #/guns, checking it out to a Laina-ase shooter on #/manage with 100 cartridges, returning it to the gun safe, and recording cleaning/maintenance on #/guns",
+        "Mark GUN1-GUN8 and R90-GUN1-R90-GUN8 as Implemented in docs/requirements/requirements.md, docs/requirements/release-9.0-gun-inventory.md, and docs/RELEASE-NOTES.md",
+        "All Playwright E2E tests, scoring-proxy tests, and scoring-ui tests pass"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Added gun-inventory.spec.js Playwright E2E test and updated requirements.md, release-9.0-gun-inventory.md, and RELEASE-NOTES.md."
+    }
+  ]
+}

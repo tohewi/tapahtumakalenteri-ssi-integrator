@@ -16,8 +16,9 @@ import { fileURLToPath } from 'url'
 import { loadConfig, isAdminEmail, isServiceAccount } from './config-loader.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DATA_DIR = path.resolve(__dirname, '..', '..', 'data')
-const DATA_FILE = path.join(DATA_DIR, 'staffing-events.json')
+const LOCAL_DATA_DIR = path.resolve(__dirname, '..', '..', 'data')
+const DATA_DIR = process.env.PERSISTENT_DATA_DIR || (existsSync('/var/data') ? '/var/data' : LOCAL_DATA_DIR)
+const DATA_FILE = process.env.STAFFING_DATA_FILE_PATH || path.join(DATA_DIR, 'staffing-events.json')
 
 // ============================================================
 // In-memory state + JSON persistence

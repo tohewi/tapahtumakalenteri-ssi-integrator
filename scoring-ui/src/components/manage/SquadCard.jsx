@@ -3,9 +3,68 @@ import ShooterActions from './ShooterActions'
 import fi from '../../i18n'
 
 // ── Squad card with expandable shooter list ──
-export default function SquadCard({ group, matchLabels, actionLoading, onMoveSquad, onSetDns, onUndoDns, expanded, onToggleExpand }) {
+export default function SquadCard({
+  group,
+  matchLabels,
+  actionLoading,
+  onMoveSquad,
+  onSetDns,
+  onUndoDns,
+  expanded,
+  onToggleExpand,
+  isLoanerSquad = false,
+  guns = [],
+  onSelectLoanerGun,
+  onReturnLoanerGun,
+  onUndoLoanerGun,
+}) {
   const shooterCount = group.total
   const hasIssues = group.issueShooters.length > 0
+
+  // R90-GUN25: Active gun + ammo checkout follows the shooter into any squad
+  const findAssignedGun = (shooter) => {
+    if (!Array.isArray(guns)) return null
+    return guns.find(g => {
+      if (g.state !== 'in_range_use' || !g.currentCheckout) return false
+      const shooterEmail = String(shooter.email || '').trim().toLowerCase()
+      const checkoutEmail = String(g.currentCheckout.shooterEmail || '').trim().toLowerCase()
+      if (shooterEmail && checkoutEmail) {
+        return shooterEmail === checkoutEmail
+      }
+      return String(g.currentCheckout.shooterName || '').trim().toLowerCase() === String(shooter.name || '').trim().toLowerCase()
+    })
+  }
+
+  const renderAssignedGunBadge = (assignedGun) => {
+    if (!assignedGun) return null
+    const ammoText = assignedGun.currentCheckout?.ammoLabel || assignedGun.currentCheckout?.ammoMake || assignedGun.ammoMake
+    return (
+      <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-100 text-amber-800">
+          Laina-ase: {assignedGun.make} {assignedGun.model} ({assignedGun.serialNumber}) · {assignedGun.currentCheckout?.cartridgesGiven ?? 0} patr.
+          {ammoText ? ` (${ammoText})` : ''}
+        </span>
+        {onReturnLoanerGun && (
+          <button
+            type="button"
+            onClick={() => onReturnLoanerGun(assignedGun)}
+            className="px-2 py-0.5 bg-emerald-600 text-white rounded-md text-xs font-semibold active:bg-emerald-700"
+          >
+            Palauta kaappiin
+          </button>
+        )}
+        {onUndoLoanerGun && (
+          <button
+            type="button"
+            onClick={() => onUndoLoanerGun(assignedGun)}
+            className="px-2 py-0.5 bg-red-100 text-red-700 border border-red-200 rounded-md text-xs font-semibold active:bg-red-200"
+          >
+            Peru lainaus
+          </button>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className={`bg-white rounded-xl border mb-2 overflow-hidden ${hasIssues ? 'border-amber-200' : 'border-gray-200'}`}>
@@ -33,55 +92,74 @@ export default function SquadCard({ group, matchLabels, actionLoading, onMoveSqu
             <p className="px-4 py-3 text-gray-400 text-sm">Ei ampujia</p>
           ) : (
             <div className="divide-y">
-              {group.okShooters.map((s, i) => (
-                <div key={`ok-${i}`} className={`px-4 py-2.5 ${s.didNotShow ? 'opacity-50' : ''}`}>
-                  <div className="flex items-center gap-2">
-                    <span className="text-green-500 text-sm shrink-0">✓</span>
-                    <div className="flex-1 min-w-0">
-                      <div className={`text-sm text-gray-800 truncate ${s.didNotShow ? 'line-through' : ''}`}>{s.name}</div>
-                      {s.email ? (
-                        <div className="text-xs text-gray-500 truncate">{s.email}</div>
-                      ) : (
-                        <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
-                      )}
-                      <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={onSetDns} onUndoDns={onUndoDns} />
+              {group.okShooters.map((s, i) => {
+                const assignedGun = findAssignedGun(s)
+                return (
+                  <div key={`ok-${i}`} className={`px-4 py-2.5 ${s.didNotShow ? 'opacity-50' : ''}`}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-500 text-sm shrink-0">✓</span>
+                      <div className="flex-1 min-w-0">
+                        <div className={`text-sm text-gray-800 truncate ${s.didNotShow ? 'line-through' : ''}`}>{s.name}</div>
+                        {s.email ? (
+                          <div className="text-xs text-gray-500 truncate">{s.email}</div>
+                        ) : (
+                          <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
+                        )}
+                        {renderAssignedGunBadge(assignedGun)}
+                        <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={onSetDns} onUndoDns={onUndoDns} />
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {isLoanerSquad && !assignedGun && onSelectLoanerGun && (
+                          <button
+                            type="button"
+                            onClick={() => onSelectLoanerGun(s)}
+                            className="px-2.5 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-semibold active:bg-indigo-100"
+                          >
+                            Valitse ase
+                          </button>
+                        )}
+                        <ActionButton
+                          label={fi.moveSquad}
+                          loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'assign'}
+                          onClick={() => onMoveSquad(s)}
+                          color="blue"
+                        />
+                      </div>
                     </div>
-                    <ActionButton
-                      label={fi.moveSquad}
-                      loading={actionLoading?.shooterName === s.name && actionLoading?.action === 'assign'}
-                      onClick={() => onMoveSquad(s)}
-                      color="blue"
-                    />
                   </div>
-                </div>
-              ))}
-              {group.issueShooters.map((s, i) => (
-                <div key={`issue-${i}`} className={`px-4 py-2.5 bg-amber-50 ${s.didNotShow ? 'opacity-50' : ''}`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-amber-500 text-sm shrink-0">⚠</span>
-                    <div className="flex-1 min-w-0">
-                      <div className={`text-sm text-gray-800 truncate ${s.didNotShow ? 'line-through' : ''}`}>{s.name}</div>
-                      {s.email ? (
-                        <div className="text-xs text-gray-500 truncate">{s.email}</div>
-                      ) : (
-                        <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
-                      )}
-                      <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={onSetDns} onUndoDns={onUndoDns} />
+                )
+              })}
+              {group.issueShooters.map((s, i) => {
+                const assignedGun = findAssignedGun(s)
+                return (
+                  <div key={`issue-${i}`} className={`px-4 py-2.5 bg-amber-50 ${s.didNotShow ? 'opacity-50' : ''}`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-amber-500 text-sm shrink-0">⚠</span>
+                      <div className="flex-1 min-w-0">
+                        <div className={`text-sm text-gray-800 truncate ${s.didNotShow ? 'line-through' : ''}`}>{s.name}</div>
+                        {s.email ? (
+                          <div className="text-xs text-gray-500 truncate">{s.email}</div>
+                        ) : (
+                          <div className="text-xs text-red-600 font-medium">🚨 Sähköposti puuttuu</div>
+                        )}
+                        {renderAssignedGunBadge(assignedGun)}
+                        <ShooterActions shooter={s} actionLoading={actionLoading} onSetDns={onSetDns} onUndoDns={onUndoDns} />
+                      </div>
+                    </div>
+                    <div className="flex gap-1 mt-1 ml-6">
+                      {s.assignments.map((sq, mi) => (
+                        <span key={mi} className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                          sq === null ? 'bg-red-100 text-red-600'
+                            : sq === s.suggestedSquad ? 'bg-green-100 text-green-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {matchLabels[mi]}: {sq === null ? '✗' : `S${sq}`}
+                        </span>
+                      ))}
                     </div>
                   </div>
-                  <div className="flex gap-1 mt-1 ml-6">
-                    {s.assignments.map((sq, mi) => (
-                      <span key={mi} className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
-                        sq === null ? 'bg-red-100 text-red-600'
-                          : sq === s.suggestedSquad ? 'bg-green-100 text-green-700'
-                          : 'bg-amber-100 text-amber-700'
-                      }`}>
-                        {matchLabels[mi]}: {sq === null ? '✗' : `S${sq}`}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

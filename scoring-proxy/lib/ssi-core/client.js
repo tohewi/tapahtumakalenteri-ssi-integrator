@@ -12,6 +12,7 @@ export {
   ssiAddToMatchManagement,
   ssiRemoveFromMatchManagement,
   ssiGetEventStaff,
+  ssiGetGroupMembers,
 } from "./management.js"
 export {
   ssiSearchAndAddParticipant,
@@ -20,6 +21,7 @@ export {
   ssiSetParticipantSquad,
   ssiSetMatchParticipantStatus,
   ssiDeleteMatchParticipant,
+  ssiSetParticipantNumber,
   ssiFindCompetitorInMatch,
   ssiFindParticipantInEvent,
   ssiSetDidNotShow,

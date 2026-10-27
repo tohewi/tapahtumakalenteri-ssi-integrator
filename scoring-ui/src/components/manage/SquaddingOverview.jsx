@@ -1,9 +1,11 @@
-import { useState, useRef, useMemo } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import * as api from "../../api"
+import * as gunsApi from "../../guns-api"
 import fi from "../../i18n"
 import ActionButton from "./ActionButton"
 import ShooterActions from "./ShooterActions"
 import SquadPickerSheet from "./SquadPickerSheet"
+import LoanerGunPickerSheet from "./LoanerGunPickerSheet"
 import SectionHeader from "./SectionHeader"
 import SquadCard from "./SquadCard"
 
@@ -24,6 +26,39 @@ export default function SquaddingOverview({ data, cupId, onRefresh, onPatchShoot
   const [actionError, setActionError] = useState(null)
   const [squadPicker, setSquadPicker] = useState(null) // { shooterName, type: 'assign'|'assignCupOnly' }
   const [expandedSquads, setExpandedSquads] = useState(new Set()) // persists across refreshes
+
+  // R90: Loaner gun & ammo inventory state (loaded if user is in SSI Group 25874 admin)
+  const [guns, setGuns] = useState([])
+  const [ammo, setAmmo] = useState([])
+  const [loanerGunsAllowed, setLoanerGunsAllowed] = useState(false)
+  const [loanerPickerShooter, setLoanerPickerShooter] = useState(null)
+
+  const loadGuns = useCallback(async () => {
+    try {
+      const res = await gunsApi.getGuns()
+      setGuns(res.guns || [])
+      setAmmo(res.ammo || [])
+      setLoanerGunsAllowed(true)
+    } catch {
+      setLoanerGunsAllowed(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    gunsApi.getGuns()
+      .then(res => {
+        if (!active) return
+        setGuns(res.guns || [])
+        setAmmo(res.ammo || [])
+        setLoanerGunsAllowed(true)
+      })
+      .catch(() => {
+        if (!active) return
+        setLoanerGunsAllowed(false)
+      })
+    return () => { active = false }
+  }, [])
 
   // Short match labels (last word: Tarkkuus, Pika, Kuvio)
   const matchLabels = matches.map(m => {
@@ -177,6 +212,61 @@ export default function SquaddingOverview({ data, cupId, onRefresh, onPatchShoot
     setSquadPicker({ shooter, type: 'move' })
   }
 
+  // R90: Loaner gun checkout & return handlers
+  const handleConfirmLoanerGun = async ({ gunId, cartridgesGiven, ammoId }) => {
+    if (!loanerPickerShooter) return
+    setActionError(null)
+    try {
+      await gunsApi.checkoutGun(gunId, {
+        shooterName: loanerPickerShooter.name,
+        shooterEmail: loanerPickerShooter.email || '',
+        cupId: String(cupId),
+        cupName: data.cup?.name || '',
+        cartridgesGiven,
+        ammoId,
+      })
+      setLoanerPickerShooter(null)
+      await loadGuns()
+    } catch (err) {
+      setActionError(err.message)
+    }
+  }
+
+  const handleReturnLoanerGun = async (gun) => {
+    setActionError(null)
+    try {
+      await gunsApi.returnGun(gun.id)
+      await loadGuns()
+    } catch (err) {
+      setActionError(err.message)
+    }
+  }
+
+  const handleUndoLoanerGun = async (gun) => {
+    setActionError(null)
+    try {
+      await gunsApi.undoCheckoutGun(gun.id)
+      await loadGuns()
+    } catch (err) {
+      setActionError(err.message)
+    }
+  }
+
+  const handleReturnAllLoanerGuns = async () => {
+    setActionError(null)
+    try {
+      await gunsApi.returnAllGuns({ cupId: String(cupId) })
+      await loadGuns()
+    } catch (err) {
+      setActionError(err.message)
+    }
+  }
+
+  const cupScopedGuns = useMemo(() =>
+    guns.filter(g => g.state !== 'in_range_use' || !g.currentCheckout?.cupId || String(g.currentCheckout.cupId) === String(cupId)),
+  [guns, cupId])
+  const inRangeGunsCount = cupScopedGuns.filter(g => g.state === 'in_range_use').length
+
   return (
     <div className="pb-6">
 
@@ -242,6 +332,21 @@ export default function SquaddingOverview({ data, cupId, onRefresh, onPatchShoot
           <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
             <p className="text-red-700 text-sm font-medium">{actionError}</p>
             <button onClick={() => setActionError(null)} className="text-red-500 text-xs underline mt-1">Sulje</button>
+          </div>
+        )}
+
+        {/* GQL-HF5: Competitor number mismatch banner */}
+        {data.numberMismatchCount > 0 && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 flex items-center justify-between gap-2">
+            <div className="text-xs text-indigo-900">
+              <strong>{data.numberMismatchCount}</strong> kilpailijanumeroa poikkeaa Cupin numeroinnista.
+            </div>
+            <ActionButton
+              label="Synkronoi kilpailijanumerot"
+              loading={actionLoading?.action === 'syncNumbers'}
+              onClick={() => runAction(() => api.manageSyncNumbers(cupId), 'all', 'syncNumbers')}
+              color="blue"
+            />
           </div>
         )}
 
@@ -437,7 +542,28 @@ export default function SquaddingOverview({ data, cupId, onRefresh, onPatchShoot
 
         {/* ── Section: Squad overview ── */}
         <div ref={squadsRef} className="scroll-mt-16">
-          <SectionHeader icon="👥" title="Squadit" count={squadGroups.length} color="blue" />
+          <div className="flex items-center justify-between mb-1">
+            <SectionHeader icon="👥" title="Squadit" count={squadGroups.length} color="blue" />
+            {loanerGunsAllowed && (
+              <div className="flex items-center gap-2">
+                {inRangeGunsCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleReturnAllLoanerGuns}
+                    className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-xs font-semibold active:bg-emerald-700"
+                  >
+                    Palauta kaikki laina-aseet kaappiin ({inRangeGunsCount})
+                  </button>
+                )}
+                <a
+                  href="#/guns"
+                  className="px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-semibold"
+                >
+                  Asekaappi
+                </a>
+              </div>
+            )}
+          </div>
           {squadGroups.map(group => (
             <SquadCard
               key={group.number}
@@ -447,6 +573,11 @@ export default function SquaddingOverview({ data, cupId, onRefresh, onPatchShoot
               onMoveSquad={handleMoveSquad}
               onSetDns={handleSetDns}
               onUndoDns={handleUndoDns}
+              isLoanerSquad={loanerGunsAllowed && (group.number === 1 || /laina/i.test(group.name))}
+              guns={cupScopedGuns}
+              onSelectLoanerGun={loanerGunsAllowed ? (s) => setLoanerPickerShooter(s) : undefined}
+              onReturnLoanerGun={loanerGunsAllowed ? handleReturnLoanerGun : undefined}
+              onUndoLoanerGun={loanerGunsAllowed ? handleUndoLoanerGun : undefined}
               expanded={expandedSquads.has(group.number)}
               onToggleExpand={() => setExpandedSquads(prev => {
                 const next = new Set(prev)
@@ -458,6 +589,17 @@ export default function SquaddingOverview({ data, cupId, onRefresh, onPatchShoot
           ))}
         </div>
       </div>
+
+      {/* ── Bottom Sheet: Loaner Gun Picker (R90) ── */}
+      {loanerPickerShooter && (
+        <LoanerGunPickerSheet
+          shooter={loanerPickerShooter}
+          guns={guns}
+          ammo={ammo}
+          onConfirm={handleConfirmLoanerGun}
+          onClose={() => setLoanerPickerShooter(null)}
+        />
+      )}
 
       {/* ── Bottom Sheet: Squad Picker ── */}
       {squadPicker && (

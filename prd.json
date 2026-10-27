@@ -1,349 +1,364 @@
 {
   "project": "TurRes SSI Tools",
-  "requirementPrefix": "R76",
-  "branchName": "R76-feature-consolidation-and-tech-debt",
-  "description": "Release 7.6 — Consolidation, Compliance Hardening, and Technical Debt Backlog",
+  "requirementPrefix": "R79",
+  "branchName": "R79-feature-ical-and-number-sync",
+  "description": "Release 7.9.3 & 7.9.4 — iCal (.ics) Calendar Attachment in Registration Confirmation Email (GQL-HF6) and Cup-Match Competitor Number Sync Hardening (GQL-HF5)",
   "userStories": [
     {
       "id": "US-001",
-      "requirementId": "R76-MG2",
-      "title": "Align scoring CupSearch sort order to proximity to today",
-      "description": "As a range officer using mobile or tablet scoring, I want CupSearch results sorted ascending by proximity to today so that all cup lists (register, manage, scoring) use consistent ordering.",
+      "requirementId": "GQL-HF6",
+      "title": "Build RFC 5545 iCal (.ics) generator and attach to sendRegistrationConfirmation in lib/email.js",
+      "description": "As a registered shooter, I want an RFC 5545 .ics calendar invite attached to my registration confirmation email so I can add the Cup event to iPhone, Android, Outlook, or Google Calendar with one tap.",
       "acceptanceCriteria": [
-        "Update cup sorting in scoring-proxy/routes/scoring.js so cups are sorted by Math.abs(new Date(starts) - now) ascending",
-        "Add unit test in scoring-proxy/test/scoring.test.js verifying proximity sorting for same-day and nearby cups",
-        "Mark MG2 and R76-MG2 as Implemented in docs/requirements/requirements.md and docs/requirements/release-7.6.md",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Implement buildRegistrationIcs({ cupId, cupName, starts, ends, shooterEmail, matchSquads }) in scoring-proxy/lib/email.js producing a valid RFC 5545 VCALENDAR/VEVENT (METHOD:REQUEST, deterministic UID registration-{cupId}-{shooterEmail}@ssi-tools, DTSTART, DTEND defaulting to starts + 8h when ends is absent)",
+        "Update sendRegistrationConfirmation in scoring-proxy/lib/email.js to accept optional { cupId, starts, ends } and attach { filename: 'ilmoittautuminen.ics', content: base64, content_type: 'text/calendar; charset=utf-8; method=REQUEST' } when starts is valid (falling back gracefully with a warning if starts is missing)",
+        "Update CupDetail GraphQL query in POST /api/v1/register/submit (scoring-proxy/routes/registration.js) to fetch starts and ends and pass { cupId, starts, ends } to sendRegistrationConfirmation",
+        "Add unit tests in scoring-proxy/test/email-ical.test.js verifying RFC 5545 .ics output, 8h fallback when ends is missing, deterministic UID, and graceful fallback when starts is missing",
+        "Mark GQL-HF6 as Implemented in docs/requirements/requirements.md",
+        "scoring-proxy lint and tests pass (npm run lint && npm test)"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Implemented sortByProximityToNow in scoring-proxy/routes/scoring.js with unit test in scoring.test.js."
+      "notes": "Implemented buildRegistrationIcs and .ics attachment in sendRegistrationConfirmation with unit tests in email-ical.test.js."
     },
     {
       "id": "US-002",
-      "requirementId": "R76-CUP1",
-      "title": "Enforce squad capacity when moving squadded shooters in ManagePage",
-      "description": "As a cup manager, I want full squads disabled in SquadPickerSheet and capacity validated on squad move so that shooters cannot be moved into a squad that is already at max capacity.",
+      "requirementId": "GQL-HF5",
+      "title": "Add SSI participant number scraping and update helpers in lib/ssi-core/participants.js",
+      "description": "As a developer, I want SSI participant number read and update helpers in participants.js so the proxy can inspect and synchronize competitor numbers between a Cup and its included matches.",
       "acceptanceCriteria": [
-        "Disable full squads (count >= max) in scoring-ui/src/components/manage/SquadPickerSheet.jsx unless it is the shooter's current squad",
-        "Add backend capacity check or validation test for squad moves in scoring-proxy/test/management.test.js",
-        "Add component test in scoring-ui/src/test/components.test.jsx verifying full squads cannot be selected",
-        "Update CUP1 and R76-CUP1 status in docs/requirements/requirements.md and docs/requirements/release-7.6.md",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Add ssiSetParticipantNumber(participantId, number, cookies, participantContentType = 93) in scoring-proxy/lib/ssi-core/participants.js (and re-export in client.js) that GETs /event/participant/{ct}/{id}/edit/, extracts form fields, overrides 'number', and POSTs the edit form",
+        "Add unit tests in scoring-proxy/test/ssi-core-scraping.test.js verifying ssiSetParticipantNumber form field extraction and POST payload",
+        "scoring-proxy lint and tests pass (npm run lint && npm test)"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "Enforced capacity in SquadPickerSheet.jsx and POST /api/manage/cup/:id/fix-squad with unit and component tests."
+      "notes": "Implemented ssiSetParticipantNumber in scoring-proxy/lib/ssi-core/participants.js."
     },
     {
       "id": "US-003",
-      "requirementId": "R76-TD1",
-      "title": "Extract http-helpers and graphql implementations from ssi-core/client.js",
-      "description": "As a developer, I want HTTP cookie/fetch/CSRF helpers and GraphQL/auth functions to live in lib/ssi-core/http-helpers.js and lib/ssi-core/graphql.js instead of monolithic client.js.",
+      "requirementId": "GQL-HF5",
+      "title": "Implement CUP-canonical competitor number mismatch detection and sync in lib/services/cup-manage.js",
+      "description": "As a cup manager, I want CUP participant numbers treated as canonical and automatically compared/synchronized across all included matches.",
       "acceptanceCriteria": [
-        "Move HTTP helper functions (cookie merging, CSRF extraction, ssiFetchPage) into scoring-proxy/lib/ssi-core/http-helpers.js",
-        "Move ssiGraphQL, ssiRefreshJWT, and ssiLogin implementations into scoring-proxy/lib/ssi-core/graphql.js (importing only from http-helpers.js)",
-        "Re-export moved functions from client.js for backward compatibility during decomposition",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Add buildCompetitorNumberSyncPlan(cupEvent) in scoring-proxy/lib/services/cup-manage.js mapping CUP competitors (by first_name + last_name + email key) to included match competitors and returning a deterministic list of mismatches ({ shooterName, email, canonicalNumber, matchId, matchName, matchParticipantId, currentNumber })",
+        "Add syncCupCompetitorNumbers({ cupEvent, cookies }) in scoring-proxy/lib/services/cup-manage.js that applies ssiSetParticipantNumber for each mismatch and returns an idempotent audit summary",
+        "Expose POST /api/v1/manage/cup/:id/sync-numbers in scoring-proxy/routes/management.js (with auditMutation logging) and also include numberMismatchCount in GET /api/v1/manage/cup/:id",
+        "Add unit and route tests in scoring-proxy/test/cup-manage.test.js and scoring-proxy/test/management.test.js",
+        "scoring-proxy lint and tests pass (npm run lint && npm test)"
       ],
       "priority": 3,
       "passes": true,
-      "notes": "Extracted http-helpers.js and graphql.js implementations from client.js."
+      "notes": "Implemented buildCompetitorNumberSyncPlan and POST /api/v1/manage/cup/:id/sync-numbers."
     },
     {
       "id": "US-004",
-      "requirementId": "R76-TD1",
-      "title": "Extract scoring and management implementations from ssi-core/client.js",
-      "description": "As a developer, I want scoring and management scraping functions moved into lib/ssi-core/scoring.js and lib/ssi-core/management.js so each domain module owns its implementation.",
+      "requirementId": "GQL-HF5",
+      "title": "Add competitor number sync button in ManagePage (#/manage) and update requirements & release notes",
+      "description": "As a cup manager on #/manage, I want to see when match competitor numbers differ from CUP numbers and synchronize them with one click.",
       "acceptanceCriteria": [
-        "Move ssiGetScoringPage and ssiSubmitScore implementations into scoring-proxy/lib/ssi-core/scoring.js",
-        "Move event staff and management group functions into scoring-proxy/lib/ssi-core/management.js",
-        "Ensure both domain modules only import from http-helpers.js (no cross-domain imports)",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Add manageSyncNumbers(cupId) in scoring-ui/src/api.js and display a 'Synkronoi kilpailijanumerot' banner/button in SquaddingOverview.jsx when numberMismatchCount > 0",
+        "Add component test in scoring-ui/src/test/components.test.jsx",
+        "Mark GQL-HF5 as Implemented in docs/requirements/requirements.md and add Release 7.9.3 & 7.9.4 entries to docs/RELEASE-NOTES.md",
+        "scoring-proxy tests pass (npm test) and scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test -- --maxWorkers=1 --pool=threads)"
       ],
       "priority": 4,
       "passes": true,
-      "notes": "Extracted scoring.js and management.js implementations from client.js."
+      "notes": "Added manageSyncNumbers in api.js and Synkronoi kilpailijanumerot banner in SquaddingOverview.jsx."
     },
     {
       "id": "US-005",
-      "requirementId": "R76-TD1",
-      "title": "Extract participants implementation from ssi-core/client.js and remove ssi-client.js shim",
-      "description": "As a developer, I want participant scraping functions moved into lib/ssi-core/participants.js and the dead lib/ssi-client.js shim removed to complete R76-TD1.",
+      "requirementId": "R90-GUN11",
+      "title": "Implement Cartridge/Ammo Inventory store, gun-to-ammo linking (defaultAmmoId), checkout deduction, and stocktake discrepancy in backend",
+      "description": "As an administrator, I want backend service functions and REST endpoints for ammo inventory grouped by (make, model, caliber), linking each gun to an ammo inventory item (defaultAmmoId), automatic stock deduction when a loaner gun is checked out with cartridges, and physical stocktake discrepancy calculation.",
       "acceptanceCriteria": [
-        "Move participant search, registration, squad assignment, cup status, and DNS functions into scoring-proxy/lib/ssi-core/participants.js",
-        "Update test imports that referenced ../lib/ssi-core/client.js to import from their respective domain modules",
-        "Delete unused scoring-proxy/lib/ssi-client.js backward-compatibility shim",
-        "Mark R76-TD1 as Implemented in docs/requirements/requirements.md and docs/requirements/release-7.6.md",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Implement ammo inventory grouped by (make, model, caliber) in scoring-proxy/lib/services/gun-inventory-service.js: listAmmo(), addAmmoPurchase({ make, model, caliber, count, price, store, purchaseDate, purchasedBy }), and recordAmmoStocktake({ ammoId, actualCount, notes, performedBy }) computing discrepancy = actualCount - calculatedBefore and updating calculatedStock = actualCount",
+        "Support defaultAmmoId (and resolved ammoMake/ammoLabel) on guns in createGun and updateGun in gun-inventory-service.js so each gun can be linked to an ammo inventory item",
+        "Update checkoutGun() so it uses the gun's linked defaultAmmoId (or an explicit ammoId override) when cartridgesGiven > 0, deducting cartridgesGiven from that ammo item's calculatedStock and incrementing totalIssued, and recording ammoId/ammoLabel on currentCheckout and usageHistory",
+        "Expose GET /api/v1/guns/ammo, POST /api/v1/guns/ammo/purchases, and POST /api/v1/guns/ammo/:id/stocktake in scoring-proxy/routes/guns.js (protected by the same SSI Group 25874 admin middleware as gun inventory, and include ammo list in GET /api/v1/guns)",
+        "Add unit and route tests in scoring-proxy/test/gun-inventory.test.js covering gun-to-ammo linking (defaultAmmoId), ammo purchase, checkout deduction, stocktake discrepancy calculation, and Group 25874 admin access enforcement on ammo endpoints",
+        "scoring-proxy lint and tests pass (npm run lint && npm test)"
       ],
       "priority": 5,
       "passes": true,
-      "notes": "Extracted participants.js, reduced client.js to 31-line compat barrel, removed lib/ssi-client.js, and updated test imports."
+      "notes": "Implemented ammo-inventory-service.js, gun-to-ammo linking (defaultAmmoId), checkout deduction, stocktake discrepancy, and CSV builders/endpoints."
     },
     {
       "id": "US-006",
-      "requirementId": "R76-ARCH3",
-      "title": "Extract scoring-service.js from routes/scoring.js",
-      "description": "As a developer, I want pure scoring business logic extracted from scoring-proxy/routes/scoring.js into scoring-proxy/lib/services/scoring-service.js with unit tests.",
+      "requirementId": "R90-GUN12",
+      "title": "Add Cartridge/Ammo Inventory, Gun-to-Ammo selector, Purchase Modal, and Stocktake Discrepancy UI to GunsPage (#/guns) and LoanerGunPickerSheet",
+      "description": "As a club equipment manager, I want to select which ammo inventory item is used with each gun in #/guns, manage ammo purchases, perform physical ammo stocktakes with discrepancy display, and automatically pre-select the gun's linked ammo when handing over a loaner gun on #/manage.",
       "acceptanceCriteria": [
-        "Extract pure helper and GraphQL query orchestration functions from scoring-proxy/routes/scoring.js into scoring-proxy/lib/services/scoring-service.js",
-        "Keep routes/scoring.js as a thin HTTP dispatcher",
-        "Add unit tests in scoring-proxy/test/scoring-service.test.js",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Add getAmmo, addAmmoPurchase, and recordAmmoStocktake in scoring-ui/src/guns-api.js",
+        "Update GunsPage.jsx (#/guns) to include: (a) a 'Käytettävä patruuna (Linked Ammo)' dropdown in the Gun Add/Edit modal populated from the Ammo Inventory items (make + model + caliber) and displayed on each gun card, (b) a Patruunavarasto (Ammo Inventory) section showing each (make, model, caliber) with calculatedStock, totalPurchased, totalIssued, and last stocktake discrepancy, (c) '+ Lisää patruunaosto' modal (make, model, caliber, count, price, store, date, buyer), and (d) 'Inventointi' modal (actualCount -> shows live discrepancy vs calculatedStock)",
+        "Update LoanerGunPickerSheet.jsx and SquadCard.jsx to automatically pre-select and display the selected gun's linked ammo item (e.g. 'Patruuna: GCI FMJ 124gr (9x19)') and deduct from that ammo item on checkout",
+        "Add component tests in scoring-ui/src/test/components.test.jsx",
+        "scoring-proxy tests pass (npm test) and scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test -- --maxWorkers=1 --pool=threads)"
       ],
       "priority": 6,
       "passes": true,
-      "notes": "Extracted scoring-service.js from routes/scoring.js with 6 unit tests in scoring-service.test.js."
+      "notes": "Added AmmoInventorySection.jsx, gun-to-ammo selector in GunsPage.jsx, and recommended ammo display in LoanerGunPickerSheet.jsx."
     },
     {
       "id": "US-007",
-      "requirementId": "R76-ARCH3",
-      "title": "Extract registration-service.js from routes/registration.js",
-      "description": "As a developer, I want registration validation, captcha management, and cup/squad enrollment orchestration extracted into scoring-proxy/lib/services/registration-service.js.",
+      "requirementId": "R90-GUN15",
+      "title": "Add CSV export for Gun Inventory, Gun Events, Ammo Inventory, and Ammo Events",
+      "description": "As an authorized group admin, I want to download CSV files for gun inventory, gun loan/maintenance events, ammo inventory, and ammo purchase/stocktake events so I can easily import them into external systems or spreadsheets.",
       "acceptanceCriteria": [
-        "Create scoring-proxy/lib/services/registration-service.js with pure business logic extracted from routes/registration.js",
-        "Reduce scoring-proxy/routes/registration.js to a thin HTTP route dispatcher",
-        "Verify all existing tests in scoring-proxy/test/registration.test.js and new service unit tests pass",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Implement buildGunsCsv(), buildGunEventsCsv(), buildAmmoCsv(), and buildAmmoEventsCsv() in scoring-proxy/lib/services/gun-inventory-service.js with proper CSV escaping (RFC 4180)",
+        "Expose GET /api/v1/guns/export/guns.csv, GET /api/v1/guns/export/gun-events.csv, GET /api/v1/guns/export/ammo.csv, and GET /api/v1/guns/export/ammo-events.csv in scoring-proxy/routes/guns.js (protected by SSI Group 25874 admin middleware, returning Content-Type: text/csv; charset=utf-8 and Content-Disposition attachment headers)",
+        "Add CSV download buttons ('Lataa aseet CSV', 'Lataa asetapahtumat CSV', 'Lataa patruunat CSV', 'Lataa patruunatapahtumat CSV') to GunsPage.jsx (#/guns)",
+        "Add unit and route tests in scoring-proxy/test/gun-inventory.test.js and mark GUN11-GUN16 and R90-GUN11-R90-GUN16 as Implemented in docs/requirements/requirements.md, docs/requirements/release-9.0-gun-inventory.md, and docs/RELEASE-NOTES.md",
+        "scoring-proxy tests pass (npm test) and scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test -- --maxWorkers=1 --pool=threads)"
       ],
       "priority": 7,
       "passes": true,
-      "notes": "Extracted registration-service.js from routes/registration.js with unit tests in registration-service.test.js."
+      "notes": "Implemented CSV export endpoints and download toolbar on #/guns."
     },
     {
       "id": "US-008",
-      "requirementId": "R76-TD3",
-      "title": "Extract staffing-service.js, clean up orphaned staffing prototype files, and add staffing tests",
-      "description": "As a developer, I want staffing route logic extracted to staffing-service.js, orphaned prototype files cleaned up, and unit tests added for staffing.",
+      "requirementId": "R90-GUN19",
+      "title": "Add undo gun & ammo loan (undoCheckoutGun) in backend and ManagePage (#/manage)",
+      "description": "As a range officer in #/manage, I want to undo an active gun and ammo loan if a shooter leaves before shooting or if the wrong gun/ammo was selected, returning the gun to the safe and restoring the ammo stock and gun usage counters.",
       "acceptanceCriteria": [
-        "Extract business logic from scoring-proxy/routes/staffing.js into scoring-proxy/lib/services/staffing-service.js",
-        "Remove or archive orphaned staffing files (StaffStatusBoard.jsx, StaffSignupPanel.jsx, lib/staffing/cron.js, notifier.js, role-assigner.js, squad-optimizer.js, IMMEDIATE-DEVELOPMENT-NEEDS.md)",
-        "Add unit tests for staffing engine and routes in scoring-proxy/test/staffing.test.js",
-        "Mark R76-ARCH3 and R76-TD3 as Implemented in docs/requirements/requirements.md and docs/requirements/release-7.6.md",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Implement undoCheckoutGun({ gunId, undoneBy }) in scoring-proxy/lib/services/gun-inventory-service.js: return gun to 'in_gun_safe', decrement timesUsedTotal (-1), timesUsedSinceMaintenance (-1), cartridgesIssuedTotal (-cartridgesGiven), and cartridgesSinceMaintenance (-cartridgesGiven) (clamped at 0), restore cartridgesGiven to the linked ammo item's calculatedStock (+cartridgesGiven) and decrement totalIssued (-cartridgesGiven), and mark the usageHistory entry as undone (undone: true, undoneAt, undoneBy)",
+        "Expose POST /api/v1/guns/:id/undo-checkout in scoring-proxy/routes/guns.js (with auditMutation logging) and add undoCheckoutGun(gunId) in scoring-ui/src/guns-api.js",
+        "Add a 'Peru lainaus' (Undo loan) button next to 'Palauta kaappiin' on checked-out shooters in SquadCard.jsx and wire it in SquaddingOverview.jsx",
+        "Add unit and route tests in scoring-proxy/test/gun-inventory.test.js and mark GUN19 / R90-GUN19 as Implemented in docs/requirements/requirements.md and docs/requirements/release-9.0-gun-inventory.md",
+        "scoring-proxy lint and tests pass (npm run lint && npm test) and scoring-ui lint and build pass (npm run lint && npm run build)"
       ],
       "priority": 8,
       "passes": true,
-      "notes": "Extracted staffing-service.js, archived orphaned prototype files to archive/staffing-prototype/, and added unit tests in staffing.test.js."
+      "notes": "Implemented undoCheckoutGun in gun-inventory-service.js, POST /api/v1/guns/:id/undo-checkout, and Peru lainaus button in SquadCard.jsx."
     },
     {
       "id": "US-009",
-      "requirementId": "R76-TD4",
-      "title": "Configure ESLint v9 with module boundary enforcement in scoring-proxy and add CI lint gate",
-      "description": "As a developer, I want ESLint v9 configured in scoring-proxy with architectural boundary rules and enforced in GitHub Actions CI.",
+      "requirementId": "R90-GUN20",
+      "title": "Record shooter ammo consumption events in ammo-inventory.json and gun maintenance count in gun-inventory.json",
+      "description": "As an administrator and reporting analyst, I want gun events stored in gun-inventory.json (tracking total rounds, rounds since maintenance, and total maintenances) and ammo consumption events (who consumed cartridges, when, how many, in which cup/gun) stored in ammo-inventory.json and exported in ammo-events.csv so both gun-centric and ammo-per-shooter reports can be generated from their respective stores.",
       "acceptanceCriteria": [
-        "Migrate root .eslintrc-architectural.js rules into scoring-proxy/eslint.config.js (ESLint v9 flat config) and remove obsolete .eslintrc-architectural.js",
-        "Add 'lint': 'eslint .' script to scoring-proxy/package.json and ensure npm run lint passes with 0 errors",
-        "Add UI and proxy lint steps to .github/workflows/ci-deploy.yml",
-        "Mark R76-ARCH4 and R76-TD4 as Implemented in docs/requirements/requirements.md and docs/requirements/release-7.6.md",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Include maintenanceCount (maintenanceHistory.length) on gun records and in buildGunsCsv() in scoring-proxy/lib/services/ammo-inventory-service.js",
+        "Record a consumption event in ammoItem.consumptions[] inside ammo-inventory.json whenever checkoutGun() issues cartridges (cartridgesGiven > 0), storing { id, checkoutId, timestamp, shooterName, shooterEmail, cupId, cupName, gunId, gunMake, gunModel, serialNumber, cartridgesConsumed, issuedBy, undone: false }",
+        "When undoCheckoutGun() is called, mark the matching ammoItem.consumptions[] entry as undone (undone: true, undoneAt, undoneBy) in ammo-inventory.json",
+        "Include 'consumption' rows (with shooterName, shooterEmail, cupName, gunMake/gunModel/serialNumber, count, timestamp, actor, undone status) in buildAmmoEventsCsv() so ammo-events.csv contains purchases, stocktakes, and per-shooter consumptions",
+        "Add unit tests in scoring-proxy/test/gun-inventory.test.js verifying ammoItem.consumptions[], undo marking, maintenanceCount, and CSV exports, and mark GUN20 / R90-GUN20 as Implemented in docs/requirements/",
+        "scoring-proxy lint and tests pass (npm run lint && npm test) and scoring-ui lint and build pass (npm run lint && npm run build)"
       ],
       "priority": 9,
       "passes": true,
-      "notes": "Configured scoring-proxy/eslint.config.js with architecture rules, added CI lint gates, and verified 0 errors."
+      "notes": "Recorded shooter consumption events in ammo-inventory.json consumptions[] and ammo-events.csv, and added maintenanceCount to guns."
     },
     {
       "id": "US-010",
-      "requirementId": "R76-TD2",
-      "title": "Decompose routes/management.js and ManagePage.jsx below 500 lines",
-      "description": "As a developer, I want routes/management.js (742 lines) and ManagePage.jsx (767 lines) decomposed below the ~500-line guideline.",
+      "requirementId": "R90-GUN22",
+      "title": "Preserve full gun history on 'Poista' (Not in Use / Poistettu käytöstä state) with toggle in GunsPage",
+      "description": "As an administrator, when I click 'Poista' on a gun in #/guns (e.g. when a gun is scrapped or sold), I want the gun marked as 'not in use' (Poistettu käytöstä) so it cannot be selected for shooting in #/manage while its full information, counters, and event history remain preserved in gun-inventory.json, CSV exports, and historical view.",
       "acceptanceCriteria": [
-        "Move remaining management route orchestration helpers from scoring-proxy/routes/management.js into scoring-proxy/lib/services/cup-manage.js so routes/management.js is under 500 lines",
-        "Extract overview sections from scoring-ui/src/components/ManagePage.jsx into scoring-ui/src/components/manage/ sub-components so ManagePage.jsx is under 500 lines",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Update retireGun(gunId, { reason, retiredBy }) in scoring-proxy/lib/services/gun-inventory-service.js and DELETE /api/v1/guns/:id in routes/guns.js to preserve the gun record and all usageHistory/maintenanceHistory, setting state = 'not_in_use' (and supporting legacy 'retired'), retiredAt, retiredBy, and retireReason",
+        "Ensure listGuns({ includeRetired: false }) excludes 'not_in_use' and 'retired' guns by default (so LoanerGunPickerSheet never shows them for shooting), while listGuns({ includeRetired: true }), buildGunsCsv(), and buildGunEventsCsv() always include them",
+        "Add a 'Näytä käytöstä poistetut' (Show not-in-use guns) checkbox toggle on GunsPage.jsx (#/guns) displaying 'Poistettu käytöstä' badge and retirement info while keeping all historical counters visible",
+        "Add unit tests in scoring-proxy/test/gun-inventory.test.js verifying that retiring a gun preserves its record and events in storage and CSV exports while excluding it from active loaner selection, and mark GUN22 / R90-GUN22 as Implemented",
+        "scoring-proxy lint and tests pass (npm run lint && npm test) and scoring-ui lint and build pass (npm run lint && npm run build)"
       ],
       "priority": 10,
       "passes": true,
-      "notes": "Reduced routes/management.js to 468 lines and ManagePage.jsx to 260 lines (extracted SquaddingOverview.jsx)."
+      "notes": "Updated retireGun to set state='not_in_use' preserving history and added Näytä käytöstä poistetut toggle on GunsPage.jsx."
     },
     {
       "id": "US-011",
-      "requirementId": "R76-TD2",
-      "title": "Decompose App.jsx and TabletScoringView.jsx below 500 lines",
-      "description": "As a developer, I want App.jsx (890 lines) and TabletScoringView.jsx (648 lines) decomposed below the ~500-line guideline.",
+      "requirementId": "R90-GUN23",
+      "title": "Allow restoring gun from 'Poistettu käytöstä' to 'Asekaapissa' and replace gun modal ammo fields with single 'Suositeltu patruunamerkki ja malli' dropdown",
+      "description": "As an administrator on #/guns, I want to restore a 'Poistettu käytöstä' gun back to 'Asekaapissa', and in the Gun Add/Edit modal I want a single 'Suositeltu patruunamerkki ja malli' dropdown populated from the ammo inventory (without stock numbers and without a duplicate 'Käytettävä patruuna varastosta' field).",
       "acceptanceCriteria": [
-        "Extract shared scoring constants/helpers and sub-views from scoring-ui/src/App.jsx and scoring-ui/src/components/TabletScoringView.jsx so both files are under 500 lines",
-        "Mark R76-TD2 as Implemented in docs/requirements/requirements.md and docs/requirements/release-7.6.md",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Implement restoreGun(gunId) in scoring-proxy/lib/services/gun-inventory-service.js (transitioning 'not_in_use'/'retired' to 'in_gun_safe'), expose POST /api/v1/guns/:id/restore in scoring-proxy/routes/guns.js (with auditMutation), add restoreGun(gunId) in scoring-ui/src/guns-api.js, and render a 'Palauta asekaappiin' button on retired gun cards in GunsPage.jsx",
+        "In GunsPage.jsx Add/Edit modal, remove the 'Käytettävä patruuna varastosta' field and make 'Suositeltu patruunamerkki ja malli' a single <select> dropdown populated from ammo inventory items formatted as '{make} {model} ({caliber})' without showing stock count",
+        "Add unit and route tests in scoring-proxy/test/gun-inventory.test.js for restoreGun and mark GUN11, GUN23 / R90-GUN11, R90-GUN23 as Implemented in docs/requirements/",
+        "scoring-proxy lint and tests pass (npm run lint && npm test) and scoring-ui lint and build pass (npm run lint && npm run build)"
       ],
       "priority": 11,
       "passes": true,
-      "notes": "Extracted scoring-helpers.js, MobileScoringViews.jsx, and TabletScoringPanels.jsx; App.jsx and TabletScoringView.jsx are now under 500 lines."
+      "notes": "Implemented restoreGun (POST /api/v1/guns/:id/restore) with Palauta asekaappiin button and replaced gun modal ammo fields with single Suositeltu patruunamerkki ja malli dropdown."
     },
     {
       "id": "US-012",
-      "requirementId": "R76-COM1",
-      "title": "Add Privacy Policy and Terms of Service pages and links",
-      "description": "As a shooter registering for an event, I want accessible Privacy Policy and Terms of Service disclosures linked from Registration and HomePage.",
+      "requirementId": "R90-GUN14",
+      "title": "Implement whole-inventory ammo stocktake table, post-stocktake balance calculation, and inventory date display on #/ammo",
+      "description": "As an equipment manager on #/ammo, I want to perform a physical stocktake for the entire ammo inventory in a single table of all cartridge types, see the date of the last inventory, and have the visible stock equal the inventoried count plus any purchases after the inventory minus any consumption after the inventory.",
       "acceptanceCriteria": [
-        "Add Privacy Policy and Terms of Service view/modal or route in scoring-ui describing SSI passthrough auth, personal data processed, Resend email processor, retention, and contact path",
-        "Link Privacy Policy and Terms of Service from RegisterPage.jsx and HomePage.jsx",
-        "Add component test verifying legal links render on RegisterPage and HomePage",
-        "Mark R76-COM1 as Implemented in docs/requirements/release-7.6.md",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Add recordWholeAmmoStocktake({ items: [{ ammoId, actualCount }], notes, performedBy }) in scoring-proxy/lib/services/ammo-inventory-service.js (and re-export in gun-inventory-service.js) and expose POST /api/v1/guns/ammo/stocktake in scoring-proxy/routes/guns.js",
+        "Track lastStocktakeCount, lastStocktakeAt, purchasedSinceStocktake, and issuedSinceStocktake on each ammo record so calculatedStock = lastStocktakeCount + purchasedSinceStocktake - issuedSinceStocktake when inventoried (or totalPurchased - totalIssued when not yet inventoried)",
+        "Update AmmoInventorySection.jsx (#/ammo) to display a summary table of all cartridge types with their current stock, last inventory date (formatDateShort(lastStocktakeAt)), last discrepancy, and a top-level 'Tee inventointi' action that opens a whole-inventory stocktake table for all cartridge types at once",
+        "Add unit and route tests in scoring-proxy/test/gun-inventory.test.js verifying whole-inventory stocktake and post-stocktake purchase/consumption calculation, and mark GUN14 / R90-GUN14 as Implemented",
+        "scoring-proxy lint and tests pass (npm run lint && npm test) and scoring-ui lint and build pass (npm run lint && npm run build)"
       ],
       "priority": 12,
       "passes": true,
-      "notes": "Added LegalDocumentPage.jsx (#/privacy and #/terms) and LegalFooterLinks on RegisterPage and HomePage with component tests."
+      "notes": "Implemented recordWholeAmmoStocktake, post-stocktake balance calculation (lastStocktakeCount + purchasedSinceStocktake - issuedSinceStocktake), and whole-inventory table with inventory date on #/ammo."
     },
     {
       "id": "US-013",
-      "requirementId": "R76-SES7",
-      "title": "Add admin session monitoring endpoint and OWASP session audit doc",
-      "description": "As an administrator, I want an authenticated manage-scoped session monitoring endpoint and formal OWASP session compliance documentation.",
+      "requirementId": "R90-GUN24",
+      "title": "Disable and remove SRA-harjoitusten vetäjähallinta (#/staffing) from HomePage and router",
+      "description": "As an administrator, I want SRA-harjoitusten vetäjähallinta (#/staffing) removed from the front page and disabled by default.",
       "acceptanceCriteria": [
-        "Expose GET /api/v1/auth/sessions (manage scope required) returning active session count and current user's active sessions via getUserSessions() and getActiveSessionCount()",
-        "Document OWASP Session Management Cheat Sheet compliance matrix and Redis token storage risk evaluation in docs/design/session-handling.md",
-        "Add unit tests for GET /api/v1/auth/sessions in scoring-proxy/test/session/",
-        "Mark R76-SEC1, R76-SEC7, and R76-SES7 as Implemented in docs/requirements/release-7.6.md",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Remove the '#/staffing' card ('SRA-harjoitusten vetäjähallinta') from scoring-ui/src/components/HomePage.jsx",
+        "Disable the '#/staffing' route in scoring-ui/src/main.jsx so it falls back to HomePage",
+        "Gate /api/v1/staffing and /api/staffing in scoring-proxy/server.js behind FEATURE_STAFFING_ENABLED (default false)",
+        "Update HomePage test in scoring-ui/src/test/components.test.jsx and mark GUN24 as Implemented in docs/requirements/requirements.md",
+        "scoring-proxy lint and tests pass (npm run lint && npm test) and scoring-ui lint and build pass (npm run lint && npm run build)"
       ],
       "priority": 13,
       "passes": true,
-      "notes": "Exposed GET /api/v1/auth/sessions and documented OWASP session audit and Redis storage risk evaluation."
+      "notes": "Removed #/staffing from HomePage.jsx and main.jsx and gated /api/v1/staffing behind FEATURE_STAFFING_ENABLED."
     },
     {
       "id": "US-014",
-      "requirementId": "R76-TEST1",
-      "title": "Expand session unit, integration, security, reliability, and latency tests",
-      "description": "As a developer, I want comprehensive test coverage for session management, Redis fallback recovery, and <50ms p95 session lookup latency.",
+      "requirementId": "R90-GUN25",
+      "title": "Ensure checked-out gun and ammo badge follows shooter when moved to another squad in ManagePage",
+      "description": "As a cup manager on #/manage, when I move a shooter who has a borrowed gun and ammo from the Laina-ase squad to another squad (e.g. Oma ase 1), I want their assigned gun + ammo badge and Palauta kaappiin / Peru lainaus buttons to remain visible with the shooter in their new squad.",
       "acceptanceCriteria": [
-        "Add edge-case unit and security tests in scoring-proxy/test/session/ covering token expiry, scope manipulation, cookie replay, and Redis disconnect fallback",
-        "Add a lightweight session lookup benchmark test asserting <50ms p95 lookup latency across 100 concurrent sessions",
-        "Mark R76-TEST1, R76-TEST2, R76-TEST3, R76-TEST4, R76-TEST5, and R76-TEST7 as Implemented in docs/requirements/release-7.6.md",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Update findAssignedGun and shooter row rendering in scoring-ui/src/components/manage/SquadCard.jsx so that any shooter with an active gun checkout (matched by email or name in guns[]) displays the Laina-ase + ammo badge, 'Palauta kaappiin', and 'Peru lainaus' buttons regardless of which squad they are currently in (both okShooters and issueShooters)",
+        "Keep the initial 'Valitse ase' button (for shooters without an assigned gun) restricted to isLoanerSquad",
+        "Add a component test in scoring-ui/src/test/components.test.jsx verifying that SquadCard renders the assigned gun badge and return/undo actions even when isLoanerSquad is false, and mark GUN25 / R90-GUN25 as Implemented in docs/requirements/",
+        "scoring-proxy lint and tests pass (npm run lint && npm test) and scoring-ui lint and build pass (npm run lint && npm run build)"
       ],
       "priority": 14,
       "passes": true,
-      "notes": "Added reliability, security, and <50ms p95 100-session latency benchmark tests in reliability-and-perf.test.js."
+      "notes": "Updated SquadCard.jsx so assigned gun and ammo badge + return/undo buttons render in any squad."
     },
     {
       "id": "US-015",
-      "requirementId": "R76-COM3",
-      "title": "Enforce per-user SSI execution identity and structured mutation audit logs",
-      "description": "As a system owner, I want state-changing SSI operations to execute with the authenticated requester's SSI session and log structured audit fields.",
+      "requirementId": "R90-TEST9",
+      "title": "Add Tier 2 post-deploy Render PR preview health and SPA smoke verification",
+      "description": "As a developer, I want pr-preview.yml to verify that the deployed Render preview URL responds on /api/v1/health and serves the SPA index page so broken preview deployments are caught automatically.",
       "acceptanceCriteria": [
-        "Ensure state-changing management and scoring endpoints execute SSI writes using requester session context and log initiatingUser and executionIdentity fields",
-        "Add automated tests verifying expired/missing requester SSI session fails with auth error without falling back to shared admin session",
-        "Mark R76-COM3 as Implemented in docs/requirements/release-7.6.md",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Create scoring-proxy/test/e2e/verify-preview-deploy.js exporting verifyPreviewDeployment({ baseUrl, maxAttempts, delayMs, fetchImpl }) that checks /api/v1/health (status === 'ok') and / (HTML containing <div id=\"root\">)",
+        "Wire a verification step into .github/workflows/pr-preview.yml and include the verification result in the PR preview comment",
+        "Add unit tests in scoring-proxy/test/live-ssi-canary.test.js covering verifyPreviewDeployment success, retry, and failure handling, and mark TEST9 / R90-TEST9 as Implemented",
+        "scoring-proxy lint and tests pass (npm run lint && npm test)"
       ],
       "priority": 15,
       "passes": true,
-      "notes": "Added structured auditMutation logging across state-changing endpoints with unit tests."
+      "notes": "Created scoring-proxy/test/e2e/verify-preview-deploy.js and wired Tier 2 smoke check into pr-preview.yml."
     },
     {
       "id": "US-016",
-      "requirementId": "R76-AUTH10",
-      "title": "Require authenticated SSI passthrough login before public cup registration submit",
-      "description": "As a shooter, I want cup registration to verify my SSI identity via passthrough login so another person cannot register or change squads using only my email address.",
+      "requirementId": "R90-TEST10",
+      "title": "Add Tier 3 Live-SSI upstream compatibility canary script and GitHub Actions workflow",
+      "description": "As a maintainer, I want a scheduled and on-demand read-only Live-SSI canary check that verifies SSI login, GraphQL schema (me + NordicSquadNode), and /groups/25874/ HTML scraping so upstream SSI changes are detected immediately.",
       "acceptanceCriteria": [
-        "Require SSI credential verification / authenticated session context in registration submit flow",
-        "Update RegisterPage.jsx and registration.test.js to cover authenticated registration submission",
-        "Mark AUTH10 and R76-AUTH10 as Implemented in docs/requirements/requirements.md and docs/requirements/release-7.6.md",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Create scoring-proxy/test/e2e/live-ssi-canary.js exporting runLiveSsiCanary({ email, password, apiKey, groupId }) performing read-only checks: (1) ssiLogin web session, (2) GraphQL token_auth + { me { email first_name last_name } }, (3) GraphQL events query with ... on NordicSquadNode fragment, and (4) ssiGetGroupMembers(groupId, cookies) verifying at least one admin member is parsed",
+        "Create .github/workflows/ssi-canary.yml with workflow_dispatch and weekly schedule triggers running node scoring-proxy/test/e2e/live-ssi-canary.js",
+        "Add unit tests in scoring-proxy/test/live-ssi-canary.test.js testing runLiveSsiCanary against mocked SSI responses and mark TEST10 / R90-TEST10 as Implemented in docs/requirements/",
+        "scoring-proxy lint and tests pass (npm run lint && npm test) and scoring-ui lint and build pass (npm run lint && npm run build)"
       ],
       "priority": 16,
       "passes": true,
-      "notes": "Implemented SSI session and passthrough password verification in routes/registration.js and RegisterPage.jsx with unit test in registration.test.js."
+      "notes": "Created scoring-proxy/test/e2e/live-ssi-canary.js and .github/workflows/ssi-canary.yml with unit tests."
     },
     {
       "id": "US-017",
-      "requirementId": "TS13",
-      "title": "Replace small up/down arrows in Tablet Scoring shooter list with drag-and-drop handle",
-      "description": "As a range officer using Tablet Scoring (#/scoring-tablet), I want to reorder shooters in the squad list using drag-and-drop via a dedicated drag handle instead of tiny up/down arrows so that I can match firing-line order without accidental position flips when tapping a shooter to score.",
+      "requirementId": "R90-LOG2",
+      "title": "Fix audit log JSON format so Render does not classify successful LOGIN_SUCCESS / SSI_OPERATION events as errors",
+      "description": "As an operator viewing Render logs, I want successful audit log lines (e.g. LOGIN_SUCCESS with success: true) to include level: 'info' and omit 'error': null so Render's log parser does not mark them with a red error icon.",
       "acceptanceCriteria": [
-        "Remove the small ▲/▼ arrow buttons from TabletShooterSidebar in scoring-ui/src/components/TabletScoringPanels.jsx",
-        "Implement touch- and pointer-friendly drag-and-drop reordering in TabletShooterSidebar / TabletScoringView using a dedicated drag handle (grip icon, ≥44x44px touch target) and/or drag threshold so tapping the shooter row selects the shooter without triggering a reorder",
-        "Ensure keyboard accessibility for reordering on the drag handle (e.g., ArrowUp/ArrowDown or Space+arrows) and visual feedback for the dragged item and drop target",
-        "Add component tests in scoring-ui/src/test/ verifying that clicking a shooter row selects the shooter without reordering, and dragging/reordering via the handle updates shooter order via onShootersReorder",
-        "Mark TS13 as Implemented in docs/requirements/requirements.md",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Update logAudit and auditMutation in scoring-proxy/lib/session/audit.js to include level: entry.success ? 'info' : 'error' and omit null error/errorCode fields when serializing JSON log lines in production (and use console.error only when entry.success === false)",
+        "Add unit test in scoring-proxy/test/session/reliability-and-perf.test.js verifying that successful logAudit/auditLogin JSON serialization has level='info' and does not contain '\"error\":' or '\"errorCode\":'",
+        "Mark LOG2 / R90-LOG2 as Implemented in docs/requirements/requirements.md and docs/requirements/release-9.0-gun-inventory.md",
+        "scoring-proxy lint and tests pass (npm run lint && npm test)"
       ],
       "priority": 17,
       "passes": true,
-      "notes": "Replaced ▲/▼ buttons with a 44x44px drag handle supporting mouse/touch drag-and-drop and keyboard reordering in TabletShooterSidebar."
+      "notes": "Added level: 'info' | 'error' and omitted null error/errorCode keys in audit.js."
     },
     {
       "id": "US-018",
-      "requirementId": "R76-TD6",
-      "title": "Create local mock SSI upstream server and Playwright E2E harness",
-      "description": "As a developer, I want a local mock SSI HTTP server (serving GraphQL and HTML scraping fixtures) and Playwright test runner configured so E2E UAT tests run deterministically offline and in CI.",
+      "requirementId": "R91-SSI1",
+      "title": "Eliminate 11-query Promise.all burst in GET /api/v1/scoring/matches and failing status query in GET /api/v1/scoring/cups",
+      "description": "As an SSI API key administrator, I want match and cup searches to use a single valid GraphQL query per search (with short-TTL caching) instead of firing an 11-query parallel burst or a guaranteed-failing status argument.",
       "acceptanceCriteria": [
-        "Create mock SSI upstream server supporting GraphQL auth/cup/match/competitor queries and HTML login/scoring/participant endpoints using existing fixtures",
-        "Configure Playwright (playwright.config.js) with mobile (390x844) and tablet landscape (1024x768) projects starting scoring-proxy pointed at mock SSI_BASE_URL",
-        "Verify a baseline smoke E2E test loads #/ and navigates to #/privacy and #/terms",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Update GET /api/v1/scoring/cups in scoring-proxy/routes/scoring.js to query SEARCH_CUPS_FALLBACK_QUERY directly without first sending the unsupported status: 'on' GraphQL argument, and filter c.status === 'on' in Node.js",
+        "Update buildMatchSearchWindows / GET /api/v1/scoring/matches in scoring-proxy/lib/services/scoring-service.js and routes/scoring.js to execute a single bounded GraphQL query (defaulting to -12 months..+12 months, or optional after/before query params) with a 60s in-memory cache instead of firing 11 parallel Promise.all queries",
+        "Update unit tests in scoring-proxy/test/scoring.test.js and mark R91-SSI1 and R91-SSI2 as Implemented in docs/requirements/requirements.md",
+        "scoring-proxy lint and tests pass (npm run lint && npm test)"
       ],
       "priority": 18,
       "passes": true,
-      "notes": "Created mock-ssi-server.js, start-e2e-servers.js, playwright.config.js, and smoke.spec.js."
+      "notes": "Replaced 11-window Promise.all burst with single bounded query + 60s cache in GET /matches and removed failing status query in GET /cups."
     },
     {
       "id": "US-019",
-      "requirementId": "R76-TD6",
-      "title": "Automate AUTH-UAT-01..08 authentication & session lifecycle E2E tests",
-      "description": "As a QA/developer, I want AUTH-UAT-01 through AUTH-UAT-08 from docs/Implementation/authentication-uat-test-plan.md automated in Playwright.",
+      "requirementId": "R91-SSI3",
+      "title": "Eliminate redundant per-match ssiFindCompetitorInMatch GraphQL queries in routes/management.js and deduplicate getAdminSession()",
+      "description": "As a cup manager, I want squad moves and DNS actions to reuse the competitor IDs already returned by the Cup GraphQL query instead of firing 3 extra GraphQL queries per click, and deduplicate concurrent getAdminSession() logins.",
       "acceptanceCriteria": [
-        "Implement Playwright E2E tests for AUTH-UAT-01 (fresh login), AUTH-UAT-02 (reload with valid session without login flash), AUTH-UAT-03 (reload without session), AUTH-UAT-04 (remember-me prefill without auto-login), AUTH-UAT-05/06 (session expiry banner and state restore on re-login), AUTH-UAT-07 (scope mismatch isolation between scoring and manage), and AUTH-UAT-08 (logout persistence)",
-        "All AUTH-UAT Playwright tests pass headlessly",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Add findMatchParticipantIdFromCupEvent(match, shooterName, email) in scoring-proxy/lib/services/cup-manage.js and use it in routes/management.js (fix-squad, set-dns, undo-dns) before falling back to ssiFindCompetitorInMatch",
+        "Add single-flight in-flight promise deduplication to getAdminSession() in scoring-proxy/server.js so concurrent requests do not trigger parallel ssiLogin / token_auth calls",
+        "Add unit tests in scoring-proxy/test/cup-manage.test.js and mark R91-SSI3 as Implemented in docs/requirements/requirements.md",
+        "scoring-proxy lint and tests pass (npm run lint && npm test)"
       ],
       "priority": 19,
       "passes": true,
-      "notes": "Automated AUTH-UAT-01..08 in scoring-ui/e2e/auth-uat.spec.js."
+      "notes": "Implemented findMatchParticipantIdFromCupEvent in cup-manage.js and single-flight adminSessionInFlight lock in server.js."
     },
     {
       "id": "US-020",
-      "requirementId": "R76-TD6",
-      "title": "Automate Mobile and Tablet Scoring UAT E2E flows",
-      "description": "As a range officer, I want mobile (#/scoring) and tablet (#/scoring-tablet) scoring workflows verified end-to-end in Playwright.",
+      "requirementId": "R91-SSI4",
+      "title": "Add slow-query warning telemetry (>2000ms) in ssiGraphQL and test guard banning deprecated scorecards fields",
+      "description": "As a maintainer, I want ssiGraphQL to log a warning whenever a query takes over 2000ms and an automated test ensuring no GraphQL query in scoring-proxy uses deprecated EventInterface/CompetitorInterface scorecards fields.",
       "acceptanceCriteria": [
-        "Implement Playwright E2E tests for mobile scoring (cup search -> match -> squad -> series scoring -> 2x double series -> save & next shooter)",
-        "Implement Playwright E2E tests for tablet scoring (3-column layout, shooter drag-and-drop reorder handle, score pad tap, double-tap deletion, completed match 'cp' read-only lock, and local score preservation across re-login)",
-        "All scoring Playwright E2E tests pass",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Measure request duration in ssiGraphQL (scoring-proxy/lib/ssi-core/graphql.js) and emit log.warn('[ssi-graphql] Slow GraphQL query (>2000ms)') when durationMs > 2000",
+        "Add an automated test in scoring-proxy/test/ssi-core-client.test.js scanning scoring-proxy routes/services/ssi-core files to verify no GraphQL query uses deprecated EventInterface.scorecards, CompetitorInterface.scorecards, or event { stages { scorecards } }",
+        "Mark R91-SSI4 as Implemented in docs/requirements/requirements.md",
+        "scoring-proxy lint and tests pass (npm run lint && npm test)"
       ],
       "priority": 20,
       "passes": true,
-      "notes": "Automated mobile and tablet scoring UAT flows in scoring-mobile.spec.js and scoring-tablet.spec.js."
+      "notes": "Added >2000ms slow query warning in graphql.js and deprecated scorecards guard test in ssi-core-client.test.js."
     },
     {
       "id": "US-021",
-      "requirementId": "R76-TD6",
-      "title": "Automate Registration and Cup Management E2E flows and wire CI gate",
-      "description": "As a cup administrator, I want public registration (#/register) and cup management (#/manage) E2E flows automated in Playwright and wired into GitHub Actions CI.",
+      "requirementId": "R91-PERF1",
+      "title": "Add write-through in-memory cache for gun-inventory.json and ammo-inventory.json",
+      "description": "As a developer, I want readGunInventoryData() and readAmmoInventoryData() to serve from a write-through memory cache (invalidated when file path or mtime changes) to avoid synchronous disk reads on every GET request.",
       "acceptanceCriteria": [
-        "Implement Playwright E2E tests for #/register (math captcha -> cup selection -> squad selection -> email/password submit) and #/manage (squadding overview, SquadPickerSheet full-squad disabled guard, and DNS confirmation dialog)",
-        "Add Playwright E2E step to .github/workflows/ci-deploy.yml",
-        "Mark TEST6 and R76-TD6 as Implemented in docs/requirements/requirements.md and docs/requirements/release-7.6.md",
-        "scoring-proxy tests pass (npm test)",
-        "scoring-ui lint, build, and tests pass (npm run lint && npm run build && npm test)"
+        "Implement write-through in-memory caching in scoring-proxy/lib/services/ammo-inventory-service.js (keyed by filePath and statSync mtimeMs, updated on atomicWriteJson)",
+        "Verify all existing gun and ammo unit/route tests in scoring-proxy/test/gun-inventory.test.js pass and mark R91-PERF1 as Implemented in docs/requirements/requirements.md",
+        "scoring-proxy lint and tests pass (npm run lint && npm test)"
       ],
       "priority": 21,
       "passes": true,
-      "notes": "Automated registration and management E2E flows in register-and-manage.spec.js and wired Playwright E2E gate into ci-deploy.yml."
+      "notes": "Implemented write-through jsonFileCache in ammo-inventory-service.js."
+    },
+    {
+      "id": "US-022",
+      "requirementId": "R91-UI1",
+      "title": "Fix CupSearch.jsx dynamic import warning and add React.lazy route code-splitting in main.jsx",
+      "description": "As a mobile user, I want secondary pages lazy-loaded via React.lazy + Suspense and the Vite mixed dynamic/static import warning on api.js resolved.",
+      "acceptanceCriteria": [
+        "Replace dynamic import('../api') in scoring-ui/src/components/CupSearch.jsx with a static import so Vite builds without the mixed import chunk warning",
+        "Use React.lazy() and <Suspense> for secondary page routes in scoring-ui/src/main.jsx",
+        "Mark R91-UI1 as Implemented in docs/requirements/requirements.md",
+        "scoring-ui lint and build pass (npm run lint && npm run build)"
+      ],
+      "priority": 22,
+      "passes": true,
+      "notes": "Fixed static import in CupSearch.jsx and added React.lazy + Suspense in main.jsx."
+    },
+    {
+      "id": "US-023",
+      "requirementId": "R91-DOC1",
+      "title": "Sync AGENTS.md, copilot-instructions.md, ssi-api-limitations.md, and architecture-review.md with R90 & SSI GraphQL rules",
+      "description": "As a developer or AI agent, I want the repository architecture docs and agent guidelines updated with SSI's GraphQL API rules and the Release 8.0 / 9.0 module structure.",
+      "acceptanceCriteria": [
+        "Update AGENTS.md and .github/copilot-instructions.md in sync with the SSI GraphQL API rules (mandatory x-api-key, no parallel query bursts, deprecated scorecards/scorecards_count on EventInterface/CompetitorInterface, non-competition with SSI monetization) and Release 9.0 files (routes/guns.js, gun-inventory-service.js, ammo-inventory-service.js, GunsPage.jsx, AmmoPage.jsx)",
+        "Update .github/agents/ssi-api-limitations.md and docs/design/architecture-review.md to reflect current line counts, domain-split ssi-core modules, and R90 persistent disk architecture",
+        "Mark R91-DOC1 as Implemented in docs/requirements/requirements.md and add Release 9.1 entry in docs/RELEASE-NOTES.md",
+        "scoring-proxy lint and scoring-ui lint pass"
+      ],
+      "priority": 23,
+      "passes": true,
+      "notes": "Updated AGENTS.md, copilot-instructions.md, ssi-api-limitations.md, and delegated follow-up refactoring issues to GitHub Copilot."
     }
   ]
 }

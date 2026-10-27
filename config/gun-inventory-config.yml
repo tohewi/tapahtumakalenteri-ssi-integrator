@@ -1,0 +1,15 @@
+# ============================================================
+# TurRes Gun Inventory Configuration (Release 9.0 — R90)
+# ============================================================
+
+accessControl:
+  # SSI Group ID whose admins have access to gun inventory & loaner management
+  # Default: https://shootnscoreit.com/groups/25874/
+  # Can also be overridden via SSI_GUN_INVENTORY_GROUP_ID environment variable
+  groupId: "25874"
+  groupUrl: "https://shootnscoreit.com/groups/25874/"
+  requiredRole: "admin"
+
+defaults:
+  # Typical Kupittaa Cup cartridge allocation (0 if shooter has ammunition permit)
+  cartridgesGiven: 100

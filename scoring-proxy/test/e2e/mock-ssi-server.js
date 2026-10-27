@@ -350,6 +350,30 @@ export function startMockSsiServer(port = 4101) {
       return res.end()
     }
 
+    if (url.pathname.match(/^\/groups\/\d+\/$/)) {
+      res.writeHead(200, { 'Content-Type': 'text/html' })
+      return res.end(`
+        <table>
+          <tr>
+            <td><input type="checkbox" value="501" /></td>
+            <td>Edit</td>
+            <td>Test Manager</td>
+            <td>manager@example.com</td>
+            <td>MD</td>
+            <td>admin</td>
+          </tr>
+          <tr>
+            <td><input type="checkbox" value="502" /></td>
+            <td>Edit</td>
+            <td>Admin User</td>
+            <td>admin@example.com</td>
+            <td>QM</td>
+            <td>admin</td>
+          </tr>
+        </table>
+      `)
+    }
+
     res.writeHead(200, { 'Content-Type': 'text/html' })
     res.end('<html><body>OK</body></html>')
   })

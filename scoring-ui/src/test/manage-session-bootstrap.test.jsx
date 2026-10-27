@@ -52,7 +52,9 @@ describe('Manage session bootstrap', () => {
 
     expect(await screen.findByText('Ei cupeja')).toBeInTheDocument()
     expect(screen.queryByPlaceholderText('your@email.com')).not.toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledWith('/api/manage/cups', { credentials: 'include' })
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/manage/cups', { credentials: 'include' })
+    })
     expect(api.login).not.toHaveBeenCalled()
     expect(api.logout).not.toHaveBeenCalled()
   })

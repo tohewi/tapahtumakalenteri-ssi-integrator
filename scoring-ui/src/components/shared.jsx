@@ -77,13 +77,24 @@ export function BackButton({ label, onClick }) {
   )
 }
 
-export function AppHeader({ title, subtitle, backLabel, onBack, children }) {
+export function AppHeader({ title, subtitle, backLabel, onBack, onLogout, logoutLabel = 'Kirjaudu ulos', children }) {
   return (
     <div className="bg-gradient-to-r from-blue-700 to-blue-900 text-white">
       {backLabel && onBack && <BackButton label={backLabel} onClick={onBack} />}
-      <div className="px-4 py-3">
-        <h1 className="text-xl font-bold">{title}</h1>
-        {subtitle && <p className="text-blue-200 text-sm mt-0.5">{subtitle}</p>}
+      <div className="px-4 py-3 flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold">{title}</h1>
+          {subtitle && <p className="text-blue-200 text-sm mt-0.5">{subtitle}</p>}
+        </div>
+        {onLogout && (
+          <button
+            type="button"
+            onClick={onLogout}
+            className="text-blue-200 text-sm active:text-white hover:text-white shrink-0"
+          >
+            {logoutLabel}
+          </button>
+        )}
       </div>
       {children}
     </div>

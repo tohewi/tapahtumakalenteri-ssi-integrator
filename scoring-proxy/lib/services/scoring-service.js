@@ -67,21 +67,13 @@ export function buildScoreFormData({ scores, csrfToken, warning, dqReason, comme
   return formData
 }
 
-export function buildMatchSearchWindows(now = new Date()) {
-  const windows = []
-  const futureEnd = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())
-  windows.push({ after: now.toISOString().split('T')[0], before: futureEnd.toISOString().split('T')[0] })
-  for (let i = 0; i < 10; i++) {
-    const end = new Date(now)
-    end.setMonth(end.getMonth() - i * 6)
-    const start = new Date(now)
-    start.setMonth(start.getMonth() - (i + 1) * 6)
-    windows.push({
-      after: start.toISOString().split('T')[0],
-      before: end.toISOString().split('T')[0],
-    })
-  }
-  return windows
+export function buildMatchSearchWindows(now = new Date(), { after = null, before = null } = {}) {
+  const pastStart = new Date(Date.UTC(now.getUTCFullYear() - 1, now.getUTCMonth(), now.getUTCDate()))
+  const futureEnd = new Date(Date.UTC(now.getUTCFullYear() + 1, now.getUTCMonth(), now.getUTCDate()))
+  return [{
+    after: after || pastStart.toISOString().split('T')[0],
+    before: before || futureEnd.toISOString().split('T')[0],
+  }]
 }
 
 export function mergeAndFormatEvents(results) {

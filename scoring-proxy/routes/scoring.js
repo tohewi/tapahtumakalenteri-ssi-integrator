@@ -7,7 +7,6 @@ import {
   getTodayStart,
   startsOnOrAfterDate,
   sortByProximityToNow,
-  isUnsupportedStatusFilterError,
   buildMatchSearchWindows,
   mergeAndFormatEvents,
   submitCompetitorScore,
@@ -21,24 +20,19 @@ const SEARCH_CUPS_DEBUG_QUERY = `
   }
 `
 
-const SEARCH_CUPS_FILTERED_QUERY = `
-  query SearchCups($search: String!, $startsAfter: String!, $status: String!) {
-    events(search: $search, starts_after: $startsAfter, status: $status) {
-      id name starts status get_content_type_key
-    }
-  }
-`
-
-const SEARCH_CUPS_FALLBACK_QUERY = `
-  query SearchCupsFallback($search: String!, $startsAfter: String!) {
+const SEARCH_CUPS_QUERY = `
+  query SearchCups($search: String!, $startsAfter: String!) {
     events(search: $search, starts_after: $startsAfter) {
       id name starts status get_content_type_key
     }
   }
 `
 
+const MATCH_SEARCH_CACHE_TTL_MS = 60 * 1000
+
 export function createScoringRouter({ requireAuth, graphqlWithRefresh }) {
   const router = express.Router()
+  const matchSearchCache = new Map()
 
   router.get('/cups', requireAuth('scoring'), asyncHandler(async (req, res) => {
     const search = req.query.search
@@ -48,31 +42,12 @@ export function createScoringRouter({ requireAuth, graphqlWithRefresh }) {
     }
 
     const todayStart = getTodayStart()
-    let statusFilterFallback = false
-    let result
-
-    if (debugMode) {
-      result = await graphqlWithRefresh(req.ssiSession, SEARCH_CUPS_DEBUG_QUERY, { search })
-    } else {
-      try {
-        result = await graphqlWithRefresh(req.ssiSession, SEARCH_CUPS_FILTERED_QUERY, {
-          search,
-          startsAfter: todayStart.toISOString(),
-          status: 'on',
-        })
-      } catch (err) {
-        if (!isUnsupportedStatusFilterError(err)) {
-          throw err
-        }
-
-        statusFilterFallback = true
-        log.warn('[scoring] events(status:) unsupported by SSI GraphQL, applying status filter locally')
-        result = await graphqlWithRefresh(req.ssiSession, SEARCH_CUPS_FALLBACK_QUERY, {
+    const result = debugMode
+      ? await graphqlWithRefresh(req.ssiSession, SEARCH_CUPS_DEBUG_QUERY, { search })
+      : await graphqlWithRefresh(req.ssiSession, SEARCH_CUPS_QUERY, {
           search,
           startsAfter: todayStart.toISOString(),
         })
-      }
-    }
 
     const rawCups = (result.events || [])
       .filter(e => e.get_content_type_key === 136)
@@ -88,11 +63,7 @@ export function createScoringRouter({ requireAuth, graphqlWithRefresh }) {
     const activeUpcoming = upcomingByDate
       .filter(c => c.status === 'on')
 
-    const filteredCups = statusFilterFallback
-      ? activeUpcoming
-      : upcomingByDate
-
-    const cups = (debugMode ? rawCups : filteredCups)
+    const cups = (debugMode ? rawCups : activeUpcoming)
       .sort(sortByProximityToNow())
 
     if (debugMode) {
@@ -282,22 +253,35 @@ export function createScoringRouter({ requireAuth, graphqlWithRefresh }) {
       }
     `
 
-    const windows = buildMatchSearchWindows()
-    const results = await Promise.all(
-      windows.map(w =>
-        graphqlWithRefresh(req.ssiSession, QUERY, {
+    const windows = buildMatchSearchWindows(new Date(), {
+      after: req.query.after || null,
+      before: req.query.before || null,
+    })
+    const win = windows[0]
+    const cacheKey = `${search.trim().toLowerCase()}:${win.after}:${win.before}`
+    const cached = matchSearchCache.get(cacheKey)
+    if (cached && Date.now() - cached.cachedAt < MATCH_SEARCH_CACHE_TTL_MS) {
+      return res.json({ matches: cached.matches })
+    }
+
+    const results = []
+    for (const w of windows) {
+      try {
+        const r = await graphqlWithRefresh(req.ssiSession, QUERY, {
           search,
           after: w.after,
           before: w.before,
-        }).catch(err => {
-          log.debug(`[search] Window ${w.after}→${w.before} failed: ${err.message}`)
-          return { events: [] }
         })
-      )
-    )
+        results.push(r)
+      } catch (err) {
+        log.debug(`[search] Window ${w.after}→${w.before} failed: ${err.message}`)
+        results.push({ events: [] })
+      }
+    }
 
     const matches = mergeAndFormatEvents(results)
-    log.debug(`[search] "${search}": ${windows.length} windows → ${matches.length} events`)
+    matchSearchCache.set(cacheKey, { cachedAt: Date.now(), matches })
+    log.debug(`[search] "${search}": ${windows.length} window(s) → ${matches.length} events`)
 
     res.json({ matches })
   }))

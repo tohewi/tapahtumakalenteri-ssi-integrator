@@ -3,14 +3,12 @@
 //
 // Logs all authentication events, session operations, and
 // SSI impersonation actions with structured JSON output.
-// Optionally stores recent entries in Redis for retrieval.
 // ============================================================
 
 import crypto from 'node:crypto'
 
 const IS_PROD = process.env.NODE_ENV === 'production'
 
-// Event types for categorization
 export const AuditEvent = {
   LOGIN_SUCCESS: 'LOGIN_SUCCESS',
   LOGIN_FAILURE: 'LOGIN_FAILURE',
@@ -25,28 +23,49 @@ export const AuditEvent = {
   RATE_LIMIT_HIT: 'RATE_LIMIT_HIT',
 }
 
-// Log an audit event
+export function serializeAuditLogJson(entry) {
+  const payload = {
+    level: entry.level,
+    id: entry.id,
+    timestamp: entry.timestamp,
+    eventType: entry.eventType,
+    user: entry.user,
+    scope: entry.scope,
+    operation: entry.operation,
+    success: entry.success,
+    duration: entry.duration,
+    ip: entry.ip,
+    ...(entry.error ? { error: entry.error } : {}),
+    ...(entry.details ? { details: entry.details } : {}),
+  }
+  return JSON.stringify(payload)
+}
+
 export function logAudit(eventType, data = {}) {
+  const isSuccess = data.success !== undefined ? Boolean(data.success) : true
   const entry = {
+    level: isSuccess ? 'info' : 'error',
     id: crypto.randomUUID(),
     timestamp: new Date().toISOString(),
     eventType,
     user: data.user || null,
     scope: data.scope || null,
     operation: data.operation || null,
-    success: data.success !== undefined ? data.success : true,
+    success: isSuccess,
     duration: data.duration || null,
     ip: data.ip || null,
-    error: data.error || null,
+    ...(data.error ? { error: data.error } : {}),
     details: data.details || null,
   }
 
-  // Always log to console as structured JSON
   if (IS_PROD) {
-    // Production: compact JSON (one line per entry for log aggregation)
-    console.log(JSON.stringify(entry))
+    const jsonLine = serializeAuditLogJson(entry)
+    if (isSuccess) {
+      console.log(jsonLine)
+    } else {
+      console.error(jsonLine)
+    }
   } else {
-    // Development: readable format
     const icon = entry.success ? '✓' : '✗'
     const userStr = entry.user ? ` [${entry.user}]` : ''
     const opStr = entry.operation ? ` ${entry.operation}` : ''
@@ -58,7 +77,6 @@ export function logAudit(eventType, data = {}) {
   return entry
 }
 
-// Convenience wrappers for common audit events
 export function auditLogin(user, ip, success, error = null) {
   return logAudit(success ? AuditEvent.LOGIN_SUCCESS : AuditEvent.LOGIN_FAILURE, {
     user, ip, success, error,
@@ -109,7 +127,7 @@ export function auditMutation({
     executionIdentityEmail: executionIdentityEmail || null,
     targetEntity,
     result,
-    errorCode,
+    ...(errorCode ? { errorCode } : {}),
   }
   return logAudit(
     result === 'success' ? AuditEvent.SSI_OPERATION : AuditEvent.SSI_OPERATION_FAILURE,
@@ -117,8 +135,45 @@ export function auditMutation({
       user: initiatingUserEmail || initiatingUserId || null,
       operation: `${operation}:${endpoint}`,
       success: result === 'success',
-      error: errorCode,
+      ...(errorCode ? { error: errorCode } : {}),
       details,
     }
   )
+}
+
+export function createAuditMiddleware() {
+  return (req, res, next) => {
+    const startTime = Date.now()
+
+    res.on('finish', () => {
+      const duration = Date.now() - startTime
+      const isMutation = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)
+      const isSSIPath = req.path.includes('/scoring') ||
+                        req.path.includes('/manage') ||
+                        req.path.includes('/register') ||
+                        req.path.includes('/staffing') ||
+                        req.path.includes('/guns')
+
+      if (isMutation && isSSIPath) {
+        const user = req._v7Session?.userId || req.ssiSession?.userId || req.ssiSession?._userId || null
+        const ip = req.ip || req.socket?.remoteAddress || 'unknown'
+        const success = res.statusCode >= 200 && res.statusCode < 400
+
+        logAudit(
+          success ? AuditEvent.SSI_OPERATION : AuditEvent.SSI_OPERATION_FAILURE,
+          {
+            user,
+            scope: req._v7Session?.scope || null,
+            operation: `${req.method} ${req.path}`,
+            success,
+            duration,
+            ip,
+            ...(success ? {} : { error: `HTTP ${res.statusCode}` }),
+          }
+        )
+      }
+    })
+
+    next()
+  }
 }

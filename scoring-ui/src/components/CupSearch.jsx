@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { formatDateShort, isToday, isFuture, parseDateLocal } from './shared'
+import { searchCups } from '../api'
 import fi from '../i18n'
 
 function isDebugModeEnabled() {
@@ -40,7 +41,6 @@ export default function CupSearch({ onSelectCup, loading, onLogout }) {
     setError(null)
     setSearched(false)
     try {
-      const { searchCups } = await import('../api.js')
       const results = await searchCups(search, { debug: debugMode })
       setCups(results)
       setSearched(true)
