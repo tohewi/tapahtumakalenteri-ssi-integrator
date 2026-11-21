@@ -520,6 +520,12 @@ GQL-HF7 validation (2026-09-11): 239 backend tests, including 12 CSRF regression
 | TS12 | **Long-Run Regression Coverage**: Automated tests must simulate long-duration scoring behavior (~3 hours) and verify no forced session drop / local-score overwrite regressions in middleware and tablet UI remount flow | ✅ Implemented |
 | TS13 | **Drag-and-Drop Shooter Reordering with Dedicated Drag Handle**: Replace the tiny up/down (`▲` / `▼`) buttons in the Tablet Scoring shooter list (`TabletShooterSidebar` in `TabletScoringPanels.jsx`) with touch- and mouse-friendly drag-and-drop reordering to match shooter order at the firing line. Must use a dedicated drag handle (or intentional hold/drag activation threshold) isolated from row selection so tapping a shooter to score never accidentally reorders their position. | ✅ Implemented (`TabletShooterSidebar` in `TabletScoringPanels.jsx`) |
 
+### Tablet Competitor Visibility Follow-up (TS14)
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| TS14 | **High-Contrast Current Competitor**: Use a dark-blue selected competitor row with white name, division, points, shot count, and drag handle. Show the selected competitor name to the right of “Tuloskortti” on the existing title line; truncate long names without increasing header height, row size, panel widths, or viewport dimensions. | ✅ Implemented/Ready |
+
 ### Rationale for TS9 (Completed Match Protection)
 
 **Business Rule**: Completed matches ('cp' status) indicate scoring is finalized and approved by shooters with no protests. Once a match reaches 'cp' status, scores become official competition results that must be protected from accidental or unauthorized modification.
@@ -561,7 +567,7 @@ Decouples public Kupittaa Cup registration (`#/register`) from immediate SSI acc
 - **Release 7.7** (QR Code Login for Scoring): 6 requirements — 6 ✅ (QR1–QR6). **7.7.1 hotfix**: 4 fixes ✅
 - **Release 7.8** (Induction Wait List): 32 requirements — 32 ✅ on branch `copilot/vscode-mnw87b09-v5g9` (pending merge to `main`)
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes ✅ (GQL-HF1–GQL-HF3). **7.9.2 hotfix**: 2 fixes ✅ (GQL-HF4, GQL-HF7). **7.9.3 hotfix**: 1 fix 📋 (GQL-HF5). **7.9.4**: 1 requirement ⬚ (GQL-HF6 — iCal calendar attachment)
-- **Release 8.0** (Tablet Scoring UI): 12 requirements — 12 ✅ (TS1–TS12)
+- **Release 8.0** (Tablet Scoring UI): 14 requirements — 14 ✅ (TS1–TS14)
 - **Release 10.0** (Public Registration Buffer): 📋 Specified & Loop 1 store implemented on `origin/R100-feature-registration-buffer-*`
 
 > **Note:** The multi-tenant **Match Management Platform** (formerly listed as Release 8.0/8.1 roadmap `MP1–MP7`) has been moved to its own repository: `tohewi/match-manager`.

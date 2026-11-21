@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import t from '../i18n'
 import TabletScoringView from '../components/TabletScoringView'
 import * as api from '../api'
 
@@ -62,6 +63,45 @@ function renderTabletScoringView(overrides = {}) {
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
+})
+
+describe('TabletScoringView — competitor visibility', () => {
+  it('uses a high-contrast selected row and moves the highlight on selection', async () => {
+    renderTabletScoringView({ match: { id: 1850, name: 'Pika', status: 'cp' } })
+
+    const first = screen.getByRole('option', { selected: true })
+    expect(first).toHaveClass('bg-blue-800', 'border-blue-950')
+    expect(within(first).getByText('1. Matti Malli')).toHaveClass('text-white')
+    expect(within(first).getByText('Pistooli')).toHaveClass('text-white')
+    expect(within(first).getByText('0')).toHaveClass('text-white')
+    expect(within(first).getByText('0/30')).toHaveClass('text-white')
+    expect(within(first).getByRole('button')).toHaveClass('text-white')
+
+    fireEvent.click(screen.getByRole('option', { name: /Teppo Testi/ }))
+    await waitFor(() => expect(first).not.toHaveClass('bg-blue-800'))
+    expect(screen.getByRole('option', { selected: true })).toHaveClass('bg-blue-800')
+  })
+
+  it('shows the current competitor beside the title without wrapping or widening the panel', async () => {
+    const longName = 'Teppo Testi Very Long Competitor Name'
+    renderTabletScoringView({
+      match: { id: 1850, name: 'Pika', status: 'cp' },
+      squad: { id: 4143, name: 'Squad 1', shooters: [SHOOTERS[0], { ...SHOOTERS[1], name: longName }] },
+    })
+
+    const heading = screen.getByRole('heading', { name: `${t.scoreTrack} Matti Malli` })
+    expect(heading).toHaveClass('flex', 'min-w-0')
+    expect(within(heading).getByText(t.scoreTrack)).toHaveClass('shrink-0')
+    fireEvent.click(screen.getByRole('option', { name: /Teppo Testi/ }))
+    await waitFor(() => expect(heading).toHaveAccessibleName(`${t.scoreTrack} ${longName}`))
+    expect(within(heading).getByText(longName)).toHaveClass('truncate', 'min-w-0')
+    expect(within(heading).getByText(longName)).toHaveAttribute('title', longName)
+  })
+
+  it('keeps the title alone when the squad has no competitors', () => {
+    renderTabletScoringView({ squad: { id: 4143, name: 'Squad 1', shooters: [] } })
+    expect(screen.getByRole('heading', { name: t.scoreTrack })).toBeInTheDocument()
+  })
 })
 
 describe('TabletScoringView — session recovery score safety', () => {

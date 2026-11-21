@@ -310,6 +310,15 @@ Browser refresh on Manage previously reset its local authentication state to log
 
 Tablet scoring UI for range officers — enter competition scores on a tablet or desktop during Kupittaa CUP events. Includes session reliability fixes that benefit all scoring modes.
 
+### Competitor Visibility Follow-up (2026-11-21)
+
+- **Overview:** Make the currently scored competitor easier to identify on tablets in poor lighting.
+- **New feature:** Show the current competitor name immediately to the right of “Tuloskortti”; long names truncate on the same line with the full name available as a title.
+- **Bug fix:** Replace the pale selected-row highlight with dark blue and white text for the name, division, points, shot count, and drag handle. Keep the selected-row contrast when a reorder drop target is highlighted.
+- **Layout:** Existing header padding, font size, row dimensions, panel widths, and viewport sizing remain unchanged.
+- **Requirement:** TS14 — Implemented/Ready (not yet deployed).
+- **Test status:** All 221 frontend tests pass, including three competitor-visibility regressions; the two original failures were reproduced before fixing the UI. Production build and targeted ESLint pass. Existing mixed static/dynamic API import build warning remains. Physical Android tablet / poor-lighting acceptance check remains manual.
+
 ### New: Tablet Scoring (`#/scoring-tablet`)
 
 - **3-column layout**: Shooter list (left), score card (center), number pad (right) — optimized for landscape tablets

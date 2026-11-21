@@ -201,9 +201,9 @@ export function TabletShooterSidebar({
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleShooterSelect(shooter) } }}
               className={`p-1.5 cursor-pointer transition-colors ${
                 isSelected
-                  ? 'bg-blue-50 border-l-4 border-blue-600'
+                  ? 'bg-blue-800 border-l-4 border-blue-950'
                   : 'hover:bg-gray-50 border-l-4 border-transparent'
-              } ${isDragging ? 'opacity-50' : ''} ${isDropTarget ? 'ring-2 ring-inset ring-blue-500 bg-blue-50/70' : ''}`}
+              } ${isDragging ? 'opacity-50' : ''} ${isDropTarget ? 'ring-2 ring-inset ring-blue-500' : ''}`}
             >
               <div className="flex items-center justify-between">
                 <button
@@ -218,7 +218,11 @@ export function TabletShooterSidebar({
                   onTouchEnd={(e) => { e.stopPropagation(); commitDrop(dragIdx, overIdx) }}
                   onClick={(e) => e.stopPropagation()}
                   onKeyDown={(e) => handleHandleKeyDown(e, shooterIdx)}
-                  className="w-11 h-11 flex items-center justify-center text-gray-400 hover:text-gray-600 active:text-blue-600 cursor-grab active:cursor-grabbing touch-none select-none shrink-0 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={`w-11 h-11 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none shrink-0 rounded-lg focus:outline-none focus:ring-2 ${
+                    isSelected
+                      ? 'text-white hover:bg-blue-900 active:bg-blue-950 focus:ring-white'
+                      : 'text-gray-400 hover:text-gray-600 active:text-blue-600 hover:bg-gray-100 focus:ring-blue-500'
+                  }`}
                 >
                   <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                     <circle cx="5" cy="3.5" r="1.3" />
@@ -231,19 +235,19 @@ export function TabletShooterSidebar({
                 </button>
                 <div className="flex-1 min-w-0 ml-1">
                   <div className={`text-xs font-medium truncate ${
-                    isSelected ? 'text-blue-900' : 'text-gray-900'
+                    isSelected ? 'text-white' : 'text-gray-900'
                   }`}>
                     {shooter.number}. {shooter.name}
                   </div>
-                  <div className="text-xs text-gray-500 truncate">{shooter.division}</div>
+                  <div className={`text-xs truncate ${isSelected ? 'text-white' : 'text-gray-500'}`}>{shooter.division}</div>
                 </div>
                 <div className="ml-2 text-right pr-1">
                   <div className={`text-sm font-bold ${
-                    isSelected ? 'text-blue-600' : 'text-gray-700'
+                    isSelected ? 'text-white' : 'text-gray-700'
                   }`}>
                     {shooterPoints}
                   </div>
-                  <div className="text-xs text-gray-400">
+                  <div className={`text-xs ${isSelected ? 'text-white' : 'text-gray-400'}`}>
                     {shooterShots}/{totalShotsInMatch}
                   </div>
                 </div>

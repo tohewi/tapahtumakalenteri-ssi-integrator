@@ -375,7 +375,14 @@ export default function TabletScoringView({
         {/* Center: Score track */}
         <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 min-w-0">
           <div className="p-2 bg-white border-b border-gray-200 flex-shrink-0">
-            <h3 className="font-semibold text-gray-700 text-xs">{t.scoreTrack}</h3>
+            <h3 className="font-semibold text-gray-700 text-xs flex items-center gap-2 min-w-0">
+              <span className="shrink-0">{t.scoreTrack}</span>{' '}
+              {selectedShooter && (
+                <span className="min-w-0 truncate font-bold text-blue-900" title={selectedShooter.name}>
+                  {selectedShooter.name}
+                </span>
+              )}
+            </h3>
           </div>
           
           {/* Save error message */}
