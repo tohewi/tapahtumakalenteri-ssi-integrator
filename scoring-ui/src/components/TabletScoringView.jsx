@@ -343,7 +343,7 @@ export default function TabletScoringView({
   const xCount = currentShooterScores ? getXCount(currentShooterScores) : 0
 
   return (
-    <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
+    <div className="h-screen supports-[height:100dvh]:h-dvh bg-gray-50 flex flex-col overflow-hidden">
       <TabletHeaderAndStats
         cup={cup}
         match={match}

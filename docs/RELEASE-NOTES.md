@@ -310,6 +310,23 @@ Browser refresh on Manage previously reset its local authentication state to log
 
 Tablet scoring UI for range officers — enter competition scores on a tablet or desktop during Kupittaa CUP events. Includes session reliability fixes that benefit all scoring modes.
 
+### Tablet Branch Dependency Security Follow-up (2026-11-21)
+
+- **Overview:** Resolve dependency audit findings alongside tablet fullscreen work (TS16).
+- **New features:** None; the existing manually registered service worker and installation manifest are unchanged.
+- **Security fixes:** Remove unused `vite-plugin-pwa` and its vulnerable Workbox/`glob` dependency chain (`GHSA-3g3m-2fjr-6pw4`). Update the remaining ESLint `minimatch` dependency from `10.2.4` to `11.0.8` (`GHSA-g3hv-75wg-m249`), published November 11; package-manager resolution used a November 14 cutoff. Existing dependency overrides and CI audit thresholds are unchanged.
+- **Requirements met:** TS16 — Implemented/Ready (not yet deployed).
+- **Test status:** Frontend audit reduced from four moderate findings to zero; backend audit also reports zero. All 228 frontend and 263 backend tests pass. Full frontend lint, production build, lockfile consistency (`npm ci --dry-run --ignore-scripts`), and diff checks pass. Existing mixed API import build warning remains.
+
+### Tablet Fullscreen Follow-up (2026-11-21)
+
+- **Overview:** Recover tablet screen space without depending on Edge toolbar auto-hide.
+- **New features:** Request document fullscreen directly on squad selection; provide a compact, accessible fullscreen toggle in the existing header. Browser exits update the control without forced reentry. Restored sessions can use the toggle without changing scores.
+- **Bug fixes:** Fit the scoring shell to dynamic viewport height, with a `100vh` fallback, so browser toolbar changes do not leave the shell sized to the wrong viewport.
+- **Compatibility:** Unsupported or denied fullscreen requests do not interrupt scoring. Automatic restoration and QR login do not attempt gesture-free fullscreen. Shared PWA display mode and orientation remain unchanged; a dedicated tablet installation is a follow-up.
+- **Requirements met:** TS15 — Implemented/Ready (not yet deployed).
+- **Test status:** All 228 frontend tests pass, including seven new fullscreen API, control, and squad-entry regressions. Production build and targeted ESLint pass; existing mixed API import build warning remains. Physical Lenovo tablet / Edge testing remains required for lock/unlock, app switching, rotation, browser Back, and actual toolbar visibility.
+
 ### Competitor Visibility Follow-up (2026-11-21)
 
 - **Overview:** Make the currently scored competitor easier to identify on tablets in poor lighting.
