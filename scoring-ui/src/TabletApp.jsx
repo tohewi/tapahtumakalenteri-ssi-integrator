@@ -8,6 +8,7 @@ import TabletScoringView from './components/TabletScoringView'
 import * as api from './api'
 import t from './i18n'
 import { log } from './log.js'
+import { requestTabletFullscreen } from './lib/fullscreen'
 
 // ============================================================
 // Scoring constants
@@ -341,6 +342,7 @@ export function TabletApp() {
   }
 
   const handleSquadSelected = async (squad) => {
+    void requestTabletFullscreen()
     setError(null)
     setLoading(true)
     try {

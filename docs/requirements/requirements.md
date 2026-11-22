@@ -526,6 +526,18 @@ GQL-HF7 validation (2026-09-11): 239 backend tests, including 12 CSRF regression
 |---|-------------|--------|
 | TS14 | **High-Contrast Current Competitor**: Use a dark-blue selected competitor row with white name, division, points, shot count, and drag handle. Show the selected competitor name to the right of “Tuloskortti” on the existing title line; truncate long names without increasing header height, row size, panel widths, or viewport dimensions. | ✅ Implemented/Ready |
 
+### Tablet Fullscreen Follow-up (TS15)
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| TS15 | **Gesture-Triggered Tablet Fullscreen**: Request document fullscreen with hidden browser navigation directly from squad selection, before asynchronous work. Provide an accessible compact enter/exit control in the existing header for restored sessions and recovery. Follow browser fullscreen changes without forcing reentry. Unsupported or rejected requests must never block scoring. Fit dynamic viewport height with a legacy fallback. Do not change the shared installation manifest or force fullscreen on automatic login, reload, or score taps. | ✅ Implemented/Ready |
+
+### Tablet Branch Dependency Security Follow-up (TS16)
+
+| # | Requirement | Status |
+|---|-------------|--------|
+| TS16 | **Dependency Vulnerability Remediation**: Resolve reported frontend dependency vulnerabilities without relaxing audit thresholds or security controls. Remove unused `vite-plugin-pwa` tooling while retaining the manually registered service worker and manifest; update the remaining `minimatch` dependency to a patched release published at least seven days earlier. Audit both applications and verify frontend lint/build/tests and backend tests. | ✅ Implemented/Ready |
+
 ### Rationale for TS9 (Completed Match Protection)
 
 **Business Rule**: Completed matches ('cp' status) indicate scoring is finalized and approved by shooters with no protests. Once a match reaches 'cp' status, scores become official competition results that must be protected from accidental or unauthorized modification.
@@ -567,7 +579,7 @@ Decouples public Kupittaa Cup registration (`#/register`) from immediate SSI acc
 - **Release 7.7** (QR Code Login for Scoring): 6 requirements — 6 ✅ (QR1–QR6). **7.7.1 hotfix**: 4 fixes ✅
 - **Release 7.8** (Induction Wait List): 32 requirements — 32 ✅ on branch `copilot/vscode-mnw87b09-v5g9` (pending merge to `main`)
 - **Release 7.9** (GraphQL Cup Management): 6 requirements — 0 ✅, 6 pending (GQL1–GQL6). **7.9.1 hotfix**: 3 fixes ✅ (GQL-HF1–GQL-HF3). **7.9.2 hotfix**: 2 fixes ✅ (GQL-HF4, GQL-HF7). **7.9.3 hotfix**: 1 fix 📋 (GQL-HF5). **7.9.4**: 1 requirement ⬚ (GQL-HF6 — iCal calendar attachment)
-- **Release 8.0** (Tablet Scoring UI): 14 requirements — 14 ✅ (TS1–TS14)
+- **Release 8.0** (Tablet Scoring UI): 16 requirements — 16 ✅ (TS1–TS16)
 - **Release 10.0** (Public Registration Buffer): 📋 Specified & Loop 1 store implemented on `origin/R100-feature-registration-buffer-*`
 
 > **Note:** The multi-tenant **Match Management Platform** (formerly listed as Release 8.0/8.1 roadmap `MP1–MP7`) has been moved to its own repository: `tohewi/match-manager`.
